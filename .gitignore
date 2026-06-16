@@ -1,0 +1,172 @@
+# ============================================================
+# 밥벌이(bobbeori) 공식 종합 .gitignore
+# ============================================================
+
+# ────────────────────────────────────────
+# 1. 환경 변수 및 보안 시크릿 (민감 정보 보호)
+# ────────────────────────────────────────
+.env
+.env.*
+# 예시/샘플 파일은 개발 가이드라인용이므로 Git 추적에 포함
+!.env.example
+!.env.sample
+
+
+# ────────────────────────────────────────
+# 2. Python (Backend, AI, ETL 공통)
+# ────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+
+# 가상환경 (팀원별 로컬 환경 격리)
+.venv/
+venv/
+env/
+.conda/
+
+
+# ────────────────────────────────────────
+# 3. 테스트, 커버리지 및 린트 캐시
+# ────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+
+# ────────────────────────────────────────
+# 4. Jupyter Notebook (ai/experiments/ 등)
+# ────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+
+# ────────────────────────────────────────
+# 5. Node / 프론트엔드 (app/frontend/)
+# ────────────────────────────────────────
+node_modules/
+app/frontend/node_modules/
+.npm/
+dist/
+app/frontend/dist/
+.next/
+.nuxt/
+.vite/
+*.local
+*.pnpm-debug.log*
+app/frontend/.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# ────────────────────────────────────────
+# 6. Docker 및 인프라 (로컬 설정 격리)
+# ────────────────────────────────────────
+.docker/
+docker-compose.override.yml
+# 팀 빌드 규칙 공유를 위해 .dockerignore는 Git으로 관리 (제외 항목 제거)
+
+
+# ────────────────────────────────────────
+# 7. Storage & 데이터 파일 (대용량 파일 배제)
+# ────────────────────────────────────────
+# 대용량 원본/가공 데이터는 Git 저장소 용량 초과를 막기 위해 제외합니다.
+storage/raw/**
+storage/processed/**
+
+# 디렉터리 구조를 보존하기 위해 하위 폴더 및 .gitkeep은 추적 허용
+!storage/raw/**/
+!storage/raw/**/.gitkeep
+!storage/processed/**/
+!storage/processed/**/.gitkeep
+
+# mock 데이터는 프론트/백엔드 교차 개발 시 필수적이므로 깃에 포함
+!storage/mock/
+!storage/mock/**
+
+
+# ────────────────────────────────────────
+# 8. 영수증 이미지 / OCR 샘플 (🚨 개인정보 포함 위험)
+# ────────────────────────────────────────
+# 실제 영수증 이미지나 텍스트 샘플은 개인정보 노출 우려가 있어 절대 깃에 올리지 않습니다.
+storage/raw/receipts/**
+etl/receipt_samples/**
+test/fixtures/receipts/**
+
+# 테스트 구동을 위한 최소한의 폴더 구조 및 무해한 .gitkeep 파일만 예외로 유지
+!storage/raw/receipts/
+!storage/raw/receipts/.gitkeep
+!etl/receipt_samples/
+!etl/receipt_samples/.gitkeep
+!test/fixtures/receipts/
+!test/fixtures/receipts/.gitkeep
+
+
+# ────────────────────────────────────────
+# 9. ML / AI 모델 파일 (대용량 바이너리)
+# ────────────────────────────────────────
+# 용량이 수백 MB ~ 몇 GB에 달하는 가중치 및 모델 파일은 Git 추적에서 제외합니다.
+*.pt
+*.pth
+*.onnx
+*.bin
+*.h5
+*.pkl
+*.joblib
+ai/ocr/models/**
+ai/recommendation/models/**
+
+# 모델 디렉터리 구조 보존을 위한 .gitkeep만 추적 허용
+!ai/ocr/models/
+!ai/ocr/models/.gitkeep
+!ai/recommendation/models/
+!ai/recommendation/models/.gitkeep
+
+
+# ────────────────────────────────────────
+# 10. Neo4j (그래프 데이터베이스)
+# ────────────────────────────────────────
+storage/neo4j/backups/**
+*.dump
+
+# 백업 디렉터리 구조 보존을 위한 .gitkeep만 추적 허용
+!storage/neo4j/backups/
+!storage/neo4j/backups/.gitkeep
+
+
+# ────────────────────────────────────────
+# 11. 로그 및 임시 출력 파일
+# ────────────────────────────────────────
+*.log
+logs/
+*.out
+
+
+# ────────────────────────────────────────
+# 12. OS / 에디터 (개인 개발 환경 설정)
+# ────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+
+# ────────────────────────────────────────
+# 13. 로컬 작업 아티팩트
+# ────────────────────────────────────────
+outputs/
+wbs_edit_work/

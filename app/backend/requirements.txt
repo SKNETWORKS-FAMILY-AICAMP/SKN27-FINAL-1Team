@@ -1,0 +1,22 @@
+# ============================================================
+# 밥벌이(bobbeori) 백엔드 Web API 서비스 운영용 의존성
+# ============================================================
+
+# Web Framework & ASGI Server
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+
+# Database & ORM (RDB - 김재묵 담당)
+sqlalchemy>=2.0.0
+alembic>=1.11.0
+psycopg2-binary>=2.9.0      # PostgreSQL 기준
+
+# Data Validation & Security (인증 - 김재묵 담당)
+pydantic[email]>=2.0.0
+python-jose[cryptography]   # JWT 토큰 인증용
+passlib[bcrypt]             # 비밀번호 해시 암호화용
+
+# Utilities & File Upload (영수증 수신 - 박준희 담당)
+python-multipart            # 영수증 파일 업로드 수신용
+httpx                       # 외부 API 통신용
+python-dotenv>=1.0.0
