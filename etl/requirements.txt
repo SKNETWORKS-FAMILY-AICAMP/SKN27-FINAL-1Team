@@ -1,0 +1,18 @@
+# ============================================================
+# 밥벌이(bobbeori) 데이터 수집(스크래핑) 및 Neo4j 적재 전용 의존성
+# ============================================================
+
+# Web Scraping & Crawling (김주영 담당 - 식재료 가이드 수집)
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+lxml                        # 고속 XML/HTML 파싱용 파서
+selenium                    # 동적 페이지 크롤링 필요 시
+
+# Graph Database Connector (김경수·김주영 담당 - 레시피/가이드 적재)
+neo4j>=5.10.0               # Neo4j 공식 파이썬 드라이버
+
+# Data Manipulation & Utilities
+pandas>=2.0.0               # 원본 데이터 전처리 및 정제용
+numpy>=1.24.0
+tqdm                        # 대용량 적재 시 터미널 진행바 표시용
+python-dotenv>=1.0.0
