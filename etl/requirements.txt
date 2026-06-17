@@ -10,6 +10,7 @@ selenium                    # 동적 페이지 크롤링 필요 시
 
 # Graph Database Connector (김경수·김주영 담당 - 레시피/가이드 적재)
 neo4j>=5.10.0               # Neo4j 공식 파이썬 드라이버
+graphdatascience==1.22      # Neo4j Graph Data Science 파이썬 클라이언트
 
 # Data Manipulation & Utilities
 pandas>=2.0.0               # 원본 데이터 전처리 및 정제용
