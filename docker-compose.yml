@@ -1,29 +1,47 @@
-version: '3.8'
-
 services:
-#   backend:
-#     build: ./app/backend
-#     ports:
-#       - "8000:8000"
-#     environment:
-#       - DB_HOST=postgres
-#     depends_on:
-#       - postgres
-#       - neo4j
+    backend:
+        build: ./app/backend
+        container_name: bobbeori_backend
+        ports:
+            - "${SERVER_PORT:-8000}:8000"
+        env_file:
+            - .env
+        environment:
+            # 컨테이너 간 통신: .env의 localhost 값을 서비스명으로 덮어씀
+            DB_HOST: postgres
+            NEO4J_URI: bolt://neo4j:7687
+        depends_on:
+            postgres:
+                condition: service_healthy
+            neo4j:
+                condition: service_started
 
-#   postgres:
-#     image: postgres:15
-#     ports:
-#       - "5432:5432"
+    postgres:
+        # PG 15: psycopg2-binary 2.9+ / SQLAlchemy 2.0+ 와 호환, 2027-11까지 지원
+        image: postgres:15
+        container_name: bobbeori_postgres
+        ports:
+            - "${DB_PORT:-5432}:5432"
+        environment:
+            POSTGRES_USER: ${DB_USER}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+            POSTGRES_DB: ${DB_NAME}
+        volumes:
+            - ./storage/postgres/data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+            interval: 5s
+            timeout: 5s
+            retries: 5
 
     neo4j:
-        image: neo4j:5.12
-        container_name: neo4j
+        image: neo4j:latest
+        container_name: bobbeori_neo4j
         ports:
             - "7474:7474"
             - "7687:7687"
         environment:
-            - NEO4J_AUTH=neo4j/YOUR_SECURE_NEO4J_PASSWORD_HERE
+            - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
             - NEO4J_PLUGINS=["apoc", "graph-data-science"]
             - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
             - NEO4J_dbms_memory_heap_initial__size=512m
@@ -32,5 +50,5 @@ services:
         volumes:
             - ./storage/neo4j/backups/neo4j_data:/data                      # 데이터베이스 데이터 저장 (그래프 데이터가 여기 저장됨)
             - ./storage/neo4j/backups/neo4j_logs:/logs                      # 로그 파일 저장
-            - ./storage/neo4j/backups/neo4j_import:/var/lib/neo4j/import    # CSV 등 임포트 파일을 넣을 위치
+            - ./storage/neo4j/import:/var/lib/neo4j/import              # CSV 등 임포트 파일 (NEO4J_IMPORT_DIR 과 동일)
             - ./storage/neo4j/backups/neo4j_plugins:/plugins                # 플러그인 파일 저장
