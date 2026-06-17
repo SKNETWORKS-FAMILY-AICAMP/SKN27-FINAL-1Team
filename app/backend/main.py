@@ -34,13 +34,19 @@ if settings.DEV_MODE:
     except Exception as e:
         print(f"⚠️ [Local DB] SQLite 테이블 자동 생성 중 실패: {e}")
 
-# Mock API 라우터 등록
-from app.backend.api.auth import auth_mock
+# API 라우터 등록
+from app.backend.api.auth import auth_mock, auth_api
 from app.backend.api.inventory import inventory_mock
 
-# v1 API 엔드포인트 바인딩
-app.include_router(auth_mock.router, prefix="/api/v1")
-app.include_router(inventory_mock.router, prefix="/api/v1")
+# v1 API 엔드포인트 바인딩 (DEV_MODE 여부에 따라 Mock과 실구현 라우터 분기 등록)
+if settings.DEV_MODE:
+    app.include_router(auth_mock.router, prefix="/api/v1")
+    app.include_router(inventory_mock.router, prefix="/api/v1")
+    print("💡 [Router] DEV_MODE 활성화로 인해 Mock API 라우터가 등록되었습니다.")
+else:
+    app.include_router(auth_api.router, prefix="/api/v1")
+    # 추후 실구현 완료 시 inventory_api 라우터 등록 예정
+    print("🚀 [Router] 프로덕션 모드 활성화로 인해 실제 DB 연동 API 라우터가 등록되었습니다.")
 
 # 기본 웰컴 API 엔드포인트
 @app.get("/")
