@@ -44,7 +44,7 @@ class Neo4j_Connection(metaclass=Singleton):
         # self.embedding_model = OllamaEmbeddings(model=embedding_model)
         self.gds = GraphDataScience(uri, auth=(user, password))
         logger.info(f"Neo4j 연결 성공: {uri}")
-        logger.info(f"임베딩 모델: {embedding_model}")
+        # logger.info(f"임베딩 모델: {embedding_model}")
 
     def close(self):
         '''해당 메소드 실행해서 리소스를 놓아주기 위함'''
@@ -70,8 +70,13 @@ class Neo4j_Connection(metaclass=Singleton):
             session.run("MATCH (n) DETACH DELETE n")
         logger.info("=== 기존 데이터 삭제 완료! ===")
 
-if __name__ == "__main__":
 
+
+
+
+
+## 실행 함수 
+def main():
     # 단독 실행 시 기본 설정 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(filename)s %(message)s", )
     load_dotenv()
@@ -104,3 +109,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Neo4j 연결 실패: {e}")
         raise e
+
+
+if __name__ == "__main__":
+    main()
