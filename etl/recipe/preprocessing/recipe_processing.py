@@ -16,7 +16,7 @@ def save_recipe_data(df: pd.DataFrame, file_path: pathlib.Path | str) -> None:
     """데이터 프레임을 csv로 변환해 지정 경로에 저장"""
     path = pathlib.Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, index=False, encoding="utf-8")
+    df.to_csv(path, index=False, encoding="utf-8-sig")
     print("--------------------------------")
     print(f"레시피 데이터 저장 완료: {file_path}")
     
@@ -99,6 +99,19 @@ def rm_low_view_rate_recipe(df: pd.DataFrame) -> pd.DataFrame:
     print(f"조회수 비율 기준 미만 데이터 제거 완료: {len(df)}")
     return df
 
+def fill_nan_values(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    컬럼 별 결측치 처리
+    CKG_MTH_ACTO_NM(조리법)에서 결측치 발생 1껀 -> "기타"로 통합
+    CKG_STA_ACTO_NM(상황) 결측치 55껀 -> "기타"로 통합
+    CKG_INBUN_NM(요리 분량) 확인 -> 데이터 보고 결정 필요 (당장은 "확인필요"로 처리 약 707껀)
+    CKG_TIME_NM(조리시간) -> "확인필요" 추가해야 할 듯
+    """
+    df["CKG_MTH_ACTO_NM"] = df["CKG_MTH_ACTO_NM"].fillna("기타")
+    df["CKG_STA_ACTO_NM"] = df["CKG_STA_ACTO_NM"].fillna("기타")
+    df["CKG_INBUN_NM"] = df["CKG_INBUN_NM"].fillna("확인필요")
+    df["CKG_TIME_NM"] = df["CKG_TIME_NM"].fillna("확인필요")
+    return df
 
 
 
@@ -139,6 +152,9 @@ def main():
 
     # 개별 재료 데이터 정규화 
     df_recipe = process_individual_ingredient(df_recipe)
+
+    # 결측치 처리
+    df_recipe = fill_nan_values(df_recipe)
 
 
 
