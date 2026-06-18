@@ -32,6 +32,43 @@ def _process_recipe_name(df: pd.DataFrame) -> pd.DataFrame:
     df["recipe_name"] = df["recipe_name"].str.strip().str.lower()
     return df
 
+def __sort_by_view_count(df: pd.DataFrame) -> pd.DataFrame:
+    """조회수 내림차순으로 정렬"""
+    df = df.sort_values(by="view_count", ascending=False)
+    return df
+
+def _rm_duplicate_recipe_name(df: pd.DataFrame) -> pd.DataFrame:
+    """레시피 이름 중복 제거"""
+    df = df.drop_duplicates(subset=["recipe_name"], keep="first")
+    print("--------------------------------")
+    print(f"레시피 이름 중복 제거 완료: {len(df)}")
+    return df
+
+def _process_ingredient(df: pd.DataFrame) -> pd.DataFrame:
+    """재료 정규화 
+    1. 소문자로 변경
+    2. [재료] 표시 부분 제거 
+    3. 분량 구분자(\x07) _ 로 변경 
+    3. 공백제거
+    4. | 부분 기준으로 split 해서 리스트로 반환
+    """
+    # 소문자화 
+    df["ingredients"] = df["ingredients"].str.lower()
+    # [재료] 표시 부분 제거 
+    df["ingredients"] = df["ingredients"].str.replace(r"\[[^\]]*\]\s*", "", regex=True)
+    # 분량 구분자 _ 로 변경 
+    df["ingredients"] = df["ingredients"].str.replace(r"\x07\s*", "_", regex=True)
+    # 공백제거
+    df["ingredients"] = df["ingredients"].str.strip()
+    # | 부분 기준으로 split 해서 리스트로 반환
+    df["ingredients"] = df["ingredients"].str.split("|")
+
+    print("--------------------------------")
+    print(f"재료 정규화 완료: {len(df)}")
+    print(f"재료 샘플: {df['ingredients'].head()}")
+
+    return df
+
 
 
 
@@ -52,6 +89,14 @@ def main():
     # 레시피 이름 정규화 
     df_recipe = _process_recipe_name(df_recipe)
 
+    # 조회수 내림차순으로 정렬
+    df_recipe = __sort_by_view_count(df_recipe)
+
+    # 레시피 이름 중복 제거
+    df_recipe = _rm_duplicate_recipe_name(df_recipe)
+
+    # 재료 정규화 
+    df_recipe = _process_ingredient(df_recipe)
 
 
     # 처리 완료된 데이터 저장 
