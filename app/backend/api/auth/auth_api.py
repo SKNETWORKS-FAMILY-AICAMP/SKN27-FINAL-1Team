@@ -61,3 +61,20 @@ def get_me(current_user_id: int = Depends(get_current_user_required), db: Sessio
             detail="사용자를 찾을 수 없습니다."
         )
     return user
+
+@router.post("/dev-login", response_model=TokenResponse)
+def dev_cheat_login(db: Session = Depends(get_db)):
+    """
+    [개발자 전용 치트키 API]
+    서버를 껐다 켜거나 DB가 날아갔을 때, 매번 카카오 로그인을 하기 번거로우므로 만든 치트키입니다.
+    이 API를 호출하면 가짜 유저(개발자)를 무조건 DB에 생성하거나 불러와서 즉시 사용할 수 있는 진짜 Access Token을 발급해 줍니다.
+    """
+    # 1. 개발자용 가짜 카카오 유저 정보를 강제로 세팅
+    access_token = auth_service.authenticate_social_user(
+        db=db,
+        provider="kakao",
+        provider_id="dev_cheat_id_9999",
+        email="dev@bobbeori.com",
+        nickname="개발자용치트유저"
+    )
+    return {"access_token": access_token, "token_type": "bearer"}

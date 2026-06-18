@@ -1,63 +1,41 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import date, datetime
-from decimal import Decimal
-
-# ==========================================
-# [식재료 (Ingredient) 관련 스키마]
-# ==========================================
 
 class IngredientBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, description="식재료명")
-    category: Optional[str] = Field(None, description="식재료 카테고리 (채소, 육류 등)")
-    quantity: Decimal = Field(default=Decimal("1.0"), ge=0, description="수량")
-    unit: str = Field(default="개", description="수량 단위 (개, g, ml 등)")
-    storage_method: str = Field(default="냉장", description="보관 방식 (냉장, 냉동, 실온)")
-    purchase_date: date = Field(default_factory=date.today, description="구매/입고일")
-    expiration_date: Optional[date] = Field(None, description="유통기한")
+    name: str = Field(..., description="식재료 이름 (예: 시금치)")
+    category: Optional[str] = Field(None, description="식재료 카테고리 (예: 채소)")
+    quantity: float = Field(default=1.0, description="수량")
+    unit: str = Field(default="개", description="수량 단위 (예: 개, g, ml)")
+    storage_method: str = Field(default="냉장", description="보관 방법 (냉장, 냉동, 실온)")
+    purchase_date: Optional[date] = Field(None, description="구매일/입고일 (없으면 오늘 날짜로 자동 지정)")
+    expiration_date: Optional[date] = Field(None, description="표기된 유통기한 (없으면 권장 보관 기간으로 자동 계산)")
 
 class IngredientCreate(IngredientBase):
     pass
 
-class IngredientUpdate(BaseModel):
-    name: Optional[str] = None
-    category: Optional[str] = None
-    quantity: Optional[Decimal] = None
-    unit: Optional[str] = None
-    storage_method: Optional[str] = None
-    purchase_date: Optional[date] = None
-    expiration_date: Optional[date] = None
-
 class IngredientResponse(IngredientBase):
     id: int
     fridge_id: int
+    purchase_date: date  # Response에서는 반드시 채워져서 나감
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    # 동적 계산 필드
+    d_day: Optional[int] = Field(None, description="유통기한/권장보관기한까지 남은 일수 (양수면 남음, 음수면 지남)")
+    is_expiring_soon: bool = Field(default=False, description="유통기한 임박 여부 (3일 이하)")
 
     class Config:
         from_attributes = True
 
-# ==========================================
-# [냉장고 (Fridge) 관련 스키마]
-# ==========================================
+class StorageSummary(BaseModel):
+    냉장: int = Field(default=0)
+    냉동: int = Field(default=0)
+    실온: int = Field(default=0)
+    기타: int = Field(default=0)
 
-class FridgeBase(BaseModel):
-    name: str = Field(default="나의 냉장고", description="냉장고 명칭")
-
-class FridgeCreate(FridgeBase):
-    pass
-
-class FridgeResponse(FridgeBase):
-    id: int
-    user_id: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# ==========================================
-# [벌크 등록(Bulk Insert) 관련 스키마]
-# ==========================================
-
-class IngredientBulkCreateRequest(BaseModel):
-    ingredients: List[IngredientCreate]
+class InventorySummaryResponse(BaseModel):
+    total: int = Field(default=0, description="전체 식재료 개수")
+    expiring_soon: int = Field(default=0, description="소비 임박 (D-3 이내) 식재료 개수")
+    today_added: int = Field(default=0, description="오늘 입고된 식재료 개수")
+    storage: StorageSummary = Field(description="보관 위치별 식재료 개수")
