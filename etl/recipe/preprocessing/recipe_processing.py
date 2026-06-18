@@ -73,11 +73,38 @@ def process_ingredient(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def process_individual_ingredient(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    개별 재료 데이터 정규화
+    df["CKG_MTRL_CN"] 컬럼의 리스트의 요소 각각을 str에서 list로 변경해서 처리해야 함 
+    재료 각각은 _ 기준으로 연결되어 있음 
+    "재료_개수_단위_나머지"로 연결되어 있으니 이 기준으로 split 해서 리스트로 반환
+    개별 재료에서 이름, 개수, 단위 까지만 사용하고 나머지는 버림 
+    """
+    df["CKG_MTRL_CN"] = df["CKG_MTRL_CN"].apply(lambda x: [item.split("_")[:3] for item in x])
+    print("--------------------------------")
+    print(f"개별 재료 데이터 정규화 완료: {len(df)}")
+    print(f"개별 재료 샘플: {df['CKG_MTRL_CN'].head()}")
+    return df
+
+def add_col_view_rate(df: pd.DataFrame) -> pd.DataFrame:
+    """최고 조회수 대비 상대 비율값"""
+    df["INQ_CNT_RATE"] = df["INQ_CNT"] / df["INQ_CNT"].max()
+    return df
+
+def rm_low_view_rate_recipe(df: pd.DataFrame) -> pd.DataFrame:
+    """조회수 비율 1.5% 미만 데이터 제거"""
+    df = df[df["INQ_CNT_RATE"] > 0.015]
+    print("--------------------------------")
+    print(f"조회수 비율 기준 미만 데이터 제거 완료: {len(df)}")
+    return df
+
 
 
 
 ########################### 실행 함수 ################################
 def main():
+    ######################################################
     # 파일 경로 지정 
     root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
     file_path       = root / "storage" / "raw" / "recipe" / "recipe.csv"
@@ -85,6 +112,8 @@ def main():
     
     # 파일 로드 
     df = load_recipe_data(file_path)
+    ######################################################
+
 
     # 사용 안하는 컬럼 제거 
     cols = ["RCP_TTL", "RGTR_ID", "RGTR_NM", "RCMM_CNT", "CKG_IPDC", "FIRST_REG_DT"]
@@ -96,14 +125,26 @@ def main():
     # 조회수 내림차순으로 정렬
     df_recipe = sort_by_view_count(df_recipe)
 
+    # 조회수 기준 상대 비율 값 추가 
+    df_recipe = add_col_view_rate(df_recipe)
+
+    # 조회수 비율 기준 미만 데이터 제거
+    df_recipe = rm_low_view_rate_recipe(df_recipe)
+
     # 레시피 이름 중복 제거
     df_recipe = rm_duplicate_recipe_name(df_recipe)
 
     # 재료 정규화 
     df_recipe = process_ingredient(df_recipe)
 
+    # 개별 재료 데이터 정규화 
+    df_recipe = process_individual_ingredient(df_recipe)
 
+
+
+    ######################################################
     # 처리 완료된 데이터 저장 
+    ######################################################
     save_recipe_data(df_recipe, new_file_path)
 
 if __name__ == "__main__":
