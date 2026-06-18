@@ -29,17 +29,21 @@ def _drop_cols(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 def _process_recipe_name(df: pd.DataFrame) -> pd.DataFrame:
     """레시피 이름 정규화 (앞뒤 공백 제거, 소문자로)"""
-    df["recipe_name"] = df["recipe_name"].str.strip().str.lower()
+    df["CKG_NM"] = df["CKG_NM"].str.strip().str.lower()
     return df
 
 def __sort_by_view_count(df: pd.DataFrame) -> pd.DataFrame:
     """조회수 내림차순으로 정렬"""
-    df = df.sort_values(by="view_count", ascending=False)
+    df = df.sort_values(by="INQ_CNT", ascending=False)
     return df
 
 def _rm_duplicate_recipe_name(df: pd.DataFrame) -> pd.DataFrame:
-    """레시피 이름 중복 제거"""
-    df = df.drop_duplicates(subset=["recipe_name"], keep="first")
+    """
+    레시피 이름 중복 제거
+    현재는 따로 기준이 없는 상태라 조회수 가장 많은 레시피 1개만 남기고 있음
+    나중에는 특정 기준 하에 n개 정도를 남기는 방향 검토할 예정
+    """
+    df = df.drop_duplicates(subset=["CKG_NM"], keep="first") 
     print("--------------------------------")
     print(f"레시피 이름 중복 제거 완료: {len(df)}")
     return df
@@ -53,19 +57,19 @@ def _process_ingredient(df: pd.DataFrame) -> pd.DataFrame:
     4. | 부분 기준으로 split 해서 리스트로 반환
     """
     # 소문자화 
-    df["ingredients"] = df["ingredients"].str.lower()
+    df["CKG_MTRL_CN"] = df["CKG_MTRL_CN"].str.lower()
     # [재료] 표시 부분 제거 
-    df["ingredients"] = df["ingredients"].str.replace(r"\[[^\]]*\]\s*", "", regex=True)
+    df["CKG_MTRL_CN"] = df["CKG_MTRL_CN"].str.replace(r"\[[^\]]*\]\s*", "", regex=True)
     # 분량 구분자 _ 로 변경 
-    df["ingredients"] = df["ingredients"].str.replace(r"\x07\s*", "_", regex=True)
+    df["CKG_MTRL_CN"] = df["CKG_MTRL_CN"].str.replace(r"\x07\s*", "_", regex=True)
     # 공백제거
-    df["ingredients"] = df["ingredients"].str.strip()
+    df["CKG_MTRL_CN"] = df["CKG_MTRL_CN"].str.strip()
     # | 부분 기준으로 split 해서 리스트로 반환
-    df["ingredients"] = df["ingredients"].str.split("|")
+    df["CKG_MTRL_CN"] = df["CKG_MTRL_CN"].str.split("|")
 
     print("--------------------------------")
     print(f"재료 정규화 완료: {len(df)}")
-    print(f"재료 샘플: {df['ingredients'].head()}")
+    print(f"재료 샘플: {df['CKG_MTRL_CN'].head()}")
 
     return df
 
@@ -83,7 +87,7 @@ def main():
     df = _load_recipe_data(file_path)
 
     # 사용 안하는 컬럼 제거 
-    cols = ["recipe_title", "recommend_count", "description", ]
+    cols = ["RCP_TTL", "RGTR_ID", "RGTR_NM", "RCMM_CNT", "CKG_IPDC", "FIRST_REG_DT"]
     df_recipe = _drop_cols(df, cols)
 
     # 레시피 이름 정규화 
