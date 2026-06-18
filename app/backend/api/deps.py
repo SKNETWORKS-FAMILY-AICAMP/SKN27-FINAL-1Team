@@ -1,18 +1,20 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.backend.core.security import verify_access_token
 
-# 로그인 시 사용할 OAuth2 Bearer 스키마 정의 (Mock 환경에서도 동일하게 작동)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
+# Swagger UI에서 토큰 직접 입력이 가능하도록 HTTPBearer 사용
+security = HTTPBearer(auto_error=False)
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> int:
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> int:
     """
     API 호출 시 HTTP Authorization 헤더에서 Bearer 토큰을 파싱하여 검증하고,
     검증 완료된 사용자의 고유 ID(int)를 반환합니다.
     """
-    if not token:
+    if not credentials:
         # 비회원 '둘러보기' 대응을 위한 예외 처리 (토큰이 없어도 0을 리턴하여 게스트 모드로 동작)
         return 0
+        
+    token = credentials.credentials
         
     user_id_str = verify_access_token(token)
     if not user_id_str:

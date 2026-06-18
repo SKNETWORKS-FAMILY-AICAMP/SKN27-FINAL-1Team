@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
     provider: str
     nickname: Optional[str] = None
     created_at: datetime
+    is_onboarded: bool = False
 
     class Config:
         from_attributes = True

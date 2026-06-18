@@ -37,14 +37,17 @@ if settings.DEV_MODE:
 # API 라우터 등록
 from app.backend.api.auth import auth_mock, auth_api
 from app.backend.api.inventory import inventory_mock
+from app.backend.api.onboarding import onboarding_api
 
 # v1 API 엔드포인트 바인딩 (DEV_MODE 여부에 따라 Mock과 실구현 라우터 분기 등록)
 if settings.DEV_MODE:
     app.include_router(auth_mock.router, prefix="/api/v1")
     app.include_router(inventory_mock.router, prefix="/api/v1")
+    app.include_router(onboarding_api.router, prefix="/api/v1")
     print("💡 [Router] DEV_MODE 활성화로 인해 Mock API 라우터가 등록되었습니다.")
 else:
     app.include_router(auth_api.router, prefix="/api/v1")
+    app.include_router(onboarding_api.router, prefix="/api/v1")
     # 추후 실구현 완료 시 inventory_api 라우터 등록 예정
     print("🚀 [Router] 프로덕션 모드 활성화로 인해 실제 DB 연동 API 라우터가 등록되었습니다.")
 

@@ -1,11 +1,11 @@
-from sqlalchemy import Column, BigInteger, String, Boolean, DateTime, Date, Numeric, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Numeric, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.backend.db.base import Base
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     email = Column(String, unique=True, index=True, nullable=True)
     provider = Column(String, nullable=False)  # kakao, naver, google
     provider_id = Column(String, unique=True, index=True, nullable=False)
@@ -20,8 +20,8 @@ class User(Base):
 class UserOnboarding(Base):
     __tablename__ = "user_onboarding"
 
-    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     allergy = Column(String, nullable=True)
     disliked_ingredients = Column(String, nullable=True)
     is_alert_allowed = Column(Boolean, default=True, nullable=False)
@@ -34,8 +34,8 @@ class UserOnboarding(Base):
 class Fridge(Base):
     __tablename__ = "fridges"
 
-    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False, default="나의 냉장고")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -47,8 +47,8 @@ class Fridge(Base):
 class Ingredient(Base):
     __tablename__ = "ingredients"
 
-    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    fridge_id = Column(BigInteger, ForeignKey("fridges.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    fridge_id = Column(Integer, ForeignKey("fridges.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False, index=True)
     category = Column(String, nullable=True)
     quantity = Column(Numeric(precision=10, scale=2), default=1.0, nullable=False)

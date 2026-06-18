@@ -18,7 +18,7 @@ class Settings:
     DB_NAME: str = os.getenv("DB_NAME", "bobbeori_db")
     
     # SQLite Fallback (DB 인프라 미구축 시 가볍게 로컬 파일 DB 사용)
-    SQLITE_URL: str = "sqlite:///./test.db"
+    SQLITE_URL: str = "sqlite:///./db/test2.db"
     
     @property
     def DATABASE_URL(self) -> str:
