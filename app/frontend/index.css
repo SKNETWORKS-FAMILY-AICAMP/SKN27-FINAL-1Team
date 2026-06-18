@@ -1,0 +1,5 @@
+/* 기본 스타일링 초기화 또는 비워둠 */
+body {
+  margin: 0;
+  font-family: sans-serif;
+}
