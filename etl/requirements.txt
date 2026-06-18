@@ -17,3 +17,6 @@ pandas>=2.0.0               # 원본 데이터 전처리 및 정제용
 numpy>=1.24.0
 tqdm                        # 대용량 적재 시 터미널 진행바 표시용
 python-dotenv>=1.0.0
+
+# Data Profiling
+jupyter==1.1.1
