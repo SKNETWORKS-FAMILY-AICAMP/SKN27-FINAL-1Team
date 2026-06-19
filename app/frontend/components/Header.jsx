@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import logoText from '../assets/logo_text_extracted.png'
 import './Header.css'
@@ -17,6 +17,28 @@ const recipeItems = [
 function Header() {
   const { pathname } = useLocation()
   const isRecipeActive = recipeItems.some((item) => item.to === pathname)
+  const [authMode, setAuthMode] = useState(() => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+
+    return window.localStorage.getItem('bobbeori-auth-mode')
+  })
+  const isGuest = authMode === 'guest'
+
+  useEffect(() => {
+    const syncAuthMode = () => {
+      setAuthMode(window.localStorage.getItem('bobbeori-auth-mode'))
+    }
+
+    window.addEventListener('storage', syncAuthMode)
+    window.addEventListener('bobbeori-auth-change', syncAuthMode)
+
+    return () => {
+      window.removeEventListener('storage', syncAuthMode)
+      window.removeEventListener('bobbeori-auth-change', syncAuthMode)
+    }
+  }, [])
 
   return (
     <header className="site-header" aria-label="밥벌이 주요 메뉴">
@@ -99,8 +121,8 @@ function Header() {
             <span className="site-header__sr-only">재료명 또는 레시피 검색</span>
             <input type="search" placeholder="재료명, 레시피 검색" />
           </label>
-          <Link className="site-header__start" to="/login">
-            로그인
+          <Link className="site-header__start" to={isGuest ? '/mypage' : '/login'}>
+            {isGuest ? '마이페이지' : '로그인'}
           </Link>
         </div>
         <button className="site-header__mobile-bell" type="button" aria-label="알림 보기" />

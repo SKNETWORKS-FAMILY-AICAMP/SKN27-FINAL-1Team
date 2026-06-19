@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import logoText from '../../assets/logo_text_extracted.png'
 import imageHello from '../../assets/extracted/images/image_hello.png'
 import iconReceipt from '../../assets/extracted/icons/icon_receipt.png'
@@ -32,6 +32,14 @@ const featureCards = [
 ]
 
 function Login() {
+  const navigate = useNavigate()
+
+  const handleGuestStart = () => {
+    window.localStorage.setItem('bobbeori-auth-mode', 'guest')
+    window.dispatchEvent(new Event('bobbeori-auth-change'))
+    navigate('/')
+  }
+
   return (
     <section className="login-page" aria-labelledby="login-title">
       <div className="login-browser">
@@ -92,6 +100,10 @@ function Login() {
                   </button>
                 ))}
               </div>
+
+              <button className="login-card__guest-button" type="button" onClick={handleGuestStart}>
+                게스트로 사용하기
+              </button>
 
               <p className="login-card__terms">
                 로그인하면 밥벌이의 <a href="/terms">이용약관</a> 및{' '}

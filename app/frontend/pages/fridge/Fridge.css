@@ -1,0 +1,835 @@
+.fridge-page {
+  width: var(--layout-container);
+  margin: 0 auto;
+  padding: 8px 0 72px;
+  color: var(--figma-text);
+  word-break: keep-all;
+}
+
+.fridge-image-slot {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: 1.4px dashed #f0cfa4;
+  border-radius: 14px;
+  background: #fffaf2;
+  overflow: hidden;
+}
+
+.fridge-image-slot.is-filled {
+  border: 0;
+  background: transparent;
+}
+
+.fridge-image-slot img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.fridge-hero {
+  min-height: 218px;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.88fr) minmax(360px, 0.9fr) 260px;
+  align-items: center;
+  gap: 26px;
+}
+
+.fridge-hero__copy h1 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: clamp(38px, 4vw, 52px);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.fridge-hero__copy p {
+  margin: 10px 0 0;
+  color: #5f4635;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.fridge-search {
+  box-sizing: border-box;
+  width: min(100%, 560px);
+  height: 48px;
+  margin-top: 18px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 999px;
+  background: #fffdf8;
+  box-shadow: 0 8px 20px rgba(69, 42, 25, 0.06);
+}
+
+.fridge-search span {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 2px solid #9b7a62;
+  border-radius: 50%;
+  position: relative;
+}
+
+.fridge-search span::after {
+  width: 7px;
+  height: 2px;
+  position: absolute;
+  right: -6px;
+  bottom: -3px;
+  border-radius: 999px;
+  background: #9b7a62;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.fridge-search input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fridge-search input::placeholder {
+  color: #9c8a7a;
+  font-weight: 600;
+}
+
+.fridge-hero__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.fridge-hero-card {
+  box-sizing: border-box;
+  min-height: 132px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  align-items: center;
+  gap: 12px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.82);
+  color: var(--figma-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.fridge-hero-card--add {
+  border-color: #ffb8bd;
+  background: #fff4f3;
+}
+
+.fridge-hero-card strong {
+  color: var(--figma-text);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.fridge-hero-card--add strong {
+  color: var(--figma-coral);
+}
+
+.fridge-hero-card p {
+  margin: 8px 0 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.fridge-hero-card__image {
+  width: 76px;
+  height: 76px;
+}
+
+.fridge-hero__image {
+  width: 252px;
+  height: 178px;
+  justify-self: end;
+  filter: drop-shadow(0 16px 22px rgba(69, 42, 25, 0.08));
+}
+
+.fridge-layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.fridge-sidebar {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.fridge-panel,
+.fridge-item,
+.fridge-add-card,
+.fridge-bottom-tip {
+  box-sizing: border-box;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.fridge-panel {
+  padding: 18px;
+}
+
+.fridge-panel h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.fridge-summary dl {
+  margin: 16px 0;
+  display: grid;
+  gap: 12px;
+}
+
+.fridge-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #5f4635;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.fridge-summary dt,
+.fridge-summary dd {
+  margin: 0;
+}
+
+.fridge-summary dd {
+  color: var(--figma-text);
+  font-weight: 900;
+}
+
+.fridge-soft-button {
+  width: 100%;
+  min-height: 38px;
+  border: 1.4px solid #e7c894;
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-quick ul {
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  color: #5f4635;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-quick li {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fridge-quick strong {
+  min-width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff0f1;
+  color: var(--figma-coral);
+  font-size: 13px;
+}
+
+.fridge-tip {
+  min-height: 154px;
+  position: relative;
+  overflow: hidden;
+}
+
+.fridge-tip__image {
+  width: 118px;
+  height: 82px;
+  position: absolute;
+  left: 12px;
+  bottom: 4px;
+  opacity: 0.95;
+}
+
+.fridge-tip h2,
+.fridge-tip p {
+  position: relative;
+  z-index: 1;
+}
+
+.fridge-tip p {
+  max-width: 150px;
+  margin: 12px 0 0;
+  color: #6f4b36;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.fridge-main {
+  min-width: 0;
+}
+
+.fridge-toolbar {
+  min-height: 70px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1.4px solid #f0d7b1;
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: rgba(255, 253, 248, 0.82);
+  box-sizing: border-box;
+}
+
+.fridge-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fridge-filter {
+  min-height: 38px;
+  padding: 0 17px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-filter.is-active {
+  border-color: var(--figma-coral);
+  background: #fff0f1;
+  color: var(--figma-coral);
+}
+
+.fridge-filter.is-cold {
+  color: #3d7fa7;
+}
+
+.fridge-filter.is-frozen {
+  color: #7167d9;
+}
+
+.fridge-filter.is-soon {
+  color: #d88720;
+}
+
+.fridge-view-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.fridge-view-controls button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fridge-view-controls button:not(:first-child) {
+  width: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.fridge-view-controls button.is-active {
+  color: var(--figma-coral);
+  border-color: #ffb8bd;
+  background: #fff0f1;
+}
+
+.fridge-view-controls span {
+  width: 14px;
+  height: 14px;
+  display: block;
+  border-radius: 4px;
+  border: 2px solid currentColor;
+}
+
+.fridge-card-grid {
+  padding: 0 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  border: 1.4px solid #f0d7b1;
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.fridge-item {
+  min-height: 164px;
+  padding: 16px 16px 0;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-rows: 1fr 42px;
+  gap: 8px 14px;
+  overflow: hidden;
+}
+
+.fridge-item.is-urgent {
+  border-color: #ffc5c9;
+  background: #fff8f6;
+}
+
+.fridge-item__image {
+  width: 82px;
+  height: 82px;
+  grid-row: 1;
+}
+
+.fridge-item__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fridge-item h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.fridge-item__title span {
+  min-height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eaf5fb;
+  color: #3d7fa7;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fridge-item__title span.is-urgent {
+  background: #fff0d8;
+  color: #d88720;
+}
+
+.fridge-item dl {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 7px;
+}
+
+.fridge-item dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #6f4b36;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.fridge-item dt,
+.fridge-item dd {
+  margin: 0;
+}
+
+.fridge-item dd {
+  color: var(--figma-text);
+  font-weight: 900;
+}
+
+.fridge-item dd.is-danger {
+  color: var(--figma-coral);
+}
+
+.fridge-item__actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid #f1d9b3;
+}
+
+.fridge-item__actions button {
+  border: 0;
+  border-right: 1px solid #f1d9b3;
+  background: transparent;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fridge-item__actions button:last-child {
+  border-right: 0;
+}
+
+.fridge-add-card {
+  min-height: 164px;
+  padding: 18px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  border-style: dashed;
+  text-align: center;
+}
+
+.fridge-add-card__image {
+  width: 84px;
+  height: 64px;
+}
+
+.fridge-add-card strong {
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.fridge-add-card button {
+  min-height: 40px;
+  padding: 0 22px;
+  border: 1.4px solid var(--figma-coral-stroke);
+  border-radius: 999px;
+  background: var(--figma-coral);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-bottom-tip {
+  min-height: 70px;
+  margin-top: 16px;
+  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 96px;
+  align-items: center;
+  gap: 18px;
+}
+
+.fridge-bottom-tip strong {
+  color: var(--figma-text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.fridge-bottom-tip span {
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.fridge-bottom-tip button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1.4px solid #c79a74;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-bottom-tip__image {
+  width: 92px;
+  height: 56px;
+}
+
+.fridge-floating-add {
+  display: none;
+}
+
+@media (max-width: 1120px) {
+  .fridge-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+  }
+
+  .fridge-hero__image {
+    display: none;
+  }
+
+  .fridge-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .fridge-sidebar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fridge-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .fridge-page {
+    width: min(100% - 28px, 430px);
+    padding: 0 0 36px;
+  }
+
+  .fridge-hero {
+    min-height: auto;
+    padding-top: 2px;
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 12px;
+  }
+
+  .fridge-hero__copy {
+    display: contents;
+  }
+
+  .fridge-hero__copy h1 {
+    grid-column: 1;
+    margin-top: 8px;
+    font-size: 25px;
+  }
+
+  .fridge-hero__copy p {
+    grid-column: 1;
+    margin-top: -2px;
+    font-size: 12px;
+  }
+
+  .fridge-search {
+    grid-column: 1 / -1;
+    height: 44px;
+    margin-top: 4px;
+  }
+
+  .fridge-hero__actions {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .fridge-hero-card {
+    min-height: 82px;
+    padding: 12px;
+    grid-template-columns: minmax(0, 1fr) 56px;
+  }
+
+  .fridge-hero-card strong {
+    font-size: 15px;
+  }
+
+  .fridge-hero-card p {
+    display: none;
+  }
+
+  .fridge-hero-card__image {
+    width: 56px;
+    height: 56px;
+  }
+
+  .fridge-hero__image {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    width: 88px;
+    height: 82px;
+    display: inline-grid;
+  }
+
+  .fridge-sidebar {
+    display: none;
+  }
+
+  .fridge-layout {
+    margin-top: 12px;
+    display: block;
+  }
+
+  .fridge-toolbar {
+    min-height: 0;
+    padding: 0;
+    display: block;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .fridge-filters {
+    margin: 0 -14px;
+    padding: 0 14px 2px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .fridge-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .fridge-filter {
+    min-height: 36px;
+    padding: 0 15px;
+    flex: 0 0 auto;
+    font-size: 12px;
+  }
+
+  .fridge-view-controls {
+    display: none;
+  }
+
+  .fridge-card-grid {
+    margin-top: 12px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .fridge-item {
+    min-height: 78px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr) 18px;
+    grid-template-rows: auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .fridge-item::after {
+    width: 9px;
+    height: 9px;
+    border-top: 2px solid #7b5437;
+    border-right: 2px solid #7b5437;
+    content: "";
+    transform: rotate(45deg);
+  }
+
+  .fridge-item__image {
+    width: 58px;
+    height: 58px;
+  }
+
+  .fridge-item__title {
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .fridge-item h2 {
+    font-size: 17px;
+  }
+
+  .fridge-item__title span {
+    min-height: 23px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .fridge-item dl {
+    margin-top: 5px;
+    display: block;
+  }
+
+  .fridge-item dl div {
+    display: inline;
+    font-size: 12px;
+  }
+
+  .fridge-item dl div + div::before {
+    content: " · ";
+  }
+
+  .fridge-item dt {
+    display: none;
+  }
+
+  .fridge-item dd {
+    display: inline;
+  }
+
+  .fridge-item__actions {
+    display: none;
+  }
+
+  .fridge-add-card {
+    display: none;
+  }
+
+  .fridge-bottom-tip {
+    display: none;
+  }
+
+  .fridge-floating-add {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    position: fixed;
+    right: max(20px, calc((100vw - 430px) / 2 + 20px));
+    bottom: 84px;
+    z-index: 70;
+    border: 1.6px solid var(--figma-coral-stroke);
+    border-radius: 50%;
+    background: var(--figma-coral);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 34px;
+    font-weight: 500;
+    box-shadow: 0 12px 24px rgba(255, 107, 116, 0.28);
+  }
+}
+
+@media (max-width: 390px) {
+  .fridge-hero {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+
+  .fridge-hero__image {
+    width: 76px;
+    height: 72px;
+  }
+}
