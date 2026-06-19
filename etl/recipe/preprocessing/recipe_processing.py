@@ -99,6 +99,13 @@ def rm_low_view_rate_recipe(df: pd.DataFrame) -> pd.DataFrame:
     print(f"조회수 비율 기준 미만 데이터 제거 완료: {len(df)}")
     return df
 
+def rm_cooking_situation(df: pd.DataFrame) -> pd.DataFrame:
+    """CKG_STA_ACTO_NM 컬럼에서 특정 값인 경우 row 제거 (ex - 이유식 등... )"""
+    df = df[~df["CKG_STA_ACTO_NM"].isin(["이유식", ])]
+    print("--------------------------------")
+    print(f"CKG_STA_ACTO_NM 특정 값 제거 완료: {len(df)}")
+    return df
+
 def fill_nan_values(df: pd.DataFrame) -> pd.DataFrame:
     """
     컬럼 별 결측치 처리
@@ -152,6 +159,9 @@ def main():
 
     # 개별 재료 데이터 정규화 
     df_recipe = process_individual_ingredient(df_recipe)
+
+    # CKG_STA_ACTO_NM 특정 값 제거 (이유식 등...)
+    df_recipe = rm_cooking_situation(df_recipe)
 
     # 결측치 처리
     df_recipe = fill_nan_values(df_recipe)
