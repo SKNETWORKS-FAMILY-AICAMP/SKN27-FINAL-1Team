@@ -4,8 +4,8 @@ const tabs = [
   { to: '/', label: '홈' },
   { to: '/fridge', label: '냉장고' },
   { to: '/recipes', label: '레시피' },
-  { to: '/recipe-recommend', label: '장보기' },
-  { to: '/guide', label: '마이' },
+  { to: '/shopping-list', label: '장보기' },
+  { to: '/mypage', label: '마이' },
 ]
 
 function MobileBottomNav() {

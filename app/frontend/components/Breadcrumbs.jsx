@@ -23,6 +23,7 @@ const breadcrumbMap = {
     { label: '레시피 추천' },
   ],
   '/login': [{ label: '홈', to: '/' }, { label: '로그인' }],
+  '/mypage': [{ label: '홈', to: '/' }, { label: '마이페이지' }],
   '/guide': [{ label: '홈', to: '/' }, { label: '보관 가이드' }],
   '/shopping-list': [{ label: '홈', to: '/' }, { label: '장보기' }],
   '/faq': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '자주 묻는 질문' }],
@@ -51,7 +52,15 @@ function Breadcrumbs() {
     return null
   }
 
-  const items = breadcrumbMap[pathname] ?? [{ label: '홈', to: '/' }]
+  const items =
+    pathname.startsWith('/recipes/') && pathname !== '/recipes'
+      ? [
+          { label: '홈', to: '/' },
+          { label: '레시피', to: '/recipes' },
+          { label: '찌개/국/탕' },
+          { label: '대파 두부 계란찌개' },
+        ]
+      : breadcrumbMap[pathname] ?? [{ label: '홈', to: '/' }]
 
   return (
     <nav className="breadcrumbs" aria-label="현재 위치">

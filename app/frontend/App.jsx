@@ -7,11 +7,16 @@ import MobileBottomNav from './components/MobileBottomNav.jsx'
 import Home from './pages/home/Home.jsx'
 import InfoPage from './pages/info/InfoPage.jsx'
 import Login from './pages/login/Login.jsx'
+import Mypage from './pages/mypage/Mypage.jsx'
 import Fridge from './pages/fridge/Fridge.jsx'
 import ReceiptOcr from './pages/receipt_ocr/ReceiptOcr.jsx'
 import Guide from './pages/guide/Guide.jsx'
+import FridgeRecipe from './pages/fridge_recipe/FridgeRecipe.jsx'
+import RecipeDetail from './pages/recipe_detail/RecipeDetail.jsx'
 import RecipeList from './pages/recipe_list/RecipeList.jsx'
+import MenuRecommend from './pages/menu_recommend/MenuRecommend.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
+import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
 function AppLayout() {
   const { pathname } = useLocation()
@@ -27,40 +32,14 @@ function AppLayout() {
           <Route path="/fridge" element={<Fridge />} />
           <Route path="/receipt-ocr" element={<ReceiptOcr />} />
           <Route path="/recipes" element={<RecipeList />} />
+          <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/guide" element={<Guide />} />
-          <Route
-            path="/recipe-fridge"
-            element={
-              <RecipeRecommend
-                title="냉장고 파먹기"
-                description="보유 재료를 기준으로 만들 수 있는 레시피를 추천하는 화면입니다."
-              />
-            }
-          />
-          <Route
-            path="/menu-recommend"
-            element={
-              <RecipeRecommend
-                title="메뉴 추천"
-                description="오늘 먹을 메뉴를 상황과 취향에 맞춰 추천하는 화면입니다."
-              />
-            }
-          />
+          <Route path="/recipe-fridge" element={<FridgeRecipe />} />
+          <Route path="/menu-recommend" element={<MenuRecommend />} />
           <Route path="/recipe-recommend" element={<RecipeRecommend />} />
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/shopping-list"
-            element={
-              <InfoPage
-                title="장보기"
-                description="추천 레시피에서 부족한 재료를 모아 장보기 리스트로 정리하는 화면입니다."
-                items={[
-                  '부족한 재료를 한 번에 확인하고 구매 목록으로 관리합니다.',
-                  '구매처별 가격 비교와 직접 요리 시 절약되는 비용을 확인할 수 있도록 확장할 예정입니다.',
-                ]}
-              />
-            }
-          />
+          <Route path="/mypage" element={<Mypage />} />
+          <Route path="/shopping-list" element={<ShoppingList />} />
           <Route
             path="/faq"
             element={
