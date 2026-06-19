@@ -1,6 +1,7 @@
 # SKN27-FINAL-1Team
 
 ### 폴더별 담당 및 내용
+
 ```
 ai       : AI/OCR/추천 실험 공간
 app      : 실제 서비스 프론트·백엔드 코드 공간
@@ -9,7 +10,9 @@ etl      : 데이터 수집, 전처리, Neo4j 적재 스크립트 공간
 storage  : 원본/가공 데이터, mock 데이터, Neo4j import 파일 보관 공간
 test     : 단위/통합/E2E 테스트와 테스트 샘플 데이터 공간
 ```
+
 ### 폴더 구조
+
 ```
 root/
 ├─ ai/                              (AI, OCR, 추천 모델/Agent 실험 코드 공간)
@@ -48,11 +51,12 @@ root/
 │     │  ├─ fridge/                 (김재묵 담당 / 냉장고 관리 화면)
 │     │  ├─ receipt_ocr/            (박준희 담당 / 영수증 업로드·결과 확인 화면)
 │     │  ├─ guide/                  (김주영 담당 / 식재료 가이드 화면)
-│     │  └─ recipe_recommend/       (김경수 담당 / 레시피 추천 결과 화면)
-│     ├─ components/                (공용 / 버튼, 카드, 모달 등 재사용 UI)
+│     │  ├─ recipe_recommend/       (김경수 담당 / 레시피 추천 화면)
+│     │  └─ recipe_list/            (김경수 담당 / 레시피 목록 조회 화면)
+│     ├─ components/                (공용 / Header, Breadcrumbs 등 재사용 UI 컴포넌트)
 │     ├─ services/                  (공용 / 프론트 API 호출 함수)
 │     ├─ stores/                    (공용 / 상태관리)
-│     └─ assets/                    (공용 / 이미지, 아이콘, 정적 리소스)
+│     └─ assets/                    (공용 / 로고, 마스코트, 추출 이미지 등 정적 리소스)
 │
 ├─ docs/                            (기획, 설계, 회의 문서 관리 공간)
 │  ├─ planning/                     (공용 / 프로젝트 주제, 기능 정의, 기획서)
