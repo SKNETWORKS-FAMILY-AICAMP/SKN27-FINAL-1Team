@@ -861,10 +861,12 @@
     border-radius: 12px;
     background: #fffdf8;
     color: var(--figma-text);
+    cursor: pointer;
     font: inherit;
     font-size: 9px;
     font-weight: 900;
     line-height: 1.2;
+    text-decoration: none;
   }
 
   .image-slot--quick {

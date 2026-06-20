@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import './MenuRecommend.css'
 
 import iconAlarm from '../../assets/extracted/icons/icon_alarm.png'
@@ -11,6 +11,28 @@ import imageMenuRecommendation from '../../assets/extracted/images/image_menu_re
 import imageSearch from '../../assets/extracted/images/image_search.png'
 
 const countOptions = [3, 5, 7]
+const moodOptions = ['든든하게', '가볍게', '따뜻하게', '빠르게']
+const mealOptions = ['아침', '점심', '저녁', '야식']
+const priorityOptions = ['조리시간 짧게', '실패 확률 낮게', '밥반찬 위주', '절약 메뉴']
+
+const process = [
+  {
+    title: '취향 조건 확인',
+    description: '선택한 분위기, 식사 시간, 우선순위를 읽고 있어요.',
+  },
+  {
+    title: '메뉴 후보 생성',
+    description: '재료 조건 없이 지금 먹기 좋은 메뉴를 뽑고 있어요.',
+  },
+  {
+    title: '난이도와 시간 정렬',
+    description: '조리 시간과 난이도를 기준으로 실패 확률을 낮춰요.',
+  },
+  {
+    title: '저장 가능한 결과 준비',
+    description: '레시피 상세와 장보기로 이어질 수 있게 정리해요.',
+  },
+]
 
 const recipes = [
   {
@@ -81,20 +103,58 @@ function ImageSlot({ src, alt = '', className = '' }) {
 }
 
 function MenuRecommend() {
+  const navigate = useNavigate()
+  const flowTimersRef = useRef([])
   const [selectedCount, setSelectedCount] = useState(5)
   const [generatedCount, setGeneratedCount] = useState(0)
   const [selectedIds, setSelectedIds] = useState([])
   const [savedIds, setSavedIds] = useState([])
+  const [selectedMood, setSelectedMood] = useState(moodOptions[0])
+  const [selectedMeal, setSelectedMeal] = useState(mealOptions[2])
+  const [selectedPriority, setSelectedPriority] = useState(priorityOptions[0])
+  const [activeStep, setActiveStep] = useState(0)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const generatedRecipes = useMemo(
     () => recipes.slice(0, generatedCount),
     [generatedCount],
   )
 
+  const progressPercent = Math.round(((activeStep + (generatedCount ? 1 : 0)) / process.length) * 100)
+
+  const clearFlowTimers = () => {
+    flowTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    flowTimersRef.current = []
+  }
+
   const handleGenerate = () => {
-    setGeneratedCount(selectedCount)
+    clearFlowTimers()
+    setGeneratedCount(0)
     setSelectedIds([])
-    setSavedIds([])
+    setActiveStep(0)
+    setIsGenerating(true)
+
+    flowTimersRef.current = process.slice(1).map((_, index) =>
+      window.setTimeout(() => {
+        setActiveStep(index + 1)
+      }, 550 * (index + 1)),
+    )
+
+    flowTimersRef.current.push(
+      window.setTimeout(() => {
+        setGeneratedCount(selectedCount)
+        setIsGenerating(false)
+        window.localStorage.setItem(
+          'bobbeori-last-menu-recommend',
+          JSON.stringify({
+            count: selectedCount,
+            mood: selectedMood,
+            meal: selectedMeal,
+            priority: selectedPriority,
+          }),
+        )
+      }, 550 * process.length),
+    )
   }
 
   const handleSelect = (recipeId) => {
@@ -106,6 +166,17 @@ function MenuRecommend() {
   const handleSave = () => {
     setSavedIds((prev) => Array.from(new Set([...prev, ...selectedIds])))
   }
+
+  const saveSingleRecipe = (recipeId) => {
+    setSavedIds((prev) => (prev.includes(recipeId) ? prev : [...prev, recipeId]))
+  }
+
+  const goShopping = (recipe) => {
+    window.localStorage.setItem('bobbeori-shopping-recipe', recipe.title)
+    navigate('/shopping-list')
+  }
+
+  useEffect(() => clearFlowTimers, [])
 
   return (
     <section className="menu-recommend-page" aria-labelledby="menu-recommend-title">
@@ -124,25 +195,77 @@ function MenuRecommend() {
         />
       </div>
 
+      <section className="menu-recommend-runner" aria-label="메뉴 추천 진행 상태">
+        <div>
+          <span>{isGenerating ? `${activeStep + 1}단계 진행 중` : generatedCount ? '추천 완료' : '추천 준비'}</span>
+          <h2>{process[activeStep].title}</h2>
+          <p>{process[activeStep].description}</p>
+        </div>
+        <div className="menu-recommend-runner__meter" aria-hidden="true">
+          <i style={{ width: `${progressPercent}%` }} />
+        </div>
+        <strong>{progressPercent}%</strong>
+      </section>
+
       <section className="menu-recommend-builder" aria-labelledby="builder-title">
         <div>
-          <h2 id="builder-title">레시피 몇 개 받을래요?</h2>
-          <p>원하는 개수를 고르면 그만큼 메뉴 후보를 생성해드려요.</p>
+          <h2 id="builder-title">오늘 어떤 메뉴가 좋을까요?</h2>
+          <p>
+            {selectedMeal}에 {selectedMood} 먹고 싶고, {selectedPriority} 기준으로 추천할게요.
+          </p>
         </div>
-        <div className="menu-recommend-counts" role="group" aria-label="추천 개수 선택">
-          {countOptions.map((count) => (
-            <button
-              className={selectedCount === count ? 'is-active' : ''}
-              key={count}
-              type="button"
-              onClick={() => setSelectedCount(count)}
-            >
-              {count}개
-            </button>
-          ))}
+        <div className="menu-recommend-options">
+          <div className="menu-recommend-counts" role="group" aria-label="분위기 선택">
+            {moodOptions.map((mood) => (
+              <button
+                className={selectedMood === mood ? 'is-active' : ''}
+                key={mood}
+                type="button"
+                onClick={() => setSelectedMood(mood)}
+              >
+                {mood}
+              </button>
+            ))}
+          </div>
+          <div className="menu-recommend-counts" role="group" aria-label="식사 시간 선택">
+            {mealOptions.map((meal) => (
+              <button
+                className={selectedMeal === meal ? 'is-active' : ''}
+                key={meal}
+                type="button"
+                onClick={() => setSelectedMeal(meal)}
+              >
+                {meal}
+              </button>
+            ))}
+          </div>
+          <div className="menu-recommend-counts" role="group" aria-label="우선순위 선택">
+            {priorityOptions.map((priority) => (
+              <button
+                className={selectedPriority === priority ? 'is-active' : ''}
+                key={priority}
+                type="button"
+                onClick={() => setSelectedPriority(priority)}
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+          <div className="menu-recommend-counts" role="group" aria-label="추천 개수 선택">
+            {countOptions.map((count) => (
+              <button
+                className={selectedCount === count ? 'is-active' : ''}
+                key={count}
+                type="button"
+                onClick={() => setSelectedCount(count)}
+              >
+                {count}개
+              </button>
+            ))}
+          </div>
         </div>
-        <button className="menu-recommend-primary" type="button" onClick={handleGenerate}>
-          {selectedCount}개 추천받기
+        <button className="menu-recommend-primary" type="button" onClick={handleGenerate} disabled={isGenerating}>
+          {isGenerating ? '추천 생성 중' : `${selectedCount}개 추천받기`}
         </button>
       </section>
 
@@ -150,7 +273,7 @@ function MenuRecommend() {
         <article>
           <ImageSlot src={iconAlarm} alt="추천 방식" />
           <span>추천 방식</span>
-          <strong>취향 기반</strong>
+          <strong>{selectedMood}</strong>
         </article>
         <article>
           <ImageSlot src={iconBasket} alt="생성 개수" />
@@ -159,8 +282,8 @@ function MenuRecommend() {
         </article>
         <article>
           <ImageSlot src={iconRefrigerator} alt="재료 조건" />
-          <span>재료 조건</span>
-          <strong>상관없음</strong>
+          <span>우선순위</span>
+          <strong>{selectedPriority}</strong>
         </article>
       </div>
 
@@ -170,7 +293,9 @@ function MenuRecommend() {
             <div>
               <h2>추천 결과</h2>
               <p>
-                {generatedCount
+                {isGenerating
+                  ? `${process[activeStep].title} 중이에요. 잠시만 기다려주세요.`
+                  : generatedCount
                   ? `${generatedCount}개의 레시피가 생성됐어요. 저장할 레시피를 선택해보세요.`
                   : '아직 추천을 생성하지 않았어요.'}
               </p>
@@ -187,9 +312,13 @@ function MenuRecommend() {
 
           {generatedCount === 0 ? (
             <div className="menu-recommend-empty">
-              <ImageSlot src={imageSearch} alt="추천 전 빈 상태" />
-              <strong>몇 개 추천받을지 먼저 골라주세요.</strong>
-              <p>추천 생성 후 마음에 드는 카드를 선택해 저장할 수 있어요.</p>
+              <ImageSlot src={isGenerating ? imageMenuRecommendation : imageSearch} alt="추천 전 빈 상태" />
+              <strong>{isGenerating ? '메뉴 후보를 고르는 중이에요.' : '조건을 고르고 추천을 시작해주세요.'}</strong>
+              <p>
+                {isGenerating
+                  ? `${selectedMeal}에 어울리는 ${selectedMood} 메뉴를 정리하고 있어요.`
+                  : '추천 생성 후 마음에 드는 카드를 선택해 저장할 수 있어요.'}
+              </p>
             </div>
           ) : (
             <div className="menu-recommend-grid">
@@ -238,9 +367,12 @@ function MenuRecommend() {
                         <button
                           type="button"
                           disabled={isSaved}
-                          onClick={() => handleSelect(recipe.id)}
+                          onClick={() => saveSingleRecipe(recipe.id)}
                         >
-                          {isSaved ? '저장 완료' : '저장 후보'}
+                          {isSaved ? '저장 완료' : '바로 저장'}
+                        </button>
+                        <button type="button" onClick={() => goShopping(recipe)}>
+                          장보기
                         </button>
                       </div>
                     </div>
@@ -254,18 +386,12 @@ function MenuRecommend() {
         <aside className="menu-recommend-guide" aria-labelledby="guide-title">
           <h2 id="guide-title">추천은 이렇게 진행돼요</h2>
           <ol>
-            <li>
-              <strong>추천 개수 선택</strong>
-              <p>3개, 5개, 7개 중 원하는 후보 수를 골라요.</p>
-            </li>
-            <li>
-              <strong>메뉴 후보 생성</strong>
-              <p>냉장고 재료와 상관없이 먹고 싶은 한 끼를 추천해요.</p>
-            </li>
-            <li>
-              <strong>레시피 저장</strong>
-              <p>마음에 드는 카드를 선택하고 저장할 수 있어요.</p>
-            </li>
+            {process.map((item, index) => (
+              <li className={index === activeStep ? 'is-active' : ''} key={item.title}>
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+              </li>
+            ))}
           </ol>
           <ImageSlot className="menu-recommend-guide__image" src={imageHello} alt="인사하는 밥벌이" />
         </aside>

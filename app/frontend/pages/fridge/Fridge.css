@@ -53,6 +53,37 @@
   line-height: 1.55;
 }
 
+.fridge-stock-notice {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 38px;
+  margin-top: 12px;
+  padding: 5px 6px 5px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #b9ddb5;
+  border-radius: 999px;
+  background: #f0fbec;
+  color: #246a35;
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-stock-notice button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #246a35;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .fridge-search {
   box-sizing: border-box;
   width: min(100%, 560px);
@@ -405,6 +436,15 @@
   background: rgba(255, 253, 248, 0.82);
 }
 
+.fridge-card-grid.is-list {
+  grid-template-columns: 1fr;
+}
+
+.fridge-card-grid.is-list .fridge-item {
+  min-height: 132px;
+  grid-template-columns: 92px minmax(0, 1fr);
+}
+
 .fridge-item {
   min-height: 164px;
   padding: 16px 16px 0;
@@ -636,6 +676,14 @@
     grid-column: 1;
     margin-top: -2px;
     font-size: 12px;
+  }
+
+  .fridge-stock-notice {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 0;
+    font-size: 11px;
   }
 
   .fridge-search {

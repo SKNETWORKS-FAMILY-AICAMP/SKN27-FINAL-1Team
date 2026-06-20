@@ -80,6 +80,75 @@
   gap: 28px;
 }
 
+.mypage-runner {
+  min-height: 96px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px auto auto;
+  align-items: center;
+  gap: 16px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 16px;
+  background: #fffaf2;
+}
+
+.mypage-runner span {
+  color: #d88720;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mypage-runner h2 {
+  margin: 5px 0 0;
+  color: var(--figma-text);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.mypage-runner p {
+  margin: 6px 0 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mypage-runner strong {
+  color: #3f8f38;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.mypage-runner button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1.6px solid var(--figma-coral-stroke);
+  border-radius: 999px;
+  background: var(--figma-coral);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.mypage-runner__meter {
+  height: 10px;
+  border-radius: 999px;
+  background: #f3dfbd;
+  overflow: hidden;
+}
+
+.mypage-runner__meter i {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--figma-coral), #69b55a);
+  transition: width 220ms ease;
+}
+
 .mypage-profile__avatar {
   width: 126px;
   height: 126px;
@@ -108,6 +177,25 @@
   font-size: 28px;
   font-weight: 900;
   letter-spacing: 0;
+}
+
+.mypage-profile input {
+  box-sizing: border-box;
+  width: min(100%, 260px);
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 10px;
+  background: #fffdf8;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mypage-profile__name input {
+  font-size: 20px;
+  font-weight: 900;
 }
 
 .mypage-profile__name span {
@@ -228,6 +316,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.mypage-stat:hover {
+  transform: translateY(-1px);
 }
 
 .mypage-stat span {
@@ -378,7 +473,7 @@
   gap: 12px;
 }
 
-.mypage-recent-list article {
+.mypage-recent-list button {
   min-height: 86px;
   padding: 10px;
   display: flex;
@@ -387,6 +482,9 @@
   border: 1px solid #f1d9b3;
   border-radius: 12px;
   background: #fffaf2;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .mypage-recent__image {
@@ -411,6 +509,13 @@
 
 .mypage-settings {
   padding: 18px;
+}
+
+.mypage-setting-note {
+  margin: 8px 0 0;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .mypage-settings ul {
@@ -442,9 +547,11 @@
   padding: 3px;
   display: inline-flex;
   justify-content: flex-start;
+  border: 0;
   border-radius: 999px;
   background: #e4d8c7;
   box-sizing: border-box;
+  cursor: pointer;
 }
 
 .mypage-toggle::before {
@@ -617,6 +724,37 @@
     height: 96px;
   }
 
+  .mypage-runner {
+    min-height: 104px;
+    margin-bottom: 12px;
+    padding: 13px;
+    grid-template-columns: 1fr auto;
+    gap: 10px 12px;
+  }
+
+  .mypage-runner h2 {
+    font-size: 15px;
+  }
+
+  .mypage-runner p {
+    font-size: 11px;
+  }
+
+  .mypage-runner strong {
+    font-size: 18px;
+  }
+
+  .mypage-runner__meter {
+    grid-column: 1 / -1;
+    height: 8px;
+  }
+
+  .mypage-runner button {
+    grid-column: 1 / -1;
+    min-height: 38px;
+    font-size: 12px;
+  }
+
   .mypage-profile {
     min-height: 0;
     padding: 14px;
@@ -642,6 +780,15 @@
   .mypage-profile p,
   .mypage-profile small {
     font-size: 12px;
+  }
+
+  .mypage-profile input {
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  .mypage-profile__name input {
+    font-size: 15px;
   }
 
   .mypage-profile p {
@@ -811,9 +958,14 @@
 
   .mypage-settings {
     min-height: 52px;
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .mypage-setting-note {
+    display: none;
   }
 
   .mypage-settings::after,

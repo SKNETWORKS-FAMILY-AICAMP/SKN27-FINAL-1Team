@@ -116,6 +116,89 @@
   background: rgba(255, 253, 248, 0.78);
 }
 
+.guide-runner {
+  min-height: 98px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px auto auto;
+  align-items: center;
+  gap: 16px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 18px;
+  background: #fffaf2;
+}
+
+.guide-runner span {
+  color: #d88720;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guide-runner h2 {
+  margin: 5px 0 0;
+  color: var(--figma-text);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.guide-runner p {
+  margin: 6px 0 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guide-runner strong {
+  color: #3f8f38;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.guide-runner__meter {
+  height: 10px;
+  border-radius: 999px;
+  background: #f3dfbd;
+  overflow: hidden;
+}
+
+.guide-runner__meter i {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--figma-coral), #69b55a);
+  transition: width 220ms ease;
+}
+
+.guide-runner__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.guide-runner__actions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.guide-runner__actions button:first-child {
+  border: 1.6px solid var(--figma-coral-stroke);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.guide-runner__actions button:last-child {
+  border: 1.4px solid #c79a74;
+  background: #fffdf8;
+  color: #6d4128;
+}
+
 .guide-section-title {
   margin-bottom: 14px;
   color: var(--figma-text);
@@ -180,6 +263,11 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
+}
+
+.guide-more-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .guide-more-button span {
@@ -323,6 +411,16 @@
   background: #fffdf8;
 }
 
+.guide-tip-card.is-active {
+  border-color: var(--figma-coral);
+  box-shadow: 0 12px 24px rgba(255, 107, 116, 0.1);
+}
+
+.guide-tip-card.is-done {
+  border-color: #badf9d;
+  background: #fbfff6;
+}
+
 .guide-tip-card__title {
   display: flex;
   align-items: center;
@@ -381,6 +479,31 @@
   color: #8b673e;
   font-size: 12px;
   font-weight: 900;
+}
+
+.guide-tip-card button {
+  min-height: 36px;
+  margin-top: 12px;
+  border: 1.4px solid #c79a74;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guide-tip-card.is-active button {
+  border-color: var(--figma-coral-stroke);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.guide-tip-card.is-done button {
+  border-color: #badf9d;
+  background: #e8f8d8;
+  color: #3c7a33;
 }
 
 .guide-fridge {
@@ -497,6 +620,10 @@
   background: #fffdf8;
 }
 
+.guide-recipe-card {
+  position: relative;
+}
+
 .guide-recipe-card__image {
   width: 96px;
   height: 78px;
@@ -517,6 +644,22 @@
   font-size: 12px;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.guide-recipe-card button {
+  min-height: 32px;
+  padding: 0 13px;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  border: 1.4px solid #c79a74;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .guide-recipe-more {
@@ -611,6 +754,42 @@
 
   .guide-hero__art img {
     width: min(100%, 178px);
+  }
+
+  .guide-runner {
+    min-height: 112px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    padding: 13px;
+    grid-template-columns: 1fr auto;
+    gap: 10px 12px;
+  }
+
+  .guide-runner h2 {
+    font-size: 15px;
+  }
+
+  .guide-runner p {
+    font-size: 11px;
+  }
+
+  .guide-runner strong {
+    font-size: 18px;
+  }
+
+  .guide-runner__meter {
+    grid-column: 1 / -1;
+    height: 8px;
+  }
+
+  .guide-runner__actions {
+    grid-column: 1 / -1;
+  }
+
+  .guide-runner__actions button {
+    flex: 1;
+    min-height: 38px;
+    font-size: 12px;
   }
 
   .guide-panel {
@@ -743,6 +922,11 @@
     display: none;
   }
 
+  .guide-tip-card button {
+    min-height: 32px;
+    margin-top: 10px;
+  }
+
   .guide-fridge__title {
     gap: 10px;
   }
@@ -781,6 +965,10 @@
     width: 260px;
     min-height: 104px;
     flex: 0 0 auto;
+  }
+
+  .guide-recipe-card {
+    padding-bottom: 48px;
   }
 }
 

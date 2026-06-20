@@ -119,8 +119,65 @@
   background: #fff4f3;
 }
 
+.receipt-stepper button.is-done {
+  border-color: #b9ddb5;
+  background: #f0fbec;
+  color: #246a35;
+}
+
 .receipt-stepper i {
   display: none;
+}
+
+.receipt-progress-panel {
+  min-height: 92px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(220px, 0.7fr) auto;
+  align-items: center;
+  gap: 18px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.82);
+  box-sizing: border-box;
+}
+
+.receipt-progress-panel span {
+  color: var(--figma-coral);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.receipt-progress-panel h2 {
+  margin: 6px 0 0;
+  color: var(--figma-text);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.receipt-progress-panel p {
+  margin: 7px 0 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.receipt-progress-panel__bar {
+  height: 12px;
+  border-radius: 999px;
+  background: #fff4e3;
+  overflow: hidden;
+}
+
+.receipt-progress-panel__bar span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--figma-coral);
+  transition: width 180ms ease;
 }
 
 .receipt-layout {
@@ -192,6 +249,11 @@
   border: 1.6px solid var(--figma-coral-stroke);
   background: var(--figma-coral);
   color: #fff;
+}
+
+.receipt-primary-button:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 .receipt-soft-button,
@@ -590,6 +652,21 @@
     padding: 0 13px;
     flex: 0 0 auto;
     border-radius: 999px;
+    font-size: 12px;
+  }
+
+  .receipt-progress-panel {
+    margin-top: 10px;
+    padding: 14px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .receipt-progress-panel h2 {
+    font-size: 17px;
+  }
+
+  .receipt-progress-panel p {
     font-size: 12px;
   }
 

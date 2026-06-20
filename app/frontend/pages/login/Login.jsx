@@ -40,6 +40,12 @@ function Login() {
     navigate('/')
   }
 
+  const handleSocialStart = (method) => {
+    window.localStorage.setItem('bobbeori-auth-mode', method.className)
+    window.dispatchEvent(new Event('bobbeori-auth-change'))
+    navigate('/')
+  }
+
   return (
     <section className="login-page" aria-labelledby="login-title">
       <div className="login-browser">
@@ -92,6 +98,7 @@ function Login() {
                     className={`login-card__button ${method.className}`}
                     type="button"
                     key={method.label}
+                    onClick={() => handleSocialStart(method)}
                   >
                     <span className={`login-card__provider ${method.className}`}>
                       {method.mark}

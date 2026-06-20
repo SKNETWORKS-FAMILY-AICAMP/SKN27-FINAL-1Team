@@ -62,6 +62,7 @@
 }
 
 .menu-recommend-builder,
+.menu-recommend-runner,
 .menu-recommend-summary article,
 .menu-recommend-results,
 .menu-recommend-guide,
@@ -72,11 +73,62 @@
   background: rgba(255, 253, 248, 0.82);
 }
 
+.menu-recommend-runner {
+  min-height: 96px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.menu-recommend-runner span {
+  color: #d88720;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.menu-recommend-runner h2 {
+  margin: 5px 0 0;
+  color: var(--figma-text);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.menu-recommend-runner p {
+  margin: 6px 0 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.menu-recommend-runner strong {
+  color: #3f8f38;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.menu-recommend-runner__meter {
+  height: 10px;
+  border-radius: 999px;
+  background: #f3dfbd;
+  overflow: hidden;
+}
+
+.menu-recommend-runner__meter i {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--figma-coral), #69b55a);
+  transition: width 240ms ease;
+}
+
 .menu-recommend-builder {
-  min-height: 116px;
+  min-height: 148px;
   padding: 20px 22px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.4fr) auto;
   align-items: center;
   gap: 18px;
 }
@@ -101,6 +153,12 @@
 
 .menu-recommend-counts {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.menu-recommend-options {
+  display: grid;
   gap: 8px;
 }
 
@@ -135,6 +193,11 @@
   border: 1.6px solid var(--figma-coral-stroke);
   background: var(--figma-coral);
   color: #fff;
+}
+
+.menu-recommend-primary:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .menu-recommend-save:disabled {
@@ -348,7 +411,7 @@
 .menu-recommend-card__actions {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -366,7 +429,8 @@
   text-decoration: none;
 }
 
-.menu-recommend-card__actions a {
+.menu-recommend-card__actions a,
+.menu-recommend-card__actions button:last-child {
   border: 1.6px solid var(--figma-coral-stroke);
   background: var(--figma-coral);
   color: #fff;
@@ -376,6 +440,17 @@
   border: 1.4px solid #c79a74;
   background: #fffdf8;
   color: #6d4128;
+}
+
+.menu-recommend-card__actions button:last-child {
+  border-color: var(--figma-coral-stroke);
+}
+
+.menu-recommend-card__actions button:disabled {
+  border-color: #bfd9b6;
+  background: #e8f8d8;
+  color: #3f8f38;
+  cursor: default;
 }
 
 .menu-recommend-guide {
@@ -399,6 +474,11 @@
   border: 1px solid #f1d9b3;
   border-radius: 12px;
   background: #fffdf8;
+}
+
+.menu-recommend-guide li.is-active {
+  border-color: var(--figma-coral);
+  background: #fff0f1;
 }
 
 .menu-recommend-guide strong {
@@ -466,6 +546,31 @@
     height: 96px;
   }
 
+  .menu-recommend-runner {
+    min-height: 92px;
+    margin-bottom: 12px;
+    padding: 13px;
+    grid-template-columns: 1fr auto;
+    gap: 10px 12px;
+  }
+
+  .menu-recommend-runner h2 {
+    font-size: 15px;
+  }
+
+  .menu-recommend-runner p {
+    font-size: 11px;
+  }
+
+  .menu-recommend-runner strong {
+    font-size: 18px;
+  }
+
+  .menu-recommend-runner__meter {
+    grid-column: 1 / -1;
+    height: 8px;
+  }
+
   .menu-recommend-builder {
     min-height: 0;
     padding: 14px;
@@ -483,8 +588,14 @@
   }
 
   .menu-recommend-counts {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .menu-recommend-counts::-webkit-scrollbar {
+    display: none;
   }
 
   .menu-recommend-counts button,
@@ -492,6 +603,10 @@
   .menu-recommend-save {
     min-height: 38px;
     font-size: 12px;
+  }
+
+  .menu-recommend-counts button {
+    min-width: max-content;
   }
 
   .menu-recommend-summary {
@@ -612,6 +727,12 @@
   .menu-recommend-card__actions {
     grid-column: 1 / -1;
     margin-top: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .menu-recommend-card__actions a,
+  .menu-recommend-card__actions button {
+    font-size: 11px;
   }
 }
 

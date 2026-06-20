@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import logoText from '../assets/logo_text_extracted.png'
 import './Header.css'
 
@@ -16,7 +16,10 @@ const recipeItems = [
 
 function Header() {
   const { pathname } = useLocation()
-  const isRecipeActive = recipeItems.some((item) => item.to === pathname)
+  const navigate = useNavigate()
+  const isRecipeActive = recipeItems.some((item) => item.to === pathname) || pathname.startsWith('/recipes/')
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const [authMode, setAuthMode] = useState(() => {
     if (typeof window === 'undefined') {
       return null
@@ -25,6 +28,18 @@ function Header() {
     return window.localStorage.getItem('bobbeori-auth-mode')
   })
   const isGuest = authMode === 'guest'
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false)
+  }
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault()
+    const query = searchTerm.trim()
+
+    navigate(query ? `/recipes?query=${encodeURIComponent(query)}` : '/recipes')
+    closeMobileMenu()
+  }
 
   useEffect(() => {
     const syncAuthMode = () => {
@@ -40,10 +55,20 @@ function Header() {
     }
   }, [])
 
+  useEffect(() => {
+    closeMobileMenu()
+  }, [pathname])
+
   return (
     <header className="site-header" aria-label="밥벌이 주요 메뉴">
       <div className="site-header__inner">
-        <button className="site-header__mobile-icon" type="button" aria-label="메뉴 열기">
+        <button
+          className="site-header__mobile-icon"
+          type="button"
+          aria-label={isMobileMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
+          aria-expanded={isMobileMenuOpen}
+          onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+        >
           <span />
         </button>
         <Link
@@ -54,7 +79,10 @@ function Header() {
           <img className="site-header__logo-text" src={logoText} alt="밥벌이" />
         </Link>
 
-        <nav className="site-header__nav" aria-label="주요 메뉴">
+        <nav
+          className={isMobileMenuOpen ? 'site-header__nav is-mobile-open' : 'site-header__nav'}
+          aria-label="주요 메뉴"
+        >
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -62,6 +90,7 @@ function Header() {
               className={({ isActive }) =>
                 isActive ? 'site-header__nav-link active' : 'site-header__nav-link'
               }
+              onClick={closeMobileMenu}
             >
               {item.label}
             </NavLink>
@@ -76,6 +105,7 @@ function Header() {
               }
               type="button"
               aria-haspopup="menu"
+              onClick={() => navigate('/recipes')}
             >
               레시피
             </button>
@@ -90,6 +120,7 @@ function Header() {
                       : 'site-header__dropdown-link'
                   }
                   role="menuitem"
+                  onClick={closeMobileMenu}
                 >
                   {item.label}
                 </NavLink>
@@ -102,6 +133,7 @@ function Header() {
             className={({ isActive }) =>
               isActive ? 'site-header__nav-link active' : 'site-header__nav-link'
             }
+            onClick={closeMobileMenu}
           >
             가이드
           </NavLink>
@@ -111,21 +143,32 @@ function Header() {
             className={({ isActive }) =>
               isActive ? 'site-header__nav-link active' : 'site-header__nav-link'
             }
+            onClick={closeMobileMenu}
           >
             장보기
           </NavLink>
         </nav>
 
         <div className="site-header__actions">
-          <label className="site-header__search">
+          <form className="site-header__search" aria-label="재료명 또는 레시피 검색" onSubmit={handleSearchSubmit}>
             <span className="site-header__sr-only">재료명 또는 레시피 검색</span>
-            <input type="search" placeholder="재료명, 레시피 검색" />
-          </label>
+            <input
+              type="search"
+              placeholder="재료명, 레시피 검색"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </form>
           <Link className="site-header__start" to={isGuest ? '/mypage' : '/login'}>
             {isGuest ? '마이페이지' : '로그인'}
           </Link>
         </div>
-        <button className="site-header__mobile-bell" type="button" aria-label="알림 보기" />
+        <button
+          className="site-header__mobile-bell"
+          type="button"
+          aria-label="알림 보기"
+          onClick={() => navigate('/mypage')}
+        />
       </div>
     </header>
   )

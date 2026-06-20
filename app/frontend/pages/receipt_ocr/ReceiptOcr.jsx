@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './ReceiptOcr.css'
 
 import iconEgg from '../../assets/extracted/icons/icon_egg.png'
@@ -19,12 +20,6 @@ const rows = [
   { raw: '맛김치', name: '김치', quantity: '1통', price: '3,400원', review: true },
 ]
 
-const summary = [
-  { label: '인식 품목', value: '6개' },
-  { label: '자동 매핑', value: '5개' },
-  { label: '검토 필요', value: '1개' },
-]
-
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
     <span className={`receipt-image-slot ${src ? 'is-filled' : ''} ${className}`}>
@@ -34,6 +29,143 @@ function ImageSlot({ src, alt = '', className = '' }) {
 }
 
 function ReceiptOcr() {
+  const navigate = useNavigate()
+  const flowTimersRef = useRef([])
+  const [activeStep, setActiveStep] = useState(1)
+  const [detectedRows, setDetectedRows] = useState(rows)
+  const [receiptSource, setReceiptSource] = useState('샘플 영수증')
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  const mappedCount = detectedRows.filter((row) => !row.review).length
+  const reviewCount = detectedRows.length - mappedCount
+  const currentSummary = [
+    { label: '인식 품목', value: `${detectedRows.length}개` },
+    { label: '자동 매핑', value: `${mappedCount}개` },
+    { label: '검토 필요', value: `${reviewCount}개` },
+  ]
+  const progressPercent = Math.round(((activeStep + 1) / steps.length) * 100)
+  const currentStepLabel = steps[activeStep]
+  const isReadyToStock = activeStep >= steps.length - 1
+
+  const progressDescriptions = [
+    '영수증을 올리거나 촬영하면 분석을 시작할 수 있어요.',
+    isProcessing ? `${receiptSource} 기준으로 품목과 가격을 읽는 중이에요.` : `${receiptSource} 기준으로 품목과 가격을 읽었어요.`,
+    `${detectedRows.length}개 품목을 장보기 재료 후보로 추출했어요.`,
+    reviewCount ? `${reviewCount}개 후보는 이름 확인이 필요해요.` : '모든 후보가 자동으로 확인됐어요.',
+    reviewCount ? '검토 필요 품목을 확인하면 입고할 수 있어요.' : '표준 재료명 매칭이 끝났어요.',
+    `총 ${detectedRows.length}개 재료를 냉장고에 입고할 준비가 끝났어요.`,
+  ]
+
+  const clearFlowTimers = () => {
+    flowTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    flowTimersRef.current = []
+  }
+
+  const moveToStep = (nextStep) => {
+    clearFlowTimers()
+    setIsProcessing(false)
+    setActiveStep(Math.max(0, Math.min(nextStep, steps.length - 1)))
+  }
+
+  const startUpload = (source) => {
+    clearFlowTimers()
+    setReceiptSource(source)
+    setIsProcessing(true)
+    setActiveStep(0)
+
+    const autoSteps = [1, 2, 3]
+    flowTimersRef.current = autoSteps.map((step, index) =>
+      window.setTimeout(() => {
+        setActiveStep(step)
+
+        if (step === 3) {
+          setIsProcessing(false)
+        }
+      }, (index + 1) * 650),
+    )
+  }
+
+  const proceedNextStep = () => {
+    clearFlowTimers()
+    setIsProcessing(false)
+
+    if (isReadyToStock) {
+      stockIngredients()
+      return
+    }
+
+    if (activeStep === 4 && reviewCount > 0) {
+      window.alert('검토 필요 품목이 있어요. 후보 변경 버튼으로 표준 재료명을 먼저 확인해주세요.')
+      moveToStep(3)
+      return
+    }
+
+    moveToStep(activeStep + 1)
+  }
+
+  const addRow = () => {
+    clearFlowTimers()
+    setIsProcessing(false)
+    const name = window.prompt('추가할 품목명을 입력해주세요.')
+
+    if (!name?.trim()) {
+      return
+    }
+
+    setDetectedRows((prev) => [
+      ...prev,
+      {
+        raw: name.trim(),
+        name: name.trim(),
+        quantity: '1개',
+        price: '0원',
+        review: true,
+      },
+    ])
+    setActiveStep(2)
+  }
+
+  const changeCandidate = (raw) => {
+    clearFlowTimers()
+    setIsProcessing(false)
+    const nextName = window.prompt('변경할 표준 재료명을 입력해주세요.')
+
+    if (!nextName?.trim()) {
+      return
+    }
+
+    setDetectedRows((prev) =>
+      prev.map((row) =>
+        row.raw === raw ? { ...row, name: nextName.trim(), review: false } : row,
+      ),
+    )
+    const remainingReviewCount = detectedRows.filter((row) => row.raw !== raw && row.review).length
+    setActiveStep(remainingReviewCount === 0 ? 5 : 4)
+  }
+
+  const resetAnalysis = () => {
+    clearFlowTimers()
+    setIsProcessing(false)
+    setDetectedRows(rows)
+    setReceiptSource('샘플 영수증')
+    setActiveStep(1)
+  }
+
+  const stockIngredients = () => {
+    clearFlowTimers()
+    setIsProcessing(false)
+
+    if (reviewCount > 0 && !window.confirm('검토 필요 품목이 남아 있어요. 그래도 냉장고에 입고할까요?')) {
+      moveToStep(3)
+      return
+    }
+
+    window.localStorage.setItem('bobbeori-last-stocked-count', String(detectedRows.length))
+    navigate('/fridge')
+  }
+
+  useEffect(() => clearFlowTimers, [])
+
   return (
     <section className="receipt-page" aria-labelledby="receipt-title">
       <div className="receipt-hero">
@@ -44,7 +176,7 @@ function ReceiptOcr() {
         <ImageSlot className="receipt-hero__image" src={imageReceipt} />
         <aside className="receipt-summary" aria-label="입고 요약">
           <h2>입고 요약</h2>
-          {summary.map((item) => (
+          {currentSummary.map((item) => (
             <div key={item.label}>
               <span>{item.label}</span>
               <strong>{item.value}</strong>
@@ -56,13 +188,41 @@ function ReceiptOcr() {
       <div className="receipt-stepper" aria-label="OCR 진행 단계">
         {steps.map((step, index) => (
           <React.Fragment key={step}>
-            <button className={index === 1 ? 'is-active' : ''} type="button">
+            <button
+              className={[
+                index === activeStep ? 'is-active' : '',
+                index < activeStep ? 'is-done' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              type="button"
+              onClick={() => moveToStep(index)}
+            >
               <span>{step}</span>
             </button>
             {index < steps.length - 1 ? <i aria-hidden="true" /> : null}
           </React.Fragment>
         ))}
       </div>
+
+      <section className="receipt-progress-panel" aria-labelledby="receipt-progress-title">
+        <div>
+          <span>{progressPercent}% 진행</span>
+          <h2 id="receipt-progress-title">{currentStepLabel}</h2>
+          <p>{progressDescriptions[activeStep]}</p>
+        </div>
+        <div className="receipt-progress-panel__bar" aria-label={`진행률 ${progressPercent}%`}>
+          <span style={{ width: `${progressPercent}%` }} />
+        </div>
+        <button
+          className="receipt-primary-button"
+          type="button"
+          disabled={isProcessing}
+          onClick={proceedNextStep}
+        >
+          {isProcessing ? 'OCR 진행 중...' : isReadyToStock ? '냉장고 입고 완료하기' : '다음 단계 진행'}
+        </button>
+      </section>
 
       <div className="receipt-layout">
         <section className="receipt-panel receipt-upload" aria-labelledby="upload-title">
@@ -71,10 +231,10 @@ function ReceiptOcr() {
             <ImageSlot className="receipt-dropzone__icon" />
             <p>영수증 사진을 드래그하거나 업로드/촬영 버튼을 눌러주세요.</p>
             <div>
-              <button className="receipt-primary-button" type="button">
+              <button className="receipt-primary-button" type="button" onClick={() => startUpload('업로드 이미지')}>
                 이미지 업로드
               </button>
-              <button className="receipt-soft-button" type="button">
+              <button className="receipt-soft-button" type="button" onClick={() => startUpload('카메라 촬영본')}>
                 카메라 촬영
               </button>
             </div>
@@ -83,13 +243,13 @@ function ReceiptOcr() {
           <div className="receipt-preview">
             <div className="receipt-preview__title">
               <h3>영수증 미리보기</h3>
-              <button type="button">다시 촬영</button>
+              <button type="button" onClick={() => moveToStep(0)}>다시 촬영</button>
             </div>
             <article className="receipt-paper">
               <strong>BABBEORI MART</strong>
               <span>2025-05-22 15:42:18</span>
               <dl>
-                {rows.map((row) => (
+                {detectedRows.map((row) => (
                   <div key={row.raw}>
                     <dt>{row.raw}</dt>
                     <dd>{row.quantity}</dd>
@@ -115,7 +275,7 @@ function ReceiptOcr() {
               <span role="columnheader">수량</span>
               <span role="columnheader">가격</span>
             </div>
-            {rows.map((row, index) => (
+            {detectedRows.map((row, index) => (
               <div className="receipt-result-row" role="row" key={row.raw}>
                 <span role="cell">
                   <b>{index + 1}</b>
@@ -126,15 +286,17 @@ function ReceiptOcr() {
               </div>
             ))}
           </div>
-          <button className="receipt-add-row" type="button">
+          <button className="receipt-add-row" type="button" onClick={addRow}>
             + 행 추가
           </button>
-          <p className="receipt-success">모든 항목이 정상적으로 추출되었어요!</p>
+          <p className="receipt-success">
+            {reviewCount ? `${reviewCount}개 항목은 검토가 필요해요.` : '모든 항목이 정상적으로 추출되었어요!'}
+          </p>
           <div className="receipt-result-actions">
-            <button className="receipt-soft-button" type="button">
+            <button className="receipt-soft-button" type="button" onClick={resetAnalysis}>
               재분석
             </button>
-            <button className="receipt-primary-button" type="button">
+            <button className="receipt-primary-button" type="button" onClick={() => moveToStep(4)}>
               결과 저장
             </button>
           </div>
@@ -143,20 +305,20 @@ function ReceiptOcr() {
         <section className="receipt-panel receipt-candidates" aria-labelledby="candidate-title">
           <h2 id="candidate-title">식재료 후보 확인</h2>
           <div className="receipt-candidate-list">
-            {rows.map((row) => (
+            {detectedRows.map((row) => (
               <article key={row.raw}>
                 <span>{row.raw}</span>
                 <b aria-hidden="true">→</b>
                 <ImageSlot className="receipt-candidate__image" src={row.image} />
                 <strong>{row.name}</strong>
-                <button type="button" aria-label={`${row.name} 후보 변경`} />
+                <button type="button" aria-label={`${row.name} 후보 변경`} onClick={() => changeCandidate(row.raw)} />
               </article>
             ))}
           </div>
 
           <h2>표준 재료명 매핑</h2>
           <div className="receipt-mapping-table">
-            {rows.map((row) => (
+            {detectedRows.map((row) => (
               <article key={row.name}>
                 <strong>{row.name}</strong>
                 <span className={row.review ? 'is-review' : ''}>{row.review ? '검토 필요' : '자동 매핑'}</span>
@@ -172,10 +334,10 @@ function ReceiptOcr() {
             <span>기본 유통기한 설정</span>
           </div>
 
-          <button className="receipt-stock-button" type="button">
+          <button className="receipt-stock-button" type="button" onClick={stockIngredients}>
             <ImageSlot className="receipt-stock-button__icon" src={iconRefrigerator} />
             냉장고에 입고하기
-            <small>총 6개 재료가 등록돼요!</small>
+            <small>총 {detectedRows.length}개 재료가 등록돼요!</small>
           </button>
         </section>
       </div>
