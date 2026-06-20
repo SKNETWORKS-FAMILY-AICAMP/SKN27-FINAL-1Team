@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Mypage.css'
 
@@ -58,8 +58,42 @@ function Mypage() {
   const authMode =
     typeof window === 'undefined' ? null : window.localStorage.getItem('bobbeori-auth-mode')
   const isGuest = authMode === 'guest'
+  const [userData, setUserData] = useState(null)
+
+  useEffect(() => {
+    if (isGuest) return
+
+    const fetchUser = async () => {
+      const token = window.localStorage.getItem('bobbeori-token')
+      if (!token) {
+        navigate('/login')
+        return
+      }
+
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+        if (!response.ok) throw new Error('인증 실패')
+        
+        const data = await response.json()
+        setUserData(data)
+      } catch (err) {
+        console.error(err)
+        window.localStorage.removeItem('bobbeori-token')
+        window.localStorage.removeItem('bobbeori-auth-mode')
+        navigate('/login')
+      }
+    }
+
+    fetchUser()
+  }, [isGuest, navigate])
 
   const handleLogout = () => {
+    window.localStorage.removeItem('bobbeori-token')
     window.localStorage.removeItem('bobbeori-auth-mode')
     window.dispatchEvent(new Event('bobbeori-auth-change'))
     navigate('/login')
@@ -79,11 +113,11 @@ function Mypage() {
         <ImageSlot className="mypage-profile__avatar" src={imageMypage} />
         <div className="mypage-profile__info">
           <div className="mypage-profile__name">
-            <h2>{isGuest ? '게스트님' : '밥벌이님'}</h2>
+            <h2>{isGuest ? '게스트님' : (userData ? `${userData.nickname}님` : '불러오는 중...')}</h2>
             <span>{isGuest ? '게스트' : '일반 회원'}</span>
           </div>
-          <p>{isGuest ? 'guest@bobbeori.com' : 'babbeori@example.com'}</p>
-          <small>{isGuest ? '게스트 모드 이용 중' : '가입일 2024. 05. 22'}</small>
+          <p>{isGuest ? 'guest@bobbeori.com' : (userData?.email || '이메일 정보 없음')}</p>
+          <small>{isGuest ? '게스트 모드 이용 중' : (userData ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}` : '')}</small>
           <div className="mypage-profile__actions">
             <button className="mypage-primary-button" type="button">
               프로필 수정
@@ -96,11 +130,9 @@ function Mypage() {
         <div className="mypage-social">
           <strong>소셜 로그인 정보</strong>
           <div>
-            <span className="mypage-social__pill mypage-social__pill--kakao">카카오</span>
-            <span className="mypage-social__pill mypage-social__pill--naver">네이버</span>
-            <button className="mypage-connect-button" type="button">
-              + 연결하기
-            </button>
+            <span className={`mypage-social__pill mypage-social__pill--kakao ${userData?.provider === 'kakao' ? 'is-active' : ''}`}>카카오</span>
+            <span className={`mypage-social__pill mypage-social__pill--naver ${userData?.provider === 'naver' ? 'is-active' : ''}`}>네이버</span>
+            <span className={`mypage-social__pill mypage-social__pill--google ${userData?.provider === 'google' ? 'is-active' : ''}`}>구글</span>
           </div>
         </div>
       </section>

@@ -8,9 +8,9 @@ import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import './Login.css'
 
 const loginMethods = [
-  { label: '카카오로 로그인', mark: '●', className: 'kakao' },
-  { label: '네이버로 로그인', mark: 'N', className: 'naver' },
-  { label: '구글로 로그인', mark: 'G', className: 'google' },
+  { label: '카카오로 로그인', mark: '●', className: 'kakao', provider: 'kakao' },
+  { label: '네이버로 로그인', mark: 'N', className: 'naver', provider: 'naver' },
+  { label: '구글로 로그인', mark: 'G', className: 'google', provider: 'google' },
 ]
 
 const featureCards = [
@@ -38,6 +38,28 @@ function Login() {
     window.localStorage.setItem('bobbeori-auth-mode', 'guest')
     window.dispatchEvent(new Event('bobbeori-auth-change'))
     navigate('/')
+  }
+
+  const handleSocialLogin = (provider) => {
+    const host = window.location.origin
+    const redirectUri = encodeURIComponent(`${host}/auth/callback/${provider}`)
+    let url = ''
+
+    if (provider === 'kakao') {
+      const clientId = import.meta.env.VITE_KAKAO_CLIENT_ID || ''
+      url = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`
+    } else if (provider === 'naver') {
+      const clientId = import.meta.env.VITE_NAVER_CLIENT_ID || ''
+      const state = 'bobbeori_naver_state'
+      url = `https://nid.naver.com/oauth2.0/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}`
+    } else if (provider === 'google') {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+      url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20profile%20email`
+    }
+
+    if (url) {
+      window.location.href = url
+    }
   }
 
   return (
@@ -92,6 +114,7 @@ function Login() {
                     className={`login-card__button ${method.className}`}
                     type="button"
                     key={method.label}
+                    onClick={() => handleSocialLogin(method.provider)}
                   >
                     <span className={`login-card__provider ${method.className}`}>
                       {method.mark}
