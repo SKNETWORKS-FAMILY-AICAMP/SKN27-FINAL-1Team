@@ -472,6 +472,8 @@
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .login-back-link {
@@ -588,11 +590,22 @@
   }
 
   .login-card__form {
-    width: min(calc(100% - 34px), 430px);
+    width: min(calc(100% - 48px), 400px);
     padding-inline: 0;
   }
 
   .login-card__helper {
+    font-size: 14px;
+  }
+
+  .login-card__button {
+    padding: 0 16px;
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    gap: 10px;
+    font-size: 14px;
+  }
+
+  .login-card__guest-button {
     font-size: 14px;
   }
 
@@ -644,8 +657,9 @@
 
   .login-card__button {
     height: 44px;
-    padding: 0 18px;
-    grid-template-columns: 30px 1fr 30px;
+    padding: 0 14px;
+    grid-template-columns: 28px minmax(0, 1fr) 28px;
+    gap: 8px;
     font-size: 13px;
   }
 

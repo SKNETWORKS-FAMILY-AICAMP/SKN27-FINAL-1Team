@@ -8,7 +8,7 @@ import iconCart from '../../assets/extracted/icons/icon_cart.png'
 import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
-import { serviceBadges, serviceContext, userProfile } from '../../data/userService.js'
+import { serviceContext, userProfile } from '../../mock/userService.js'
 
 const stats = [
   { label: '보유 재료', value: '28개', note: '냉장 18 · 냉동 7 · 임박 3', image: iconRefrigerator },
@@ -20,7 +20,7 @@ const stats = [
 const settings = [
   { label: '소비 임박 재료 우선 추천', checked: true },
   { label: '매운맛 선호', checked: false },
-  { label: '1인분 위주 추천', checked: true },
+  { label: '저장한 레시피 우선 표시', checked: true },
   { label: '알레르기 재료 제외', checked: true },
 ]
 
@@ -32,8 +32,8 @@ const alerts = [
 ]
 
 const recentRecipes = [
-  { title: '버섯 들깨탕', meta: '25분 · 매칭률 86%' },
-  { title: '김치 참치 볶음밥', meta: '15분 · 매칭률 78%' },
+  { title: '버섯 들깨탕', meta: '최근 본 레시피' },
+  { title: '김치 참치 볶음밥', meta: '저장한 레시피' },
 ]
 
 const cartHistory = [
@@ -80,6 +80,12 @@ function Mypage() {
   const [completedSteps, setCompletedSteps] = useState(['프로필 확인'])
   const [saveMessage, setSaveMessage] = useState('추천 기준이 서비스에 반영되어 있어요.')
   const [userData, setUserData] = useState(null)
+  const [savedFridgeRecipe] = useState(() => {
+    if (typeof window === 'undefined') return null
+
+    const saved = window.localStorage.getItem('bobbeori-fridge-recipe')
+    return saved ? JSON.parse(saved) : null
+  })
   const authMode =
     typeof window === 'undefined' ? null : window.localStorage.getItem('bobbeori-auth-mode')
   const isGuest = authMode === 'guest'
@@ -210,15 +216,20 @@ function Mypage() {
   const profileCreatedAt = userData?.created_at
     ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}`
     : '가입일 2024. 05. 22'
+  const selectedRecipe = savedFridgeRecipe ?? {
+    id: 'green-onion-tofu-egg-stew',
+    title: serviceContext.selectedRecipe,
+    category: '기본 추천',
+    reason: `${userProfile.priority} 기준으로 이어볼 수 있는 추천 메뉴예요.`,
+  }
 
   return (
     <section className="mypage" aria-labelledby="mypage-title">
       <div className="mypage-hero">
         <div>
-          <h1 id="mypage-title">내 맞춤 서비스</h1>
+          <h1 id="mypage-title">마이페이지</h1>
           <p>
-            {userProfile.household}, {userProfile.budgetLabel}, {userProfile.cookTime} 기준으로
-            추천과 장보기를 조정하고 있어요.
+            내 프로필, 저장한 레시피, 알림 설정과 이용 기록을 한곳에서 확인해요.
           </p>
         </div>
         <ImageSlot className="mypage-hero__image" src={imageMypage} />
@@ -331,18 +342,18 @@ function Mypage() {
             <ImageSlot className="mypage-selected-recipe__image" src={imageRecommendation} />
             <div>
               <div className="mypage-recipe-title-row">
-                <h3>{serviceContext.selectedRecipe}</h3>
-                <span>{serviceContext.fridgeMatch} 매칭</span>
+                <h3>{selectedRecipe.title}</h3>
+                <span>{savedFridgeRecipe ? '저장됨' : selectedRecipe.category}</span>
               </div>
-              <p>{userProfile.cookTime} · {userProfile.taste} · {userProfile.priority}</p>
-              <p>{serviceBadges.join(' · ')}</p>
+              <p>{selectedRecipe.reason}</p>
+              <p>{savedFridgeRecipe ? `보유 재료 ${selectedRecipe.owned}/${selectedRecipe.total}개 · 부족 재료 ${selectedRecipe.missing.length}개` : '저장한 메뉴와 최근 본 레시피를 이어서 확인할 수 있어요.'}</p>
               <div className="mypage-recipe-actions">
                 <button
                   className="mypage-primary-button"
                   type="button"
                   onClick={() => {
                     completeStep('오늘 추천 이어가기')
-                    navigate('/recipes/green-onion-tofu-egg-stew')
+                    navigate(`/recipes/${selectedRecipe.id}`)
                   }}
                 >
                   레시피 보기
@@ -431,8 +442,8 @@ function Mypage() {
       <section className="mypage-panel mypage-cta">
         <ImageSlot className="mypage-cta__image" src={iconRefrigerator} />
         <div>
-          <h2>더 똑똑한 추천으로 식탁을 더 알차게!</h2>
-          <p>{userProfile.mealTarget} 기준으로 부족 재료와 예산을 다시 계산해볼게요.</p>
+          <h2>저장한 추천을 이어서 확인해보세요</h2>
+          <p>마음에 든 메뉴와 장보기 목록을 다시 불러올 수 있어요.</p>
         </div>
         <button className="mypage-primary-button" type="button" onClick={continueRecommendation}>
           나에게 맞는 추천 더 보기

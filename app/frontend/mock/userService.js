@@ -1,6 +1,6 @@
 export const userProfile = {
   name: '밥벌이님',
-  household: '2인 가구',
+  household: '1인 가구',
   mealTarget: '오늘 저녁',
   budgetLabel: '18,000원 이하',
   cookTime: '25분 안쪽',
@@ -38,7 +38,7 @@ export const serviceSteps = [
 ]
 
 export const serviceBadges = [
-  '2인분 기준',
+  '1인분 기준',
   '25분 안쪽',
   '맵지 않게',
   '소비 임박 우선',

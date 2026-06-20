@@ -8,82 +8,16 @@ import iconOnion from '../../assets/extracted/icons/icon_onion.png'
 import iconReceipt from '../../assets/extracted/icons/icon_receipt.png'
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
+import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
-import StatsModal from '../../components/modals/StatsModal'
+import { demoIngredients, initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 
 const FILTER_TYPES = [
   { label: '전체', tone: '' },
   { label: '냉장', tone: 'cold' },
   { label: '냉동', tone: 'frozen' },
   { label: '소비 임박', tone: 'soon' },
-]
-
-const initialFormData = {
-  name: '',
-  category: '채소',
-  quantity: 1,
-  unit: '개',
-  storage_method: '냉장',
-  expiration_date: '',
-}
-
-const demoIngredients = [
-  {
-    id: 1,
-    name: '대파',
-    category: '채소',
-    quantity: 1,
-    unit: '단',
-    storage_method: '냉장',
-    expiration_date: '2026-06-26',
-    d_day: 6,
-    is_expiring_soon: false,
-  },
-  {
-    id: 2,
-    name: '두부',
-    category: '가공식품',
-    quantity: 1,
-    unit: '개',
-    storage_method: '냉장',
-    expiration_date: '2026-06-23',
-    d_day: 3,
-    is_expiring_soon: true,
-  },
-  {
-    id: 3,
-    name: '계란',
-    category: '유제품',
-    quantity: 10,
-    unit: '개',
-    storage_method: '냉장',
-    expiration_date: '2026-06-28',
-    d_day: 8,
-    is_expiring_soon: false,
-  },
-  {
-    id: 4,
-    name: '양파',
-    category: '채소',
-    quantity: 2,
-    unit: '개',
-    storage_method: '실온',
-    expiration_date: '2026-06-30',
-    d_day: 10,
-    is_expiring_soon: false,
-  },
-  {
-    id: 5,
-    name: '버섯',
-    category: '채소',
-    quantity: 1,
-    unit: '봉',
-    storage_method: '냉장',
-    expiration_date: '2026-06-22',
-    d_day: 2,
-    is_expiring_soon: true,
-  },
 ]
 
 function ImageSlot({ src, alt = '', className = '' }) {
@@ -126,6 +60,7 @@ function getDdayLabel(item) {
 
 function Fridge() {
   const navigate = useNavigate()
+  const { dialogNode, showAlert } = useAppDialog()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const [ingredients, setIngredients] = useState(demoIngredients)
   const [summary, setSummary] = useState(buildSummary(demoIngredients))
@@ -136,7 +71,6 @@ function Fridge() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormData)
-  const [isStatsOpen, setIsStatsOpen] = useState(false)
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -280,7 +214,9 @@ function Fridge() {
 
   const handleSubmitIngredient = async () => {
     if (!formData.name.trim()) {
-      window.alert('재료 이름을 입력해주세요.')
+      await showAlert('재료 이름을 입력해주세요.', {
+        title: '입력 확인',
+      })
       return
     }
 
@@ -333,11 +269,15 @@ function Fridge() {
         fetchFridgeData()
       } else {
         const errData = await response.json()
-        window.alert(`재료 저장에 실패했습니다: ${errData.detail || '알 수 없는 에러'}`)
+        await showAlert(`재료 저장에 실패했습니다: ${errData.detail || '알 수 없는 에러'}`, {
+          title: '저장 실패',
+        })
       }
     } catch (err) {
       console.error(err)
-      window.alert('서버 통신 중 오류가 발생했습니다.')
+      await showAlert('서버 통신 중 오류가 발생했습니다.', {
+        title: '서버 오류',
+      })
     }
   }
 
@@ -359,11 +299,15 @@ function Fridge() {
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
         fetchFridgeData()
       } else {
-        window.alert('삭제에 실패했습니다.')
+        await showAlert('삭제에 실패했습니다.', {
+          title: '삭제 실패',
+        })
       }
     } catch (err) {
       console.error(err)
-      window.alert('서버 오류로 삭제하지 못했습니다.')
+      await showAlert('서버 오류로 삭제하지 못했습니다.', {
+        title: '서버 오류',
+      })
     }
   }
 
@@ -429,11 +373,15 @@ function Fridge() {
       if (response.ok) {
         fetchFridgeData()
       } else {
-        window.alert('소비 처리에 실패했습니다.')
+        await showAlert('소비 처리에 실패했습니다.', {
+          title: '소비 처리 실패',
+        })
       }
     } catch (err) {
       console.error(err)
-      window.alert('서버 오류로 소비 처리하지 못했습니다.')
+      await showAlert('서버 오류로 소비 처리하지 못했습니다.', {
+        title: '서버 오류',
+      })
     }
   }
 
@@ -486,57 +434,6 @@ function Fridge() {
       </div>
 
       <div className="fridge-layout">
-        <aside className="fridge-sidebar" aria-label="냉장고 요약">
-          <section className="fridge-panel fridge-summary">
-            <h2>요약 정보</h2>
-            <dl>
-              <div>
-                <dt>전체 재료</dt>
-                <dd>{filterCounts.전체}개</dd>
-              </div>
-              <div>
-                <dt>냉장</dt>
-                <dd>{filterCounts.냉장}개</dd>
-              </div>
-              <div>
-                <dt>냉동</dt>
-                <dd>{filterCounts.냉동}개</dd>
-              </div>
-              <div>
-                <dt>실온</dt>
-                <dd>{summary.storage?.실온 || 0}개</dd>
-              </div>
-              <div>
-                <dt>소비 임박 (D-3↓)</dt>
-                <dd>{filterCounts['소비 임박']}개</dd>
-              </div>
-            </dl>
-            <button className="fridge-soft-button" type="button" onClick={() => setIsStatsOpen(true)}>
-              상세 통계 보기
-            </button>
-          </section>
-
-          <section className="fridge-panel fridge-quick">
-            <h2>빠른 이동</h2>
-            <ul>
-              <li>
-                소비 임박 재료 <strong>{filterCounts['소비 임박']}</strong>
-              </li>
-              <li>최근 소비 내역</li>
-              <li>자주 먹는 재료</li>
-              <li>
-                휴지통 <strong>2</strong>
-              </li>
-            </ul>
-          </section>
-
-          <section className="fridge-panel fridge-tip">
-            <ImageSlot className="fridge-tip__image" src={imageAlarm} />
-            <h2>오늘도 알뜰하게!</h2>
-            <p>소비 임박 재료 {filterCounts['소비 임박']}개가 있어요. 우선 소비해볼까요?</p>
-          </section>
-        </aside>
-
         <main className="fridge-main">
           <div className="fridge-toolbar">
             <div className="fridge-filters" aria-label="재료 상태 필터">
@@ -659,12 +556,7 @@ function Fridge() {
         onConfirm={confirmModal.onConfirm}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
-
-      <StatsModal
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        summary={summary}
-      />
+      {dialogNode}
 
       <section className="fridge-bottom-tip">
         <strong>알뜰 팁</strong>

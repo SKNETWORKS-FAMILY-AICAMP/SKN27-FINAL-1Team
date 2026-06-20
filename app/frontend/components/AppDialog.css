@@ -1,0 +1,139 @@
+.app-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  background: rgba(43, 28, 19, 0.28);
+}
+
+.app-dialog-card {
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  padding: 20px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 18px;
+  background: #fffdf8;
+  box-shadow: 0 24px 54px rgba(69, 42, 25, 0.18);
+  color: var(--figma-text);
+}
+
+.app-dialog-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-dialog-card__header span {
+  min-height: 28px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #d88720;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.app-dialog-card__header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #efd8b8;
+  border-radius: 50%;
+  background: #fffaf2;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.app-dialog-card h2 {
+  margin: 18px 0 0;
+  color: var(--figma-text);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.app-dialog-card p {
+  margin: 10px 0 0;
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.app-dialog-card input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 0 14px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 12px;
+  background: #fffaf2;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  outline: 0;
+}
+
+.app-dialog-card input:focus {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.12);
+}
+
+.app-dialog-card__actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-dialog-card__actions button {
+  min-height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.app-dialog-card__secondary {
+  border: 1.4px solid #c79a74;
+  background: #fffdf8;
+  color: #6d4128;
+}
+
+.app-dialog-card__primary {
+  border: 1.6px solid var(--figma-coral-stroke);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+@media (max-width: 520px) {
+  .app-dialog-overlay {
+    align-items: end;
+    padding: 14px;
+  }
+
+  .app-dialog-card {
+    border-radius: 16px;
+  }
+
+  .app-dialog-card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-dialog-card__actions button:only-child {
+    grid-column: 1 / -1;
+  }
+}

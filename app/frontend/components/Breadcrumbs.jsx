@@ -3,62 +3,42 @@ import { Link, useLocation } from 'react-router-dom'
 import './Breadcrumbs.css'
 
 const breadcrumbMap = {
-  '/': [{ label: '홈' }],
   '/fridge': [{ label: '홈', to: '/' }, { label: '냉장고' }],
   '/receipt-ocr': [{ label: '홈', to: '/' }, { label: '영수증 등록' }],
   '/recipes': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '레시피 목록' }],
-  '/recipe-fridge': [
-    { label: '홈', to: '/' },
-    { label: '레시피' },
-    { label: '냉장고 파먹기' },
-  ],
-  '/menu-recommend': [
-    { label: '홈', to: '/' },
-    { label: '레시피' },
-    { label: '메뉴 추천' },
-  ],
-  '/recipe-recommend': [
-    { label: '홈', to: '/' },
-    { label: '레시피' },
-    { label: '레시피 추천' },
-  ],
+  '/recipe-fridge': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '냉장고 파먹기' }],
+  '/menu-recommend': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '메뉴 추천' }],
+  '/recipe-recommend': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '레시피 추천' }],
   '/login': [{ label: '홈', to: '/' }, { label: '로그인' }],
   '/mypage': [{ label: '홈', to: '/' }, { label: '마이페이지' }],
   '/guide': [{ label: '홈', to: '/' }, { label: '보관 가이드' }],
   '/shopping-list': [{ label: '홈', to: '/' }, { label: '장보기' }],
   '/faq': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '자주 묻는 질문' }],
   '/support': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '고객 지원' }],
-  '/refund-policy': [
-    { label: '홈', to: '/' },
-    { label: '고객 서비스' },
-    { label: '반품 및 환불 정책' },
-  ],
+  '/refund-policy': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '반품 및 환불 정책' }],
   '/terms': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '이용약관' }],
-  '/privacy-policy': [
-    { label: '홈', to: '/' },
-    { label: '정책 및 안내' },
-    { label: '개인정보처리방침' },
-  ],
-  '/location-policy': [
-    { label: '홈', to: '/' },
-    { label: '정책 및 안내' },
-    { label: '위치기반 서비스 약관' },
-  ],
+  '/privacy-policy': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '개인정보처리방침' }],
+  '/location-policy': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '위치기반 서비스 약관' }],
 }
 
 function Breadcrumbs() {
   const { pathname } = useLocation()
+
   if (pathname === '/') {
     return null
   }
 
-  const items =
-    pathname.startsWith('/recipes/') && pathname !== '/recipes'
+  const items = pathname.startsWith('/guide/') && pathname !== '/guide'
+    ? [
+        { label: '홈', to: '/' },
+        { label: '보관 가이드', to: '/guide' },
+        { label: decodeURIComponent(pathname.split('/').pop() || '') },
+      ]
+    : pathname.startsWith('/recipes/') && pathname !== '/recipes'
       ? [
           { label: '홈', to: '/' },
           { label: '레시피', to: '/recipes' },
-          { label: '찌개/국/탕' },
-          { label: '대파 두부 계란찌개' },
+          { label: '레시피 상세' },
         ]
       : breadcrumbMap[pathname] ?? [{ label: '홈', to: '/' }]
 

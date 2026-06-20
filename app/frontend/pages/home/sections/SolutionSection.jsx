@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import iconAlarm from '../../../assets/extracted/icons/icon_alarm.png'
 import iconBasket from '../../../assets/extracted/icons/icon_basket.png'
+import iconCart from '../../../assets/extracted/icons/icon_cart.png'
 import iconReceipt from '../../../assets/extracted/icons/icon_receipt.png'
 import iconRefrigerator from '../../../assets/extracted/icons/icon_refrigerator.png'
 import iconTime from '../../../assets/extracted/icons/icon_time.png'
@@ -11,29 +12,38 @@ import imageMenuRecommendation from '../../../assets/extracted/images/image_menu
 import imageMypage from '../../../assets/extracted/images/image_mypage.png'
 import imagePutting from '../../../assets/extracted/images/image_putting.png'
 import imageReceiptRegistration from '../../../assets/extracted/images/image_receipt registration.png'
-import recommendationImage from '../../../assets/extracted/images/image_recommendation.png'
 import imageSearch from '../../../assets/extracted/images/image_search.png'
 import imageShop from '../../../assets/extracted/images/image_shop.png'
 
 const flowSteps = [
   {
     label: '영수증 등록',
+    caption: 'OCR 자동 인식',
     icon: iconReceipt,
   },
   {
-    label: '냉장고 재료 입고',
+    label: '냉장고 입고',
+    caption: '수량·보관 위치',
     icon: iconRefrigerator,
   },
   {
     label: '소비 임박 확인',
+    caption: '유통기한 알림',
     icon: iconTime,
   },
   {
-    label: '레시피 추천',
+    label: 'AI 메뉴 추천',
+    caption: '매칭률과 이유',
     icon: iconBasket,
   },
   {
+    label: '부족 재료 장보기',
+    caption: '판매처 가격 비교',
+    icon: iconCart,
+  },
+  {
     label: '유통기한 알림',
+    caption: '먹기 좋은 타이밍',
     icon: iconAlarm,
   },
 ]
@@ -131,11 +141,18 @@ const features = [
   },
 ]
 
-const reasons = [
-  '보유 재료 매칭률',
-  '소비 임박 재료 우선',
-  '부족 재료 최소화',
-  '사용자 취향 반영',
+const recommendationScores = [
+  { label: '보유 재료 매칭', value: 93 },
+  { label: '소비 임박 우선', value: 88 },
+  { label: '취향 적합도', value: 81 },
+  { label: '부족 재료 최소화', value: 90 },
+]
+
+const recommendationReasons = [
+  '보유 재료를 최대한 활용',
+  '유통기한이 가까운 재료 우선',
+  '사용자 취향과 조리 시간 반영',
+  '추가 구매 품목과 비용 최소화',
 ]
 
 function SolutionSection() {
@@ -201,7 +218,13 @@ function SolutionSection() {
   return (
     <section className="home-section home-solution home-reveal" aria-label="밥벌이 해결 방식">
       <div className="home-flow">
-        <h2>밥벌이는 이렇게 해결해요</h2>
+        <div className="home-flow__heading">
+          <div>
+            <p>한 번에 이어지는 식사 준비</p>
+            <h2>밥벌이는 이렇게 해결해요</h2>
+          </div>
+          <span>등록부터 조리, 장보기, 알림까지 서로 연결된 흐름으로 식재료 낭비를 줄입니다.</span>
+        </div>
         <div className="home-flow__steps">
           {flowSteps.map((step, index) => (
             <div className="home-flow__item" key={step.label}>
@@ -209,6 +232,7 @@ function SolutionSection() {
                 <img src={step.icon} alt="" />
               </span>
               <strong>{step.label}</strong>
+              <small>{step.caption}</small>
               {index < flowSteps.length - 1 && <i aria-hidden="true" />}
             </div>
           ))}
@@ -218,14 +242,20 @@ function SolutionSection() {
       <div className="home-solution__bottom">
         <div className="home-feature-block">
           <div className="home-feature-header">
-            <h2>밥벌이가 도와주는 일</h2>
-            <div className="home-feature-controls" aria-label="밥벌이가 도와주는 일 슬라이드 이동">
-              <button type="button" aria-label="이전 도움 항목" onClick={() => moveFeature(-1)}>
-                &lt;
-              </button>
-              <button type="button" aria-label="다음 도움 항목" onClick={() => moveFeature(1)}>
-                &gt;
-              </button>
+            <div>
+              <p>서비스 흐름</p>
+              <h2>밥벌이가 도와주는 일</h2>
+            </div>
+            <div className="home-feature-header__side">
+              <span>재료 등록부터 추천, 장보기, 보관 가이드까지 식재료를 쓰는 전 과정을 한 흐름으로 연결합니다.</span>
+              <div className="home-feature-controls" aria-label="밥벌이가 도와주는 일 슬라이드 이동">
+                <button type="button" aria-label="이전 도움 항목" onClick={() => moveFeature(-1)}>
+                  &lt;
+                </button>
+                <button type="button" aria-label="다음 도움 항목" onClick={() => moveFeature(1)}>
+                  &gt;
+                </button>
+              </div>
             </div>
           </div>
 
@@ -246,16 +276,16 @@ function SolutionSection() {
                 const displayIndex = index % features.length
 
                 return (
-                <section
-                  className={`home-feature-section ${activeFeatureIndex % features.length === displayIndex ? 'is-active' : ''}`}
-                  key={`${feature.label}-${index}`}
-                  aria-hidden={activeFeatureIndex % features.length === displayIndex ? undefined : 'true'}
-                >
-                  <div className="home-feature-section__image image-slot image-slot--feature image-slot--filled" aria-hidden="true">
-                    <img src={feature.icon} alt="" />
-                  </div>
-                  <div className="home-feature-section__text">
-                    <span>{String(displayIndex + 1).padStart(2, '0')}</span>
+                  <section
+                    className={`home-feature-section ${activeFeatureIndex % features.length === displayIndex ? 'is-active' : ''}`}
+                    key={`${feature.label}-${index}`}
+                    aria-hidden={activeFeatureIndex % features.length === displayIndex ? undefined : 'true'}
+                  >
+                    <div className="home-feature-section__image image-slot image-slot--feature image-slot--filled" aria-hidden="true">
+                      <img src={feature.icon} alt="" />
+                    </div>
+                    <div className="home-feature-section__text">
+                      <span>{String(displayIndex + 1).padStart(2, '0')}</span>
                     <h3>{feature.label}</h3>
                     <p className="home-feature-summary">{feature.summary}</p>
                     <ul>
@@ -263,8 +293,8 @@ function SolutionSection() {
                         <li key={line}>{line}</li>
                       ))}
                     </ul>
-                  </div>
-                </section>
+                    </div>
+                  </section>
                 )
               })}
             </div>
@@ -272,15 +302,55 @@ function SolutionSection() {
         </div>
 
         <div className="home-ai-block">
-          <h2>AI가 추천 이유까지 설명해요</h2>
-          <blockquote aria-label="대파가 D-1이라 오늘 먼저 쓰는 레시피를 추천했어요.">
-            <img src={recommendationImage} alt="" />
-          </blockquote>
-          <ul>
-            {reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+          <div className="home-ai-heading">
+            <div>
+              <p>설명 가능한 추천</p>
+              <h2>
+                AI가 왜 이 메뉴를 골랐는지
+                <br />
+                추천 이유까지 보여줘요
+              </h2>
+            </div>
+            <span>단순 인기순이 아니라 재료, 유통기한, 구매량, 취향을 함께 계산합니다.</span>
+          </div>
+
+          <div className="home-ai-grid">
+            <article className="home-ai-quote">
+              <span aria-hidden="true">“</span>
+              <h3>
+                대파가 D-1이라 오늘 먼저 쓰고,
+                <br />
+                냉장고 재료 7개로 만들 수 있는
+                <strong>대파 두부 계란찌개</strong>를 추천했어요.
+              </h3>
+              <div>
+                <em>대파 D-1</em>
+                <em>보유 재료 7/10</em>
+                <em>20분 완성</em>
+                <em>매운맛 낮음</em>
+              </div>
+            </article>
+
+            <article className="home-ai-score">
+              <h3>추천 점수 구성</h3>
+              <div className="home-ai-score__list">
+                {recommendationScores.map((score) => (
+                  <div className="home-ai-score__row" key={score.label}>
+                    <span>{score.label}</span>
+                    <i aria-hidden="true">
+                      <b style={{ width: `${score.value}%` }} />
+                    </i>
+                    <strong>{score.value}</strong>
+                  </div>
+                ))}
+              </div>
+              <ul>
+                {recommendationReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
         </div>
       </div>
     </section>
