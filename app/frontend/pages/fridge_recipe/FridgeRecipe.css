@@ -1,0 +1,502 @@
+.fridge-recipe-page {
+  width: var(--layout-container);
+  margin: 0 auto;
+  padding: 8px 0 72px;
+  color: var(--figma-text);
+  word-break: keep-all;
+}
+
+.fridge-recipe-image-slot {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: 1.4px dashed #f0cfa4;
+  border-radius: 14px;
+  background: #fffaf2;
+  overflow: hidden;
+}
+
+.fridge-recipe-image-slot.is-filled {
+  border: 0;
+  background: transparent;
+}
+
+.fridge-recipe-image-slot img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.fridge-recipe-hero {
+  min-height: 230px;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(360px, 1fr);
+  align-items: center;
+  gap: 36px;
+}
+
+.fridge-recipe-hero h1 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: clamp(44px, 5vw, 60px);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.fridge-recipe-hero p {
+  max-width: 520px;
+  margin: 18px 0 0;
+  color: #5f4635;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.fridge-recipe-hero__actions {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fridge-recipe-hero__actions button,
+.fridge-recipe-card__actions button,
+.fridge-recipe-saved button {
+  min-height: 44px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.6px solid var(--figma-coral-stroke);
+  border-radius: 999px;
+  background: var(--figma-coral);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.fridge-recipe-hero__actions button {
+  min-width: 220px;
+  min-height: 58px;
+  padding: 0 30px;
+  border-width: 1.8px;
+  border-radius: 16px;
+  font-size: 18px;
+  box-shadow: 0 12px 24px rgba(244, 121, 96, 0.18);
+}
+
+.fridge-recipe-hero__actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.fridge-recipe-hero__image {
+  width: min(100%, 390px);
+  aspect-ratio: 577 / 433;
+  height: auto;
+  padding: 8px;
+  justify-self: end;
+  align-self: start;
+  filter: drop-shadow(0 16px 22px rgba(69, 42, 25, 0.08));
+}
+
+.fridge-recipe-empty,
+.fridge-recipe-saved,
+.fridge-recipe-card {
+  box-sizing: border-box;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.fridge-recipe-empty {
+  min-height: 148px;
+  margin-top: 20px;
+  padding: 22px 26px;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 22px;
+}
+
+.fridge-recipe-empty__image {
+  width: 104px;
+  height: 86px;
+}
+
+.fridge-recipe-empty h2,
+.fridge-recipe-section-title h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.fridge-recipe-empty p,
+.fridge-recipe-section-title p,
+.fridge-recipe-saved p {
+  margin: 8px 0 0;
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.fridge-recipe-results {
+  margin-top: 22px;
+}
+
+.fridge-recipe-section-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.fridge-recipe-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.fridge-recipe-card {
+  overflow: hidden;
+}
+
+.fridge-recipe-card.is-selected {
+  border-color: var(--figma-coral);
+  box-shadow: 0 12px 26px rgba(244, 121, 96, 0.12);
+}
+
+.fridge-recipe-card__media {
+  height: 190px;
+  padding: 14px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.fridge-recipe-card__media > span {
+  min-height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  border-radius: 999px;
+  background: #fff0d8;
+  color: #d88720;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fridge-recipe-card__image {
+  width: 100%;
+  height: 100%;
+}
+
+.fridge-recipe-card__image.is-filled img {
+  object-fit: cover;
+}
+
+.fridge-recipe-card__body {
+  padding: 0 16px 16px;
+}
+
+.fridge-recipe-card h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.fridge-recipe-card__meta {
+  margin: 8px 0 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.fridge-recipe-card__score {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fridge-recipe-card__score div {
+  min-height: 50px;
+  padding: 10px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: #fff7e9;
+}
+
+.fridge-recipe-card__score dt,
+.fridge-recipe-card__score dd {
+  margin: 0;
+}
+
+.fridge-recipe-card__score dt {
+  color: #8b673e;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.fridge-recipe-card__score dd {
+  margin-top: 4px;
+  color: var(--figma-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fridge-recipe-card__reason {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #f1d9b3;
+  border-radius: 12px;
+  background: #fffaf2;
+}
+
+.fridge-recipe-card__reason b {
+  color: #d88720;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fridge-recipe-card__reason p {
+  margin: 6px 0 0;
+  color: #5f4635;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.fridge-recipe-card__actions {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fridge-recipe-card__actions button:last-child {
+  border: 1.4px solid #c79a74;
+  background: #fffdf8;
+  color: #6d4128;
+}
+
+.fridge-recipe-saved {
+  min-height: 92px;
+  margin-top: 18px;
+  padding: 18px 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+}
+
+.fridge-recipe-saved span {
+  color: var(--figma-coral);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fridge-recipe-saved strong {
+  margin-top: 4px;
+  display: block;
+  color: var(--figma-text);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+@media (max-width: 1120px) {
+  .fridge-recipe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .fridge-recipe-page {
+    width: min(100% - 36px, 390px);
+    padding: 0 0 108px;
+    overflow-x: hidden;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .fridge-recipe-hero {
+    min-height: auto;
+    padding-top: 4px;
+    display: block;
+  }
+
+  .fridge-recipe-hero h1 {
+    font-size: 28px;
+  }
+
+  .fridge-recipe-hero p {
+    max-width: 100%;
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .fridge-recipe-hero__actions {
+    margin-top: 14px;
+    gap: 6px;
+  }
+
+  .fridge-recipe-hero__actions button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 18px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .fridge-recipe-hero__image {
+    display: none;
+  }
+
+  .fridge-recipe-empty {
+    min-height: 106px;
+    margin-top: 14px;
+    padding: 14px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .fridge-recipe-empty__image {
+    width: 68px;
+    height: 58px;
+  }
+
+  .fridge-recipe-empty h2,
+  .fridge-recipe-section-title h2 {
+    font-size: 17px;
+  }
+
+  .fridge-recipe-empty p,
+  .fridge-recipe-section-title p {
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  .fridge-recipe-section-title {
+    display: block;
+  }
+
+  .fridge-recipe-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .fridge-recipe-card {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .fridge-recipe-card__media {
+    height: 108px;
+    padding: 0;
+  }
+
+  .fridge-recipe-card__media > span {
+    top: 6px;
+    left: 6px;
+    min-height: 22px;
+    padding: 0 7px;
+    font-size: 9px;
+  }
+
+  .fridge-recipe-card__body {
+    padding: 0;
+  }
+
+  .fridge-recipe-card h2 {
+    font-size: 15px;
+  }
+
+  .fridge-recipe-card__meta {
+    margin-top: 5px;
+    font-size: 11px;
+  }
+
+  .fridge-recipe-card__score {
+    margin-top: 7px;
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .fridge-recipe-card__score div {
+    min-height: 0;
+    padding: 7px 8px;
+  }
+
+  .fridge-recipe-card__score dt {
+    display: none;
+  }
+
+  .fridge-recipe-card__score dd {
+    margin: 0;
+    font-size: 10px;
+  }
+
+  .fridge-recipe-card__reason {
+    margin-top: 7px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .fridge-recipe-card__reason b {
+    display: none;
+  }
+
+  .fridge-recipe-card__reason p {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .fridge-recipe-card__actions {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+  }
+
+  .fridge-recipe-card__actions button,
+  .fridge-recipe-saved button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .fridge-recipe-card__actions button {
+    min-height: 38px;
+    font-size: 11px;
+  }
+
+  .fridge-recipe-saved {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  .fridge-recipe-page {
+    width: min(100% - 24px, 430px);
+  }
+}
