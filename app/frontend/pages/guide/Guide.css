@@ -129,7 +129,7 @@
 
 .guide-ingredient-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(108px, 1fr)) 44px;
+  grid-template-columns: repeat(6, minmax(116px, 1fr)) 44px;
   align-items: center;
   gap: 18px;
 }
@@ -138,7 +138,7 @@
 .guide-more-button {
   box-sizing: border-box;
   min-width: 0;
-  height: 64px;
+  height: 76px;
   border: 1.4px solid #efd8b8;
   border-radius: 14px;
   background: #fffdf8;
@@ -154,7 +154,7 @@
 }
 
 .guide-ingredient {
-  padding: 8px 16px;
+  padding: 8px 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -180,6 +180,11 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
+}
+
+.guide-more-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .guide-more-button span {
@@ -213,9 +218,15 @@
 }
 
 .guide-ingredient__image {
-  width: 38px;
-  height: 38px;
+  width: 52px;
+  height: 52px;
   flex: 0 0 auto;
+}
+
+.guide-ingredient__image img,
+.guide-all-item__image img,
+.guide-detail__image img {
+  transform: scale(1.12);
 }
 
 .guide-content-grid {
@@ -231,19 +242,19 @@
 
 .guide-detail__header {
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) auto;
+  grid-template-columns: 154px minmax(0, 1fr);
   align-items: center;
   gap: 22px;
 }
 
 .guide-detail__image {
-  width: 112px;
-  height: 112px;
+  width: 148px;
+  height: 148px;
   border-radius: 18px;
 }
 
 .guide-detail h2,
-.guide-fridge h2,
+.guide-tip-detail h2,
 .guide-recipes h2 {
   margin: 0;
   color: var(--figma-text);
@@ -281,7 +292,6 @@
   content: "✓";
 }
 
-.guide-soft-button,
 .guide-primary-button {
   box-sizing: border-box;
   min-height: 42px;
@@ -293,16 +303,129 @@
   font-weight: 900;
 }
 
-.guide-soft-button {
-  border: 1.4px solid #c79a74;
-  background: #fffdf8;
-  color: #6d4128;
-}
-
 .guide-primary-button {
   border: 1.6px solid var(--figma-coral-stroke);
   background: var(--figma-coral);
   color: #fff;
+}
+
+.guide-all {
+  margin-top: 16px;
+  padding: 22px;
+}
+
+.guide-all__header {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guide-all__header h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 23px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.guide-all__header p {
+  margin: 7px 0 0;
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.guide-all__header > span {
+  min-height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.guide-all-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.guide-all-item {
+  min-width: 0;
+  min-height: 132px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 14px;
+  background: #fffdf8;
+  color: var(--figma-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.guide-all-item:hover,
+.guide-all-item:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 10px 20px rgba(255, 107, 116, 0.1);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.guide-all-item__image {
+  width: 82px;
+  height: 82px;
+}
+
+.guide-all-item strong {
+  display: block;
+  color: var(--figma-text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.guide-all-item p {
+  margin: 6px 0 0;
+  color: #6f4b36;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.guide-all-item > span[aria-hidden="true"] {
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid #9b6d4d;
+  border-right: 2px solid #9b6d4d;
+  transform: rotate(45deg);
+}
+
+.guide-list-back {
+  min-height: 38px;
+  margin-top: 16px;
+  padding: 0 16px;
+  border: 1.4px solid #c79a74;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .guide-tip-grid {
@@ -314,13 +437,32 @@
 
 .guide-tip-card {
   box-sizing: border-box;
-  min-height: 232px;
+  min-height: 106px;
   padding: 18px 16px;
   display: flex;
   flex-direction: column;
   border: 1.4px solid #efd8b8;
   border-radius: 14px;
   background: #fffdf8;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.guide-tip-card:hover,
+.guide-tip-card:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 10px 20px rgba(255, 107, 116, 0.1);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.guide-tip-card.is-active {
+  border-color: var(--figma-coral);
+  background: #fff4f3;
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 116, 0.18);
 }
 
 .guide-tip-card__title {
@@ -355,12 +497,7 @@
 }
 
 .guide-tip-card ul {
-  margin: 14px 0 14px;
-  padding-left: 14px;
-  color: #3c2a1f;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.55;
+  display: none;
 }
 
 .guide-tip-card li + li {
@@ -369,7 +506,7 @@
 
 .guide-tip-card strong {
   min-height: 32px;
-  margin-top: auto;
+  margin-top: 14px;
   padding: 0 11px;
   display: inline-flex;
   align-items: center;
@@ -383,75 +520,77 @@
   font-weight: 900;
 }
 
-.guide-fridge {
-  padding: 18px;
+.guide-tip-detail {
+  padding: 20px;
   align-self: stretch;
 }
 
-.guide-fridge__title {
-  display: flex;
+.guide-tip-detail > span {
+  min-height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-}
-
-.guide-fridge__icon {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 auto;
-}
-
-.guide-fridge__list {
-  margin: 20px 0 18px;
-  display: grid;
-  gap: 12px;
-}
-
-.guide-fridge__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  color: #5f4635;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.guide-fridge__row dt,
-.guide-fridge__row dd {
-  margin: 0;
-}
-
-.guide-fridge__row dd {
-  color: var(--figma-text);
-  text-align: right;
+  border: 1px solid #efd8b8;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #8b673e;
+  font-size: 12px;
   font-weight: 900;
 }
 
-.guide-fridge__row dd.is-highlight {
-  color: #3d7fa7;
+.guide-tip-detail h2 {
+  margin-top: 14px;
 }
 
-.guide-fridge__row dd.is-danger {
-  color: #ff6b32;
+.guide-tip-detail ul {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  list-style: none;
 }
 
-.guide-fridge__row dd.is-badge {
-  min-height: 26px;
-  padding: 0 10px;
+.guide-tip-detail li {
+  padding-left: 16px;
+  position: relative;
+  color: #3c2a1f;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.guide-tip-detail li::before {
+  width: 6px;
+  height: 6px;
+  position: absolute;
+  top: 9px;
+  left: 0;
+  border-radius: 50%;
+  background: var(--figma-coral);
+  content: "";
+}
+
+.guide-tip-detail strong {
+  min-height: 34px;
+  margin-top: 18px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: #ff9248;
-  color: #fff;
+  background: #e8f8d8;
+  color: #3c7a33;
+  font-size: 13px;
+  font-weight: 900;
 }
 
-.guide-fridge .guide-primary-button,
-.guide-fridge .guide-edit-button {
-  width: 100%;
-}
-
-.guide-edit-button {
-  margin-top: 10px;
+.guide-tip-detail p {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #f1d9b3;
+  color: #7b5d46;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .guide-recipes {
@@ -497,6 +636,10 @@
   background: #fffdf8;
 }
 
+.guide-recipe-card {
+  position: relative;
+}
+
 .guide-recipe-card__image {
   width: 96px;
   height: 78px;
@@ -517,6 +660,22 @@
   font-size: 12px;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.guide-recipe-card button {
+  min-height: 32px;
+  padding: 0 13px;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  border: 1.4px solid #c79a74;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .guide-recipe-more {
@@ -544,18 +703,27 @@
 
 @media (max-width: 1080px) {
   .guide-ingredient-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 44px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .guide-more-button {
+    width: 100%;
+    border-radius: 14px;
   }
 
   .guide-content-grid {
     grid-template-columns: 1fr;
   }
 
-  .guide-fridge {
+  .guide-tip-detail {
     max-width: none;
   }
 
   .guide-tip-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-all-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -566,23 +734,20 @@
 
 @media (max-width: 760px) {
   .guide-page {
-    width: min(100% - 28px, 430px);
-    padding: 0 0 36px;
+    width: min(100% - 36px, 390px);
+    padding: 0 0 108px;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
   }
 
   .guide-hero {
     min-height: auto;
     padding-top: 4px;
-    grid-template-columns: minmax(0, 1fr) minmax(130px, 42%);
-    grid-template-areas:
-      "copy art"
-      "search search";
-    align-items: center;
-    gap: 14px 10px;
+    display: block;
   }
 
   .guide-hero__copy {
-    align-self: center;
+    align-self: auto;
   }
 
   .guide-hero__copy h1 {
@@ -591,26 +756,20 @@
   }
 
   .guide-hero__copy p {
-    max-width: 250px;
+    max-width: 100%;
     margin-top: 8px;
     font-size: 13px;
     line-height: 1.5;
   }
 
   .guide-search {
+    width: 100%;
     height: 44px;
-    margin-top: 0;
+    margin-top: 18px;
   }
 
   .guide-hero__art {
-    min-height: 0;
-    justify-content: end;
-    margin-top: 0;
-    pointer-events: none;
-  }
-
-  .guide-hero__art img {
-    width: min(100%, 178px);
+    display: none;
   }
 
   .guide-panel {
@@ -628,38 +787,32 @@
   }
 
   .guide-ingredient-list {
-    margin: 0 -16px;
-    padding: 0 16px 2px;
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .guide-ingredient-list::-webkit-scrollbar {
-    display: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
   }
 
   .guide-ingredient {
-    width: 74px;
-    height: 72px;
+    width: 100%;
+    height: 82px;
     padding: 8px 6px;
-    flex: 0 0 auto;
     flex-direction: column;
     gap: 4px;
     font-size: 12px;
   }
 
   .guide-ingredient__image {
-    width: 34px;
-    height: 34px;
+    width: 46px;
+    height: 46px;
   }
 
   .guide-more-button {
-    width: 42px;
-    height: 42px;
-    align-self: center;
-    flex: 0 0 auto;
+    width: 100%;
+    height: 82px;
+    border-radius: 14px;
   }
 
   .guide-content-grid {
@@ -668,24 +821,72 @@
   }
 
   .guide-detail,
-  .guide-fridge,
+  .guide-tip-detail,
+  .guide-all,
   .guide-recipes {
     padding: 16px;
   }
 
+  .guide-all {
+    margin-top: 12px;
+  }
+
+  .guide-all__header {
+    margin-bottom: 12px;
+    align-items: flex-start;
+  }
+
+  .guide-all__header h2 {
+    font-size: 19px;
+  }
+
+  .guide-all__header p {
+    font-size: 12px;
+  }
+
+  .guide-all-list {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .guide-all-item {
+    min-height: 104px;
+    padding: 10px;
+    grid-template-columns: 72px minmax(0, 1fr) 14px;
+    gap: 10px;
+  }
+
+  .guide-all-item__image {
+    width: 68px;
+    height: 68px;
+  }
+
+  .guide-all-item strong {
+    font-size: 14px;
+  }
+
+  .guide-all-item p {
+    font-size: 11px;
+  }
+
+  .guide-list-back {
+    width: 100%;
+    margin-top: 12px;
+  }
+
   .guide-detail__header {
-    grid-template-columns: 76px minmax(0, 1fr);
+    grid-template-columns: 98px minmax(0, 1fr);
     gap: 14px;
   }
 
   .guide-detail__image {
-    width: 74px;
-    height: 74px;
+    width: 94px;
+    height: 94px;
     border-radius: 14px;
   }
 
   .guide-detail h2,
-  .guide-fridge h2,
+  .guide-tip-detail h2,
   .guide-recipes h2 {
     font-size: 19px;
   }
@@ -694,10 +895,6 @@
     margin-top: 5px;
     font-size: 13px;
     line-height: 1.45;
-  }
-
-  .guide-detail__more {
-    display: none;
   }
 
   .guide-owned-badge {
@@ -738,27 +935,18 @@
     transform: rotate(45deg);
   }
 
-  .guide-tip-card ul,
   .guide-tip-card strong {
-    display: none;
+    min-height: 28px;
+    margin-top: 10px;
+    font-size: 11px;
   }
 
-  .guide-fridge__title {
-    gap: 10px;
-  }
-
-  .guide-fridge__icon {
-    width: 46px;
-    height: 46px;
-  }
-
-  .guide-fridge__list {
-    margin-top: 16px;
-    gap: 10px;
-  }
-
-  .guide-fridge__row {
+  .guide-tip-detail li {
     font-size: 13px;
+  }
+
+  .guide-tip-detail p {
+    font-size: 11px;
   }
 
   .guide-recipes {
@@ -766,30 +954,29 @@
   }
 
   .guide-recipe-list {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr;
     gap: 10px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .guide-recipe-list::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
   }
 
   .guide-recipe-card,
   .guide-recipe-more {
-    width: 260px;
+    width: 100%;
     min-height: 104px;
-    flex: 0 0 auto;
+  }
+
+  .guide-recipe-card {
+    padding-bottom: 48px;
   }
 }
 
 @media (max-width: 390px) {
-  .guide-hero__art img {
-    width: 138px;
+  .guide-page {
+    width: min(100% - 24px, 430px);
   }
 
   .guide-hero__copy p {
-    max-width: 220px;
+    max-width: 100%;
   }
 }

@@ -2,7 +2,11 @@ import { useEffect } from 'react'
 import './Home.css'
 import HeroSection from './sections/HeroSection'
 import ProblemSection from './sections/ProblemSection'
+import CoreFeatureSection from './sections/CoreFeatureSection'
+import ReceiptAgentSection from './sections/ReceiptAgentSection'
 import SolutionSection from './sections/SolutionSection'
+import ReviewSection from './sections/ReviewSection'
+import FaqSection from './sections/FaqSection'
 
 function Home() {
   useEffect(() => {
@@ -36,7 +40,11 @@ function Home() {
     <div className="home-page">
       <HeroSection />
       <ProblemSection />
+      <CoreFeatureSection />
+      <ReceiptAgentSection />
       <SolutionSection />
+      <ReviewSection />
+      <FaqSection />
     </div>
   )
 }

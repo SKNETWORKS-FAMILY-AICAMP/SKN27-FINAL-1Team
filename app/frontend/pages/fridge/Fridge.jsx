@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './Fridge.css'
 
 import iconEgg from '../../assets/extracted/icons/icon_egg.png'
 import iconMushroom from '../../assets/extracted/icons/icon_mushroom.png'
 import iconOnion from '../../assets/extracted/icons/icon_onion.png'
 import iconReceipt from '../../assets/extracted/icons/icon_receipt.png'
-import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
-
+import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
-import StatsModal from '../../components/modals/StatsModal'
+import { demoIngredients, initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 
 const FILTER_TYPES = [
   { label: '전체', tone: '' },
@@ -28,48 +28,76 @@ function ImageSlot({ src, alt = '', className = '' }) {
   )
 }
 
-function Fridge() {
-  const initialFormData = {
-    name: '',
-    category: '채소',
-    quantity: 1,
-    unit: '개',
-    storage_method: '냉장',
-    expiration_date: ''
+function getIngredientIcon(name = '') {
+  if (name.includes('양파')) return iconOnion
+  if (name.includes('버섯')) return iconMushroom
+  if (name.includes('계란') || name.includes('달걀')) return iconEgg
+  return null
+}
+
+function buildSummary(items) {
+  return {
+    total: items.length,
+    expiring_soon: items.filter((item) => item.is_expiring_soon).length,
+    storage: {
+      냉장: items.filter((item) => item.storage_method === '냉장').length,
+      냉동: items.filter((item) => item.storage_method === '냉동').length,
+      실온: items.filter((item) => item.storage_method === '실온').length,
+      기타: items.filter((item) => !['냉장', '냉동', '실온'].includes(item.storage_method)).length,
+    },
+  }
+}
+
+function getDdayLabel(item) {
+  if (item.d_day !== null && item.d_day !== undefined) {
+    if (item.d_day > 0) return `D-${item.d_day}`
+    if (item.d_day === 0) return 'D-Day'
+    return `D+${Math.abs(item.d_day)} 지남`
   }
 
-  const [ingredients, setIngredients] = useState([])
-  const [summary, setSummary] = useState({
-    total: 0,
-    expiring_soon: 0,
-    storage: { 냉장: 0, 냉동: 0, 실온: 0, 기타: 0 }
-  })
+  return '-'
+}
+
+function Fridge() {
+  const navigate = useNavigate()
+  const { dialogNode, showAlert } = useAppDialog()
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const [ingredients, setIngredients] = useState(demoIngredients)
+  const [summary, setSummary] = useState(buildSummary(demoIngredients))
   const [activeFilter, setActiveFilter] = useState('전체')
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortType, setSortType] = useState('latest') // 'latest', 'oldest'
+  const [viewMode, setViewMode] = useState('grid')
+  const [sortType, setSortType] = useState('latest')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormData)
-  const [isStatsOpen, setIsStatsOpen] = useState(false)
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: null
+    onConfirm: null,
   })
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const [stockedCount, setStockedCount] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 0
+    }
 
-  useEffect(() => {
-    fetchFridgeData()
-  }, [])
+    return Number(window.localStorage.getItem('bobbeori-last-stocked-count') ?? 0)
+  })
+
+  const hasToken = () => Boolean(window.localStorage.getItem('bobbeori-token'))
 
   const fetchFridgeData = async () => {
-    try {
-      const token = localStorage.getItem('bobbeori-token')
-      if (!token) return // 토큰이 없으면 로그인 페이지로 이동하는 로직은 추후 보완 가능
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      const nextSummary = buildSummary(ingredients)
+      setSummary(nextSummary)
+      return
+    }
 
+    try {
       const resIngredients = await fetch(`${apiUrl}/api/v1/inventory`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (resIngredients.ok) {
         const data = await resIngredients.json()
@@ -77,7 +105,7 @@ function Fridge() {
       }
 
       const resSummary = await fetch(`${apiUrl}/api/v1/inventory/summary`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (resSummary.ok) {
         const data = await resSummary.json()
@@ -88,117 +116,201 @@ function Fridge() {
     }
   }
 
-  // 필터 로직
-  const filteredIngredients = ingredients.filter((item) => {
-    // 1. 카테고리 필터
-    let passCategory = true
-    if (activeFilter === '냉장') passCategory = item.storage_method === '냉장'
-    else if (activeFilter === '냉동') passCategory = item.storage_method === '냉동'
-    else if (activeFilter === '소비 임박') passCategory = item.is_expiring_soon
-    
-    // 2. 검색어 필터
-    let passSearch = true
-    if (searchQuery.trim() !== '') {
-      // 이름이나 카테고리로 검색 가능
-      passSearch = item.name.includes(searchQuery.trim()) || 
-                   (item.category && item.category.includes(searchQuery.trim()))
+  useEffect(() => {
+    fetchFridgeData()
+  }, [])
+
+  useEffect(() => {
+    if (!hasToken()) {
+      setSummary(buildSummary(ingredients))
     }
+  }, [ingredients])
 
-    return passCategory && passSearch
-  })
+  const filterCounts = useMemo(
+    () => ({
+      전체: summary.total,
+      냉장: summary.storage?.냉장 || 0,
+      냉동: summary.storage?.냉동 || 0,
+      '소비 임박': summary.expiring_soon,
+    }),
+    [summary],
+  )
 
-  // 정렬 로직 적용
-  const sortedIngredients = [...filteredIngredients].sort((a, b) => {
-    if (sortType === 'latest') {
-      return b.id - a.id // 최신 등록순 (ID가 클수록 최근)
-    } else if (sortType === 'oldest') {
-      return a.id - b.id // 오래된 순
-    }
-    return 0
-  })
+  const sortedIngredients = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    const filteredIngredients = ingredients.filter((item) => {
+      const matchesCategory =
+        activeFilter === '전체' ||
+        (activeFilter === '냉장' && item.storage_method === '냉장') ||
+        (activeFilter === '냉동' && item.storage_method === '냉동') ||
+        (activeFilter === '소비 임박' && item.is_expiring_soon)
+      const matchesSearch =
+        normalizedQuery === '' ||
+        item.name.toLowerCase().includes(normalizedQuery) ||
+        (item.category && item.category.toLowerCase().includes(normalizedQuery))
 
-  const toggleSort = () => {
-    if (sortType === 'latest') setSortType('oldest')
-    else setSortType('latest')
-  }
+      return matchesCategory && matchesSearch
+    })
+
+    return [...filteredIngredients].sort((a, b) => {
+      if (sortType === 'oldest') {
+        return a.id - b.id
+      }
+
+      if (sortType === 'expiry') {
+        const aDay = a.d_day ?? 999
+        const bDay = b.d_day ?? 999
+        return aDay - bDay
+      }
+
+      return b.id - a.id
+    })
+  }, [activeFilter, ingredients, searchQuery, sortType])
 
   const getSortLabel = () => {
-    if (sortType === 'latest') return '등록일 최신순'
-    return '등록일 오래된순'
+    if (sortType === 'oldest') return '등록일 오래된순'
+    if (sortType === 'expiry') return '소비기한 임박순'
+    return '등록일 최신순'
   }
 
-  // 폼 입력 핸들러
-  const handleFormChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+  const toggleSort = () => {
+    setSortType((prev) => {
+      if (prev === 'latest') return 'oldest'
+      if (prev === 'oldest') return 'expiry'
+      return 'latest'
+    })
   }
 
-  // 폼 제출 핸들러 (추가 및 수정 공통)
+  const handleFormChange = (event) => {
+    const { name, value } = event.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setFormData(initialFormData)
+    setEditingId(null)
+  }
+
+  const openAddModal = () => {
+    setFormData(initialFormData)
+    setEditingId(null)
+    setIsModalOpen(true)
+  }
+
+  const openEditModal = (item) => {
+    setFormData({
+      name: item.name || '',
+      category: item.category || '기타',
+      storage_method: item.storage_method || '냉장',
+      quantity: Number(item.quantity) || 1,
+      unit: item.unit || '개',
+      purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
+      expiration_date: item.expiration_date || '',
+    })
+    setEditingId(item.id)
+    setIsModalOpen(true)
+  }
+
   const handleSubmitIngredient = async () => {
     if (!formData.name.trim()) {
-      alert('재료 이름을 입력해주세요.')
+      await showAlert('재료 이름을 입력해주세요.', {
+        title: '입력 확인',
+      })
       return
     }
 
     const payload = {
       ...formData,
-      quantity: Math.round(Number(formData.quantity) * 10) / 10
+      quantity: Math.round(Number(formData.quantity) * 10) / 10,
+      expiration_date: formData.expiration_date || null,
     }
-    if (!payload.expiration_date) {
-      payload.expiration_date = null
+
+    if (!hasToken()) {
+      setIngredients((prev) => {
+        if (editingId !== null) {
+          return prev.map((item) => (item.id === editingId ? { ...item, ...payload } : item))
+        }
+
+        return [
+          {
+            ...payload,
+            id: Date.now(),
+            d_day: payload.expiration_date ? 7 : null,
+            is_expiring_soon: false,
+          },
+          ...prev,
+        ]
+      })
+      setActiveFilter('전체')
+      setSearchQuery('')
+      closeModal()
+      return
     }
 
     try {
-      const token = localStorage.getItem('bobbeori-token')
+      const token = window.localStorage.getItem('bobbeori-token')
       const isEditing = editingId !== null
-      const url = isEditing 
+      const url = isEditing
         ? `${apiUrl}/api/v1/inventory/${editingId}`
         : `${apiUrl}/api/v1/inventory`
-      
+
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
         closeModal()
-        fetchFridgeData() // 데이터 리로드
+        fetchFridgeData()
       } else {
         const errData = await response.json()
-        alert(`재료 저장에 실패했습니다: ${errData.detail || '알 수 없는 에러'}`)
+        await showAlert(`재료 저장에 실패했습니다: ${errData.detail || '알 수 없는 에러'}`, {
+          title: '저장 실패',
+        })
       }
     } catch (err) {
       console.error(err)
-      alert('서버 통신 중 오류가 발생했습니다.')
+      await showAlert('서버 통신 중 오류가 발생했습니다.', {
+        title: '서버 오류',
+      })
     }
   }
 
-  // 삭제 핸들러 (실제 API 호출)
   const executeDelete = async (id) => {
+    if (!hasToken()) {
+      setIngredients((prev) => prev.filter((item) => item.id !== id))
+      setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
+      return
+    }
+
     try {
-      const token = localStorage.getItem('bobbeori-token')
+      const token = window.localStorage.getItem('bobbeori-token')
       const response = await fetch(`${apiUrl}/api/v1/inventory/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.ok) {
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
         fetchFridgeData()
       } else {
-        alert('삭제에 실패했습니다.')
+        await showAlert('삭제에 실패했습니다.', {
+          title: '삭제 실패',
+        })
       }
     } catch (err) {
       console.error(err)
-      alert('서버 오류로 삭제하지 못했습니다.')
+      await showAlert('서버 오류로 삭제하지 못했습니다.', {
+        title: '서버 오류',
+      })
     }
   }
 
-  // 삭제 컨펌 모달 띄우기
   const handleDeleteClick = (id, name) => {
     setConfirmModal({
       isOpen: true,
@@ -209,13 +321,11 @@ function Fridge() {
           냉장고에서 완전히 삭제하시겠습니까?
         </>
       ),
-      onConfirm: () => executeDelete(id)
+      onConfirm: () => executeDelete(id),
     })
   }
 
-  // 소비 핸들러 (1개 차감)
   const handleConsumeClick = async (item) => {
-    // 1개 이하일 때 소비를 누르면 컨펌 모달 띄우기
     if (Number(item.quantity) <= 1) {
       setConfirmModal({
         isOpen: true,
@@ -226,12 +336,11 @@ function Fridge() {
             모두 소비 처리하고 삭제할까요?
           </>
         ),
-        onConfirm: () => executeDelete(item.id)
+        onConfirm: () => executeDelete(item.id),
       })
       return
     }
 
-    // 1개 차감 로직
     const newQuantity = Math.round((Number(item.quantity) - 1) * 10) / 10
     const payload = {
       name: item.name,
@@ -240,56 +349,45 @@ function Fridge() {
       quantity: newQuantity,
       unit: item.unit,
       purchase_date: item.purchase_date,
-      expiration_date: item.expiration_date
+      expiration_date: item.expiration_date,
+    }
+
+    if (!hasToken()) {
+      setIngredients((prev) =>
+        prev.map((target) => (target.id === item.id ? { ...target, quantity: newQuantity } : target)),
+      )
+      return
     }
 
     try {
-      const token = localStorage.getItem('bobbeori-token')
+      const token = window.localStorage.getItem('bobbeori-token')
       const response = await fetch(`${apiUrl}/api/v1/inventory/${item.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
         fetchFridgeData()
       } else {
-        alert('소비 처리에 실패했습니다.')
+        await showAlert('소비 처리에 실패했습니다.', {
+          title: '소비 처리 실패',
+        })
       }
     } catch (err) {
       console.error(err)
-      alert('서버 오류로 소비 처리하지 못했습니다.')
+      await showAlert('서버 오류로 소비 처리하지 못했습니다.', {
+        title: '서버 오류',
+      })
     }
   }
 
-  // 수정 버튼 클릭 핸들러
-  const openEditModal = (item) => {
-    setFormData({
-      name: item.name || '',
-      category: item.category || '기타',
-      storage_method: item.storage_method || '냉장',
-      quantity: Number(item.quantity) || 1,
-      unit: item.unit || '개',
-      purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
-      expiration_date: item.expiration_date || ''
-    })
-    setEditingId(item.id)
-    setIsModalOpen(true)
-  }
-
-  const openAddModal = () => {
-    setFormData(initialFormData)
-    setEditingId(null)
-    setIsModalOpen(true)
-  }
-
-  const closeModal = () => {
-    setIsModalOpen(false)
-    setFormData(initialFormData)
-    setEditingId(null)
+  const clearStockNotice = () => {
+    setStockedCount(0)
+    window.localStorage.removeItem('bobbeori-last-stocked-count')
   }
 
   return (
@@ -298,26 +396,32 @@ function Fridge() {
         <div className="fridge-hero__copy">
           <h1 id="fridge-title">냉장고 재료 관리</h1>
           <p>우리 집 재료를 한눈에 관리하고, 알뜰하게 소비해요!</p>
+          {stockedCount > 0 ? (
+            <div className="fridge-stock-notice">
+              <span>영수증에서 {stockedCount}개 재료가 입고됐어요.</span>
+              <button type="button" onClick={clearStockNotice}>확인</button>
+            </div>
+          ) : null}
           <label className="fridge-search" aria-label="재료명 검색">
             <span aria-hidden="true" />
-            <input 
-              type="search" 
-              placeholder="재료명으로 검색해보세요" 
+            <input
+              type="search"
+              placeholder="재료명으로 검색해보세요"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
           </label>
         </div>
 
         <div className="fridge-hero__actions">
-          <button className="fridge-hero-card" type="button">
+          <button className="fridge-hero-card" type="button" onClick={() => navigate('/receipt-ocr')}>
             <div>
               <strong>영수증 OCR 입고</strong>
               <p>영수증 촬영으로 재료를 한 번에 등록해요</p>
             </div>
             <ImageSlot className="fridge-hero-card__image" src={iconReceipt} />
           </button>
-          <button className="fridge-hero-card fridge-hero-card--add" type="button" onClick={() => setIsModalOpen(true)}>
+          <button className="fridge-hero-card fridge-hero-card--add" type="button" onClick={openAddModal}>
             <div>
               <strong>+ 재료 추가</strong>
               <p>직접 입력해서 재료를 추가해요</p>
@@ -330,104 +434,51 @@ function Fridge() {
       </div>
 
       <div className="fridge-layout">
-        <aside className="fridge-sidebar" aria-label="냉장고 요약">
-          <section className="fridge-panel fridge-summary">
-            <h2>요약 정보</h2>
-            <dl>
-              <div>
-                <dt>전체 재료</dt>
-                <dd>{summary.total}개</dd>
-              </div>
-              <div>
-                <dt>냉장</dt>
-                <dd>{summary.storage['냉장'] || 0}개</dd>
-              </div>
-              <div>
-                <dt>냉동</dt>
-                <dd>{summary.storage['냉동'] || 0}개</dd>
-              </div>
-              <div>
-                <dt>실온</dt>
-                <dd>{summary.storage['실온'] || 0}개</dd>
-              </div>
-              <div>
-                <dt>소비 임박 (D-3↓)</dt>
-                <dd>{summary.expiring_soon}개</dd>
-              </div>
-            </dl>
-            <button 
-              type="button" 
-              onClick={() => setIsStatsOpen(true)}
-              style={{ width: '100%', marginTop: '12px', padding: '8px', background: 'var(--figma-coral)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              상세 통계 보기
-            </button>
-          </section>
-
-          <section className="fridge-panel fridge-quick">
-            <h2>빠른 이동</h2>
-            <ul>
-              <li>
-                소비 임박 재료 <strong>3</strong>
-              </li>
-              <li>최근 소비 내역</li>
-              <li>자주 먹는 재료</li>
-              <li>
-                휴지통 <strong>2</strong>
-              </li>
-            </ul>
-          </section>
-
-          <section className="fridge-panel fridge-tip">
-            <ImageSlot className="fridge-tip__image" src={imageAlarm} />
-            <h2>오늘도 알뜰하게!</h2>
-            <p>소비 임박 재료 {summary.expiring_soon}개가 있어요. 우선 소비해볼까요?</p>
-          </section>
-        </aside>
-
         <main className="fridge-main">
           <div className="fridge-toolbar">
             <div className="fridge-filters" aria-label="재료 상태 필터">
-              {FILTER_TYPES.map((filter) => {
-                let count = 0
-                if (filter.label === '전체') count = summary.total
-                else if (filter.label === '냉장') count = summary.storage['냉장'] || 0
-                else if (filter.label === '냉동') count = summary.storage['냉동'] || 0
-                else if (filter.label === '소비 임박') count = summary.expiring_soon
-
-                return (
-                  <button
-                    className={[
-                      'fridge-filter',
-                      activeFilter === filter.label ? 'is-active' : '',
-                      filter.tone ? `is-${filter.tone}` : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    key={filter.label}
-                    type="button"
-                    onClick={() => setActiveFilter(filter.label)}
-                  >
-                    {filter.label} ({count})
-                  </button>
-                )
-              })}
+              {FILTER_TYPES.map((filter) => (
+                <button
+                  className={[
+                    'fridge-filter',
+                    activeFilter === filter.label ? 'is-active' : '',
+                    filter.tone ? `is-${filter.tone}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  key={filter.label}
+                  type="button"
+                  onClick={() => setActiveFilter(filter.label)}
+                >
+                  {filter.label} ({filterCounts[filter.label]})
+                </button>
+              ))}
             </div>
 
             <div className="fridge-view-controls">
-              <button type="button" onClick={toggleSort} style={{ width: '130px' }}>
+              <button type="button" onClick={toggleSort}>
                 {getSortLabel()}
               </button>
-              <button className="is-active" type="button" aria-label="그리드 보기">
+              <button
+                className={viewMode === 'grid' ? 'is-active' : ''}
+                type="button"
+                aria-label="그리드 보기"
+                onClick={() => setViewMode('grid')}
+              >
                 <span />
               </button>
-              <button type="button" aria-label="리스트 보기">
+              <button
+                className={viewMode === 'list' ? 'is-active' : ''}
+                type="button"
+                aria-label="리스트 보기"
+                onClick={() => setViewMode('list')}
+              >
                 <span />
               </button>
             </div>
           </div>
 
-          <div className="fridge-card-grid">
+          <div className={viewMode === 'list' ? 'fridge-card-grid is-list' : 'fridge-card-grid'}>
             {ingredients.length === 0 ? (
               <div className="fridge-empty-state">
                 <ImageSlot className="fridge-empty-state__image" src={imagePutting} />
@@ -435,25 +486,19 @@ function Fridge() {
                 <p>첫 식재료를 등록하고 관리해보세요.</p>
                 <button type="button" onClick={openAddModal}>+ 첫 재료 추가하기</button>
               </div>
-            ) : filteredIngredients.length === 0 ? (
+            ) : sortedIngredients.length === 0 ? (
               <div className="fridge-empty-state">
                 <h3>해당 조건의 재료가 없습니다.</h3>
+                <button type="button" onClick={() => setActiveFilter('전체')}>전체 보기</button>
               </div>
             ) : (
               <>
-                {sortedIngredients.map((item) => {
-                  let mappedIcon = null
-                  const nameStr = item.name || ''
-                  if (nameStr.includes('양파')) mappedIcon = iconOnion
-                  else if (nameStr.includes('버섯')) mappedIcon = iconMushroom
-                  else if (nameStr.includes('계란') || nameStr.includes('달걀')) mappedIcon = iconEgg
-
-                  return (
-                    <article className={`fridge-item ${item.is_expiring_soon ? 'is-urgent' : ''}`} key={item.id}>
-                      <ImageSlot className="fridge-item__image" src={mappedIcon} />
-                      <div className="fridge-item__body">
-                        <div className="fridge-item__title">
-                          <h2>{item.name}</h2>
+                {sortedIngredients.map((item) => (
+                  <article className={`fridge-item ${item.is_expiring_soon ? 'is-urgent' : ''}`} key={item.id}>
+                    <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
+                    <div className="fridge-item__body">
+                      <div className="fridge-item__title">
+                        <h2>{item.name}</h2>
                         <span className={item.is_expiring_soon ? 'is-urgent' : ''}>
                           {item.storage_method}
                         </span>
@@ -470,10 +515,8 @@ function Fridge() {
                         <div>
                           <dt>소비기한</dt>
                           <dd className={item.is_expiring_soon ? 'fridge-dday-urgent' : 'fridge-dday-normal'}>
-                            {item.d_day !== null && item.d_day !== undefined 
-                              ? (item.d_day > 0 ? `D-${item.d_day}` : item.d_day === 0 ? 'D-Day' : `D+${Math.abs(item.d_day)} 지남`) 
-                              : '-'}
-                            <small className="fridge-dday-date">({item.expiration_date})</small>
+                            {getDdayLabel(item)}
+                            {item.expiration_date ? <small className="fridge-dday-date">({item.expiration_date})</small> : null}
                           </dd>
                         </div>
                       </dl>
@@ -484,13 +527,12 @@ function Fridge() {
                       <button type="button" onClick={() => handleDeleteClick(item.id, item.name)}>삭제</button>
                     </div>
                   </article>
-                  )
-                })}
+                ))}
 
-                <article className="fridge-add-card" onClick={openAddModal} style={{cursor: 'pointer'}}>
+                <article className="fridge-add-card">
                   <ImageSlot className="fridge-add-card__image" src={imageAlarm} />
                   <strong>더 많은 재료를 추가해보세요!</strong>
-                  <button type="button">+ 재료 추가</button>
+                  <button type="button" onClick={openAddModal}>+ 재료 추가</button>
                 </article>
               </>
             )}
@@ -498,7 +540,7 @@ function Fridge() {
         </main>
       </div>
 
-      <IngredientModal 
+      <IngredientModal
         isOpen={isModalOpen}
         editingId={editingId}
         formData={formData}
@@ -507,28 +549,23 @@ function Fridge() {
         onSubmit={handleSubmitIngredient}
       />
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         onConfirm={confirmModal.onConfirm}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
-
-      <StatsModal 
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        summary={summary}
-      />
+      {dialogNode}
 
       <section className="fridge-bottom-tip">
         <strong>알뜰 팁</strong>
         <span>소비 임박 재료로 맛있는 레시피를 추천받아 보세요!</span>
-        <button type="button">레시피 추천 받기</button>
+        <button type="button" onClick={() => navigate('/recipe-fridge')}>레시피 추천 받기</button>
         <ImageSlot className="fridge-bottom-tip__image" src={imageAlarm} />
       </section>
 
-      <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={() => setIsModalOpen(true)}>
+      <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={openAddModal}>
         +
       </button>
     </section>

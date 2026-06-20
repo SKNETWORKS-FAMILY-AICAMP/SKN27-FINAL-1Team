@@ -176,6 +176,10 @@ Thumbs.db
 outputs/
 wbs_edit_work/
 
+# Local browser / responsive verification artifacts
+tmp-*/
+tmp-*
+
 # ────────────────────────────────────────
 # 14. 데이터베이스 및 로컬 스토리지
 # ────────────────────────────────────────
