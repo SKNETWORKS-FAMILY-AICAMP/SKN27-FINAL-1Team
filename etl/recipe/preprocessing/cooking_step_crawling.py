@@ -124,30 +124,36 @@ def _get_recipe_page(recipe_url: str, session: requests.Session) -> BeautifulSou
 
 
 # 크롤링 한 HTML 문서를 데이터로 추출 
-def _get_recipe_data(recipe_page: BeautifulSoup) -> dict:
+def _get_recipe_data(recipe_page: BeautifulSoup) -> dict | None:
     """레시피 페이지를 받아서 레시피 데이터를 추출해서 반환"""
     recipe_data = {}
     # 레시피 메인 이미지 
-    # <img id="main_thumbs" src="https://recipe1.ezmember.co.kr/cache/recipe/2024/03/21/fc8e55cf223e79bb676370ce5fb181a31.jpg" alt="main thumb">
-    recipe_data["recipe_main_thumbs"] = recipe_page.find("img", id="main_thumbs")["src"]
+    # <img id="main_thumbs" src="..." alt="main thumb">
+    main_thumbs = recipe_page.find("img", id="main_thumbs")
+    if main_thumbs and main_thumbs.get("src"):
+        recipe_data["recipe_main_thumbs"] = main_thumbs["src"]
+
     # 레시피 스탭
-    # <div id="stepdescr1" class="media-body">닭은 흐르는 물에 깨끗하게 씻어 핏물을 제거해주세요.</div>
-    # 레시피가 stepdescr1 ~ n 까지 있음 데이터가 없을 때 까지 반복해서 추출 99까지로 해놓고 실패 시 루프 빠져나옴 
-    # 레시피들은 하나의 dict로 묶어서 한 컬럼에 저장 
+    # <div id="stepdescr1" class="media-body">...</div>
     for i in range(1, 100):
         stepdescr = recipe_page.find("div", id=f"stepdescr{i}")
         if stepdescr:
-            recipe_data[f"recipe_step_{i}"] = {"step": i, "description": stepdescr.text}
+            recipe_data[f"recipe_step_{i}"] = {"step": i, "description": stepdescr.text.strip()}
         else:
             break
+
     # 레시피 스탭 이미지
-    # <div id="stepimg1" class="media-right"><img src="https://recipe1.ezmember.co.kr/cache/recipe/2024/03/21/711ef959b02feaeb742a3ab835d6f6691.jpg"></div>
+    # <div id="stepimg1" class="media-right"><img src="..."></div>
     for i in range(1, 100):
         stepimg = recipe_page.find("div", id=f"stepimg{i}")
-        if stepimg:
-            recipe_data[f"recipe_step_img_{i}"] = {"step": i, "image": stepimg.find("img")["src"]}
-        else:
+        if not stepimg:
             break
+        img = stepimg.find("img")
+        if img and img.get("src"):
+            recipe_data[f"recipe_step_img_{i}"] = {"step": i, "image": img["src"]}
+
+    if not any(key.startswith("recipe_step_") for key in recipe_data):
+        return None
 
     return recipe_data
 
@@ -163,8 +169,16 @@ def crawling_recipe(df_cooking_step: pd.DataFrame) -> pd.DataFrame:
             continue
 
         recipe_page = _get_recipe_page(row["RECIPE_URL"], session)
-        if recipe_page:
+        if not recipe_page:
+            continue
+
+        try:
             recipe_data = _get_recipe_data(recipe_page)
+        except (AttributeError, KeyError, TypeError) as e:
+            print(f"데이터 추출 실패: {row['RECIPE_URL']} ({e})")
+            continue
+
+        if recipe_data:
             df_cooking_step.at[index, "RECIPE_DATA"] = json.dumps(
                 recipe_data, ensure_ascii=False
             )
