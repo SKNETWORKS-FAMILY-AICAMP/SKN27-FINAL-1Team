@@ -57,7 +57,7 @@ class OAuthClient:
         """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # 1. 액세스 토큰 요청 (네이버 API)
+                # 1. 액세스 토큰 요청 (네이버 API - 네이버는 쿼리 파라미터로 전송해야 안전함)
                 token_res = await client.post(
                     "https://nid.naver.com/oauth2.0/token",
                     data={
@@ -66,11 +66,18 @@ class OAuthClient:
                         "client_secret": settings.NAVER_CLIENT_SECRET,
                         "redirect_uri": settings.NAVER_REDIRECT_URI,
                         "code": code,
-                        "state": "naver_login_state" # CSRF 방지를 위한 상태 코드
-                    }
+                        "state": "bobbeori_naver_state"
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}
                 )
                 token_res.raise_for_status()
-                access_token = token_res.json().get("access_token")
+                token_data = token_res.json()
+                if "error" in token_data:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"네이버 토큰 발급 실패: {token_data.get('error_description')}"
+                    )
+                access_token = token_data.get("access_token")
 
                 # 2. 발급받은 토큰으로 사용자 정보 요청
                 user_res = await client.get(
@@ -108,7 +115,8 @@ class OAuthClient:
                         "client_secret": settings.GOOGLE_CLIENT_SECRET,
                         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
                         "code": code,
-                    }
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}
                 )
                 token_res.raise_for_status()
                 access_token = token_res.json().get("access_token")

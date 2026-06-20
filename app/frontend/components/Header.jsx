@@ -22,13 +22,17 @@ function Header() {
       return null
     }
 
-    return window.localStorage.getItem('bobbeori-auth-mode')
+    const token = window.localStorage.getItem('bobbeori-token')
+    const mode = window.localStorage.getItem('bobbeori-auth-mode')
+    return token ? 'user' : mode
   })
-  const isGuest = authMode === 'guest'
+  const isLoggedIn = authMode === 'user' || authMode === 'guest'
 
   useEffect(() => {
     const syncAuthMode = () => {
-      setAuthMode(window.localStorage.getItem('bobbeori-auth-mode'))
+      const token = window.localStorage.getItem('bobbeori-token')
+      const mode = window.localStorage.getItem('bobbeori-auth-mode')
+      setAuthMode(token ? 'user' : mode)
     }
 
     window.addEventListener('storage', syncAuthMode)
@@ -121,8 +125,8 @@ function Header() {
             <span className="site-header__sr-only">재료명 또는 레시피 검색</span>
             <input type="search" placeholder="재료명, 레시피 검색" />
           </label>
-          <Link className="site-header__start" to={isGuest ? '/mypage' : '/login'}>
-            {isGuest ? '마이페이지' : '로그인'}
+          <Link className="site-header__start" to={isLoggedIn ? '/mypage' : '/login'}>
+            {isLoggedIn ? '마이페이지' : '로그인'}
           </Link>
         </div>
         <button className="site-header__mobile-bell" type="button" aria-label="알림 보기" />
