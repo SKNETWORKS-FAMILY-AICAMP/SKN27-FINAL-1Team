@@ -1055,3 +1055,20 @@
   background: transparent;
   padding: 0;
 }
+/* ==========================================================================
+   Confirm Modal
+   ========================================================================== */
+
+.fridge-confirm-modal {
+  max-width: 400px !important;
+}
+
+.fridge-modal-footer .btn-danger {
+  background-color: var(--figma-coral);
+  color: white;
+  border-color: var(--figma-coral);
+}
+
+.fridge-modal-footer .btn-danger:hover {
+  background-color: #e55c65;
+}

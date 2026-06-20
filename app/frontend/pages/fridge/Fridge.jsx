@@ -9,6 +9,10 @@ import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
 
+import IngredientModal from '../../components/modals/IngredientModal'
+import ConfirmModal from '../../components/modals/ConfirmModal'
+import StatsModal from '../../components/modals/StatsModal'
+
 const FILTER_TYPES = [
   { label: '전체', tone: '' },
   { label: '냉장', tone: 'cold' },
@@ -44,7 +48,15 @@ function Fridge() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortType, setSortType] = useState('latest') // 'latest', 'oldest'
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormData)
+  const [isStatsOpen, setIsStatsOpen] = useState(false)
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null
+  })
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
   useEffect(() => {
@@ -121,27 +133,30 @@ function Fridge() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  // 재료 등록 API 호출
-  const handleAddIngredient = async () => {
+  // 폼 제출 핸들러 (추가 및 수정 공통)
+  const handleSubmitIngredient = async () => {
     if (!formData.name.trim()) {
       alert('재료 이름을 입력해주세요.')
       return
     }
 
-    // 빈 값이면 백엔드로 굳이 빈 문자열 전송하지 않고 undefined 또는 null 처리하거나
-    // 백엔드가 빈 문자열을 허용한다면 그대로 전송 (Pydantic이 None 변환 처리 가능성)
     const payload = {
       ...formData,
       quantity: Math.round(Number(formData.quantity) * 10) / 10
     }
     if (!payload.expiration_date) {
-      payload.expiration_date = null // null 처리
+      payload.expiration_date = null
     }
 
     try {
       const token = localStorage.getItem('bobbeori-token')
-      const response = await fetch(`${apiUrl}/api/v1/inventory`, {
-        method: 'POST',
+      const isEditing = editingId !== null
+      const url = isEditing 
+        ? `${apiUrl}/api/v1/inventory/${editingId}`
+        : `${apiUrl}/api/v1/inventory`
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
@@ -150,12 +165,11 @@ function Fridge() {
       })
 
       if (response.ok) {
-        setFormData(initialFormData) // 폼 초기화
-        setIsModalOpen(false) // 모달 닫기
+        closeModal()
         fetchFridgeData() // 데이터 리로드
       } else {
         const errData = await response.json()
-        alert(`재료 등록에 실패했습니다: ${errData.detail || '알 수 없는 에러'}`)
+        alert(`재료 저장에 실패했습니다: ${errData.detail || '알 수 없는 에러'}`)
       }
     } catch (err) {
       console.error(err)
@@ -163,9 +177,119 @@ function Fridge() {
     }
   }
 
+  // 삭제 핸들러 (실제 API 호출)
+  const executeDelete = async (id) => {
+    try {
+      const token = localStorage.getItem('bobbeori-token')
+      const response = await fetch(`${apiUrl}/api/v1/inventory/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (response.ok) {
+        setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
+        fetchFridgeData()
+      } else {
+        alert('삭제에 실패했습니다.')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('서버 오류로 삭제하지 못했습니다.')
+    }
+  }
+
+  // 삭제 컨펌 모달 띄우기
+  const handleDeleteClick = (id, name) => {
+    setConfirmModal({
+      isOpen: true,
+      title: '재료 삭제',
+      message: (
+        <>
+          <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{name}</span>을(를)<br />
+          냉장고에서 완전히 삭제하시겠습니까?
+        </>
+      ),
+      onConfirm: () => executeDelete(id)
+    })
+  }
+
+  // 소비 핸들러 (1개 차감)
+  const handleConsumeClick = async (item) => {
+    // 1개 이하일 때 소비를 누르면 컨펌 모달 띄우기
+    if (Number(item.quantity) <= 1) {
+      setConfirmModal({
+        isOpen: true,
+        title: '모두 소비',
+        message: (
+          <>
+            <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{item.name}</span>의 남은 수량이 1개 이하입니다.<br />
+            모두 소비 처리하고 삭제할까요?
+          </>
+        ),
+        onConfirm: () => executeDelete(item.id)
+      })
+      return
+    }
+
+    // 1개 차감 로직
+    const newQuantity = Math.round((Number(item.quantity) - 1) * 10) / 10
+    const payload = {
+      name: item.name,
+      category: item.category,
+      storage_method: item.storage_method,
+      quantity: newQuantity,
+      unit: item.unit,
+      purchase_date: item.purchase_date,
+      expiration_date: item.expiration_date
+    }
+
+    try {
+      const token = localStorage.getItem('bobbeori-token')
+      const response = await fetch(`${apiUrl}/api/v1/inventory/${item.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        fetchFridgeData()
+      } else {
+        alert('소비 처리에 실패했습니다.')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('서버 오류로 소비 처리하지 못했습니다.')
+    }
+  }
+
+  // 수정 버튼 클릭 핸들러
+  const openEditModal = (item) => {
+    setFormData({
+      name: item.name || '',
+      category: item.category || '기타',
+      storage_method: item.storage_method || '냉장',
+      quantity: Number(item.quantity) || 1,
+      unit: item.unit || '개',
+      purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
+      expiration_date: item.expiration_date || ''
+    })
+    setEditingId(item.id)
+    setIsModalOpen(true)
+  }
+
+  const openAddModal = () => {
+    setFormData(initialFormData)
+    setEditingId(null)
+    setIsModalOpen(true)
+  }
+
   const closeModal = () => {
     setIsModalOpen(false)
     setFormData(initialFormData)
+    setEditingId(null)
   }
 
   return (
@@ -231,8 +355,12 @@ function Fridge() {
                 <dd>{summary.expiring_soon}개</dd>
               </div>
             </dl>
-            <button className="fridge-soft-button" type="button">
-              통계 보기
+            <button 
+              type="button" 
+              onClick={() => setIsStatsOpen(true)}
+              style={{ width: '100%', marginTop: '12px', padding: '8px', background: 'var(--figma-coral)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              상세 통계 보기 📊
             </button>
           </section>
 
@@ -305,7 +433,7 @@ function Fridge() {
                 <ImageSlot className="fridge-empty-state__image" src={imagePutting} />
                 <h3>냉장고가 텅 비었어요!</h3>
                 <p>첫 식재료를 등록하고 관리해보세요.</p>
-                <button type="button" onClick={() => setIsModalOpen(true)}>+ 첫 재료 추가하기</button>
+                <button type="button" onClick={openAddModal}>+ 첫 재료 추가하기</button>
               </div>
             ) : filteredIngredients.length === 0 ? (
               <div className="fridge-empty-state">
@@ -351,15 +479,15 @@ function Fridge() {
                       </dl>
                     </div>
                     <div className="fridge-item__actions">
-                      <button type="button">수정</button>
-                      <button type="button">소비</button>
-                      <button type="button">삭제</button>
+                      <button type="button" onClick={() => openEditModal(item)}>수정</button>
+                      <button type="button" onClick={() => handleConsumeClick(item)}>소비</button>
+                      <button type="button" onClick={() => handleDeleteClick(item.id, item.name)}>삭제</button>
                     </div>
                   </article>
                   )
                 })}
 
-                <article className="fridge-add-card" onClick={() => setIsModalOpen(true)} style={{cursor: 'pointer'}}>
+                <article className="fridge-add-card" onClick={openAddModal} style={{cursor: 'pointer'}}>
                   <ImageSlot className="fridge-add-card__image" src={imageAlarm} />
                   <strong>더 많은 재료를 추가해보세요!</strong>
                   <button type="button">+ 재료 추가</button>
@@ -369,6 +497,29 @@ function Fridge() {
           </div>
         </main>
       </div>
+
+      <IngredientModal 
+        isOpen={isModalOpen}
+        editingId={editingId}
+        formData={formData}
+        handleFormChange={handleFormChange}
+        onClose={closeModal}
+        onSubmit={handleSubmitIngredient}
+      />
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
+
+      <StatsModal 
+        isOpen={isStatsOpen}
+        onClose={() => setIsStatsOpen(false)}
+        summary={summary}
+      />
 
       <section className="fridge-bottom-tip">
         <strong>알뜰 팁</strong>
@@ -380,70 +531,6 @@ function Fridge() {
       <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={() => setIsModalOpen(true)}>
         +
       </button>
-
-      {/* 재료 추가 모달 뼈대 및 폼 */}
-      {isModalOpen && (
-        <div className="fridge-modal-overlay">
-          <div className="fridge-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="fridge-modal-header">
-              <h3>재료 직접 추가</h3>
-              <button onClick={closeModal}>✕</button>
-            </div>
-            <div className="fridge-modal-body">
-              <div className="fridge-form-group">
-                <label>재료명 <span style={{color:'red'}}>*</span></label>
-                <input type="text" name="name" placeholder="예) 양파, 대파, 우유" value={formData.name} onChange={handleFormChange} />
-              </div>
-              <div className="fridge-form-row">
-                <div className="fridge-form-group">
-                  <label>카테고리</label>
-                  <select name="category" value={formData.category} onChange={handleFormChange}>
-                    <option value="채소">채소</option>
-                    <option value="과일">과일</option>
-                    <option value="육류">육류</option>
-                    <option value="수산물">수산물</option>
-                    <option value="유제품">유제품</option>
-                    <option value="가공식품">가공식품</option>
-                    <option value="기타">기타</option>
-                  </select>
-                </div>
-                <div className="fridge-form-group">
-                  <label>보관 위치</label>
-                  <select name="storage_method" value={formData.storage_method} onChange={handleFormChange}>
-                    <option value="냉장">냉장</option>
-                    <option value="냉동">냉동</option>
-                    <option value="실온">실온</option>
-                  </select>
-                </div>
-              </div>
-              <div className="fridge-form-row">
-                <div className="fridge-form-group">
-                  <label>수량 <small style={{color:'#8b673e', fontWeight: 'normal'}}>(반 개는 0.5)</small></label>
-                  <input type="number" name="quantity" min="0.5" step="0.5" value={formData.quantity} onChange={handleFormChange} />
-                </div>
-                <div className="fridge-form-group">
-                  <label>단위</label>
-                  <select name="unit" value={formData.unit} onChange={handleFormChange}>
-                    <option value="개">개</option>
-                    <option value="g">g (그램)</option>
-                    <option value="ml">ml (미리리터)</option>
-                    <option value="봉">봉</option>
-                    <option value="단">단</option>
-                  </select>
-                </div>
-              </div>
-              <div className="fridge-form-group">
-                <label>유통기한(소비기한) <small style={{color:'#8b673e', fontWeight: 'normal'}}>(미입력시 자동 계산)</small></label>
-                <input type="date" name="expiration_date" value={formData.expiration_date} onChange={handleFormChange} />
-              </div>
-            </div>
-            <div className="fridge-modal-footer">
-              <button className="btn-cancel" onClick={closeModal}>취소</button>
-              <button className="btn-submit" onClick={handleAddIngredient}>등록하기</button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   )
 }
