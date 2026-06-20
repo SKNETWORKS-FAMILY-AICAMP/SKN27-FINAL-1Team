@@ -49,14 +49,28 @@ root/
 │     ├─ pages/                     (페이지 단위 화면 관리)
 │     │  ├─ home/                   (이재희 담당 / 홈 대시보드 화면)
 │     │  ├─ fridge/                 (김재묵 담당 / 냉장고 관리 화면)
+│     │  ├─ fridge_recipe/          (김재묵 담당 / 냉장고파먹기 추천 화면)
 │     │  ├─ receipt_ocr/            (박준희 담당 / 영수증 업로드·결과 확인 화면)
 │     │  ├─ guide/                  (김주영 담당 / 식재료 가이드 화면)
+│     │  ├─ info/                   (공용 / 서비스 안내 화면)
+│     │  ├─ login/                  (공용 / 로그인 화면)
+│     │  ├─ menu_recommend/         (김경수 담당 / 메뉴 추천 화면)
+│     │  ├─ mypage/                 (공용 / 마이페이지 화면)
 │     │  ├─ recipe_recommend/       (김경수 담당 / 레시피 추천 화면)
-│     │  └─ recipe_list/            (김경수 담당 / 레시피 목록 조회 화면)
-│     ├─ components/                (공용 / Header, Breadcrumbs 등 재사용 UI 컴포넌트)
+│     │  ├─ recipe_list/            (김경수 담당 / 레시피 목록 조회 화면)
+│     │  ├─ recipe_detail/          (김경수 담당 / 레시피 상세 화면)
+│     │  └─ shopping_list/          (공용 / 장보기 목록 화면)
+│     ├─ components/                (공용 / Header, Breadcrumbs, Dialog 등 재사용 UI 컴포넌트)
+│     │  └─ modals/                 (공용 / 확인, 재료 수정, 통계 모달)
+│     ├─ mock/                      (공용 / 프론트 화면용 mock 데이터)
+│     ├─ data/                      (공용 / 화면에서 사용하는 정적 데이터)
 │     ├─ services/                  (공용 / 프론트 API 호출 함수)
 │     ├─ stores/                    (공용 / 상태관리)
-│     └─ assets/                    (공용 / 로고, 마스코트, 추출 이미지 등 정적 리소스)
+│     ├─ assets/                    (공용 / 로고, 마스코트, 추출 이미지 등 정적 리소스)
+│     │  ├─ extracted/              (공용 / 추출 이미지 리소스)
+│     │  └─ fonts/                  (공용 / 웹폰트)
+│     ├─ public/                    (공용 / 빌드 시 그대로 제공되는 정적 파일)
+│     └─ .env.sample                (공용 / 환경 변수 파일)
 │
 ├─ docs/                            (기획, 설계, 회의 문서 관리 공간)
 │  ├─ planning/                     (공용 / 프로젝트 주제, 기능 정의, 기획서)
@@ -104,7 +118,7 @@ root/
 │  │  └─ food_guide/                (김주영 담당 / 가이드 테스트 샘플)
 │  └─ api/                          (공용 / API 요청·응답 테스트)
 │
-├─ .env.example
+├─ .env.sample
 ├─ .gitignore
 ├─ docker-compose.yml
 └─ README.md                        (공용 / 프로젝트 소개, 실행 방법, 폴더 설명)

@@ -55,10 +55,7 @@ export default function IngredientModal({
               <label>단위</label>
               <select name="unit" value={formData.unit} onChange={handleFormChange}>
                 <option value="개">개</option>
-                <option value="g">g (그램)</option>
-                <option value="ml">ml (미리리터)</option>
-                <option value="봉">봉</option>
-                <option value="단">단</option>
+                <option value="Kg">Kg</option>
               </select>
             </div>
           </div>

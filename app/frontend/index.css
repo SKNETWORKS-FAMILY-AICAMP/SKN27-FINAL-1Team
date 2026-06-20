@@ -105,6 +105,28 @@ body {
   line-height: 1.6;
 }
 
+.page-container__actions {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-container__actions a {
+  min-height: 42px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--figma-coral-stroke);
+  border-radius: 999px;
+  background: var(--figma-coral);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
 .info-page-list {
   max-width: 720px;
   margin: 28px 0 0;

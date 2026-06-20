@@ -8,9 +8,9 @@ import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import './Login.css'
 
 const loginMethods = [
-  { label: '카카오로 로그인', mark: '●', className: 'kakao', provider: 'kakao' },
-  { label: '네이버로 로그인', mark: 'N', className: 'naver', provider: 'naver' },
-  { label: '구글로 로그인', mark: 'G', className: 'google', provider: 'google' },
+  { label: '카카오로 로그인', mark: '●', className: 'kakao', provider: 'kakao', envKey: 'VITE_KAKAO_CLIENT_ID' },
+  { label: '네이버로 로그인', mark: 'N', className: 'naver', provider: 'naver', envKey: 'VITE_NAVER_CLIENT_ID' },
+  { label: '구글로 로그인', mark: 'G', className: 'google', provider: 'google', envKey: 'VITE_GOOGLE_CLIENT_ID' },
 ]
 
 const featureCards = [
@@ -34,26 +34,34 @@ const featureCards = [
 function Login() {
   const navigate = useNavigate()
 
-  const handleGuestStart = () => {
-    window.localStorage.setItem('bobbeori-auth-mode', 'guest')
+  const startLocalSession = (mode) => {
+    window.localStorage.setItem('bobbeori-auth-mode', mode)
     window.dispatchEvent(new Event('bobbeori-auth-change'))
     navigate('/')
   }
 
-  const handleSocialLogin = (provider) => {
+  const handleGuestStart = () => {
+    startLocalSession('guest')
+  }
+
+  const handleSocialLogin = (method) => {
+    const clientId = import.meta.env[method.envKey] || ''
+
+    if (!clientId) {
+      startLocalSession(method.className)
+      return
+    }
+
     const host = window.location.origin
-    const redirectUri = encodeURIComponent(`${host}/auth/callback/${provider}`)
+    const redirectUri = encodeURIComponent(`${host}/auth/callback/${method.provider}`)
     let url = ''
 
-    if (provider === 'kakao') {
-      const clientId = import.meta.env.VITE_KAKAO_CLIENT_ID || ''
+    if (method.provider === 'kakao') {
       url = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`
-    } else if (provider === 'naver') {
-      const clientId = import.meta.env.VITE_NAVER_CLIENT_ID || ''
+    } else if (method.provider === 'naver') {
       const state = 'bobbeori_naver_state'
       url = `https://nid.naver.com/oauth2.0/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}`
-    } else if (provider === 'google') {
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+    } else if (method.provider === 'google') {
       url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20profile%20email`
     }
 
@@ -114,7 +122,7 @@ function Login() {
                     className={`login-card__button ${method.className}`}
                     type="button"
                     key={method.label}
-                    onClick={() => handleSocialLogin(method.provider)}
+                    onClick={() => handleSocialLogin(method)}
                   >
                     <span className={`login-card__provider ${method.className}`}>
                       {method.mark}

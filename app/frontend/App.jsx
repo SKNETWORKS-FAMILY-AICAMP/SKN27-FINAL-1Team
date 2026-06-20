@@ -35,6 +35,7 @@ function AppLayout() {
           <Route path="/recipes" element={<RecipeList />} />
           <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/guide" element={<Guide />} />
+          <Route path="/guide/:ingredientName" element={<Guide />} />
           <Route path="/recipe-fridge" element={<FridgeRecipe />} />
           <Route path="/menu-recommend" element={<MenuRecommend />} />
           <Route path="/recipe-recommend" element={<RecipeRecommend />} />
