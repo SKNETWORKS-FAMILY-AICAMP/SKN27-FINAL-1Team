@@ -52,7 +52,8 @@ class InventoryService:
         
         return {
             "d_day": d_day_delta,
-            "is_expiring_soon": is_expiring_soon
+            "is_expiring_soon": is_expiring_soon,
+            "calculated_expiration_date": target_date
         }
 
     def add_ingredient(self, db: Session, user_id: int, data: IngredientCreate):
@@ -92,6 +93,9 @@ class InventoryService:
             calc_info = self._calculate_d_day_and_flags(ing)
             item_dict = ing.__dict__.copy()
             item_dict.update(calc_info)
+            # 명시적 유통기한이 없으면 자동 계산된 유통기한으로 대체
+            if not item_dict.get("expiration_date"):
+                item_dict["expiration_date"] = calc_info.get("calculated_expiration_date")
             results.append(item_dict)
             
         return results
