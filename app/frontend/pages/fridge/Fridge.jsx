@@ -360,7 +360,7 @@ function Fridge() {
               onClick={() => setIsStatsOpen(true)}
               style={{ width: '100%', marginTop: '12px', padding: '8px', background: 'var(--figma-coral)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
             >
-              상세 통계 보기 📊
+              상세 통계 보기
             </button>
           </section>
 

@@ -20,10 +20,17 @@ export default function StatsModal({ isOpen, onClose, summary }) {
     <div className="fridge-modal-overlay">
       <div className="fridge-modal-content stats-modal" onClick={(e) => e.stopPropagation()}>
         <div className="fridge-modal-header">
-          <h2>📊 내 냉장고 통계</h2>
+          <h2>내 냉장고 통계</h2>
           <button type="button" onClick={onClose} aria-label="닫기">✕</button>
         </div>
         <div className="fridge-modal-body stats-modal-body">
+          <div className="stats-card" style={{ textAlign: 'center', backgroundColor: '#fffbf0', borderColor: '#f4d19b' }}>
+            <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#8b673e' }}>내 냉장고 총 재료</h3>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--figma-coral)' }}>
+              {total}<span style={{ fontSize: '20px', color: '#666' }}> 개</span>
+            </div>
+          </div>
+
           <div className="stats-card">
             <h3>소비 임박 비율</h3>
             <div className="stats-progress-bg">
