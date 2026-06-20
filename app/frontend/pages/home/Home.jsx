@@ -1,0 +1,44 @@
+import { useEffect } from 'react'
+import './Home.css'
+import HeroSection from './sections/HeroSection'
+import ProblemSection from './sections/ProblemSection'
+import SolutionSection from './sections/SolutionSection'
+
+function Home() {
+  useEffect(() => {
+    const revealTargets = document.querySelectorAll('.home-reveal')
+
+    if (!('IntersectionObserver' in window)) {
+      revealTargets.forEach((target) => target.classList.add('show'))
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return
+          entry.target.classList.add('show')
+          observer.unobserve(entry.target)
+        })
+      },
+      {
+        rootMargin: '0px 0px -12% 0px',
+        threshold: 0.14,
+      },
+    )
+
+    revealTargets.forEach((target) => observer.observe(target))
+
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div className="home-page">
+      <HeroSection />
+      <ProblemSection />
+      <SolutionSection />
+    </div>
+  )
+}
+
+export default Home
