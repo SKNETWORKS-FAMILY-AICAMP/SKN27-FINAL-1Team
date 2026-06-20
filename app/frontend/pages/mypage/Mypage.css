@@ -284,6 +284,12 @@
   border-radius: 10px;
   font-size: 14px;
   font-weight: 900;
+  opacity: 0.35;
+  transition: opacity 0.2s ease;
+}
+
+.mypage-social__pill.is-active {
+  opacity: 1;
 }
 
 .mypage-social__pill--kakao {
@@ -296,6 +302,12 @@
   border: 1.4px solid #9add9a;
   background: #eefceb;
   color: #147c2e;
+}
+
+.mypage-social__pill--google {
+  border: 1.4px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
 }
 
 .mypage-connect-button {

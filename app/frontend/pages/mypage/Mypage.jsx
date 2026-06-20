@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Mypage.css'
 
@@ -79,6 +79,7 @@ function Mypage() {
   const [connectedSocials, setConnectedSocials] = useState(['카카오', '네이버'])
   const [completedSteps, setCompletedSteps] = useState(['프로필 확인'])
   const [saveMessage, setSaveMessage] = useState('추천 기준이 서비스에 반영되어 있어요.')
+  const [userData, setUserData] = useState(null)
   const authMode =
     typeof window === 'undefined' ? null : window.localStorage.getItem('bobbeori-auth-mode')
   const isGuest = authMode === 'guest'
@@ -94,7 +95,60 @@ function Mypage() {
     setCompletedSteps((prev) => (prev.includes(step) ? prev : [...prev, step]))
   }
 
+  useEffect(() => {
+    if (isGuest) {
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      return
+    }
+
+    const fetchUser = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('인증 실패')
+        }
+
+        const data = await response.json()
+        setUserData(data)
+        setProfileName(data.nickname ? `${data.nickname}님` : userProfile.name)
+        setProfileEmail(data.email || 'babbeori@example.com')
+        setConnectedSocials((prev) => {
+          if (!data.provider) {
+            return prev
+          }
+
+          const providerLabel = {
+            kakao: '카카오',
+            naver: '네이버',
+            google: '구글',
+          }[data.provider] ?? data.provider
+
+          return prev.includes(providerLabel) ? prev : [providerLabel, ...prev]
+        })
+      } catch (err) {
+        console.error(err)
+        window.localStorage.removeItem('bobbeori-token')
+        window.localStorage.removeItem('bobbeori-auth-mode')
+        window.dispatchEvent(new Event('bobbeori-auth-change'))
+        navigate('/login')
+      }
+    }
+
+    fetchUser()
+  }, [isGuest, navigate])
+
   const handleLogout = () => {
+    window.localStorage.removeItem('bobbeori-token')
     window.localStorage.removeItem('bobbeori-auth-mode')
     window.dispatchEvent(new Event('bobbeori-auth-change'))
     navigate('/login')
@@ -151,6 +205,12 @@ function Mypage() {
     navigate('/recipe-fridge')
   }
 
+  const profileDisplayName = isGuest ? '게스트님' : profileName
+  const profileDisplayEmail = isGuest ? 'guest@bobbeori.com' : profileEmail
+  const profileCreatedAt = userData?.created_at
+    ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}`
+    : '가입일 2024. 05. 22'
+
   return (
     <section className="mypage" aria-labelledby="mypage-title">
       <div className="mypage-hero">
@@ -188,7 +248,7 @@ function Mypage() {
                 onChange={(event) => setProfileName(event.target.value)}
               />
             ) : (
-              <h2>{isGuest ? '게스트님' : profileName}</h2>
+              <h2>{profileDisplayName}</h2>
             )}
             <span>{isGuest ? '게스트' : '일반 회원'}</span>
           </div>
@@ -199,9 +259,9 @@ function Mypage() {
               onChange={(event) => setProfileEmail(event.target.value)}
             />
           ) : (
-            <p>{isGuest ? 'guest@bobbeori.com' : profileEmail}</p>
+            <p>{profileDisplayEmail}</p>
           )}
-          <small>{isGuest ? '게스트 모드 이용 중' : '가입일 2024. 05. 22'}</small>
+          <small>{isGuest ? '게스트 모드 이용 중' : profileCreatedAt}</small>
           <div className="mypage-profile__actions">
             <button
               className="mypage-primary-button"
@@ -218,21 +278,26 @@ function Mypage() {
         <div className="mypage-social">
           <strong>소셜 로그인 정보</strong>
           <div>
-            {connectedSocials.map((social) => (
-              <span
-                className={`mypage-social__pill ${
-                  social === '카카오' ? 'mypage-social__pill--kakao' : 'mypage-social__pill--naver'
-                }`}
-                key={social}
-              >
-                {social}
-              </span>
-            ))}
-            <button
-              className="mypage-connect-button"
-              type="button"
-              onClick={connectSocial}
-            >
+            {connectedSocials.map((social) => {
+              const className =
+                social === '카카오'
+                  ? 'mypage-social__pill--kakao'
+                  : social === '구글'
+                    ? 'mypage-social__pill--google'
+                    : 'mypage-social__pill--naver'
+
+              return (
+                <span
+                  className={`mypage-social__pill ${className} ${
+                    userData?.provider && social.toLowerCase().includes(userData.provider) ? 'is-active' : ''
+                  }`}
+                  key={social}
+                >
+                  {social}
+                </span>
+              )
+            })}
+            <button className="mypage-connect-button" type="button" onClick={connectSocial}>
               + 연결하기
             </button>
           </div>
@@ -260,7 +325,7 @@ function Mypage() {
       <div className="mypage-grid">
         <section className="mypage-panel mypage-recipe" aria-labelledby="selected-recipe-title">
           <div className="mypage-panel__title">
-              <h2 id="selected-recipe-title">오늘 이어갈 추천</h2>
+            <h2 id="selected-recipe-title">오늘 이어갈 추천</h2>
           </div>
           <article className="mypage-selected-recipe">
             <ImageSlot className="mypage-selected-recipe__image" src={imageRecommendation} />

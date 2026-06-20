@@ -1,4 +1,4 @@
-.fridge-page {
+﻿.fridge-page {
   width: var(--layout-container);
   margin: 0 auto;
   padding: 8px 0 72px;
@@ -827,7 +827,7 @@
   }
 
   .fridge-item dl div + div::before {
-    content: " · ";
+    content: " 쨌 ";
   }
 
   .fridge-item dt {
@@ -880,4 +880,243 @@
     width: 76px;
     height: 72px;
   }
+}
+/* ==========================================================================
+   Empty State & Modal
+   ========================================================================== */
+
+.fridge-empty-state {
+  grid-column: 1 / -1;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1.4px dashed #f0d7b1;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.6);
+  padding: 40px 20px;
+}
+
+.fridge-empty-state__image {
+  width: 120px;
+  height: 120px;
+  border: none;
+  background: transparent;
+  margin-bottom: 16px;
+}
+
+.fridge-empty-state h3 {
+  margin: 0 0 8px;
+  color: var(--figma-text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.fridge-empty-state p {
+  margin: 0 0 24px;
+  color: #8b673e;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.fridge-empty-state button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  background: var(--figma-coral);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.fridge-empty-state button:hover {
+  opacity: 0.9;
+}
+
+.fridge-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(69, 42, 25, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.fridge-modal-content {
+  width: 100%;
+  max-width: 480px;
+  background: #fffdf8;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(69, 42, 25, 0.15);
+  animation: modal-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modal-pop {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.fridge-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f1d9b3;
+}
+
+.fridge-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--figma-text);
+}
+
+.fridge-modal-header button {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #a4826b;
+  cursor: pointer;
+}
+
+.fridge-modal-body {
+  padding: 24px;
+}
+
+.fridge-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  background: #fffaf2;
+  border-top: 1px solid #f1d9b3;
+}
+
+.fridge-modal-footer button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  background: transparent;
+  border: 1px solid #e0cdb2;
+  color: #6f4b36;
+}
+
+.btn-submit {
+  background: var(--figma-coral);
+  border: none;
+  color: #fff;
+}
+/* ==========================================================================
+   Form Styles (Modal)
+   ========================================================================== */
+
+.fridge-form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.fridge-form-row .fridge-form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.fridge-form-group {
+  margin-bottom: 16px;
+}
+
+.fridge-form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #6f4b36;
+}
+
+.fridge-form-group input,
+.fridge-form-group select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #e0cdb2;
+  border-radius: 10px;
+  background: #fffdf8;
+  font-size: 14px;
+  color: var(--figma-text);
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.fridge-form-group input:focus,
+.fridge-form-group select:focus {
+  outline: none;
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.1);
+}
+
+.fridge-form-group input::placeholder {
+  color: #c4b5a3;
+}
+
+/* ==========================================================================
+   D-Day Urgent Badge Styles
+   ========================================================================== */
+
+.fridge-dday-urgent {
+  color: #d32f2f !important;
+  font-weight: 900 !important;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(211, 47, 47, 0.2);
+  display: inline-block;
+  background: #ffebee;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.fridge-dday-normal {
+  color: var(--figma-text) !important;
+}
+
+.fridge-dday-date {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+  font-weight: 400;
+  text-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+/* ==========================================================================
+   Confirm Modal
+   ========================================================================== */
+
+.fridge-confirm-modal {
+  max-width: 400px !important;
+}
+
+.fridge-modal-footer .btn-danger {
+  background-color: var(--figma-coral);
+  color: white;
+  border-color: var(--figma-coral);
+}
+
+.fridge-modal-footer .btn-danger:hover {
+  background-color: #e55c65;
 }

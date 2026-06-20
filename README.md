@@ -56,7 +56,8 @@ root/
 │     ├─ components/                (공용 / Header, Breadcrumbs 등 재사용 UI 컴포넌트)
 │     ├─ services/                  (공용 / 프론트 API 호출 함수)
 │     ├─ stores/                    (공용 / 상태관리)
-│     └─ assets/                    (공용 / 로고, 마스코트, 추출 이미지 등 정적 리소스)
+│     ├─ assets/                    (공용 / 로고, 마스코트, 추출 이미지 등 정적 리소스)
+│     └─ .env.sample                (공용 / 환경 변수 파일)
 │
 ├─ docs/                            (기획, 설계, 회의 문서 관리 공간)
 │  ├─ planning/                     (공용 / 프로젝트 주제, 기능 정의, 기획서)
@@ -104,7 +105,7 @@ root/
 │  │  └─ food_guide/                (김주영 담당 / 가이드 테스트 샘플)
 │  └─ api/                          (공용 / API 요청·응답 테스트)
 │
-├─ .env.example
+├─ .env.sample
 ├─ .gitignore
 ├─ docker-compose.yml
 └─ README.md                        (공용 / 프로젝트 소개, 실행 방법, 폴더 설명)

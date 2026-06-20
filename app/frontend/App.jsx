@@ -7,6 +7,7 @@ import MobileBottomNav from './components/MobileBottomNav.jsx'
 import Home from './pages/home/Home.jsx'
 import InfoPage from './pages/info/InfoPage.jsx'
 import Login from './pages/login/Login.jsx'
+import Callback from './pages/login/Callback.jsx'
 import Mypage from './pages/mypage/Mypage.jsx'
 import Fridge from './pages/fridge/Fridge.jsx'
 import ReceiptOcr from './pages/receipt_ocr/ReceiptOcr.jsx'
@@ -38,6 +39,7 @@ function AppLayout() {
           <Route path="/menu-recommend" element={<MenuRecommend />} />
           <Route path="/recipe-recommend" element={<RecipeRecommend />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/auth/callback/:provider" element={<Callback />} />
           <Route path="/mypage" element={<Mypage />} />
           <Route path="/shopping-list" element={<ShoppingList />} />
           <Route

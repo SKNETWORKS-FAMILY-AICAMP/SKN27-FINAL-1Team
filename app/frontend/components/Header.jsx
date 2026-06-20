@@ -14,20 +14,24 @@ const recipeItems = [
   { to: '/menu-recommend', label: '메뉴 추천' },
 ]
 
+function getAuthMode() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const token = window.localStorage.getItem('bobbeori-token')
+  const mode = window.localStorage.getItem('bobbeori-auth-mode')
+  return token ? 'user' : mode
+}
+
 function Header() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const isRecipeActive = recipeItems.some((item) => item.to === pathname) || pathname.startsWith('/recipes/')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [authMode, setAuthMode] = useState(() => {
-    if (typeof window === 'undefined') {
-      return null
-    }
-
-    return window.localStorage.getItem('bobbeori-auth-mode')
-  })
-  const isGuest = authMode === 'guest'
+  const [authMode, setAuthMode] = useState(getAuthMode)
+  const isLoggedIn = authMode === 'user' || authMode === 'guest'
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false)
@@ -43,7 +47,7 @@ function Header() {
 
   useEffect(() => {
     const syncAuthMode = () => {
-      setAuthMode(window.localStorage.getItem('bobbeori-auth-mode'))
+      setAuthMode(getAuthMode())
     }
 
     window.addEventListener('storage', syncAuthMode)
@@ -71,11 +75,7 @@ function Header() {
         >
           <span />
         </button>
-        <Link
-          to="/"
-          className="site-header__brand"
-          aria-label="밥벌이 홈"
-        >
+        <Link to="/" className="site-header__brand" aria-label="밥벌이 홈">
           <img className="site-header__logo-text" src={logoText} alt="밥벌이" />
         </Link>
 
@@ -115,9 +115,7 @@ function Header() {
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    isActive
-                      ? 'site-header__dropdown-link active'
-                      : 'site-header__dropdown-link'
+                    isActive ? 'site-header__dropdown-link active' : 'site-header__dropdown-link'
                   }
                   role="menuitem"
                   onClick={closeMobileMenu}
@@ -159,8 +157,8 @@ function Header() {
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </form>
-          <Link className="site-header__start" to={isGuest ? '/mypage' : '/login'}>
-            {isGuest ? '마이페이지' : '로그인'}
+          <Link className="site-header__start" to={isLoggedIn ? '/mypage' : '/login'}>
+            {isLoggedIn ? '마이페이지' : '로그인'}
           </Link>
         </div>
         <button
