@@ -25,14 +25,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 로컬 개발(DEV_MODE) 시 가벼운 SQLite 테이블 자동 생성
+# 로컬 개발(DEV_MODE) 시 테이블 자동 생성
 if settings.DEV_MODE:
     try:
-        # base.py에 선언된 메타데이터를 기반으로 SQLite 데이터베이스 테이블을 자동 생성합니다.
+        # base.py에 선언된 메타데이터를 기반으로 데이터베이스 테이블을 자동 생성합니다.
         Base.metadata.create_all(bind=engine)
-        print("💡 [Local DB] DEV_MODE가 활성화되어 SQLite 테이블이 정상적으로 자동 생성되었습니다.")
+        print(f"💡 [DB Setup] DEV_MODE 활성화: '{settings.DB_ENGINE}' 데이터베이스 테이블이 정상적으로 감지/생성되었습니다.")
     except Exception as e:
-        print(f"⚠️ [Local DB] SQLite 테이블 자동 생성 중 실패: {e}")
+        print(f"⚠️ [DB Setup] '{settings.DB_ENGINE}' 테이블 자동 생성 중 실패: {e}")
 
 # API 라우터 등록
 from app.backend.api.auth import auth_mock, auth_api
