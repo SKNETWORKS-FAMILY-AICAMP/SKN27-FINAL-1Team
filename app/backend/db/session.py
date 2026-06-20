@@ -4,7 +4,7 @@ from app.backend.core.config import settings
 
 # SQLite는 멀티 스레드 테스트 시 동시성 충돌을 방지하기 위해 특별한 인자가 필요함
 connect_args = {}
-if settings.DEV_MODE or settings.DATABASE_URL.startswith("sqlite"):
+if settings.DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
 # SQLAlchemy 데이터베이스 엔진 생성
