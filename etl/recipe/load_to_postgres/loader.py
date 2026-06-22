@@ -33,7 +33,7 @@ _VARCHAR_LIMITS = {
 _REQUIRED_TABLES = ("recipes", "recipe_ingredients", "ingredients")
 _REQUIRED_COLUMNS = {
     "ingredients": ("name", "normalized_name"),
-    "recipes": ("id", "title"),
+    "recipes": ("id", "title", "recipe_steps"),
     "recipe_ingredients": ("recipe_id", "ingredient_id"),
 }
 
@@ -106,28 +106,54 @@ def _parse_recipe_data(recipe_data_json: Any) -> dict[str, Any]:
         return {}
 
 
-def build_description(recipe_data_json: Any) -> str | None:
+def build_recipe_steps(recipe_data_json: Any) -> list[dict[str, Any]] | None:
+    """mock recipeSteps 형식(title, text) + step_no, image_url 조리단계 배열을 만든다."""
     data = _parse_recipe_data(recipe_data_json)
     if not data:
         return None
 
-    step_items: list[tuple[int, str]] = []
+    steps: dict[int, dict[str, Any]] = {}
+
     for key, value in data.items():
-        if not key.startswith("recipe_step_") or key.startswith("recipe_step_img_"):
-            continue
         if not isinstance(value, dict):
             continue
-        description = value.get("description")
-        if not description:
-            continue
-        step_no = value.get("step")
-        step_items.append((int(step_no) if step_no is not None else 0, str(description)))
 
-    if not step_items:
+        if key.startswith("recipe_step_img_"):
+            step_no = int(value.get("step") or 0)
+            if step_no <= 0:
+                continue
+            step = steps.setdefault(
+                step_no,
+                {"step_no": step_no, "title": f"{step_no}단계", "text": None, "image_url": None},
+            )
+            step["image_url"] = _clip(value.get("image"), _VARCHAR_LIMITS["image_url"])
+            continue
+
+        if not key.startswith("recipe_step_"):
+            continue
+
+        step_no = int(value.get("step") or 0)
+        description = value.get("description")
+        if step_no <= 0 or not description:
+            continue
+
+        step = steps.setdefault(
+            step_no,
+            {"step_no": step_no, "title": f"{step_no}단계", "text": None, "image_url": None},
+        )
+        step["text"] = str(description)
+
+    if not steps:
         return None
 
-    step_items.sort(key=lambda item: item[0])
-    return "\n".join(description for _, description in step_items)
+    ordered = [steps[step_no] for step_no in sorted(steps) if steps[step_no].get("text")]
+    return ordered or None
+
+
+def serialize_recipe_steps(steps: list[dict[str, Any]] | None) -> str | None:
+    if not steps:
+        return None
+    return json.dumps(steps, ensure_ascii=False)
 
 
 def extract_image_url(recipe_data_json: Any) -> str | None:
@@ -262,16 +288,18 @@ def upsert_ingredients(db: PostgreDB, unique_ingredients: dict[str, str]) -> dic
 def build_recipe_row(row: pd.Series) -> dict[str, Any]:
     """recipes 테이블 INSERT 파라미터를 만든다."""
     recipe_id = int(row["RCP_SNO"])
+    recipe_steps = build_recipe_steps(row.get("RECIPE_DATA"))
     return {
         "id": recipe_id,
         "title": _clip(row["CKG_NM"], _VARCHAR_LIMITS["title"]) or "이름없음",
-        "description": build_description(row.get("RECIPE_DATA")),
+        "description": None,
         "category": _clip(row.get("CKG_KND_ACTO_NM"), _VARCHAR_LIMITS["category"]),
         "serving_size": parse_serving_size(row.get("CKG_INBUN_NM")),
         "cooking_time": parse_cooking_time_minutes(row.get("CKG_TIME_NM")),
         "difficulty": _clip(row.get("CKG_DODF_NM"), _VARCHAR_LIMITS["difficulty"]),
         "image_url": extract_image_url(row.get("RECIPE_DATA")),
         "source_url": _clip(row.get("RECIPE_URL"), _VARCHAR_LIMITS["source_url"]),
+        "recipe_steps": serialize_recipe_steps(recipe_steps),
     }
 
 

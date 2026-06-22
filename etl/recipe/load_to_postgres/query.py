@@ -30,7 +30,8 @@ INSERT INTO recipes (
     cooking_time,
     difficulty,
     image_url,
-    source_url
+    source_url,
+    recipe_steps
 )
 VALUES (
     %(id)s,
@@ -41,7 +42,8 @@ VALUES (
     %(cooking_time)s,
     %(difficulty)s,
     %(image_url)s,
-    %(source_url)s
+    %(source_url)s,
+    %(recipe_steps)s::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
     title = EXCLUDED.title,
@@ -51,7 +53,8 @@ ON CONFLICT (id) DO UPDATE SET
     cooking_time = EXCLUDED.cooking_time,
     difficulty = EXCLUDED.difficulty,
     image_url = EXCLUDED.image_url,
-    source_url = EXCLUDED.source_url;
+    source_url = EXCLUDED.source_url,
+    recipe_steps = EXCLUDED.recipe_steps;
 """
 
 INSERT_RECIPE_INGREDIENT = """
