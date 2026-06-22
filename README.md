@@ -86,6 +86,7 @@ root/
 │  │  ├─ profiling/                 (김경수 담당 / 원본 컬럼 분석)
 │  │  ├─ preprocessing/             (김경수 담당 / 레시피 데이터 전처리)
 │  │  └─ load_to_neo4j/             (김경수 담당 / 레시피 데이터 Neo4j 적재)
+│  │  └─ load_to_postgres/          (김경수 담당 / 레시피 데이터 postgres 적재)
 │  ├─ food_guide/                   (김주영 담당 / 가이드 데이터 수집·검수)
 │  │  ├─ collection/                (김주영 담당 / 보관·손질·세척 정보 수집)
 │  │  ├─ validation/                (김주영 담당 / 수집 데이터 검수)
