@@ -1,61 +1,66 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.backend.core.config import settings
 from app.backend.db.session import engine
 from app.backend.db.base import Base
-
-# DB 모델 로드 (create_all 호출 시 테이블들이 감지되도록 임포트)
 from app.backend.db import models
+from app.backend.api.auth import auth_api
+from app.backend.api.inventory import inventory_api
+from app.backend.api.onboarding import onboarding_api
+from app.backend.api.receipts import receipts_api
+from app.backend.api.guide import guide_api
+from app.backend.api.recipes import recipes_api
+from app.backend.api.shopping import shopping_api
+from app.backend.api.notifications import notifications_api
 
-# FastAPI 인스턴스 생성
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="밥벌이 (Bobbeori) 프로젝트의 백엔드 모의(Mock) API 및 선행 개발 서버입니다.",
+    description="밥벌이(Bobbeori) 백엔드 API 서버입니다.",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
-# CORS 설정 (프론트엔드 UI 연동 지원)
+# 프론트엔드 로컬 개발 환경에서 API를 호출할 수 있도록 CORS를 허용합니다.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 로컬 개발 환경용 전체 허용 (배포 시 특정 도메인으로 축소 필요)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 로컬 개발(DEV_MODE) 시 테이블 자동 생성
+# 개발 모드에서는 SQLAlchemy 모델 기준으로 테이블을 자동 생성합니다.
 if settings.DEV_MODE:
     try:
-        # base.py에 선언된 메타데이터를 기반으로 데이터베이스 테이블을 자동 생성합니다.
         Base.metadata.create_all(bind=engine)
-        print(f"💡 [DB Setup] DEV_MODE 활성화: '{settings.DB_ENGINE}' 데이터베이스 테이블이 정상적으로 감지/생성되었습니다.")
+        print(f"[DB Setup] DEV_MODE: {settings.DB_ENGINE} 테이블 확인/생성 완료")
     except Exception as e:
-        print(f"⚠️ [DB Setup] '{settings.DB_ENGINE}' 테이블 자동 생성 중 실패: {e}")
+        print(f"[DB Setup] {settings.DB_ENGINE} 테이블 자동 생성 실패: {e}")
 
-# API 라우터 등록
-from app.backend.api.auth import auth_mock, auth_api
-from app.backend.api.inventory import inventory_api
-from app.backend.api.onboarding import onboarding_api
 
-# v1 API 엔드포인트 바인딩 (DEV_MODE 여부에 따라 Mock과 실구현 라우터 분기 등록)
-if settings.DEV_MODE:
-    app.include_router(auth_api.router, prefix="/api/v1")
-    app.include_router(inventory_api.router, prefix="/api/v1")
-    app.include_router(onboarding_api.router, prefix="/api/v1")
-    print("💡 [Router] DEV_MODE 활성화로 인해 Mock API(일부) 라우터가 등록되었습니다.")
-else:
-    app.include_router(auth_api.router, prefix="/api/v1")
-    app.include_router(inventory_api.router, prefix="/api/v1")
-    app.include_router(onboarding_api.router, prefix="/api/v1")
-    print("🚀 [Router] 프로덕션 모드 활성화로 인해 실제 DB 연동 API 라우터가 등록되었습니다.")
+API_V1_PREFIX = "/api/v1"
 
-# 기본 웰컴 API 엔드포인트
-@app.get("/")
+app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+app.include_router(onboarding_api.router, prefix=API_V1_PREFIX)
+app.include_router(inventory_api.router, prefix=API_V1_PREFIX)
+app.include_router(receipts_api.router, prefix=API_V1_PREFIX)
+app.include_router(guide_api.router, prefix=API_V1_PREFIX)
+app.include_router(recipes_api.router, prefix=API_V1_PREFIX)
+app.include_router(shopping_api.router, prefix=API_V1_PREFIX)
+app.include_router(notifications_api.router, prefix=API_V1_PREFIX)
+
+
+@app.get("/", tags=["Health"])
 def read_root():
+    """
+    서버가 정상적으로 실행 중인지 확인하는 기본 헬스체크 엔드포인트입니다.
+    """
     return {
+        "status": "ok",
         "message": f"Welcome to {settings.PROJECT_NAME} API Server",
         "dev_mode": settings.DEV_MODE,
-        "docs_url": "/docs"
+        "docs_url": "/docs",
     }
