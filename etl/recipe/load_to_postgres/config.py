@@ -36,3 +36,8 @@ def build_dsn() -> str:
     port = require_env(DbEnv.PORT)
     database = require_env(DbEnv.NAME)
     return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+RECIPE_FIX_CSV = PROJECT_ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
+COOKING_STEPS_CSV = PROJECT_ROOT / "storage" / "raw" / "recipe" / "cooking_steps.csv"
