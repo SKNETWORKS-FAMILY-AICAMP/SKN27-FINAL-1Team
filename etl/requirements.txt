@@ -20,3 +20,6 @@ python-dotenv>=1.0.0
 
 # Data Profiling
 jupyter==1.1.1
+
+# postgresql
+psycopg[binary]==3.3.3
