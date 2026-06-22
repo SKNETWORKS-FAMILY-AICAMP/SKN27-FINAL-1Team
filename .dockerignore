@@ -1,0 +1,10 @@
+.venv
+.git
+storage
+**/__pycache__
+**/*.pyc
+app/frontend/node_modules
+test
+ai
+etl
+docs
