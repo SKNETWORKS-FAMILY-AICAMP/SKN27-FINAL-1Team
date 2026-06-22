@@ -1019,12 +1019,31 @@
   }
 }
 
-@media (max-width: 390px) {
+@media (max-width: 480px) {
   .shopping-page {
-    width: min(100% - 24px, 430px);
+    width: 100%;
+    padding: 0 12px;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .shopping-hero__copy p {
     max-width: 100%;
+  }
+
+  .shopping-item-card {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .shopping-saving__compare,
+  .shopping-cost__flow {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .shopping-saving__compare::-webkit-scrollbar,
+  .shopping-cost__flow::-webkit-scrollbar {
+    display: none;
   }
 }
