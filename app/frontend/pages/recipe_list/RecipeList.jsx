@@ -4,7 +4,20 @@ import './RecipeList.css'
 
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
 import imageSearch from '../../assets/extracted/images/image_search.png'
-import { recipeQuickMenus, recipes } from '../../mock/recipeListMock.js'
+import { recipeQuickMenus } from '../../mock/recipeListMock.js'
+
+const PAGE_SIZE = 20
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+/** 개별 기능 연결 시 true로 전환 (현재는 텍스트 검색·보기 방식만 활성) */
+const FEATURE_FLAGS = {
+  quickMenu: false,
+  categoryFilter: false,
+  timeFilter: false,
+  levelFilter: false,
+  sortFilter: false,
+  savedRecipes: false,
+}
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -38,60 +51,102 @@ function ListIcon() {
   )
 }
 
+function formatCookingTime(minutes) {
+  if (minutes == null) {
+    return '-'
+  }
+  return `${minutes}분`
+}
+
 function RecipeList() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [searchTerm, setSearchTerm] = useState(
+  const submittedQuery = useMemo(
+    () => (new URLSearchParams(location.search).get('query') ?? '').trim(),
+    [location.search],
+  )
+  const [draftSearchTerm, setDraftSearchTerm] = useState(
     () => new URLSearchParams(location.search).get('query') ?? '',
   )
+  const [recipes, setRecipes] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [viewMode, setViewMode] = useState('grid')
+
+  // 후속 연결용 필터·바로가기 state (UI 유지, FEATURE_FLAGS로 동작 제어)
   const [category, setCategory] = useState('전체')
   const [timeFilter, setTimeFilter] = useState('전체')
   const [levelFilter, setLevelFilter] = useState('전체')
   const [sortBy, setSortBy] = useState('인기순')
-  const [viewMode, setViewMode] = useState('grid')
-  const [visibleCount, setVisibleCount] = useState(5)
-  const [savedIds, setSavedIds] = useState([])
   const [showSavedOnly, setShowSavedOnly] = useState(false)
+  const [savedIds, setSavedIds] = useState([])
 
   useEffect(() => {
-    setSearchTerm(new URLSearchParams(location.search).get('query') ?? '')
+    setDraftSearchTerm(new URLSearchParams(location.search).get('query') ?? '')
+    setPage(1)
   }, [location.search])
 
-  const filteredRecipes = useMemo(() => {
-    const normalizedQuery = searchTerm.trim().toLowerCase()
-
-    const result = recipes.filter((recipe) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        recipe.title.toLowerCase().includes(normalizedQuery) ||
-        recipe.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
-      const matchesCategory = category === '전체' || recipe.category === category
-      const minutes = Number.parseInt(recipe.time, 10)
-      const matchesTime =
-        timeFilter === '전체' ||
-        (timeFilter === '15분 이하' && minutes <= 15) ||
-        (timeFilter === '20분 이하' && minutes <= 20) ||
-        (timeFilter === '30분 이하' && minutes <= 30)
-      const matchesLevel = levelFilter === '전체' || recipe.level === levelFilter
-      const matchesSaved = !showSavedOnly || savedIds.includes(recipe.id)
-
-      return matchesQuery && matchesCategory && matchesTime && matchesLevel && matchesSaved
-    })
-
-    if (sortBy === '조리시간순') {
-      return [...result].sort((a, b) => Number.parseInt(a.time, 10) - Number.parseInt(b.time, 10))
+  useEffect(() => {
+    if (!submittedQuery) {
+      setRecipes([])
+      setTotal(0)
+      setHasNext(false)
+      setError(null)
+      setIsLoading(false)
+      return undefined
     }
 
-    if (sortBy === '난이도순') {
-      return [...result].sort((a, b) => a.level.localeCompare(b.level, 'ko'))
+    const controller = new AbortController()
+
+    const fetchRecipes = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const params = new URLSearchParams({
+          query: submittedQuery,
+          page: String(page),
+          page_size: String(PAGE_SIZE),
+        })
+        const response = await fetch(`${apiUrl}/api/v1/recipes/search?${params}`, {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error('레시피 검색에 실패했습니다.')
+        }
+
+        const data = await response.json()
+        setRecipes((prev) => (page === 1 ? data.items : [...prev, ...data.items]))
+        setTotal(data.total)
+        setHasNext(data.has_next)
+      } catch (fetchError) {
+        if (fetchError.name === 'AbortError') {
+          return
+        }
+
+        setError(fetchError.message || '레시피 검색에 실패했습니다.')
+        if (page === 1) {
+          setRecipes([])
+          setTotal(0)
+          setHasNext(false)
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
     }
 
-    return result
-  }, [category, levelFilter, savedIds, searchTerm, showSavedOnly, sortBy, timeFilter])
+    fetchRecipes()
+    return () => controller.abort()
+  }, [submittedQuery, page])
 
-  const visibleRecipes = filteredRecipes.slice(0, visibleCount)
   const hasActiveFilter =
-    Boolean(searchTerm.trim()) ||
+    Boolean(submittedQuery) ||
     category !== '전체' ||
     timeFilter !== '전체' ||
     levelFilter !== '전체' ||
@@ -99,56 +154,69 @@ function RecipeList() {
 
   const submitSearch = (event) => {
     event.preventDefault()
-    setVisibleCount(5)
+    const query = draftSearchTerm.trim()
+    navigate(query ? `/recipes?query=${encodeURIComponent(query)}` : '/recipes')
   }
 
   const handleQuickMenu = (title) => {
+    if (!FEATURE_FLAGS.quickMenu) {
+      return
+    }
+
     setShowSavedOnly(false)
     setCategory('전체')
     setLevelFilter('전체')
     setTimeFilter('전체')
-    setVisibleCount(5)
 
     if (title === '인기 레시피') {
       setSortBy('인기순')
-      setSearchTerm('')
+      navigate('/recipes')
       return
     }
 
     if (title === '간단 레시피') {
       setTimeFilter('15분 이하')
       setLevelFilter('쉬움')
-      setSearchTerm('')
+      navigate('/recipes')
       return
     }
 
     if (title === '요리 입문') {
       setLevelFilter('쉬움')
-      setSearchTerm('')
+      navigate('/recipes')
       return
     }
 
     if (title === '저장한 레시피') {
       setShowSavedOnly(true)
-      setSearchTerm('')
+      navigate('/recipes')
     }
   }
 
   const toggleSaved = (recipeId) => {
+    if (!FEATURE_FLAGS.savedRecipes) {
+      return
+    }
+
     setSavedIds((prev) =>
       prev.includes(recipeId) ? prev.filter((id) => id !== recipeId) : [...prev, recipeId],
     )
   }
 
   const resetFilters = () => {
-    setSearchTerm('')
     setCategory('전체')
     setTimeFilter('전체')
     setLevelFilter('전체')
     setShowSavedOnly(false)
     setSortBy('인기순')
-    setVisibleCount(5)
+    navigate('/recipes')
   }
+
+  const showInitialPrompt = !submittedQuery
+  const showNoResults = submittedQuery && !isLoading && !error && recipes.length === 0
+
+  const resultsTitle = showSavedOnly ? '저장한 레시피' : submittedQuery ? '검색 결과' : '전체 레시피'
+  const resultsCount = submittedQuery ? total : 0
 
   return (
     <section className="recipe-list-page" aria-labelledby="recipe-list-title">
@@ -164,11 +232,8 @@ function RecipeList() {
             <input
               type="search"
               placeholder="레시피명, 재료명을 검색해보세요"
-              value={searchTerm}
-              onChange={(event) => {
-                setSearchTerm(event.target.value)
-                setVisibleCount(5)
-              }}
+              value={draftSearchTerm}
+              onChange={(event) => setDraftSearchTerm(event.target.value)}
             />
             <button type="submit">검색</button>
           </form>
@@ -177,12 +242,18 @@ function RecipeList() {
         <ImageSlot className="recipe-list-hero__image" src={imageSearch} />
       </div>
 
-      <div className="recipe-list-quick" aria-label="레시피 바로가기">
+      <div
+        className={`recipe-list-quick${FEATURE_FLAGS.quickMenu ? '' : ' is-pending'}`}
+        aria-label="레시피 바로가기"
+        aria-disabled={!FEATURE_FLAGS.quickMenu}
+      >
         {recipeQuickMenus.map((menu) => (
           <button
             className="recipe-list-quick-card"
             type="button"
             key={menu.title}
+            disabled={!FEATURE_FLAGS.quickMenu}
+            title={FEATURE_FLAGS.quickMenu ? menu.title : '준비 중인 기능입니다'}
             onClick={() => handleQuickMenu(menu.title)}
           >
             <ImageSlot className={`recipe-list-quick-card__icon is-${menu.mark || 'image'}`} src={menu.image} />
@@ -194,16 +265,26 @@ function RecipeList() {
         ))}
       </div>
 
-      <section className="recipe-list-filter" aria-labelledby="recipe-filter-title">
-        <h2 id="recipe-filter-title">레시피 필터</h2>
+      <section
+        className={`recipe-list-filter${FEATURE_FLAGS.categoryFilter || FEATURE_FLAGS.timeFilter || FEATURE_FLAGS.levelFilter || FEATURE_FLAGS.sortFilter ? '' : ' is-pending'}`}
+        aria-labelledby="recipe-filter-title"
+      >
+        <h2 id="recipe-filter-title">
+          레시피 필터
+          {!FEATURE_FLAGS.categoryFilter &&
+          !FEATURE_FLAGS.timeFilter &&
+          !FEATURE_FLAGS.levelFilter &&
+          !FEATURE_FLAGS.sortFilter ? (
+            <span className="recipe-list-pending-label">일부 필터 준비 중</span>
+          ) : null}
+        </h2>
         <div className="recipe-list-filter__controls">
           <select
             aria-label="카테고리"
             value={category}
-            onChange={(event) => {
-              setCategory(event.target.value)
-              setVisibleCount(5)
-            }}
+            disabled={!FEATURE_FLAGS.categoryFilter}
+            title={FEATURE_FLAGS.categoryFilter ? undefined : '준비 중인 기능입니다'}
+            onChange={(event) => setCategory(event.target.value)}
           >
             <option value="전체">카테고리 전체</option>
             <option value="국/찌개">국/찌개</option>
@@ -214,10 +295,9 @@ function RecipeList() {
           <select
             aria-label="조리시간"
             value={timeFilter}
-            onChange={(event) => {
-              setTimeFilter(event.target.value)
-              setVisibleCount(5)
-            }}
+            disabled={!FEATURE_FLAGS.timeFilter}
+            title={FEATURE_FLAGS.timeFilter ? undefined : '준비 중인 기능입니다'}
+            onChange={(event) => setTimeFilter(event.target.value)}
           >
             <option value="전체">조리시간 전체</option>
             <option value="15분 이하">15분 이하</option>
@@ -227,10 +307,9 @@ function RecipeList() {
           <select
             aria-label="난이도"
             value={levelFilter}
-            onChange={(event) => {
-              setLevelFilter(event.target.value)
-              setVisibleCount(5)
-            }}
+            disabled={!FEATURE_FLAGS.levelFilter}
+            title={FEATURE_FLAGS.levelFilter ? undefined : '준비 중인 기능입니다'}
+            onChange={(event) => setLevelFilter(event.target.value)}
           >
             <option value="전체">난이도 전체</option>
             <option value="쉬움">쉬움</option>
@@ -240,10 +319,9 @@ function RecipeList() {
             <select
               aria-label="정렬"
               value={sortBy}
-              onChange={(event) => {
-                setSortBy(event.target.value)
-                setVisibleCount(5)
-              }}
+              disabled={!FEATURE_FLAGS.sortFilter}
+              title={FEATURE_FLAGS.sortFilter ? undefined : '준비 중인 기능입니다'}
+              onChange={(event) => setSortBy(event.target.value)}
             >
               <option value="인기순">인기순</option>
               <option value="조리시간순">조리시간순</option>
@@ -275,55 +353,84 @@ function RecipeList() {
 
       <section className="recipe-list-results" aria-labelledby="recipe-results-title">
         <h2 id="recipe-results-title">
-          {showSavedOnly ? '저장한 레시피' : '전체 레시피'} <span>({filteredRecipes.length})</span>
+          {resultsTitle} <span>({resultsCount})</span>
           {hasActiveFilter ? (
             <button className="recipe-list-reset" type="button" onClick={resetFilters}>
               필터 초기화
             </button>
           ) : null}
         </h2>
+
+        {error ? (
+          <p className="recipe-list-status recipe-list-status--error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        {isLoading && page === 1 ? (
+          <p className="recipe-list-status" aria-live="polite">
+            레시피를 검색하고 있어요...
+          </p>
+        ) : null}
+
         <div className={viewMode === 'list' ? 'recipe-list-grid is-list' : 'recipe-list-grid'}>
-          {visibleRecipes.map((recipe) => (
-            <article
-              className="recipe-card"
-              key={recipe.title}
-              role="button"
-              tabIndex={0}
-              onClick={() => navigate(`/recipes/${recipe.id}`)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  navigate(`/recipes/${recipe.id}`)
-                }
-              }}
-            >
-              <div className="recipe-card__media">
-                {recipe.badge ? <span className="recipe-card__badge">{recipe.badge}</span> : null}
-                <button
-                  type="button"
-                  aria-label={`${recipe.title} 저장`}
-                  aria-pressed={savedIds.includes(recipe.id)}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    toggleSaved(recipe.id)
-                  }}
-                >
-                  {savedIds.includes(recipe.id) ? '♥' : '♡'}
-                </button>
-                <ImageSlot className="recipe-card__image" src={recipe.image} />
-              </div>
+          {showInitialPrompt ? (
+            <article className="recipe-card recipe-card--empty">
               <div className="recipe-card__body">
-                <h3>{recipe.title}</h3>
-                <p>{recipe.time} · {recipe.level}</p>
-                <div>
-                  {recipe.tags.map((tag) => (
-                    <span key={tag}>{tag}</span>
-                  ))}
-                </div>
+                <h3>검색된 레시피가 없어요.</h3>
+                <p>레시피를 검색해 주세요.</p>
               </div>
             </article>
-          ))}
-          {visibleRecipes.length === 0 ? (
+          ) : null}
+
+          {submittedQuery && !error
+            ? recipes.map((recipe) => (
+                <article
+                  className="recipe-card"
+                  key={recipe.recipe_id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/recipes/${recipe.recipe_id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      navigate(`/recipes/${recipe.recipe_id}`)
+                    }
+                  }}
+                >
+                  <div className="recipe-card__media">
+                    <button
+                      type="button"
+                      className="recipe-card__save"
+                      aria-label={`${recipe.recipe_name} 저장`}
+                      aria-pressed={savedIds.includes(recipe.recipe_id)}
+                      disabled={!FEATURE_FLAGS.savedRecipes}
+                      title={FEATURE_FLAGS.savedRecipes ? undefined : '준비 중인 기능입니다'}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        toggleSaved(recipe.recipe_id)
+                      }}
+                    >
+                      {savedIds.includes(recipe.recipe_id) ? '♥' : '♡'}
+                    </button>
+                    <ImageSlot className="recipe-card__image" src={recipe.main_image_url} alt="" />
+                  </div>
+                  <div className="recipe-card__body">
+                    <h3>{recipe.recipe_name}</h3>
+                    <p>
+                      {formatCookingTime(recipe.cooking_time_min)} · {recipe.difficulty || '-'}
+                    </p>
+                    {recipe.category ? (
+                      <div>
+                        <span>{recipe.category}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              ))
+            : null}
+
+          {showNoResults ? (
             <article className="recipe-card recipe-card--empty">
               <div className="recipe-card__body">
                 <h3>조건에 맞는 레시피가 없어요.</h3>
@@ -333,16 +440,20 @@ function RecipeList() {
           ) : null}
         </div>
 
-        <button
-          className="recipe-list-more"
-          type="button"
-          disabled={visibleCount >= filteredRecipes.length}
-          onClick={() => {
-            setVisibleCount((prev) => prev + 5)
-          }}
-        >
-          {visibleCount >= filteredRecipes.length ? '모든 레시피를 보고 있어요' : '더 많은 레시피 보기'}
-        </button>
+        {submittedQuery && !error ? (
+          <button
+            className="recipe-list-more"
+            type="button"
+            disabled={!hasNext || isLoading}
+            onClick={() => setPage((prev) => prev + 1)}
+          >
+            {!hasNext
+              ? '모든 레시피를 보고 있어요'
+              : isLoading
+                ? '불러오는 중...'
+                : '더 많은 레시피 보기'}
+          </button>
+        ) : null}
       </section>
 
       <ImageSlot className="recipe-list-mobile-art" src={imageRecommendation} />
