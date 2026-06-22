@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
-from app.backend.db.models import User, Fridge, UserOnboarding
+from app.backend.db.models import User
 from app.backend.core.security import create_access_token
 
 class AuthService:
@@ -62,19 +62,7 @@ class AuthService:
                 # user.id 값을 임시로 얻어와서 하위 테이블 생성을 위해 DB에 flush 실행
                 db.flush()
                 
-                # 2-2. 신규 회원가입 시, 알림 및 선호도 온보딩 기본 레코드 생성
-                onboarding = UserOnboarding(
-                    user_id=user.id,
-                    is_alert_allowed=True
-                )
-                db.add(onboarding)
-                
-                # 2-3. 사용자가 즉시 식재료를 등록할 수 있게 '나의 냉장고' 기본 생성
-                fridge = Fridge(
-                    user_id=user.id,
-                    name="나의 냉장고"
-                )
-                db.add(fridge)
+                db.flush()
                 
                 # 변경사항을 최종적으로 DB에 확정(commit)
                 db.commit()

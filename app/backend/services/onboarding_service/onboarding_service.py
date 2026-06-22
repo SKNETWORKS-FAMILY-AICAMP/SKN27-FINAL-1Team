@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from app.backend.db.models import UserOnboarding
+from app.backend.db.models import UserPreference
 from app.backend.schemas.onboarding import OnboardingRequest, OnboardingResponse
+from datetime import datetime
 
 class OnboardingService:
     def get_onboarding(self, db: Session, user_id: int) -> dict:
@@ -9,7 +10,7 @@ class OnboardingService:
         DB에 쉼표로 저장된 문자열을 리스트로 복원합니다.
         데이터가 없는 경우 기본값 딕셔너리를 반환합니다.
         """
-        onboarding = db.query(UserOnboarding).filter(UserOnboarding.user_id == user_id).first()
+        onboarding = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
         
         if not onboarding:
             return {
@@ -25,9 +26,9 @@ class OnboardingService:
             "id": onboarding.id,
             "user_id": onboarding.user_id,
             "disliked_ingredients": onboarding.disliked_ingredients.split(",") if onboarding.disliked_ingredients else [],
-            "allergy": onboarding.allergy.split(",") if onboarding.allergy else [],
-            "is_alert_allowed": onboarding.is_alert_allowed,
-            "updated_at": onboarding.updated_at
+            "allergy": onboarding.allergies.split(",") if onboarding.allergies else [],
+            "is_alert_allowed": onboarding.allow_expiry_alert,
+            "updated_at": None
         }
 
     def save_onboarding(self, db: Session, user_id: int, data: OnboardingRequest) -> dict:
@@ -39,20 +40,20 @@ class OnboardingService:
         disliked_str = ",".join(data.disliked_ingredients) if data.disliked_ingredients else None
         allergy_str = ",".join(data.allergy) if data.allergy else None
         
-        onboarding = db.query(UserOnboarding).filter(UserOnboarding.user_id == user_id).first()
+        onboarding = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
         
         if onboarding:
             # 기존 레코드가 있으면 UPDATE
             onboarding.disliked_ingredients = disliked_str
-            onboarding.allergy = allergy_str
-            onboarding.is_alert_allowed = data.is_alert_allowed
+            onboarding.allergies = allergy_str
+            onboarding.allow_expiry_alert = data.is_alert_allowed
         else:
             # 기존 레코드가 없으면 INSERT
-            onboarding = UserOnboarding(
+            onboarding = UserPreference(
                 user_id=user_id,
                 disliked_ingredients=disliked_str,
-                allergy=allergy_str,
-                is_alert_allowed=data.is_alert_allowed
+                allergies=allergy_str,
+                allow_expiry_alert=data.is_alert_allowed
             )
             db.add(onboarding)
             
@@ -65,8 +66,8 @@ class OnboardingService:
             "user_id": onboarding.user_id,
             "disliked_ingredients": data.disliked_ingredients,
             "allergy": data.allergy,
-            "is_alert_allowed": onboarding.is_alert_allowed,
-            "updated_at": onboarding.updated_at
+            "is_alert_allowed": onboarding.allow_expiry_alert,
+            "updated_at": None
         }
 
 onboarding_service = OnboardingService()
