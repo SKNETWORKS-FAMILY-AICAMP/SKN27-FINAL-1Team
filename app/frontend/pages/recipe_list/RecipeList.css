@@ -259,9 +259,17 @@
 
 .recipe-list-filter__controls {
   display: grid;
-  grid-template-columns: 170px 170px 170px minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+}
+
+.recipe-list-filter__controls > select {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recipe-list-filter select,

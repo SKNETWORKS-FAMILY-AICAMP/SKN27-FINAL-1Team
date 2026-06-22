@@ -5,16 +5,30 @@ import './RecipeList.css'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
 import imageSearch from '../../assets/extracted/images/image_search.png'
 import { recipeQuickMenus } from '../../mock/recipeListMock.js'
+import { RecipeFilterConfig } from './recipeFilterConfig.js'
 
 const PAGE_SIZE = 20
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-/** 개별 기능 연결 시 true로 전환 (현재는 텍스트 검색·보기 방식만 활성) */
+const recipeTypeOptions = RecipeFilterConfig.toSelectOptions(
+  RecipeFilterConfig.recipeTypes,
+  `${RecipeFilterConfig.labels.recipeType}`,
+)
+const cookingTimeOptions = RecipeFilterConfig.toSelectOptions(
+  RecipeFilterConfig.cookingTimes,
+  `${RecipeFilterConfig.labels.cookingTime}`,
+)
+const difficultyOptions = RecipeFilterConfig.toSelectOptions(
+  RecipeFilterConfig.difficulties,
+  `${RecipeFilterConfig.labels.difficulty}`,
+)
+
+/** 개별 기능 연결 시 true로 전환 */
 const FEATURE_FLAGS = {
   quickMenu: false,
-  categoryFilter: false,
-  timeFilter: false,
-  levelFilter: false,
+  categoryFilter: true,
+  timeFilter: true,
+  levelFilter: true,
   sortFilter: false,
   savedRecipes: false,
 }
@@ -76,11 +90,10 @@ function RecipeList() {
   const [error, setError] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
 
-  // 후속 연결용 필터·바로가기 state (UI 유지, FEATURE_FLAGS로 동작 제어)
-  const [category, setCategory] = useState('전체')
-  const [timeFilter, setTimeFilter] = useState('전체')
-  const [levelFilter, setLevelFilter] = useState('전체')
-  const [sortBy, setSortBy] = useState('인기순')
+  const [category, setCategory] = useState(RecipeFilterConfig.FILTER_ALL)
+  const [timeFilter, setTimeFilter] = useState(RecipeFilterConfig.FILTER_ALL)
+  const [levelFilter, setLevelFilter] = useState(RecipeFilterConfig.FILTER_ALL)
+  const [sortBy, setSortBy] = useState(RecipeFilterConfig.sortOptions[0].value)
   const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [savedIds, setSavedIds] = useState([])
 
@@ -147,9 +160,9 @@ function RecipeList() {
 
   const hasActiveFilter =
     Boolean(submittedQuery) ||
-    category !== '전체' ||
-    timeFilter !== '전체' ||
-    levelFilter !== '전체' ||
+    category !== RecipeFilterConfig.FILTER_ALL ||
+    timeFilter !== RecipeFilterConfig.FILTER_ALL ||
+    levelFilter !== RecipeFilterConfig.FILTER_ALL ||
     showSavedOnly
 
   const submitSearch = (event) => {
@@ -164,9 +177,9 @@ function RecipeList() {
     }
 
     setShowSavedOnly(false)
-    setCategory('전체')
-    setLevelFilter('전체')
-    setTimeFilter('전체')
+    setCategory(RecipeFilterConfig.FILTER_ALL)
+    setLevelFilter(RecipeFilterConfig.FILTER_ALL)
+    setTimeFilter(RecipeFilterConfig.FILTER_ALL)
 
     if (title === '인기 레시피') {
       setSortBy('인기순')
@@ -175,14 +188,14 @@ function RecipeList() {
     }
 
     if (title === '간단 레시피') {
-      setTimeFilter('15분 이하')
-      setLevelFilter('쉬움')
+      setTimeFilter('15분이내')
+      setLevelFilter('초급')
       navigate('/recipes')
       return
     }
 
     if (title === '요리 입문') {
-      setLevelFilter('쉬움')
+      setLevelFilter('초급')
       navigate('/recipes')
       return
     }
@@ -204,11 +217,11 @@ function RecipeList() {
   }
 
   const resetFilters = () => {
-    setCategory('전체')
-    setTimeFilter('전체')
-    setLevelFilter('전체')
+    setCategory(RecipeFilterConfig.FILTER_ALL)
+    setTimeFilter(RecipeFilterConfig.FILTER_ALL)
+    setLevelFilter(RecipeFilterConfig.FILTER_ALL)
     setShowSavedOnly(false)
-    setSortBy('인기순')
+    setSortBy(RecipeFilterConfig.sortOptions[0].value)
     navigate('/recipes')
   }
 
@@ -217,6 +230,12 @@ function RecipeList() {
 
   const resultsTitle = showSavedOnly ? '저장한 레시피' : submittedQuery ? '검색 결과' : '전체 레시피'
   const resultsCount = submittedQuery ? total : 0
+
+  const isFilterSectionPending =
+    !FEATURE_FLAGS.categoryFilter &&
+    !FEATURE_FLAGS.timeFilter &&
+    !FEATURE_FLAGS.levelFilter &&
+    !FEATURE_FLAGS.sortFilter
 
   return (
     <section className="recipe-list-page" aria-labelledby="recipe-list-title">
@@ -266,66 +285,68 @@ function RecipeList() {
       </div>
 
       <section
-        className={`recipe-list-filter${FEATURE_FLAGS.categoryFilter || FEATURE_FLAGS.timeFilter || FEATURE_FLAGS.levelFilter || FEATURE_FLAGS.sortFilter ? '' : ' is-pending'}`}
+        className={`recipe-list-filter${isFilterSectionPending ? ' is-pending' : ''}`}
         aria-labelledby="recipe-filter-title"
       >
         <h2 id="recipe-filter-title">
           레시피 필터
-          {!FEATURE_FLAGS.categoryFilter &&
-          !FEATURE_FLAGS.timeFilter &&
-          !FEATURE_FLAGS.levelFilter &&
-          !FEATURE_FLAGS.sortFilter ? (
-            <span className="recipe-list-pending-label">일부 필터 준비 중</span>
+          {!FEATURE_FLAGS.sortFilter ? (
+            <span className="recipe-list-pending-label">정렬 준비 중</span>
           ) : null}
         </h2>
         <div className="recipe-list-filter__controls">
           <select
-            aria-label="카테고리"
+            aria-label={RecipeFilterConfig.labels.recipeType}
             value={category}
             disabled={!FEATURE_FLAGS.categoryFilter}
             title={FEATURE_FLAGS.categoryFilter ? undefined : '준비 중인 기능입니다'}
             onChange={(event) => setCategory(event.target.value)}
           >
-            <option value="전체">카테고리 전체</option>
-            <option value="국/찌개">국/찌개</option>
-            <option value="볶음">볶음</option>
-            <option value="반찬">반찬</option>
-            <option value="파스타">파스타</option>
+            {recipeTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <select
-            aria-label="조리시간"
+            aria-label={RecipeFilterConfig.labels.cookingTime}
             value={timeFilter}
             disabled={!FEATURE_FLAGS.timeFilter}
             title={FEATURE_FLAGS.timeFilter ? undefined : '준비 중인 기능입니다'}
             onChange={(event) => setTimeFilter(event.target.value)}
           >
-            <option value="전체">조리시간 전체</option>
-            <option value="15분 이하">15분 이하</option>
-            <option value="20분 이하">20분 이하</option>
-            <option value="30분 이하">30분 이하</option>
+            {cookingTimeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <select
-            aria-label="난이도"
+            aria-label={RecipeFilterConfig.labels.difficulty}
             value={levelFilter}
             disabled={!FEATURE_FLAGS.levelFilter}
             title={FEATURE_FLAGS.levelFilter ? undefined : '준비 중인 기능입니다'}
             onChange={(event) => setLevelFilter(event.target.value)}
           >
-            <option value="전체">난이도 전체</option>
-            <option value="쉬움">쉬움</option>
-            <option value="보통">보통</option>
+            {difficultyOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <div className="recipe-list-filter__right">
             <select
-              aria-label="정렬"
+              aria-label={RecipeFilterConfig.labels.sort}
               value={sortBy}
               disabled={!FEATURE_FLAGS.sortFilter}
               title={FEATURE_FLAGS.sortFilter ? undefined : '준비 중인 기능입니다'}
               onChange={(event) => setSortBy(event.target.value)}
             >
-              <option value="인기순">인기순</option>
-              <option value="조리시간순">조리시간순</option>
-              <option value="난이도순">난이도순</option>
+              {RecipeFilterConfig.sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <div className="recipe-list-view" aria-label="보기 방식">
               <button
