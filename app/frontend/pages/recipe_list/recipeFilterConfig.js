@@ -70,4 +70,93 @@ export class RecipeFilterConfig {
       ...values.map((value) => ({ value, label: value })),
     ]
   }
+
+  static urlKeys = {
+    query: 'query',
+    category: 'category',
+    difficulty: 'difficulty',
+    cookingTime: 'cooking_time',
+    browse: 'browse',
+  }
+
+  /**
+   * @param {string} search - location.search (e.g. '?query=김치')
+   * @returns {{ query: string, category: string, timeFilter: string, levelFilter: string, browseAll: boolean }}
+   */
+  static parseSearchParams(search) {
+    const params = new URLSearchParams(search)
+    return {
+      query: (params.get(this.urlKeys.query) ?? '').trim(),
+      category: params.get(this.urlKeys.category) ?? this.FILTER_ALL,
+      timeFilter: params.get(this.urlKeys.cookingTime) ?? this.FILTER_ALL,
+      levelFilter: params.get(this.urlKeys.difficulty) ?? this.FILTER_ALL,
+      browseAll: params.get(this.urlKeys.browse) === 'all',
+    }
+  }
+
+  /**
+   * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
+   * @returns {URLSearchParams}
+   */
+  static buildSearchParams(criteria) {
+    const params = new URLSearchParams()
+    const query = (criteria.query ?? '').trim()
+    if (query) {
+      params.set(this.urlKeys.query, query)
+    }
+    if (criteria.category && criteria.category !== this.FILTER_ALL) {
+      params.set(this.urlKeys.category, criteria.category)
+    }
+    if (criteria.timeFilter && criteria.timeFilter !== this.FILTER_ALL) {
+      params.set(this.urlKeys.cookingTime, criteria.timeFilter)
+    }
+    if (criteria.levelFilter && criteria.levelFilter !== this.FILTER_ALL) {
+      params.set(this.urlKeys.difficulty, criteria.levelFilter)
+    }
+    if (criteria.browseAll) {
+      params.set(this.urlKeys.browse, 'all')
+    }
+    return params
+  }
+
+  /**
+   * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
+   * @returns {boolean}
+   */
+  static shouldFetch(criteria) {
+    return (
+      Boolean(criteria.browseAll) ||
+      Boolean((criteria.query ?? '').trim()) ||
+      criteria.category !== this.FILTER_ALL ||
+      criteria.timeFilter !== this.FILTER_ALL ||
+      criteria.levelFilter !== this.FILTER_ALL
+    )
+  }
+
+  /**
+   * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
+   * @param {number} page
+   * @param {number} pageSize
+   * @returns {Record<string, string>}
+   */
+  static toApiParams(criteria, page, pageSize) {
+    const params = {
+      page: String(page),
+      page_size: String(pageSize),
+    }
+    const query = (criteria.query ?? '').trim()
+    if (query) {
+      params.query = query
+    }
+    if (criteria.category && criteria.category !== this.FILTER_ALL) {
+      params.category = criteria.category
+    }
+    if (criteria.levelFilter && criteria.levelFilter !== this.FILTER_ALL) {
+      params.difficulty = criteria.levelFilter
+    }
+    if (criteria.timeFilter && criteria.timeFilter !== this.FILTER_ALL) {
+      params.cooking_time_label = criteria.timeFilter
+    }
+    return params
+  }
 }
