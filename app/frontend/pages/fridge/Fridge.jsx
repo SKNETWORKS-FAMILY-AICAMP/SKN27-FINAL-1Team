@@ -77,6 +77,7 @@ function Fridge() {
     message: '',
     onConfirm: null,
   })
+  const [consumeTarget, setConsumeTarget] = useState(null)
   const [stockedCount, setStockedCount] = useState(() => {
     if (typeof window === 'undefined') {
       return 0
@@ -325,15 +326,36 @@ function Fridge() {
     })
   }
 
-  const handleConsumeClick = async (item) => {
-    if (Number(item.quantity) <= 1) {
+  const handleConsumeClick = (item) => {
+    setConsumeTarget({ item, consumeAmount: 1 })
+  }
+
+  const executeConsume = async (item, consumeAmount) => {
+    if (isNaN(consumeAmount) || consumeAmount <= 0) {
+      await showAlert('올바른 소비 수량을 입력해주세요. (0보다 큰 숫자)', {
+        title: '입력 오류',
+      })
+      return
+    }
+
+    const currentQty = Number(item.quantity)
+    
+    if (consumeAmount > currentQty) {
+      await showAlert(`보유 수량(${currentQty}${item.unit})보다 많이 소비할 수 없습니다.`, {
+        title: '수량 초과',
+      })
+      return
+    }
+
+    setConsumeTarget(null)
+    
+    if (consumeAmount === currentQty) {
       setConfirmModal({
         isOpen: true,
         title: '모두 소비',
         message: (
           <>
-            <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{item.name}</span>의 남은 수량이 1개 이하입니다.<br />
-            모두 소비 처리하고 삭제할까요?
+            <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{item.name}</span>을(를) 모두 소비 처리하고 삭제할까요?
           </>
         ),
         onConfirm: () => executeDelete(item.id),
@@ -341,7 +363,7 @@ function Fridge() {
       return
     }
 
-    const newQuantity = Math.round((Number(item.quantity) - 1) * 10) / 10
+    const newQuantity = Math.round((currentQty - consumeAmount) * 10) / 10
     const payload = {
       name: item.name,
       category: item.category,
@@ -556,6 +578,33 @@ function Fridge() {
         onConfirm={confirmModal.onConfirm}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
+      {consumeTarget && (
+        <div className="fridge-modal-overlay">
+          <div className="fridge-modal-content fridge-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="fridge-modal-header">
+              <h2>재료 소비</h2>
+              <button type="button" onClick={() => setConsumeTarget(null)} aria-label="닫기">✕</button>
+            </div>
+            <div className="fridge-modal-body" style={{ textAlign: 'center', padding: '30px 20px', fontSize: '16px', lineHeight: '1.6' }}>
+              <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{consumeTarget.item.name}</span>을(를) 소비하시겠습니까?<br/><br/>
+              소비할 수량:{' '}
+              <input 
+                type="number" 
+                min="0.1" 
+                max={consumeTarget.item.quantity} 
+                step="0.1" 
+                value={consumeTarget.consumeAmount} 
+                onChange={(e) => setConsumeTarget({ ...consumeTarget, consumeAmount: e.target.value })} 
+                style={{ width: '80px', padding: '8px', textAlign: 'center', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }} 
+              /> {consumeTarget.item.unit}
+            </div>
+            <div className="fridge-modal-footer">
+              <button type="button" className="btn-cancel" onClick={() => setConsumeTarget(null)}>취소</button>
+              <button type="button" className="btn-submit btn-danger" onClick={() => executeConsume(consumeTarget.item, Number(consumeTarget.consumeAmount))}>확인</button>
+            </div>
+          </div>
+        </div>
+      )}
       {dialogNode}
 
       <section className="fridge-bottom-tip">
