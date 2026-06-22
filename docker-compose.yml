@@ -10,6 +10,7 @@ services:
         env_file:
             - .env
         environment:
+            DB_ENGINE: postgresql
             DB_HOST: postgres
             NEO4J_URI: bolt://neo4j:7687
         depends_on:
@@ -54,6 +55,7 @@ services:
             POSTGRES_DB: ${DB_NAME}
         volumes:
             - ./storage/postgres/data:/var/lib/postgresql/data
+            - ./app/backend/schemas/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
             interval: 10s
