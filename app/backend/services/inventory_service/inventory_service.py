@@ -6,14 +6,14 @@ from app.backend.db.models import User, Ingredient, FridgeItem
 from app.backend.schemas.inventory import IngredientCreate, IngredientResponse
 
 class InventoryService:
-    def get_recommended_lifespan(self, name: str, storage_method: str = "냉장") -> int:
+    def get_recommended_lifespan(self, name: str, category: str, storage_method: str = "냉장") -> int:
         from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
         try:
-            return expiration_ai_service.predict_expiration_days(name, storage_method)
+            return expiration_ai_service.predict_expiration_days(name, category, storage_method)
         except Exception as e:
             return 7
 
-    def _calculate_d_day_and_flags(self, expiry_date: date, purchased_date: date, name: str, storage_location: str) -> dict:
+    def _calculate_d_day_and_flags(self, expiry_date: date, purchased_date: date, name: str, category: str, storage_location: str) -> dict:
         """DB의 식재료 객체를 기반으로 유통기한 D-day와 임박 여부를 계산합니다."""
         import logging
         logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class InventoryService:
                 else:
                     target_date = expiry_date
             else:
-                lifespan_days = self.get_recommended_lifespan(name, storage_location)
+                lifespan_days = self.get_recommended_lifespan(name, category, storage_location)
                 
                 p_date = purchased_date or today
                 if isinstance(p_date, str):
@@ -37,7 +37,7 @@ class InventoryService:
                 target_date = p_date + timedelta(days=lifespan_days)
                 
             d_day_delta = (target_date - today).days
-            is_expiring_soon = True if d_day_delta <= 3 and d_day_delta >= 0 else False
+            is_expiring_soon = True if d_day_delta <= 3 else False
             
             return {
                 "d_day": d_day_delta,
@@ -59,6 +59,7 @@ class InventoryService:
             expiry_date=item.expiry_date,
             purchased_date=item.purchased_date,
             name=ingredient.name,
+            category=ingredient.category,
             storage_location=item.storage_location or "냉장"
         )
         
@@ -86,20 +87,27 @@ class InventoryService:
         ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
         
         if not ingredient:
-            ingredient = Ingredient(
-                name=data.name,
-                normalized_name=normalized,
-                category=data.category,
-                default_unit=data.unit
-            )
-            db.add(ingredient)
-            db.flush()
+            try:
+                from sqlalchemy.exc import IntegrityError
+                with db.begin_nested():
+                    ingredient = Ingredient(
+                        name=data.name,
+                        normalized_name=normalized,
+                        category=data.category,
+                        default_unit=data.unit
+                    )
+                    db.add(ingredient)
+                    db.flush()
+            except IntegrityError:
+                # 동시성 문제 등으로 이미 같은 이름이 등록된 경우
+                ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
             
         # 2. 유통기한 자동 계산
         calc_info = self._calculate_d_day_and_flags(
             expiry_date=data.expiration_date,
             purchased_date=data.purchase_date or date.today(),
             name=ingredient.name,
+            category=ingredient.category,
             storage_location=data.storage_method
         )
         
@@ -171,6 +179,7 @@ class InventoryService:
             expiry_date=fridge_item.expiry_date,
             purchased_date=fridge_item.purchased_date or date.today(),
             name=fridge_item.display_name or ingredient.name,
+            category=ingredient.category,
             storage_location=fridge_item.storage_location or "냉장"
         )
         

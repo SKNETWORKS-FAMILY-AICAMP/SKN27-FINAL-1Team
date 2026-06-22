@@ -25,8 +25,8 @@ class OnboardingService:
         return {
             "id": onboarding.id,
             "user_id": onboarding.user_id,
-            "disliked_ingredients": onboarding.disliked_ingredients.split(",") if onboarding.disliked_ingredients else [],
-            "allergy": onboarding.allergies.split(",") if onboarding.allergies else [],
+            "disliked_ingredients": [x.strip() for x in onboarding.disliked_ingredients.split(",") if x.strip()] if onboarding.disliked_ingredients else [],
+            "allergy": [x.strip() for x in onboarding.allergies.split(",") if x.strip()] if onboarding.allergies else [],
             "is_alert_allowed": onboarding.allow_expiry_alert,
             "updated_at": None
         }
@@ -36,9 +36,12 @@ class OnboardingService:
         주어진 user_id에 대한 온보딩 설정 정보를 생성하거나 업데이트합니다.
         List[str]을 쉼표로 연결된 문자열로 직렬화하여 DB에 저장합니다.
         """
-        # 리스트를 쉼표 구분 문자열로 변환 (빈 리스트는 None 처리)
-        disliked_str = ",".join(data.disliked_ingredients) if data.disliked_ingredients else None
-        allergy_str = ",".join(data.allergy) if data.allergy else None
+        # 리스트 내의 유효한 값만 필터링하여 쉼표 구분 문자열로 변환 (빈 리스트는 None 처리)
+        valid_dislikes = [x.strip() for x in (data.disliked_ingredients or []) if x.strip()]
+        disliked_str = ",".join(valid_dislikes) if valid_dislikes else None
+        
+        valid_allergies = [x.strip() for x in (data.allergy or []) if x.strip()]
+        allergy_str = ",".join(valid_allergies) if valid_allergies else None
         
         onboarding = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
         

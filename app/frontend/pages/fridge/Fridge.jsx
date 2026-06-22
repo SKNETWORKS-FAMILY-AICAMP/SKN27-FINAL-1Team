@@ -71,6 +71,7 @@ function Fridge() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormData)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -249,6 +250,7 @@ function Fridge() {
       return
     }
 
+    setIsSubmitting(true)
     try {
       const token = window.localStorage.getItem('bobbeori-token')
       const isEditing = editingId !== null
@@ -279,6 +281,8 @@ function Fridge() {
       await showAlert('서버 통신 중 오류가 발생했습니다.', {
         title: '서버 오류',
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -569,6 +573,7 @@ function Fridge() {
         handleFormChange={handleFormChange}
         onClose={closeModal}
         onSubmit={handleSubmitIngredient}
+        isSubmitting={isSubmitting}
       />
 
       <ConfirmModal

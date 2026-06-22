@@ -62,8 +62,6 @@ class AuthService:
                 # user.id 값을 임시로 얻어와서 하위 테이블 생성을 위해 DB에 flush 실행
                 db.flush()
                 
-                db.flush()
-                
                 # 변경사항을 최종적으로 DB에 확정(commit)
                 db.commit()
                 # 새롭게 생성된 DB의 최신 상태를 객체에 동기화(refresh)

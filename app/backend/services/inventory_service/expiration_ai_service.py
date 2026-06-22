@@ -52,7 +52,7 @@ class ExpirationAIService:
             logger.error(f"Tavily 검색 중 오류 발생: {str(e)}")
             return "검색 중 오류가 발생했습니다. 자체 지식을 활용하세요."
 
-    def predict_expiration_days(self, ingredient_name: str, storage_method: str = "냉장") -> int:
+    def predict_expiration_days(self, ingredient_name: str, category: str = "기타", storage_method: str = "냉장") -> int:
         """
         OpenAI의 Tool Calling(ReAct 방식)을 활용하여, 식재료 소비기한을 실시간으로 검색하고 판단합니다.
         """
@@ -62,17 +62,19 @@ class ExpirationAIService:
 
         system_prompt = (
             "당신은 식품 안전 및 식재료 보관 전문가 에이전트입니다.\n"
-            "사용자가 식재료 이름과 보관 방법(냉장, 냉동, 실온)을 제공하면, 해당 식재료가 그 환경에서 섭취 가능한 최대 일수를 "
-            "검색 도구(search_food_expiration_info)를 사용하여 실시간으로 알아본 후 판단하세요.\n"
-            "일반적이고 확신하는 식재료라도 가급적 검색 도구를 활용하여 근거를 마련하세요.\n\n"
-            "중요한 조건:\n"
-            "1. 사용자의 건강을 최우선으로 생각하여, 널리 알려진 일반적인 소비기한 대비 약 20%의 '안전 마진'을 뺀 보수적인 숫자를 반환하세요. (예: 우유 냉장이 10일이면 8, 감자 실온이 15일이면 12 등)\n"
-            "2. 최종 응답은 오직 '정수(숫자)' 1개만 반환하세요. 다른 어떤 설명이나 단어(일, days 등)도 포함하면 안 됩니다."
+            "사용자가 식재료 이름, 카테고리, 보관 방법을 제공하면, 검색 도구(search_food_expiration_info)를 통해 실시간으로 알아본 후 판단하세요.\n\n"
+            "중요한 판단 과정 (Thinking Process):\n"
+            "1. 먼저 입력된 '이름'과 '카테고리'를 바탕으로 이 식재료가 생물(신선식품)인지, 가공/건조/발효 식품인지 속성을 파악하세요.\n"
+            "2. (예를 들어 '파스타'이고 카테고리가 '가공식품'이면 건파스타 면입니다. 카테고리가 '채소'나 '기타'라도 이름이 '김치', '된장' 같은 '발효식품'이라면 실온/냉장 환경에서 6개월~1년 이상 장기 보관이 가능함을 반드시 인지하세요.)\n"
+            "3. 파악한 속성과 보관 방법에 따라 일반적으로 널리 알려진 소비기한(일수)을 도출하세요. 발효식품, 건조/가공식품은 매우 긴 유통기한(수십~수백 일)을 가집니다.\n"
+            "4. 사용자의 건강을 위해 도출된 기간에서 20%의 '안전 마진'을 차감한 보수적인 일수를 도출하되, 건조/가공/발효식품처럼 기본 보관 기한이 긴 품목은 이 20% 차감으로 인해 기한이 어이없이 짧아지지 않도록 유연하게 적용하세요.\n\n"
+            "최종 응답 규칙:\n"
+            "오직 '정수(숫자)' 1개만 반환하세요. 다른 어떤 설명이나 단어(일, days 등)도 절대 포함하면 안 됩니다."
         )
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"식재료: {ingredient_name}, 보관 방법: {storage_method}"}
+            {"role": "user", "content": f"식재료: {ingredient_name}, 카테고리: {category}, 보관 방법: {storage_method}"}
         ]
 
         tools = [
