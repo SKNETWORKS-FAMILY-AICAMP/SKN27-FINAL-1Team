@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Numeric, ForeignKey, func
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, Date, Numeric, ForeignKey, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.backend.db.base import Base
 
@@ -61,3 +62,21 @@ class Ingredient(Base):
 
     # Relationships
     fridge = relationship("Fridge", back_populates="ingredients")
+
+
+class Recipe(Base):
+    """schema.sql recipes 테이블 (레시피 검색·추천용)."""
+
+    __tablename__ = "recipes"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    serving_size = Column(Integer, nullable=True)
+    cooking_time = Column(Integer, nullable=True)
+    difficulty = Column(String(50), nullable=True)
+    image_url = Column(String(500), nullable=True)
+    source_url = Column(String(500), nullable=True)
+    recipe_steps = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
