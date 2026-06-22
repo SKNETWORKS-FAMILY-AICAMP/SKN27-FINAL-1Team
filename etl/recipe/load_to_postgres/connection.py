@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 #################################################################
-# 싱글톤 클래스 (나중에 파일들 정리되면 공통 부분 묶을 예정)
+# 싱글톤 클래스 
 #################################################################
 class Singleton(type):
     _instances = {}
@@ -49,6 +49,23 @@ class PostgreDB(metaclass=Singleton):
             cursor.execute(query, args or ())
             return cursor.fetchall()
 
+    def execute(self, query: str, params: dict | None = None) -> None:
+        """이름 기반 파라미터 쿼리를 실행한다."""
+        with self.conn.cursor() as cursor:
+            cursor.execute(query, params or {})
+
+    def executemany(self, query: str, params_seq: list[dict]) -> None:
+        """이름 기반 파라미터 쿼리를 여러 건 실행한다."""
+        if not params_seq:
+            return
+        with self.conn.cursor() as cursor:
+            cursor.executemany(query, params_seq)
+
+    def fetch_one(self, query: str, params: dict | None = None):
+        """이름 기반 파라미터 쿼리를 실행하고 fetchone 한다."""
+        with self.conn.cursor() as cursor:
+            cursor.execute(query, params or {})
+            return cursor.fetchone()
 
     def test_conn(self) -> str:
         """`SELECT 1`로 연결을 확인하고 결과 문자열을 반환한다. """

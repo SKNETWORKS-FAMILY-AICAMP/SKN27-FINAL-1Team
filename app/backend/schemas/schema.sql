@@ -205,6 +205,7 @@ CREATE TABLE recipes (
     difficulty VARCHAR(50),
     image_url VARCHAR(500),
     source_url VARCHAR(500),
+    recipe_steps JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -218,6 +219,7 @@ COMMENT ON COLUMN recipes.cooking_time IS '조리시간';
 COMMENT ON COLUMN recipes.difficulty IS '난이도';
 COMMENT ON COLUMN recipes.image_url IS '이미지URL';
 COMMENT ON COLUMN recipes.source_url IS '출처URL';
+COMMENT ON COLUMN recipes.recipe_steps IS '조리단계 JSON 배열';
 COMMENT ON COLUMN recipes.created_at IS '생성일시';
 
 CREATE TABLE recipe_ingredients (
