@@ -78,3 +78,23 @@ class Recipe(Base):
     source_url = Column(String(500), nullable=True)
     recipe_steps = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    recipe_ingredients = relationship(
+        "RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan"
+    )
+
+
+class RecipeIngredient(Base):
+    """schema.sql recipe_ingredients 테이블."""
+    __tablename__ = "recipe_ingredients"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    recipe_id = Column(BigInteger, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    ingredient_id = Column(BigInteger, ForeignKey("ingredients.id", ondelete="RESTRICT"), nullable=False)
+    raw_ingredient_name = Column(String(255), nullable=True)
+    required_quantity = Column(Numeric(10, 2), nullable=True)
+    unit = Column(String(30), nullable=True)
+    is_main_ingredient = Column(Boolean, nullable=False, default=False)
+
+    recipe = relationship("Recipe", back_populates="recipe_ingredients")
+    ingredient = relationship("Ingredient")
