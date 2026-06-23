@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.backend.db.models import FridgeItem, Recipe, RecipeIngredient
+
+
+class RecipeDetailService:
+    def get_recipe_detail(self, db: Session, recipe_id: int, user_id: int) -> dict[str, Any]:
+        recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+        if not recipe:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="레시피를 찾을 수 없습니다.",
+            )
+
+        ingredients = self._fetch_ingredients(db, recipe_id)
+        owned, missing = self._split_owned_missing(ingredients, user_id, db)
+
+        return {
+            "recipe_id": recipe.id,
+            "title": recipe.title,
+            "category": recipe.category,
+            "difficulty": recipe.difficulty,
+            "cooking_time_min": recipe.cooking_time,
+            "serving_count": recipe.serving_size,
+            "main_image_url": recipe.image_url,
+            "owned_ingredients": owned,
+            "missing_ingredients": missing,
+            "steps": self._to_steps(recipe.recipe_steps),
+            "source_url": recipe.source_url,
+        }
+
+    def _fetch_ingredients(self, db: Session, recipe_id: int) -> list[dict[str, Any]]:
+        rows = (
+            db.query(RecipeIngredient)
+            .filter(RecipeIngredient.recipe_id == recipe_id)
+            .order_by(RecipeIngredient.is_main_ingredient.desc(), RecipeIngredient.id)
+            .all()
+        )
+
+        return [
+            {
+                "name": row.raw_ingredient_name or "",
+                "amount": self._format_amount(row.required_quantity, row.unit),
+                "ingredient_id": int(row.ingredient_id) if row.ingredient_id else None,
+            }
+            for row in rows
+            if row.raw_ingredient_name
+        ]
+
+    def _split_owned_missing(
+        self,
+        ingredients: list[dict[str, Any]],
+        user_id: int,
+        db: Session,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        if user_id <= 0:
+            return [], ingredients
+
+        owned_ids = {
+            item.ingredient_id
+            for item in db.query(FridgeItem.ingredient_id)
+            .filter(FridgeItem.user_id == user_id)
+            .all()
+        }
+
+        owned: list[dict[str, Any]] = []
+        missing: list[dict[str, Any]] = []
+
+        for ingredient in ingredients:
+            ingredient_id = ingredient.get("ingredient_id")
+            if ingredient_id and ingredient_id in owned_ids:
+                owned.append(ingredient)
+            else:
+                missing.append(ingredient)
+
+        return owned, missing
+
+    def _format_amount(self, quantity: Decimal | float | int | None, unit: str | None) -> str | None:
+        if quantity is None and not unit:
+            return None
+        if quantity is None:
+            return unit
+        if isinstance(quantity, Decimal):
+            normalized = format(quantity.normalize(), "f").rstrip("0").rstrip(".")
+        else:
+            normalized = str(quantity)
+        if unit:
+            return f"{normalized}{unit}"
+        return normalized
+
+    def _to_steps(self, recipe_steps: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        if not recipe_steps:
+            return []
+
+        steps: list[dict[str, Any]] = []
+        for step in recipe_steps:
+            text = step.get("text")
+            if not text:
+                continue
+            steps.append(
+                {
+                    "title": step.get("title") or f"{step.get('step_no', len(steps) + 1)}단계",
+                    "text": str(text),
+                    "image_url": step.get("image_url"),
+                }
+            )
+        return steps
+
+
+recipe_detail_service = RecipeDetailService()
