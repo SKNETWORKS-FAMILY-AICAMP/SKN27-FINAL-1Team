@@ -63,6 +63,69 @@ function RecipeDetail() {
   const [isCooking, setIsCooking] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [isCooked, setIsCooked] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSaveRecipe = async () => {
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      await showAlert('레시피를 저장하려면 로그인이 필요해요.', {
+        title: '로그인이 필요해요',
+      })
+      navigate('/login')
+      return
+    }
+
+    if (!recipe?.recipe_id) {
+      await showAlert('레시피 정보가 올바르지 않아 저장할 수 없어요.', {
+        title: '저장 실패',
+      })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/recommendations`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ recipe_id: recipe.recipe_id }),
+      })
+
+      if (response.status === 401) {
+        await showAlert('로그인이 만료되었어요. 다시 로그인해 주세요.', {
+          title: '로그인이 필요해요',
+        })
+        navigate('/login')
+        return
+      }
+
+      if (response.status === 404) {
+        await showAlert('레시피를 찾을 수 없어 저장하지 못했어요.', {
+          title: '저장 실패',
+        })
+        return
+      }
+
+      if (!response.ok) {
+        await showAlert('레시피를 추천 목록에 저장하지 못했어요.', {
+          title: '저장 실패',
+        })
+        return
+      }
+
+      await showAlert('레시피를 추천 목록에 저장했어요.', {
+        title: '저장 완료',
+      })
+    } catch {
+      await showAlert('레시피를 추천 목록에 저장하지 못했어요.', {
+        title: '저장 실패',
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -195,11 +258,10 @@ function RecipeDetail() {
           <button
             className="recipe-detail-video-button"
             type="button"
-            onClick={() => showAlert('레시피 영상은 준비 중입니다.', {
-              title: '준비 중이에요',
-            })}
+            disabled={isSaving}
+            onClick={handleSaveRecipe}
           >
-            레시피 영상 보기
+            레시피 저장하기
           </button>
 
           <div className="recipe-detail-meta" aria-label="레시피 정보">
