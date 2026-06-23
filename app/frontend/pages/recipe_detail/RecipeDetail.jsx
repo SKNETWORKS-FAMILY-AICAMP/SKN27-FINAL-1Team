@@ -396,14 +396,8 @@ function RecipeDetail() {
                   }}
                 >
                   <span>{index + 1}</span>
-                  <ImageSlot
-                    className="recipe-detail-step__image"
-                    src={index === 0 ? null : (step.image_url || imageEatRefrigerator)}
-                  />
-                  <div>
-                    <h3>{step.title}</h3>
-                    <p>{step.text}</p>
-                  </div>
+                  <h3>{step.title}</h3>
+                  <p>{step.text}</p>
                 </article>
               ))}
             </div>
