@@ -26,10 +26,19 @@ const cartHistory = [
   { date: '2024.05.12', price: '7,380원' },
 ]
 
+const toLocalDateKey = (date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 10)
+}
+
+const todayForCalendar = new Date()
+const recipeDeleteDate = new Date(todayForCalendar)
+recipeDeleteDate.setDate(todayForCalendar.getDate() + 7)
+
 const calendarEvents = [
-  { day: new Date().getDate(), title: '밥벌이 테스트', tone: 'danger' },
-  { day: 8, title: '두부 소비 추천', tone: 'green' },
-  { day: 12, title: '메뉴 추천 확인', tone: 'yellow' },
+  { dateKey: toLocalDateKey(todayForCalendar), title: '대파 오늘까지 사용 추천', tone: 'danger' },
+  { dateKey: toLocalDateKey(todayForCalendar), title: '저녁 추천: 대파 두부 계란찌개', tone: 'green' },
+  { dateKey: toLocalDateKey(recipeDeleteDate), title: '저장 레시피 삭제 예정', tone: 'yellow' },
 ]
 
 const tabs = [
@@ -65,7 +74,10 @@ function CalendarPreview({ connected }) {
   const lastDate = new Date(year, month + 1, 0).getDate()
   const days = [
     ...Array.from({ length: firstDay }, (_, index) => ({ id: `empty-${index}` })),
-    ...Array.from({ length: lastDate }, (_, index) => ({ id: index + 1, day: index + 1 })),
+    ...Array.from({ length: lastDate }, (_, index) => {
+      const day = index + 1
+      return { id: day, day, dateKey: toLocalDateKey(new Date(year, month, day)) }
+    }),
   ]
 
   return (
@@ -84,14 +96,16 @@ function CalendarPreview({ connected }) {
       </div>
       <div className="mypage-calendar-preview__grid">
         {days.map((item) => {
-          const event = calendarEvents.find((calendarEvent) => calendarEvent.day === item.day)
+          const events = calendarEvents.filter((calendarEvent) => calendarEvent.dateKey === item.dateKey)
           return (
             <div
               className={`mypage-calendar-preview__day ${item.day === today.getDate() ? 'is-today' : ''}`}
               key={item.id}
             >
               {item.day ? <span>{item.day}</span> : null}
-              {event ? <b className={`is-${event.tone}`}>{event.title}</b> : null}
+              {events.map((event) => (
+                <b className={`is-${event.tone}`} key={event.title}>{event.title}</b>
+              ))}
             </div>
           )
         })}
@@ -239,25 +253,7 @@ function Mypage() {
   }
 
   const connectGoogleCalendar = async () => {
-    const token = window.localStorage.getItem('bobbeori-token')
-    if (!token) {
-      navigate('/login')
-      return
-    }
-
-    if (calendarEnabled) {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/calendar/google/disconnect`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (response.ok) {
-        setCalendarEnabled(false)
-      }
-      return
-    }
-
-    navigate('/calendar/connect')
+    navigate('/login?calendar=1')
   }
 
   const createCalendarTestEvent = async () => {
@@ -278,7 +274,8 @@ function Mypage() {
       return
     }
 
-    setCalendarTestEvent(await response.json())
+    const data = await response.json()
+    setCalendarTestEvent(data.events?.find((event) => event.html_link) ?? null)
   }
 
   const profileDisplayName = isGuest ? '게스트님' : profileName
@@ -540,14 +537,14 @@ function Mypage() {
                   <p>소비기한 임박 재료와 추천 식단 알림을 캘린더에 자동으로 등록해요.</p>
                   {calendarTestEvent ? (
                     <a href={calendarTestEvent.html_link} target="_blank" rel="noreferrer">
-                      오늘 테스트 일정 확인하기
+                      생성한 캘린더 일정 확인하기
                     </a>
                   ) : null}
                 </div>
                 <div className="mypage-calendar-connect__actions">
                   {calendarEnabled ? (
                     <button className="mypage-soft-button" type="button" onClick={createCalendarTestEvent}>
-                      오늘 테스트 일정 추가
+                      캘린더 알림 3개 추가
                     </button>
                   ) : null}
                   <button

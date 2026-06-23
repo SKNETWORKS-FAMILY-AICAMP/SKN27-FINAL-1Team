@@ -82,6 +82,31 @@ async def _get_access_token(integration: CalendarIntegration, db: Session) -> st
     return access_token
 
 
+async def _create_event_once(client: httpx.AsyncClient, calendar_id: str, access_token: str, event_key: str, event: dict):
+    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    existing_res = await client.get(
+        url,
+        headers=headers,
+        params={"privateExtendedProperty": f"bobbeoriKey={event_key}", "singleEvents": "true", "maxResults": 1},
+    )
+    if existing_res.status_code >= 400:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event lookup failed.")
+
+    existing = existing_res.json().get("items", [])
+    if existing:
+        item = existing[0]
+        return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": True}
+
+    event["extendedProperties"] = {"private": {"bobbeoriKey": event_key}}
+    event_res = await client.post(url, headers=headers, json=event)
+    if event_res.status_code >= 400:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event creation failed.")
+
+    item = event_res.json()
+    return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": False}
+
+
 @router.get("/google/status")
 def google_calendar_status(
     current_user_id: int = Depends(get_current_user_required),
@@ -202,22 +227,42 @@ async def create_google_calendar_test_event(
 ):
     integration = _get_google_integration(db, current_user_id)
     access_token = await _get_access_token(integration, db)
-    today = date.today().isoformat()
+    today = date.today()
+    recipe_expiry_date = today + timedelta(days=7)
+    events = [
+        (
+            f"ingredient-expiry-{current_user_id}-{today.isoformat()}",
+            {
+                "summary": "대파 오늘까지 사용 추천",
+                "description": "소비기한 임박 재료를 먼저 사용해보세요.",
+                "start": {"date": today.isoformat()},
+                "end": {"date": (today + timedelta(days=1)).isoformat()},
+            },
+        ),
+        (
+            f"today-menu-{current_user_id}-{today.isoformat()}",
+            {
+                "summary": "저녁 추천: 대파 두부 계란찌개",
+                "description": "오늘의 추천 메뉴입니다.",
+                "start": {"date": today.isoformat()},
+                "end": {"date": (today + timedelta(days=1)).isoformat()},
+            },
+        ),
+        (
+            f"recipe-delete-{current_user_id}-{recipe_expiry_date.isoformat()}",
+            {
+                "summary": "저장 레시피 삭제 예정",
+                "description": "등록해둔 레시피가 오늘 사라질 예정이에요.",
+                "start": {"date": recipe_expiry_date.isoformat()},
+                "end": {"date": (recipe_expiry_date + timedelta(days=1)).isoformat()},
+            },
+        ),
+    ]
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        event_res = await client.post(
-            f"https://www.googleapis.com/calendar/v3/calendars/{integration.calendar_id}/events",
-            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-            json={
-                "summary": "밥벌이 테스트 일정",
-                "description": "밥벌이 Google Calendar 연동 확인용 임시 일정입니다.",
-                "start": {"date": today},
-                "end": {"date": (date.today() + timedelta(days=1)).isoformat()},
-            },
-        )
+        created = [
+            await _create_event_once(client, integration.calendar_id, access_token, event_key, event)
+            for event_key, event in events
+        ]
 
-    if event_res.status_code >= 400:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event creation failed.")
-
-    data = event_res.json()
-    return {"event_id": data.get("id"), "html_link": data.get("htmlLink"), "date": today}
+    return {"events": created}

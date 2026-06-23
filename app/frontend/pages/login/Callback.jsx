@@ -78,7 +78,7 @@ function Callback() {
       } catch (err) {
         console.error(err)
         setError(err.message)
-        setTimeout(() => navigate(isCalendarCallback ? '/mypage' : '/login'), 3000)
+        setTimeout(() => navigate(isCalendarCallback ? '/login?calendar=1' : '/login'), 3000)
       }
     }
 
