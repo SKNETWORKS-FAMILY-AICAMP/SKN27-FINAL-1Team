@@ -1,4 +1,4 @@
-"""`python -m load_to_postgres` — 레시피 PostgreSQL 적재 CLI."""
+"""`python -m etl.recipe.load_to_postgres` — 레시피 PostgreSQL 적재 CLI."""
 
 from __future__ import annotations
 
