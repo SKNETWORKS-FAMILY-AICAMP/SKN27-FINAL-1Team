@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import './Mypage.css'
 
 import iconAlarm from '../../assets/extracted/icons/icon_alarm.png'
-import iconBasket from '../../assets/extracted/icons/icon_basket.png'
-import iconCart from '../../assets/extracted/icons/icon_cart.png'
 import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
@@ -13,15 +11,6 @@ import { serviceContext, userProfile } from '../../mock/userService.js'
 const stats = [
   { label: '보유 재료', value: '28개', note: '냉장 18 · 냉동 7 · 임박 3', image: iconRefrigerator },
   { label: '추천 횟수', value: '24회', note: '이번 달 기준', image: iconAlarm },
-  { label: '절약 금액', value: serviceContext.savedThisMonth, note: '직접 요리 기준', image: iconBasket },
-  { label: '이번 장보기', value: '15,690원', note: `${serviceContext.selectedMarket} 최저가`, image: iconCart },
-]
-
-const settings = [
-  { label: '소비 임박 재료 우선 추천', checked: true },
-  { label: '매운맛 선호', checked: false },
-  { label: '저장한 레시피 우선 표시', checked: true },
-  { label: '알레르기 재료 제외', checked: true },
 ]
 
 const alerts = [
@@ -44,7 +33,6 @@ const cartHistory = [
 
 const setupSteps = [
   '프로필 확인',
-  '추천 기준 설정',
   '알림 설정',
   '오늘 추천 이어가기',
 ]
@@ -71,14 +59,13 @@ function Toggle({ checked, label, onClick }) {
 
 function Mypage() {
   const navigate = useNavigate()
-  const [personalSettings, setPersonalSettings] = useState(settings)
   const [alertSettings, setAlertSettings] = useState(alerts)
   const [profileName, setProfileName] = useState(userProfile.name)
   const [profileEmail, setProfileEmail] = useState('babbeori@example.com')
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [connectedSocials, setConnectedSocials] = useState(['카카오', '네이버'])
   const [completedSteps, setCompletedSteps] = useState(['프로필 확인'])
-  const [saveMessage, setSaveMessage] = useState('추천 기준이 서비스에 반영되어 있어요.')
+  const [saveMessage, setSaveMessage] = useState('마이페이지 설정을 확인해보세요.')
   const [userData, setUserData] = useState(null)
   const [savedFridgeRecipe] = useState(() => {
     if (typeof window === 'undefined') return null
@@ -160,16 +147,6 @@ function Mypage() {
     navigate('/login')
   }
 
-  const toggleSetting = (targetLabel) => {
-    setPersonalSettings((prev) =>
-      prev.map((setting) =>
-        setting.label === targetLabel ? { ...setting, checked: !setting.checked } : setting,
-      ),
-    )
-    completeStep('추천 기준 설정')
-    setSaveMessage(`${targetLabel} 설정을 변경했어요.`)
-  }
-
   const toggleAlert = (targetLabel) => {
     setAlertSettings((prev) =>
       prev.map((alert) =>
@@ -197,12 +174,11 @@ function Mypage() {
   }
 
   const saveAllSettings = () => {
-    completeStep('추천 기준 설정')
     completeStep('알림 설정')
-    setSaveMessage('마이페이지 설정을 저장했어요.')
+    setSaveMessage('알림 설정을 저장했어요.')
     window.localStorage.setItem(
       'bobbeori-mypage-settings',
-      JSON.stringify({ personalSettings, alertSettings }),
+      JSON.stringify({ alertSettings }),
     )
   }
 
@@ -321,7 +297,7 @@ function Mypage() {
             className="mypage-panel mypage-stat"
             key={stat.label}
             type="button"
-            onClick={() => navigate(index === 0 ? '/fridge' : index === 3 ? '/shopping-list' : '/recipe-fridge')}
+            onClick={() => navigate(index === 0 ? '/fridge' : '/recipe-fridge')}
           >
             <div>
               <span>{stat.label}</span>
@@ -382,22 +358,6 @@ function Mypage() {
               ))}
             </div>
           </div>
-        </section>
-
-        <section className="mypage-panel mypage-settings" aria-labelledby="settings-title">
-          <h2 id="settings-title">추천 기준</h2>
-          <ul>
-            {personalSettings.map((setting) => (
-              <li key={setting.label}>
-                <span>{setting.label}</span>
-                <Toggle
-                  checked={setting.checked}
-                  label={setting.label}
-                  onClick={() => toggleSetting(setting.label)}
-                />
-              </li>
-            ))}
-          </ul>
         </section>
 
         <section className="mypage-panel mypage-settings" aria-labelledby="alerts-title">
