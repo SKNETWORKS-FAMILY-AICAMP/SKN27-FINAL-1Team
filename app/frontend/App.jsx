@@ -18,6 +18,7 @@ import RecipeList from './pages/recipe_list/RecipeList.jsx'
 import MenuRecommend from './pages/menu_recommend/MenuRecommend.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
 import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
+import CalendarConnect from './pages/calendar_connect/CalendarConnect.jsx'
 
 function AppLayout() {
   const { pathname } = useLocation()
@@ -42,6 +43,7 @@ function AppLayout() {
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback/:provider" element={<Callback />} />
           <Route path="/mypage" element={<Mypage />} />
+          <Route path="/calendar/connect" element={<CalendarConnect />} />
           <Route path="/shopping-list" element={<ShoppingList />} />
           <Route
             path="/faq"

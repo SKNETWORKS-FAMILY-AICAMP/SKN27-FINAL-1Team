@@ -648,6 +648,104 @@
   font-weight: 800;
 }
 
+.mypage-calendar-preview {
+  margin-top: 16px;
+  padding: 22px;
+}
+
+.mypage-calendar-preview__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.mypage-calendar-preview__head h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.mypage-calendar-preview__head p {
+  margin: 6px 0 0;
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mypage-calendar-preview__head strong {
+  color: var(--figma-coral);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.mypage-calendar-preview__week,
+.mypage-calendar-preview__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mypage-calendar-preview__week {
+  margin-top: 18px;
+}
+
+.mypage-calendar-preview__week span {
+  color: #8a6548;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.mypage-calendar-preview__grid {
+  margin-top: 8px;
+}
+
+.mypage-calendar-preview__day {
+  min-height: 82px;
+  padding: 8px;
+  border: 1px solid #f1d9b3;
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.78);
+}
+
+.mypage-calendar-preview__day span {
+  color: #5f4635;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.mypage-calendar-preview__day b {
+  display: block;
+  margin-top: 8px;
+  padding: 5px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+
+.mypage-calendar-preview__day.is-today {
+  border-color: var(--figma-coral);
+  box-shadow: inset 0 0 0 1px rgba(255, 94, 107, 0.28);
+}
+
+.mypage-calendar-preview__day b.is-danger {
+  background: #fff0f1;
+  color: var(--figma-coral);
+}
+
+.mypage-calendar-preview__day b.is-green {
+  background: #e7f5ec;
+  color: #245c3c;
+}
+
+.mypage-calendar-preview__day b.is-yellow {
+  background: #fff3cc;
+  color: #8a6400;
+}
+
 @media (max-width: 1120px) {
   .mypage-layout {
     grid-template-columns: 180px minmax(0, 1fr);
@@ -929,6 +1027,35 @@
 
   .mypage-calendar-connect p {
     font-size: 12px;
+  }
+
+  .mypage-calendar-preview {
+    padding: 14px;
+  }
+
+  .mypage-calendar-preview__head h2 {
+    font-size: 18px;
+  }
+
+  .mypage-calendar-preview__head p {
+    font-size: 12px;
+  }
+
+  .mypage-calendar-preview__week,
+  .mypage-calendar-preview__grid {
+    gap: 4px;
+  }
+
+  .mypage-calendar-preview__day {
+    min-height: 52px;
+    padding: 5px;
+    border-radius: 10px;
+  }
+
+  .mypage-calendar-preview__day b {
+    margin-top: 3px;
+    padding: 3px;
+    font-size: 9px;
   }
 
   .mypage-chart {

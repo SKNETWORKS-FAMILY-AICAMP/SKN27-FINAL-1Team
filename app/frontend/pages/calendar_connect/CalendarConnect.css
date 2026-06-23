@@ -1,0 +1,108 @@
+.calendar-connect {
+  width: min(100% - 32px, 960px);
+  margin: 0 auto;
+  padding: 56px 0 96px;
+}
+
+.calendar-connect__panel {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 44px;
+  border: 1px solid var(--stroke-warm);
+  border-radius: 28px;
+  background: linear-gradient(180deg, #fffdf7 0%, #fff8ee 100%);
+  box-shadow: 0 18px 46px rgba(83, 52, 27, 0.08);
+  text-align: center;
+}
+
+.calendar-connect__eyebrow {
+  display: inline-flex;
+  padding: 8px 14px;
+  border: 1px solid var(--stroke-green);
+  border-radius: 999px;
+  color: var(--primary-dark);
+  font-weight: 800;
+}
+
+.calendar-connect h1 {
+  margin: 22px 0 12px;
+  color: var(--text-strong);
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  line-height: 1.1;
+}
+
+.calendar-connect p {
+  margin: 0 auto;
+  max-width: 520px;
+  color: var(--text-main);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.calendar-connect__notice {
+  display: grid;
+  gap: 6px;
+  margin: 30px auto;
+  padding: 18px 20px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: rgba(231, 245, 236, 0.7);
+  color: var(--text-main);
+  text-align: left;
+}
+
+.calendar-connect__notice strong {
+  color: var(--primary-dark);
+}
+
+.calendar-connect__notice span {
+  color: var(--text-sub);
+  line-height: 1.55;
+}
+
+.calendar-connect__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.calendar-connect__primary,
+.calendar-connect__secondary {
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.calendar-connect__primary {
+  border: 1px solid var(--primary-dark);
+  background: var(--primary-dark);
+  color: #fff;
+}
+
+.calendar-connect__secondary {
+  border: 1px solid var(--stroke-green);
+  background: #fff;
+  color: var(--primary-dark);
+}
+
+@media (max-width: 640px) {
+  .calendar-connect {
+    padding: 28px 0 72px;
+  }
+
+  .calendar-connect__panel {
+    padding: 28px 20px;
+    border-radius: 22px;
+  }
+
+  .calendar-connect__actions {
+    display: grid;
+  }
+
+  .calendar-connect__primary,
+  .calendar-connect__secondary {
+    width: 100%;
+  }
+}

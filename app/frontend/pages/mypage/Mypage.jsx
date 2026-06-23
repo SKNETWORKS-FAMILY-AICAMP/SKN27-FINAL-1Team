@@ -26,6 +26,12 @@ const cartHistory = [
   { date: '2024.05.12', price: '7,380원' },
 ]
 
+const calendarEvents = [
+  { day: 4, title: '대파 소비 알림', tone: 'danger' },
+  { day: 8, title: '두부 소비 추천', tone: 'green' },
+  { day: 12, title: '메뉴 추천 확인', tone: 'yellow' },
+]
+
 const tabs = [
   { id: 'profile', label: '내 정보' },
   { id: 'alerts', label: '알림 및 캘린더' },
@@ -48,6 +54,49 @@ function Toggle({ checked, label, onClick }) {
       aria-pressed={checked}
       onClick={onClick}
     />
+  )
+}
+
+function CalendarPreview({ connected }) {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const firstDay = new Date(year, month, 1).getDay()
+  const lastDate = new Date(year, month + 1, 0).getDate()
+  const days = [
+    ...Array.from({ length: firstDay }, (_, index) => ({ id: `empty-${index}` })),
+    ...Array.from({ length: lastDate }, (_, index) => ({ id: index + 1, day: index + 1 })),
+  ]
+
+  return (
+    <section className="mypage-panel mypage-calendar-preview" aria-labelledby="calendar-preview-title">
+      <div className="mypage-calendar-preview__head">
+        <div>
+          <h2 id="calendar-preview-title">밥벌이 캘린더</h2>
+          <p>{connected ? 'Google Calendar와 연결되어 있어요.' : '연동하면 일정 등록이 가능해요.'}</p>
+        </div>
+        <strong>{year}.{String(month + 1).padStart(2, '0')}</strong>
+      </div>
+      <div className="mypage-calendar-preview__week" aria-hidden="true">
+        {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
+          <span key={day}>{day}</span>
+        ))}
+      </div>
+      <div className="mypage-calendar-preview__grid">
+        {days.map((item) => {
+          const event = calendarEvents.find((calendarEvent) => calendarEvent.day === item.day)
+          return (
+            <div
+              className={`mypage-calendar-preview__day ${item.day === today.getDate() ? 'is-today' : ''}`}
+              key={item.id}
+            >
+              {item.day ? <span>{item.day}</span> : null}
+              {event ? <b className={`is-${event.tone}`}>{event.title}</b> : null}
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -104,11 +153,14 @@ function Mypage() {
     const fetchUser = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-        const [userDataResponse, summaryResponse] = await Promise.all([
+        const [userDataResponse, summaryResponse, calendarResponse] = await Promise.all([
           fetch(`${apiUrl}/api/v1/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${apiUrl}/api/v1/inventory/summary`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${apiUrl}/api/v1/calendar/google/status`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ])
@@ -123,6 +175,11 @@ function Mypage() {
         if (summaryResponse.ok) {
           const summaryData = await summaryResponse.json()
           setInventorySummary(summaryData)
+        }
+
+        if (calendarResponse.ok) {
+          const calendarData = await calendarResponse.json()
+          setCalendarEnabled(calendarData.connected)
         }
 
         setProfileName(data.nickname ? `${data.nickname}님` : userProfile.name)
@@ -178,6 +235,28 @@ function Mypage() {
   const connectSocial = () => {
     const nextSocial = connectedSocials.includes('구글') ? '애플' : '구글'
     setConnectedSocials((prev) => (prev.includes(nextSocial) ? prev : [...prev, nextSocial]))
+  }
+
+  const connectGoogleCalendar = async () => {
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    if (calendarEnabled) {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/v1/calendar/google/disconnect`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        setCalendarEnabled(false)
+      }
+      return
+    }
+
+    navigate('/calendar/connect')
   }
 
   const profileDisplayName = isGuest ? '게스트님' : profileName
@@ -441,11 +520,13 @@ function Mypage() {
                 <button
                   className="mypage-primary-button"
                   type="button"
-                  onClick={() => setCalendarEnabled((prev) => !prev)}
+                  onClick={connectGoogleCalendar}
                 >
                   {calendarEnabled ? '연동 해제' : 'Google Calendar 연결'}
                 </button>
               </section>
+
+              <CalendarPreview connected={calendarEnabled} />
             </>
           )}
 
