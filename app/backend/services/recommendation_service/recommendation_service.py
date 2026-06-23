@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecommendationResult
 
-MANUAL_SAVE_TYPE = "manual_save"
-
 
 class RecommendationService:
+    MANUAL_SAVE_TYPE = "manual_save"
+
     def save_manual(
         self,
         db: Session,
@@ -33,7 +33,7 @@ class RecommendationService:
         row = RecommendationResult(
             user_id=user_id,
             recipe_id=recipe_id,
-            recommendation_type=MANUAL_SAVE_TYPE,
+            recommendation_type=self.MANUAL_SAVE_TYPE,
         )
         db.add(row)
         db.commit()
@@ -42,7 +42,7 @@ class RecommendationService:
         return {
             "recommendation_id": int(row.id),
             "recipe_id": int(row.recipe_id),
-            "recommendation_type": row.recommendation_type or MANUAL_SAVE_TYPE,
+            "recommendation_type": row.recommendation_type or self.MANUAL_SAVE_TYPE,
             "created_at": row.created_at,
         }
 
