@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import MobileBottomNav from './components/MobileBottomNav.jsx'
+import OnboardingModal from './components/OnboardingModal.jsx'
 import Home from './pages/home/Home.jsx'
 import InfoPage from './pages/info/InfoPage.jsx'
 import Login from './pages/login/Login.jsx'
@@ -21,10 +22,27 @@ import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
 function AppLayout() {
   const { pathname } = useLocation()
-  const isAuthPage = pathname === '/login'
+  const isAuthPage = pathname === '/login' || pathname.startsWith('/auth/callback')
+  
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  useEffect(() => {
+    const hasSeen = localStorage.getItem('hasSeenOnboarding_v4');
+    const token = localStorage.getItem('bobbeori-token');
+    const authMode = localStorage.getItem('bobbeori-auth-mode');
+    
+    // 비로그인 상태이거나 이미 온보딩을 봤다면 스킵
+    if (isAuthPage || hasSeen) return;
+
+    // 정상 로그인(토큰 존재) 이거나, 소셜 모의 로그인(kakao, naver 등 - guest 제외)일 경우 띄움
+    if (token || (authMode && authMode !== 'guest')) {
+      setShowOnboarding(true)
+    }
+  }, [pathname, isAuthPage])
 
   return (
     <div className={isAuthPage ? 'app-shell app-shell--auth' : 'app-shell'}>
+      {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
       {!isAuthPage && <Header />}
       <main className={isAuthPage ? 'app-main app-main--auth' : 'app-main'}>
         {!isAuthPage && <Breadcrumbs />}
