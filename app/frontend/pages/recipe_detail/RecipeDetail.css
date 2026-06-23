@@ -692,3 +692,21 @@
     height: 206px;
   }
 }
+
+.recipe-detail-status {
+  margin: 24px 0 16px;
+  color: #6f4b36;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.recipe-detail-status--error {
+  color: #b42318;
+}
+
+.recipe-detail-empty-note {
+  margin: 0;
+  color: #8a6a55;
+  font-size: 14px;
+  line-height: 1.5;
+}
