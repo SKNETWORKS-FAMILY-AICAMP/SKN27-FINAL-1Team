@@ -1,3 +1,8 @@
+"""사용자 추천·저장 목록(recommendation_results) 서비스.
+
+추천 엔진(검색 후 모델 추론)은 별도 모듈로 추가 예정이며, 이 파일은 결과함 CRUD만 담당한다.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -10,8 +15,8 @@ from app.backend.db.models import Recipe, RecommendationResult
 MANUAL_SAVE_TYPE = "manual_save"
 
 
-class RecommendationSaveService:
-    def save_recipe_recommendation(
+class RecommendationService:
+    def save_manual(
         self,
         db: Session,
         user_id: int,
@@ -42,4 +47,4 @@ class RecommendationSaveService:
         }
 
 
-recommendation_save_service = RecommendationSaveService()
+recommendation_service = RecommendationService()
