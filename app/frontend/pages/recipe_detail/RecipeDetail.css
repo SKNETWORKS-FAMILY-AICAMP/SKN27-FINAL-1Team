@@ -678,7 +678,7 @@
   }
 
   .recipe-detail-step__image {
-    display: none;
+    display: none !important;
   }
 
   .recipe-detail-primary {
@@ -687,7 +687,7 @@
   }
 }
 
-@media (max-width: 390px) {
+@media (max-width: 480px) {
   .recipe-detail-main-image {
     height: 206px;
   }

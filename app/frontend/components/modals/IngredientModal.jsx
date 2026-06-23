@@ -6,7 +6,8 @@ export default function IngredientModal({
   formData,
   handleFormChange,
   onClose,
-  onSubmit
+  onSubmit,
+  isSubmitting
 }) {
   if (!isOpen) return null
 
@@ -65,9 +66,9 @@ export default function IngredientModal({
           </div>
         </div>
         <div className="fridge-modal-footer">
-          <button type="button" className="btn-cancel" onClick={onClose}>취소</button>
-          <button type="button" className="btn-submit" onClick={onSubmit}>
-            {editingId ? '수정 완료' : '등록 완료'}
+          <button type="button" className="btn-cancel" onClick={onClose} disabled={isSubmitting}>취소</button>
+          <button type="button" className="btn-submit" onClick={onSubmit} disabled={isSubmitting}>
+            {isSubmitting ? '처리 중...' : (editingId ? '수정 완료' : '등록 완료')}
           </button>
         </div>
       </div>

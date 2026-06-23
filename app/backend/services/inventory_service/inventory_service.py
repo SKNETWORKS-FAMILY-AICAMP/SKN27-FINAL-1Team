@@ -1,170 +1,221 @@
 from sqlalchemy.orm import Session
+from fastapi import HTTPException, status, UploadFile
+from typing import List, Optional
 from datetime import date, timedelta
-from app.backend.db.models import Fridge, Ingredient
-from app.backend.schemas.inventory import IngredientCreate
-from fastapi import HTTPException, status
+from app.backend.db.models import User, Ingredient, FridgeItem
+from app.backend.schemas.inventory import IngredientCreate, IngredientResponse
 
 class InventoryService:
-    def get_or_create_fridge(self, db: Session, user_id: int) -> Fridge:
-        """사용자의 냉장고를 가져오거나 없으면 새로 생성합니다."""
-        fridge = db.query(Fridge).filter(Fridge.user_id == user_id).first()
-        if not fridge:
-            fridge = Fridge(user_id=user_id, name="나의 냉장고")
-            db.add(fridge)
-            db.commit()
-            db.refresh(fridge)
-        return fridge
+    def get_recommended_lifespan(self, name: str, category: str, storage_method: str = "냉장") -> int:
+        from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+        try:
+            return expiration_ai_service.predict_expiration_days(name, category, storage_method)
+        except Exception as e:
+            return 7
 
-    def get_recommended_lifespan(self, name: str) -> int:
-        """
-        [임시] 식재료별 권장 보관 기간을 반환하는 헬퍼 함수
-        추후 다른 팀원의 DB/API 연동으로 교체될 예정입니다.
-        """
-        mock_lifespan_db = {
-            "시금치": 15,
-            "우유": 10,
-            "두부": 7,
-            "계란": 30,
-            "돼지고기": 5,
-            "소고기": 5,
-            "양파": 30,
-            "마늘": 60,
-            "사과": 21,
-            "바나나": 7
-        }
-        # 일치하는 식재료가 있으면 그 값을, 없으면 기본값 7일을 반환
-        return mock_lifespan_db.get(name, 7)
-
-    def _calculate_d_day_and_flags(self, ingredient: Ingredient) -> dict:
+    def _calculate_d_day_and_flags(self, expiry_date: date, purchased_date: date, name: str, category: str, storage_location: str) -> dict:
         """DB의 식재료 객체를 기반으로 유통기한 D-day와 임박 여부를 계산합니다."""
+        import logging
+        logger = logging.getLogger(__name__)
         today = date.today()
         
-        # 유통기한이 명시적으로 저장되어 있다면 그것을 기준
-        if ingredient.expiration_date:
-            target_date = ingredient.expiration_date
-        else:
-            # 명시된 유통기한이 없다면, 구매일(입고일) + 권장 보관 기간으로 유통기한 유추
-            lifespan_days = self.get_recommended_lifespan(ingredient.name)
-            target_date = ingredient.purchase_date + timedelta(days=lifespan_days)
+        try:
+            if expiry_date:
+                if isinstance(expiry_date, str):
+                    from datetime import datetime
+                    target_date = datetime.strptime(expiry_date, "%Y-%m-%d").date()
+                else:
+                    target_date = expiry_date
+            else:
+                lifespan_days = self.get_recommended_lifespan(name, category, storage_location)
+                
+                p_date = purchased_date or today
+                if isinstance(p_date, str):
+                    from datetime import datetime
+                    p_date = datetime.strptime(p_date, "%Y-%m-%d").date()
+                    
+                target_date = p_date + timedelta(days=lifespan_days)
+                
+            d_day_delta = (target_date - today).days
+            is_expiring_soon = True if d_day_delta <= 3 else False
             
-        d_day_delta = (target_date - today).days
-        is_expiring_soon = True if d_day_delta <= 3 and d_day_delta >= 0 else False
+            return {
+                "d_day": d_day_delta,
+                "is_expiring_soon": is_expiring_soon,
+                "calculated_expiration_date": target_date
+            }
+        except Exception as e:
+            logger.error(f"D-day 계산 중 치명적 오류: {e}")
+            fallback_date = today + timedelta(days=7)
+            return {
+                "d_day": 7,
+                "is_expiring_soon": False,
+                "calculated_expiration_date": fallback_date
+            }
+
+    def _map_to_response(self, item: FridgeItem, ingredient: Ingredient) -> dict:
+        """FridgeItem과 Ingredient를 프론트엔드가 요구하는 IngredientResponse 스키마 형태로 매핑합니다."""
+        calc_info = self._calculate_d_day_and_flags(
+            expiry_date=item.expiry_date,
+            purchased_date=item.purchased_date,
+            name=ingredient.name,
+            category=ingredient.category,
+            storage_location=item.storage_location or "냉장"
+        )
+        
+        final_expiry = item.expiry_date or calc_info.get("calculated_expiration_date")
         
         return {
-            "d_day": d_day_delta,
-            "is_expiring_soon": is_expiring_soon,
-            "calculated_expiration_date": target_date
+            "id": item.id,
+            "fridge_id": 1, # 프론트엔드 호환성을 위한 더미 데이터
+            "name": item.display_name or ingredient.name,
+            "category": ingredient.category,
+            "quantity": float(item.quantity) if item.quantity else 1.0,
+            "unit": item.unit or ingredient.default_unit or "개",
+            "storage_method": item.storage_location or "냉장",
+            "purchase_date": item.purchased_date or date.today(),
+            "expiration_date": final_expiry,
+            "created_at": item.created_at,
+            "updated_at": item.created_at,
+            "d_day": calc_info.get("d_day"),
+            "is_expiring_soon": calc_info.get("is_expiring_soon")
         }
 
     def add_ingredient(self, db: Session, user_id: int, data: IngredientCreate):
-        fridge = self.get_or_create_fridge(db, user_id)
+        # 1. 마스터 테이블 확인
+        normalized = data.name.strip().replace(" ", "").lower()
+        ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
         
-        # 구매일이 없으면 오늘 날짜
-        purchase_date = data.purchase_date if data.purchase_date else date.today()
-        
-        ingredient = Ingredient(
-            fridge_id=fridge.id,
-            name=data.name,
-            category=data.category,
-            quantity=data.quantity,
-            unit=data.unit,
-            storage_method=data.storage_method,
-            purchase_date=purchase_date,
-            expiration_date=data.expiration_date
+        if not ingredient:
+            try:
+                from sqlalchemy.exc import IntegrityError
+                with db.begin_nested():
+                    ingredient = Ingredient(
+                        name=data.name,
+                        normalized_name=normalized,
+                        category=data.category,
+                        default_unit=data.unit
+                    )
+                    db.add(ingredient)
+                    db.flush()
+            except IntegrityError:
+                # 동시성 문제 등으로 이미 같은 이름이 등록된 경우
+                ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
+            
+        # 2. 유통기한 자동 계산
+        calc_info = self._calculate_d_day_and_flags(
+            expiry_date=data.expiration_date,
+            purchased_date=data.purchase_date or date.today(),
+            name=ingredient.name,
+            category=ingredient.category,
+            storage_location=data.storage_method
         )
         
-        db.add(ingredient)
+        final_expiry = data.expiration_date or calc_info.get("calculated_expiration_date")
+
+        # 3. FridgeItem 추가
+        fridge_item = FridgeItem(
+            user_id=user_id,
+            ingredient_id=ingredient.id,
+            display_name=data.name,
+            quantity=data.quantity,
+            unit=data.unit,
+            storage_location=data.storage_method,
+            purchased_date=data.purchase_date or date.today(),
+            expiry_date=final_expiry,
+            status="normal"
+        )
+        db.add(fridge_item)
         db.commit()
-        db.refresh(ingredient)
+        db.refresh(fridge_item)
         
-        # Response 구성을 위한 추가 정보 계산
-        calc_info = self._calculate_d_day_and_flags(ingredient)
-        
-        result = ingredient.__dict__.copy()
-        result.update(calc_info)
-        return result
+        return self._map_to_response(fridge_item, ingredient)
 
     def get_ingredients(self, db: Session, user_id: int):
-        fridge = self.get_or_create_fridge(db, user_id)
-        ingredients = db.query(Ingredient).filter(Ingredient.fridge_id == fridge.id).all()
+        items = db.query(FridgeItem, Ingredient).join(
+            Ingredient, FridgeItem.ingredient_id == Ingredient.id
+        ).filter(
+            FridgeItem.user_id == user_id,
+            FridgeItem.status == "normal"
+        ).all()
         
         results = []
-        for ing in ingredients:
-            calc_info = self._calculate_d_day_and_flags(ing)
-            item_dict = ing.__dict__.copy()
-            item_dict.update(calc_info)
-            # 명시적 유통기한이 없으면 자동 계산된 유통기한으로 대체
-            if not item_dict.get("expiration_date"):
-                item_dict["expiration_date"] = calc_info.get("calculated_expiration_date")
-            results.append(item_dict)
+        for fridge_item, ingredient in items:
+            results.append(self._map_to_response(fridge_item, ingredient))
             
         return results
 
     def delete_ingredient(self, db: Session, user_id: int, ingredient_id: int):
-        fridge = self.get_or_create_fridge(db, user_id)
-        ingredient = db.query(Ingredient).filter(
-            Ingredient.id == ingredient_id,
-            Ingredient.fridge_id == fridge.id
+        fridge_item = db.query(FridgeItem).filter(
+            FridgeItem.id == ingredient_id, 
+            FridgeItem.user_id == user_id
         ).first()
         
-        if not ingredient:
-            raise HTTPException(status_code=404, detail="해당 식재료를 찾을 수 없습니다.")
+        if not fridge_item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
             
-        db.delete(ingredient)
+        db.delete(fridge_item)
         db.commit()
-        return {"detail": "식재료가 성공적으로 삭제되었습니다."}
 
     def update_ingredient(self, db: Session, user_id: int, ingredient_id: int, data: IngredientCreate):
-        fridge = self.get_or_create_fridge(db, user_id)
-        ingredient = db.query(Ingredient).filter(
-            Ingredient.id == ingredient_id,
-            Ingredient.fridge_id == fridge.id
+        fridge_item = db.query(FridgeItem).filter(
+            FridgeItem.id == ingredient_id, 
+            FridgeItem.user_id == user_id
         ).first()
         
-        if not ingredient:
-            raise HTTPException(status_code=404, detail="해당 식재료를 찾을 수 없습니다.")
+        if not fridge_item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
             
-        # 데이터 업데이트
-        ingredient.name = data.name
-        ingredient.category = data.category
-        ingredient.quantity = data.quantity
-        ingredient.unit = data.unit
-        ingredient.storage_method = data.storage_method
-        if data.purchase_date:
-            ingredient.purchase_date = data.purchase_date
-        ingredient.expiration_date = data.expiration_date
+        fridge_item.display_name = data.name
+        fridge_item.quantity = data.quantity
+        fridge_item.unit = data.unit
+        fridge_item.storage_location = data.storage_method
+        fridge_item.purchased_date = data.purchase_date
+        fridge_item.expiry_date = data.expiration_date
         
+        ingredient = db.query(Ingredient).filter(Ingredient.id == fridge_item.ingredient_id).first()
+        
+        calc_info = self._calculate_d_day_and_flags(
+            expiry_date=fridge_item.expiry_date,
+            purchased_date=fridge_item.purchased_date or date.today(),
+            name=fridge_item.display_name or ingredient.name,
+            category=ingredient.category,
+            storage_location=fridge_item.storage_location or "냉장"
+        )
+        
+        if not fridge_item.expiry_date:
+            fridge_item.expiry_date = calc_info.get("calculated_expiration_date")
+            
         db.commit()
-        db.refresh(ingredient)
+        db.refresh(fridge_item)
         
-        calc_info = self._calculate_d_day_and_flags(ingredient)
-        result = ingredient.__dict__.copy()
-        result.update(calc_info)
-        return result
+        return self._map_to_response(fridge_item, ingredient)
 
     def get_inventory_summary(self, db: Session, user_id: int):
-        fridge = self.get_or_create_fridge(db, user_id)
-        ingredients = db.query(Ingredient).filter(Ingredient.fridge_id == fridge.id).all()
+        items = db.query(FridgeItem, Ingredient).join(
+            Ingredient, FridgeItem.ingredient_id == Ingredient.id
+        ).filter(
+            FridgeItem.user_id == user_id,
+            FridgeItem.status == "normal"
+        ).all()
         
         today = date.today()
         
-        total = len(ingredients)
+        total = len(items)
         expiring_soon = 0
         today_added = 0
         storage = {"냉장": 0, "냉동": 0, "실온": 0, "기타": 0}
         
-        for ing in ingredients:
-            # 1. 소비 임박 카운트
-            calc_info = self._calculate_d_day_and_flags(ing)
-            if calc_info["is_expiring_soon"]:
+        for fridge_item, ingredient in items:
+            mapped = self._map_to_response(fridge_item, ingredient)
+            
+            if mapped.get("is_expiring_soon"):
                 expiring_soon += 1
                 
-            # 2. 오늘 입고 카운트
-            if ing.purchase_date == today:
+            if fridge_item.purchased_date == today:
                 today_added += 1
                 
-            # 3. 보관 위치별 카운트
-            method = ing.storage_method
+            method = fridge_item.storage_location or "기타"
             if method in storage:
                 storage[method] += 1
             else:

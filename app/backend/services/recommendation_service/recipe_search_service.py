@@ -122,7 +122,7 @@ class RecipeSearchService:
     def _to_item(self, recipe: Recipe) -> dict[str, Any]:
         return {
             "recipe_id": recipe.id,
-            "recipe_name": recipe.title,
+            "title": recipe.title,
             "category": recipe.category,
             "difficulty": recipe.difficulty,
             "cooking_time_min": recipe.cooking_time,

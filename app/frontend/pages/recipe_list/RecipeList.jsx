@@ -590,7 +590,7 @@ function RecipeList() {
                     <button
                       type="button"
                       className="recipe-card__save"
-                      aria-label={`${recipe.recipe_name} 저장`}
+                      aria-label={`${recipe.title} 저장`}
                       aria-pressed={savedIds.includes(recipe.recipe_id)}
                       disabled={!FEATURE_FLAGS.savedRecipes}
                       title={
@@ -615,7 +615,7 @@ function RecipeList() {
                   </div>
 
                   <div className="recipe-card__body">
-                    <h3>{recipe.recipe_name}</h3>
+                    <h3>{recipe.title}</h3>
 
                     <p>
                       {formatCookingTime(recipe.cooking_time_min)} ·{" "}
