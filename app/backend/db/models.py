@@ -78,7 +78,6 @@ class Ingredient(Base):
     # 식재료와 연결된 별칭, 영수증 항목, 냉장고 항목, 레시피 데이터를 조회합니다.
     aliases = relationship("IngredientAlias", back_populates="ingredient", cascade="all, delete-orphan")
     receipt_items = relationship("ReceiptItem", back_populates="ingredient")
-    import_candidates = relationship("InventoryImportCandidate", back_populates="ingredient")
     fridge_items = relationship("FridgeItem", back_populates="ingredient")
     guide = relationship("IngredientGuide", back_populates="ingredient", uselist=False, cascade="all, delete-orphan")
     recipe_ingredients = relationship("RecipeIngredient", back_populates="ingredient")
@@ -142,35 +141,10 @@ class ReceiptItem(Base):
     memo = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # 원본 영수증, 매칭된 식재료, 냉장고 등록 후보를 연결합니다.
+    # 원본 영수증, 매칭된 식재료, 냉장고 등록 항목을 연결합니다.
     receipt = relationship("Receipt", back_populates="items")
     ingredient = relationship("Ingredient", back_populates="receipt_items")
-    import_candidates = relationship("InventoryImportCandidate", back_populates="receipt_item", cascade="all, delete-orphan")
-
-
-class InventoryImportCandidate(Base):
-    """영수증 품목을 냉장고에 등록하기 전 후보 상태로 보관하는 ORM 모델입니다."""
-
-    __tablename__ = "inventory_import_candidates"
-    __table_args__ = (
-        CheckConstraint("status IN ('pending', 'confirmed', 'rejected')", name="ck_inventory_import_candidates_status"),
-        Index("idx_import_candidates_receipt_item_id", "receipt_item_id"),
-    )
-
-    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
-    receipt_item_id = Column(BigIntPrimaryKey, ForeignKey("receipt_items.id", ondelete="CASCADE"), nullable=False)
-    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="SET NULL"), nullable=True)
-    display_name = Column(String(255), nullable=True)
-    quantity = Column(Numeric(10, 2), nullable=True)
-    unit = Column(String(30), nullable=True)
-    status = Column(String(30), nullable=False, server_default="pending")
-    reject_reason = Column(String(255), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    # 후보의 원천 품목, 매칭 식재료, 확정된 냉장고 항목을 연결합니다.
-    receipt_item = relationship("ReceiptItem", back_populates="import_candidates")
-    ingredient = relationship("Ingredient", back_populates="import_candidates")
-    fridge_item = relationship("FridgeItem", back_populates="import_candidate", uselist=False)
+    fridge_items = relationship("FridgeItem", back_populates="receipt_item")
 
 
 class FridgeItem(Base):
@@ -181,17 +155,17 @@ class FridgeItem(Base):
         CheckConstraint("status IN ('normal', 'expiring', 'expired', 'used')", name="ck_fridge_items_status"),
         Index("idx_fridge_items_user_id", "user_id"),
         Index("idx_fridge_items_ingredient_id", "ingredient_id"),
+        Index("idx_fridge_items_receipt_item_id", "receipt_item_id"),
         Index("idx_fridge_items_expiry_date", "expiry_date"),
     )
 
     id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
     user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="RESTRICT"), nullable=False)
-    import_candidate_id = Column(
+    receipt_item_id = Column(
         BigIntPrimaryKey,
-        ForeignKey("inventory_import_candidates.id", ondelete="SET NULL"),
+        ForeignKey("receipt_items.id", ondelete="SET NULL"),
         nullable=True,
-        unique=True,
     )
     display_name = Column(String(255), nullable=True)
     quantity = Column(Numeric(10, 2), nullable=True)
@@ -202,10 +176,10 @@ class FridgeItem(Base):
     status = Column(String(30), nullable=False, server_default="normal")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # 냉장고 항목의 소유자, 식재료, 영수증 등록 후보, 알림을 연결합니다.
+    # 냉장고 항목의 소유자, 식재료, 영수증 등록 항목, 알림을 연결합니다.
     user = relationship("User", back_populates="fridge_items")
     ingredient = relationship("Ingredient", back_populates="fridge_items")
-    import_candidate = relationship("InventoryImportCandidate", back_populates="fridge_item")
+    receipt_item = relationship("ReceiptItem", back_populates="fridge_items")
     notifications = relationship("Notification", back_populates="fridge_item", cascade="all, delete-orphan")
 
 
