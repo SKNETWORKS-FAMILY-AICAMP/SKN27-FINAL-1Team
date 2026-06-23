@@ -16,6 +16,7 @@ from sqlalchemy import (
     func,
     true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.backend.db.base import Base
@@ -236,9 +237,9 @@ class Recipe(Base):
     difficulty = Column(String(50), nullable=True)
     image_url = Column(String(500), nullable=True)
     source_url = Column(String(500), nullable=True)
+    recipe_steps = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # 레시피 재료와 추천 결과를 연결합니다.
     recipe_ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
     recommendation_results = relationship("RecommendationResult", back_populates="recipe", cascade="all, delete-orphan")
 
