@@ -32,6 +32,8 @@ services:
                 condition: service_healthy
             neo4j:
                 condition: service_started
+            recipe_load:
+                condition: service_completed_successfully
         healthcheck:
             test:
                 [
@@ -59,6 +61,23 @@ services:
             - /app/node_modules
         depends_on:
             backend:
+                condition: service_healthy
+
+    recipe_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_recipe_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            DB_HOST: postgres
+        volumes:
+            - ./storage:/project/storage:ro
+            - ./.env:/project/.env:ro
+        depends_on:
+            postgres:
                 condition: service_healthy
 
     postgres:

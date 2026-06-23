@@ -6,5 +6,4 @@ storage
 app/frontend/node_modules
 test
 ai
-etl
 docs
