@@ -27,7 +27,7 @@ const cartHistory = [
 ]
 
 const calendarEvents = [
-  { day: 4, title: '대파 소비 알림', tone: 'danger' },
+  { day: new Date().getDate(), title: '밥벌이 테스트', tone: 'danger' },
   { day: 8, title: '두부 소비 추천', tone: 'green' },
   { day: 12, title: '메뉴 추천 확인', tone: 'yellow' },
 ]
@@ -106,6 +106,7 @@ function Mypage() {
   const [activeTab, setActiveTab] = useState('profile')
   const [calendarEnabled, setCalendarEnabled] = useState(false)
   const [calendarAutoAdd, setCalendarAutoAdd] = useState(true)
+  const [calendarTestEvent, setCalendarTestEvent] = useState(null)
   const [profileName, setProfileName] = useState(userProfile.name)
   const [profileEmail, setProfileEmail] = useState('babbeori@example.com')
   const [isEditingProfile, setIsEditingProfile] = useState(false)
@@ -257,6 +258,27 @@ function Mypage() {
     }
 
     navigate('/calendar/connect')
+  }
+
+  const createCalendarTestEvent = async () => {
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const response = await fetch(`${apiUrl}/api/v1/calendar/google/test-event`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!response.ok) {
+      window.alert('Google Calendar 일정 생성에 실패했어요. 다시 연동해보세요.')
+      return
+    }
+
+    setCalendarTestEvent(await response.json())
   }
 
   const profileDisplayName = isGuest ? '게스트님' : profileName
@@ -516,14 +538,26 @@ function Mypage() {
                 <div>
                   <h2 id="google-calendar-title">Google Calendar 연결</h2>
                   <p>소비기한 임박 재료와 추천 식단 알림을 캘린더에 자동으로 등록해요.</p>
+                  {calendarTestEvent ? (
+                    <a href={calendarTestEvent.html_link} target="_blank" rel="noreferrer">
+                      오늘 테스트 일정 확인하기
+                    </a>
+                  ) : null}
                 </div>
-                <button
-                  className="mypage-primary-button"
-                  type="button"
-                  onClick={connectGoogleCalendar}
-                >
-                  {calendarEnabled ? '연동 해제' : 'Google Calendar 연결'}
-                </button>
+                <div className="mypage-calendar-connect__actions">
+                  {calendarEnabled ? (
+                    <button className="mypage-soft-button" type="button" onClick={createCalendarTestEvent}>
+                      오늘 테스트 일정 추가
+                    </button>
+                  ) : null}
+                  <button
+                    className="mypage-primary-button"
+                    type="button"
+                    onClick={connectGoogleCalendar}
+                  >
+                    {calendarEnabled ? '연동 해제' : 'Google Calendar 연결'}
+                  </button>
+                </div>
               </section>
 
               <CalendarPreview connected={calendarEnabled} />

@@ -648,6 +648,22 @@
   font-weight: 800;
 }
 
+.mypage-calendar-connect a {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--figma-coral);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.mypage-calendar-connect__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .mypage-calendar-preview {
   margin-top: 16px;
   padding: 22px;
@@ -1027,6 +1043,11 @@
 
   .mypage-calendar-connect p {
     font-size: 12px;
+  }
+
+  .mypage-calendar-connect__actions {
+    display: grid;
+    justify-content: stretch;
   }
 
   .mypage-calendar-preview {
