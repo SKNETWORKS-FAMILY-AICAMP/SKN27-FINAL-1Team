@@ -2,16 +2,63 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, UploadFile
 from typing import List, Optional
 from datetime import date, timedelta
-from app.backend.db.models import User, Ingredient, FridgeItem
+from app.backend.db.models import User, Ingredient, FridgeItem, IngredientStorageStandard
 from app.backend.schemas.inventory import IngredientCreate, IngredientResponse
 
 class InventoryService:
     def get_recommended_lifespan(self, name: str, category: str, storage_method: str = "냉장") -> int:
         from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
         try:
-            return expiration_ai_service.predict_expiration_days(name, category, storage_method)
+            _, days = expiration_ai_service.predict_storage_and_lifespan(name, category, storage_method)
+            return days
         except Exception as e:
             return 7
+
+    def _get_or_create_storage_rule(self, db: Session, ingredient: Ingredient, storage_method: Optional[str]) -> tuple[str, int]:
+        from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+        from sqlalchemy.exc import IntegrityError
+        
+        final_storage = storage_method
+        cached_rule = None
+        
+        if final_storage:
+            cached_rule = db.query(IngredientStorageStandard).filter(
+                IngredientStorageStandard.ingredient_id == ingredient.id,
+                IngredientStorageStandard.storage_location == final_storage
+            ).first()
+        else:
+            cached_rule = db.query(IngredientStorageStandard).filter(
+                IngredientStorageStandard.ingredient_id == ingredient.id
+            ).first()
+            if cached_rule:
+                final_storage = cached_rule.storage_location
+                
+        if cached_rule:
+            return final_storage, cached_rule.lifespan_days
+            
+        pred_storage, pred_days = expiration_ai_service.predict_storage_and_lifespan(
+            ingredient.name, ingredient.category, storage_method
+        )
+        final_storage = final_storage or pred_storage
+        lifespan_days = pred_days
+        
+        try:
+            with db.begin_nested():
+                new_rule = IngredientStorageStandard(
+                    ingredient_id=ingredient.id,
+                    storage_location=final_storage,
+                    lifespan_days=lifespan_days
+                )
+                db.add(new_rule)
+                db.flush()
+        except IntegrityError as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to cache storage rule: {e}")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Unknown error while caching storage rule: {e}")
+            
+        return final_storage, lifespan_days
 
     def _calculate_d_day_and_flags(self, expiry_date: date, purchased_date: date, name: str, category: str, storage_location: str) -> dict:
         """DB의 식재료 객체를 기반으로 유통기한 D-day와 임박 여부를 계산합니다."""
@@ -102,16 +149,19 @@ class InventoryService:
                 # 동시성 문제 등으로 이미 같은 이름이 등록된 경우
                 ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
             
-        # 2. 유통기한 자동 계산
-        calc_info = self._calculate_d_day_and_flags(
-            expiry_date=data.expiration_date,
-            purchased_date=data.purchase_date or date.today(),
-            name=ingredient.name,
-            category=ingredient.category,
-            storage_location=data.storage_method
-        )
+        # 2. 보관 방법 및 유통기한 자동 계산 (캐시 활용)
+        final_storage = data.storage_method
+        final_expiry = data.expiration_date
         
-        final_expiry = data.expiration_date or calc_info.get("calculated_expiration_date")
+        if not final_expiry:
+            final_storage, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
+            p_date = data.purchase_date or date.today()
+            if isinstance(p_date, str):
+                from datetime import datetime
+                p_date = datetime.strptime(p_date, "%Y-%m-%d").date()
+            final_expiry = p_date + timedelta(days=lifespan_days)
+        else:
+            final_storage = final_storage or "냉장"
 
         # 3. FridgeItem 추가
         fridge_item = FridgeItem(
@@ -120,7 +170,7 @@ class InventoryService:
             display_name=data.name,
             quantity=data.quantity,
             unit=data.unit,
-            storage_location=data.storage_method,
+            storage_location=final_storage,
             purchased_date=data.purchase_date or date.today(),
             expiry_date=final_expiry,
             status="normal"
@@ -166,25 +216,27 @@ class InventoryService:
         if not fridge_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
             
+        ingredient = db.query(Ingredient).filter(Ingredient.id == fridge_item.ingredient_id).first()
+        
+        final_storage = data.storage_method
+        final_expiry = data.expiration_date
+        
+        if not final_expiry:
+            final_storage, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
+            p_date = data.purchase_date or date.today()
+            if isinstance(p_date, str):
+                from datetime import datetime
+                p_date = datetime.strptime(p_date, "%Y-%m-%d").date()
+            final_expiry = p_date + timedelta(days=lifespan_days)
+        else:
+            final_storage = final_storage or "냉장"
+
         fridge_item.display_name = data.name
         fridge_item.quantity = data.quantity
         fridge_item.unit = data.unit
-        fridge_item.storage_location = data.storage_method
-        fridge_item.purchased_date = data.purchase_date
-        fridge_item.expiry_date = data.expiration_date
-        
-        ingredient = db.query(Ingredient).filter(Ingredient.id == fridge_item.ingredient_id).first()
-        
-        calc_info = self._calculate_d_day_and_flags(
-            expiry_date=fridge_item.expiry_date,
-            purchased_date=fridge_item.purchased_date or date.today(),
-            name=fridge_item.display_name or ingredient.name,
-            category=ingredient.category,
-            storage_location=fridge_item.storage_location or "냉장"
-        )
-        
-        if not fridge_item.expiry_date:
-            fridge_item.expiry_date = calc_info.get("calculated_expiration_date")
+        fridge_item.storage_location = final_storage
+        fridge_item.purchased_date = data.purchase_date or date.today()
+        fridge_item.expiry_date = final_expiry
             
         db.commit()
         db.refresh(fridge_item)

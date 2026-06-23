@@ -7,7 +7,7 @@ class IngredientBase(BaseModel):
     category: Optional[str] = Field(None, description="식재료 카테고리 (예: 채소)")
     quantity: float = Field(default=1.0, description="수량")
     unit: str = Field(default="개", description="수량 단위 (예: 개, g, ml)")
-    storage_method: str = Field(default="냉장", description="보관 방법 (냉장, 냉동, 실온)")
+    storage_method: Optional[str] = Field(default=None, description="보관 방법 (입력 안하면 AI가 권장 방법 추천)")
     purchase_date: Optional[date] = Field(None, description="구매일/입고일 (없으면 오늘 날짜로 자동 지정)")
     expiration_date: Optional[date] = Field(None, description="표기된 유통기한 (없으면 권장 보관 기간으로 자동 계산)")
 
