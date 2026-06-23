@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from sqlalchemy.orm import Session
 
-from app.backend.api.deps import get_current_user_required
+from app.backend.api.deps import get_current_user, get_current_user_required
 from app.backend.db.session import get_db
 from app.backend.schemas.recipes import (
     RecipeDetailResponse,
@@ -10,6 +10,7 @@ from app.backend.schemas.recipes import (
     RecipeRecommendRequest,
     RecipeSearchResponse,
 )
+from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
 
 router = APIRouter(prefix="/recipes", tags=["Recipes (레시피)"])
@@ -62,15 +63,8 @@ def recommend_recipes(
 @router.get("/{id}", response_model=RecipeDetailResponse)
 def get_recipe_detail(
     id: int,
-    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user),
 ):
-    """
-    레시피 상세 조리법을 조회합니다.
-    현재는 API 계약 확인용 임시 응답을 반환합니다.
-    """
-    return {
-        "recipe_id": id,
-        "title": "대파 볶음밥",
-        "ingredients": ["밥", "대파", "계란", "간장"],
-        "steps": ["대파를 썬다.", "팬에 볶는다.", "밥과 계란을 넣고 볶는다."],
-    }
+    """레시피 상세 조회. 비로그인 시 보유 재료는 비어 있고 전체가 부족 재료로 반환됩니다."""
+    return recipe_detail_service.get_recipe_detail(db, id, current_user_id)
