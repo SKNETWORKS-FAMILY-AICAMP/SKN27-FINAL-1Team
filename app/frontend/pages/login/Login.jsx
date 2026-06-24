@@ -178,7 +178,7 @@ function Login() {
                 ) : (
                   <>
                     로그인하면 밥벌이의 <a href="/terms">이용약관</a> 및{' '}
-                    <a href="/privacy-policy">개인정보 처리방침</a>에 동의한 것으로 간주합니다.
+                    <a href="/privacy">개인정보 처리방침</a>에 동의한 것으로 간주합니다.
                   </>
                 )}
               </p>

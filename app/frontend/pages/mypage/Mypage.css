@@ -438,8 +438,15 @@
   gap: 14px;
 }
 
+.mypage-saved-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .mypage-saved-section {
-  margin-top: 20px;
+  min-width: 0;
 }
 
 .mypage-saved-section__head h3 {
@@ -503,6 +510,33 @@
   align-items: center;
 }
 
+.mypage-saved-column-empty {
+  margin-top: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  border: 1px solid #f1d9b3;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.mypage-saved-column-empty h3 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.mypage-saved-column-empty p {
+  margin: 0;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .mypage-saved-empty h3 {
   margin: 0;
   color: var(--figma-text);
@@ -515,6 +549,78 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.mypage .fridge-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(69, 42, 25, 0.4);
+  box-sizing: border-box;
+}
+
+.mypage .fridge-modal-content {
+  width: min(100%, 400px);
+  overflow: hidden;
+  border-radius: 20px;
+  background: #fffdf8;
+  box-shadow: 0 20px 40px rgba(69, 42, 25, 0.15);
+}
+
+.mypage .fridge-modal-header {
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1d9b3;
+}
+
+.mypage .fridge-modal-header h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.mypage .fridge-modal-header button {
+  border: 0;
+  background: transparent;
+  color: #a4826b;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.mypage .fridge-modal-footer {
+  padding: 20px 24px;
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid #f1d9b3;
+  background: #fffaf2;
+}
+
+.mypage .fridge-modal-footer button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.mypage .btn-cancel {
+  border: 1px solid #e0cdb2;
+  background: transparent;
+  color: #6f4b36;
+}
+
+.mypage .btn-danger {
+  border: 1px solid var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
 }
 
 .mypage-recent {
@@ -1133,6 +1239,10 @@
   .mypage-saved .mypage-panel__title .mypage-soft-button {
     flex: 0 0 auto;
     padding: 0 10px;
+  }
+
+  .mypage-saved-grid {
+    grid-template-columns: 1fr;
   }
 
   .mypage-saved-card {

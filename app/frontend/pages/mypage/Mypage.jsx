@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './Mypage.css'
 
 import iconAlarm from '../../assets/extracted/icons/icon_alarm.png'
 import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
+import ConfirmModal from '../../components/modals/ConfirmModal'
 import { serviceContext, userProfile } from '../../mock/userService.js'
 import { readStoredRecipes, removeStoredRecipe, saveStoredRecipe } from '../../utils/savedRecipes.js'
 
@@ -134,11 +135,14 @@ function CalendarPreview({ connected, events, monthDate, onChangeMonth }) {
 
 function Mypage() {
   const navigate = useNavigate()
+  const { search } = useLocation()
+  const initialTab = new URLSearchParams(search).get('tab')
   const [alertSettings, setAlertSettings] = useState(alerts)
-  const [activeTab, setActiveTab] = useState('profile')
+  const [activeTab, setActiveTab] = useState(tabs.some((tab) => tab.id === initialTab) ? initialTab : 'profile')
   const [calendarEnabled, setCalendarEnabled] = useState(false)
   const [googleCalendarEvents, setGoogleCalendarEvents] = useState([])
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [calendarCostEnabled, setCalendarCostEnabled] = useState(() =>
     typeof window === 'undefined'
       ? true
@@ -340,6 +344,11 @@ function Mypage() {
   }, [activeTab])
 
   useEffect(() => {
+    const tab = new URLSearchParams(search).get('tab')
+    setActiveTab(tabs.some((item) => item.id === tab) ? tab : 'profile')
+  }, [search])
+
+  useEffect(() => {
     if (activeTab === 'alerts') {
       loadGoogleCalendarEvents()
     }
@@ -407,10 +416,6 @@ function Mypage() {
   }
 
   const deleteSavedRecipe = (recipe) => {
-    if (!window.confirm(`${recipe.title} 레시피를 정말 삭제할까요?`)) {
-      return
-    }
-
     const token = window.localStorage.getItem('bobbeori-token')
     if (token && recipe.recommendationId) {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -422,6 +427,7 @@ function Mypage() {
 
     const next = removeStoredRecipe(recipe.storageId)
     setSavedRecipes(next)
+    setDeleteTarget(null)
 
     const legacy = window.localStorage.getItem('bobbeori-fridge-recipe')
     if (!legacy) return
@@ -467,7 +473,7 @@ function Mypage() {
               className={activeTab === tab.id ? 'is-active' : ''}
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => navigate(tab.id === 'profile' ? '/mypage' : `/mypage?tab=${tab.id}`)}
             >
               {tab.label}
             </button>
@@ -659,33 +665,17 @@ function Mypage() {
                 </button>
               </div>
 
-              {savedRecipes.length === 0 ? (
-                <div className="mypage-saved-empty">
-                  <ImageSlot className="mypage-saved-empty__image" src={imageRecommendation} />
-                  <div>
-                    <h3>아직 저장된 레시피가 없어요</h3>
-                    <p>냉장고파먹기나 메뉴추천에서 마음에 드는 레시피를 저장해보세요.</p>
-                    <div className="mypage-saved-empty__actions">
-                      <button className="mypage-primary-button" type="button" onClick={() => navigate('/recipe-fridge')}>
-                        추천 받으러 가기
-                      </button>
-                      <button className="mypage-soft-button" type="button" onClick={() => navigate('/recipes')}>
-                        레시피 찾으러 가기
-                      </button>
+              <div className="mypage-saved-grid">
+                {[
+                  ['추천받은 레시피', '냉장고파먹기와 메뉴추천에서 저장한 레시피예요.', recommendedSavedRecipes, '/recipe-fridge', '추천 받으러 가기'],
+                  ['내가 저장한 레시피', '상세 페이지에서 직접 저장한 레시피예요.', manuallySavedRecipes, '/recipes', '레시피 찾으러 가기'],
+                ].map(([title, description, recipes, actionPath, actionLabel]) => (
+                  <section className="mypage-saved-section" key={title} aria-label={title}>
+                    <div className="mypage-saved-section__head">
+                      <h3>{title}</h3>
+                      <p>{description}</p>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                [
-                  ['추천 레시피', '냉장고파먹기와 메뉴추천에서 저장한 레시피예요.', recommendedSavedRecipes],
-                  ['저장한 레시피', '상세 페이지에서 저장해 DB에 기록된 레시피예요.', manuallySavedRecipes],
-                ].map(([title, description, recipes]) => (
-                  recipes.length > 0 ? (
-                    <section className="mypage-saved-section" key={title} aria-label={title}>
-                      <div className="mypage-saved-section__head">
-                        <h3>{title}</h3>
-                        <p>{description}</p>
-                      </div>
+                    {recipes.length > 0 ? (
                       <div className="mypage-saved-list">
                         {recipes.map((recipe) => (
                           <article className="mypage-saved-card" key={recipe.storageId}>
@@ -705,7 +695,7 @@ function Mypage() {
                                 <button className="mypage-primary-button" type="button" onClick={() => navigate(`/recipes/${recipe.recipeId || recipe.id}`)}>
                                   레시피 보기
                                 </button>
-                                <button className="mypage-soft-button" type="button" onClick={() => deleteSavedRecipe(recipe)}>
+                                <button className="mypage-soft-button" type="button" onClick={() => setDeleteTarget(recipe)}>
                                   삭제
                                 </button>
                               </div>
@@ -713,10 +703,19 @@ function Mypage() {
                           </article>
                         ))}
                       </div>
-                    </section>
-                  ) : null
-                ))
-              )}
+                    ) : (
+                      <div className="mypage-saved-column-empty">
+                        <ImageSlot className="mypage-saved-empty__image" src={imageRecommendation} />
+                        <h3>{title}가 없어요</h3>
+                        <p>{title === '추천받은 레시피' ? '추천 화면에서 마음에 드는 메뉴를 저장해보세요.' : '레시피 상세에서 저장하면 여기에 모여요.'}</p>
+                        <button className="mypage-primary-button" type="button" onClick={() => navigate(actionPath)}>
+                          {actionLabel}
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
             </section>
           )}
 
@@ -804,6 +803,20 @@ function Mypage() {
 
         </div>
       </div>
+      <ConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="레시피 삭제"
+        message={deleteTarget ? (
+          <>
+            <span style={{ color: 'var(--figma-coral)', fontWeight: 900, fontSize: '18px' }}>
+              {deleteTarget.title}
+            </span>을(를)<br />
+            저장된 레시피에서 삭제하시겠습니까?
+          </>
+        ) : null}
+        onConfirm={() => deleteTarget && deleteSavedRecipe(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </section>
   )
 }

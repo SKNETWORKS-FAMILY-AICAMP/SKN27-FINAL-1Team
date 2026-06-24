@@ -17,18 +17,29 @@ const breadcrumbMap = {
   '/support': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '고객 지원' }],
   '/refund-policy': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '반품 및 환불 정책' }],
   '/terms': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '이용약관' }],
-  '/privacy-policy': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '개인정보처리방침' }],
-  '/location-policy': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '위치기반 서비스 약관' }],
+  '/privacy': [{ label: '홈', to: '/' }, { label: '정책 및 안내' }, { label: '개인정보처리방침' }],
 }
 
 function Breadcrumbs() {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
 
   if (pathname === '/') {
     return null
   }
 
-  const items = pathname.startsWith('/guide/') && pathname !== '/guide'
+  const mypageTab = new URLSearchParams(search).get('tab')
+  const mypageTabLabels = {
+    saved: '저장된 레시피',
+    alerts: '알림 및 캘린더',
+  }
+
+  const items = pathname === '/mypage'
+    ? [
+        { label: '홈', to: '/' },
+        { label: '마이페이지', to: mypageTabLabels[mypageTab] ? '/mypage' : undefined },
+        { label: mypageTabLabels[mypageTab] || '내 정보' },
+      ]
+    : pathname.startsWith('/guide/') && pathname !== '/guide'
     ? [
         { label: '홈', to: '/' },
         { label: '보관 가이드', to: '/guide' },

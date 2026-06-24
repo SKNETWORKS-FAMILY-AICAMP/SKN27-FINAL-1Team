@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -47,13 +47,13 @@ async def confirm_receipt_items(
         try:
             integration = _get_google_integration(db, current_user_id)
             access_token = await _get_access_token(integration, db)
-            today = date.today()
+            now = datetime.now(timezone(timedelta(hours=9)))
             event_key = f"receipt-cost-{current_user_id}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
             event = {
                 "summary": f"식재료 사용비용 {total_price:,}원",
                 "description": f"OCR 입고 {len(request_data.items)}개 품목 기준 사용비용입니다.",
-                "start": {"date": today.isoformat()},
-                "end": {"date": (today + timedelta(days=1)).isoformat()},
+                "start": {"dateTime": now.isoformat()},
+                "end": {"dateTime": (now + timedelta(minutes=10)).isoformat()},
                 "colorId": "6",
             }
             async with httpx.AsyncClient(timeout=10.0) as client:

@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
@@ -88,40 +88,36 @@ function AppLayout() {
             element={
               <InfoPage
                 title="이용약관"
-                description="밥벌이 서비스 이용 조건과 사용자 책임 범위를 안내하는 페이지입니다."
+                description="밥벌이 서비스 이용에 필요한 기본 조건을 안내합니다."
                 items={[
-                  '사용자는 등록한 식재료 정보와 알림 설정을 직접 확인하고 관리해야 합니다.',
-                  '추천 레시피와 보관 정보는 참고용이며, 실제 섭취 가능 여부는 사용자가 최종 확인해야 합니다.',
+                  '밥벌이는 냉장고 재료 관리, 영수증 OCR 입고, 레시피 추천, 장보기 목록, 캘린더 알림 기능을 제공합니다.',
+                  '사용자는 본인이 등록한 식재료, 영수증, 레시피 저장 정보가 정확한지 직접 확인하고 관리해야 합니다.',
+                  '레시피 추천, 보관 가이드, 유통기한 알림은 참고용 정보이며 실제 섭취 가능 여부는 사용자가 최종 판단해야 합니다.',
+                  '타인의 계정 또는 정보를 무단으로 사용하거나 서비스 운영을 방해하는 행위는 제한될 수 있습니다.',
+                  '서비스 내용은 개선을 위해 변경될 수 있으며, 중요한 변경 사항은 서비스 화면 또는 공지로 안내합니다.',
+                  '문의: bobbeori@bobbeori.com',
                 ]}
               />
             }
           />
           <Route
-            path="/privacy-policy"
+            path="/privacy"
             element={
               <InfoPage
                 title="개인정보처리방침"
-                description="밥벌이 서비스에서 수집 및 활용할 수 있는 개인정보 처리 기준을 안내하는 페이지입니다."
+                description="밥벌이가 서비스 제공을 위해 처리하는 개인정보 기준입니다."
                 items={[
-                  '소셜 로그인 정보, 알림 채널, 추천 기준 등 서비스 이용에 필요한 정보만 활용합니다.',
-                  '영수증과 식재료 정보는 냉장고 관리 및 추천 기능 제공을 위해 사용됩니다.',
+                  '수집 항목: 소셜 로그인 식별 정보, 이메일, 닉네임, 냉장고 재료, 영수증 OCR 결과, 저장 레시피, 알림 및 캘린더 연동 설정.',
+                  '이용 목적: 회원 식별, 냉장고 재료 관리, 레시피 추천, 장보기 목록 생성, Google Calendar 알림 등록, 고객 문의 대응.',
+                  'Google Calendar 연동 시 사용자가 동의한 범위 안에서 밥벌이 알림 일정을 생성하고 조회합니다.',
+                  '위치정보는 수집하거나 사용하지 않습니다.',
+                  '개인정보는 서비스 이용 기간 동안 보관하며, 회원 탈퇴 또는 삭제 요청 시 관계 법령상 보관이 필요한 경우를 제외하고 삭제합니다.',
+                  '개인정보 처리 관련 문의 및 삭제 요청: bobbeori@bobbeori.com',
                 ]}
               />
             }
           />
-          <Route
-            path="/location-policy"
-            element={
-              <InfoPage
-                title="위치기반 서비스 약관"
-                description="장보기 추천 또는 주변 구매처 안내 기능에 위치 정보가 활용될 수 있는 경우를 안내하는 페이지입니다."
-                items={[
-                  '현재 위치 기반 기능은 준비 중이며, 실제 적용 시 별도 동의 절차를 제공합니다.',
-                  '위치 정보는 주변 구매처 안내와 가격 비교 개선 목적으로만 활용됩니다.',
-                ]}
-              />
-            }
-          />
+          <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
         </Routes>
       </main>
       {!isAuthPage && <Footer />}
