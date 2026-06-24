@@ -94,6 +94,18 @@
   opacity: 0.72;
 }
 
+.fridge-recipe-hero__actions button.is-secondary {
+  border-color: #c79a74;
+  background: #fffdf8;
+  color: #6d4128;
+  box-shadow: 0 12px 24px rgba(109, 65, 40, 0.1);
+}
+
+.fridge-recipe-hero__actions button.is-secondary:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .fridge-recipe-hero__image {
   width: min(100%, 390px);
   aspect-ratio: 577 / 433;
@@ -187,7 +199,9 @@
   padding: 0 10px;
   display: inline-flex;
   align-items: center;
-  position: relative;
+  position: absolute;
+  top: 14px;
+  left: 14px;
   z-index: 2;
   border-radius: 999px;
   background: #fff0d8;
@@ -416,16 +430,18 @@
   }
 
   .fridge-recipe-card__media {
+    position: relative;
     height: 108px;
     padding: 0;
+    overflow: visible;
   }
 
   .fridge-recipe-card__image {
     inset: 0;
+    z-index: 0;
   }
 
   .fridge-recipe-card__media > span {
-    position: absolute;
     top: 6px;
     left: 6px;
     z-index: 2;

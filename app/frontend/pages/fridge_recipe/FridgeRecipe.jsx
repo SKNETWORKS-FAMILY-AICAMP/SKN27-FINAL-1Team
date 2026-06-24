@@ -135,6 +135,16 @@ function FridgeRecipe() {
             <button type="button" onClick={startRecommendation} disabled={isLoading}>
               {isLoading ? '추천 중' : hasRequested ? '새로 추천받기' : '추천받기'}
             </button>
+            {hasRequested && hasMore ? (
+              <button
+                type="button"
+                className="is-secondary"
+                onClick={loadMoreRecommendations}
+                disabled={isLoading}
+              >
+                다른 레시피 추천
+              </button>
+            ) : null}
           </div>
         </div>
         <ImageSlot className="fridge-recipe-hero__image" src={imageMenuRecommendation} />
@@ -166,12 +176,7 @@ function FridgeRecipe() {
         <section className="fridge-recipe-results" aria-labelledby="fridge-recipe-results-title">
           <div className="fridge-recipe-section-title">
             <h2 id="fridge-recipe-results-title">추천받은 메뉴</h2>
-            <p>하나를 선택해 저장하면 마이페이지에서 이어볼 수 있어요.</p>
-            {hasMore ? (
-              <button type="button" onClick={loadMoreRecommendations} disabled={isLoading}>
-                다른 레시피 추천
-              </button>
-            ) : null}
+            <p>추천받은 메뉴를 저장해보세요.</p>
           </div>
 
           <div className="fridge-recipe-grid">
@@ -181,8 +186,8 @@ function FridgeRecipe() {
                 key={recipe.recipe_id}
               >
                 <div className="fridge-recipe-card__media">
-                  <span>{recipe.category || '추천 메뉴'}</span>
                   <ImageSlot className="fridge-recipe-card__image" src={recipe.main_image_url} alt={recipe.title} />
+                  <span>{recipe.category || '추천 메뉴'}</span>
                 </div>
 
                 <div className="fridge-recipe-card__body">
