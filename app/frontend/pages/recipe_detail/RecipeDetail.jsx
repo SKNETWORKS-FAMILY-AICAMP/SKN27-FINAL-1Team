@@ -5,6 +5,7 @@ import './RecipeDetail.css'
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrigerator.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -113,7 +114,7 @@ function RecipeDetail() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ recipe_id: recipe.recipe_id }),
+        body: JSON.stringify({ recipe_id: recipe.recipe_id, recommendation_type: 'manual_save' }),
       })
 
       if (response.status === 401) {
@@ -138,6 +139,18 @@ function RecipeDetail() {
         return
       }
 
+      const savedResult = await response.json()
+      saveStoredRecipe({
+        recipe_id: recipe.recipe_id,
+        recommendation_id: savedResult.recommendation_id,
+        title: recipe.title,
+        description: buildDescription(recipe),
+        category: recipe.category,
+        image: recipe.main_image_url || imageEatRefrigerator,
+        source: '저장한 레시피',
+        savedType: 'saved',
+      })
+      setIsSaved(true)
       await showAlert('레시피를 추천 목록에 저장했어요.', {
         title: '저장 완료',
       })

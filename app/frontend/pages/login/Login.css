@@ -243,6 +243,11 @@
   text-align: center;
 }
 
+.login-card__form.is-calendar {
+  min-height: 430px;
+  justify-content: center;
+}
+
 .login-card__form h2 {
   margin: 0;
   color: #2e1b12;
@@ -329,6 +334,11 @@
 .login-card__button.naver {
   border-color: #b6e2b2;
   background: linear-gradient(90deg, #fbfff8, #effbea);
+}
+
+.login-card__button.calendar {
+  border-color: #bfd8c7;
+  background: linear-gradient(90deg, #fffdf8, #e7f5ec);
 }
 
 .login-card__provider {
