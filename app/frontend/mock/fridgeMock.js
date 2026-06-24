@@ -1,9 +1,9 @@
 export const initialIngredientFormData = {
   name: '',
-  category: '채소',
+  category: '기타',
   quantity: 1,
   unit: '개',
-  storage_method: '냉장',
+  storage_method: '',
   purchase_date: '',
   expiration_date: '',
 }

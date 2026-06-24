@@ -37,6 +37,10 @@ INGREDIENT_LIFESPAN_OVERRIDES = [
         "keywords": ["계란", "달걀"],
         "days": {"냉장": 21, "냉동": 60, "실온": 7},
     },
+    {
+        "keywords": ["얼음", "ice", "생수", "물", "소금", "설탕", "꿀"],
+        "days": {"냉장": 730, "냉동": 730, "실온": 730},
+    },
 ]
 
 # 일반 식재료는 식재료명 대신 카테고리와 보관 위치를 기준으로 보수적인 기본값을 사용합니다.
@@ -139,6 +143,7 @@ class ExpirationAIService:
             "당신은 식품 안전 및 식재료 보관 전문가 AI입니다.\n"
             "사용자가 식재료명, 카테고리, 보관 방법을 제공합니다. 보관 방법이 없으면 최적 보관 방법을 판단하세요.\n"
             "필요하면 search_food_expiration_info 도구로 정보를 확인한 뒤 보수적인 소비기한을 산출하세요.\n"
+            "단, 얼음, 소금, 설탕, 생수 등 사실상 소비기한이 무제한이거나 상하지 않는 식재료는 일수를 730으로 반환하세요.\n"
             "최종 응답은 반드시 '보관방법|일수' 형식이어야 합니다. 예: 냉장|14\n"
             "보관방법은 반드시 '냉장', '냉동', '실온' 중 하나만 사용하고, 일수는 정수만 사용하세요."
         )
@@ -236,6 +241,63 @@ class ExpirationAIService:
             predicted_days = 730
 
         return final_storage, predicted_days
+
+    def predict_ingredient_info(self, ingredient_name: str) -> dict:
+        """식재료명만으로 유효성, 보관방법, 일수를 종합적으로 예측합니다."""
+        if not self.openai_client or not ingredient_name.strip():
+            return {
+                "is_valid_food": True if ingredient_name.strip() else False,
+                "storage_method": "",
+                "lifespan_days": 7
+            }
+
+        system_prompt = (
+            "당신은 식재료 전문가 AI입니다.\n"
+            "사용자가 입력한 단어가 먹을 수 있는 실제 식재료인지 판단하세요.\n"
+            "장난스러운 입력(예: 'ㅁㄴㅇ', '책상', '폰')이면 유효성을 False로 반환하세요.\n"
+            "식재료가 맞다면, 최적의 보관 방법(냉장, 냉동, 실온 중 택1)과 보수적인 소비기한 일수를 추론하세요.\n"
+            "단, 얼음, 소금, 설탕, 생수 등 사실상 상하지 않는 재료는 일수를 730으로 반환하세요.\n"
+            "응답 형식은 반드시 'True/False|보관방법|일수' 형식이어야 합니다.\n"
+            "예시1: True|냉장|14\n"
+            "예시2: True|냉동|730\n"
+            "예시3: False|실온|0"
+        )
+
+        try:
+            response = self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": ingredient_name},
+                ],
+                temperature=0.1,
+                max_tokens=30,
+            )
+            answer = response.choices[0].message.content.strip()
+            parts = answer.split("|")
+
+            if len(parts) >= 3:
+                is_valid = parts[0].strip().lower() == "true"
+                storage = parts[1].strip()
+                days_str = "".join(filter(str.isdigit, parts[2]))
+                days = int(days_str) if days_str else 7
+
+                if storage not in VALID_STORAGE_METHODS:
+                    storage = DEFAULT_STORAGE
+
+                return {
+                    "is_valid_food": is_valid,
+                    "storage_method": storage,
+                    "lifespan_days": min(max(days, 1), 730) if is_valid else 0
+                }
+        except Exception as exc:
+            logger.error("식재료 종합 정보 예측 중 오류 발생: %s", exc)
+
+        return {
+            "is_valid_food": True,
+            "storage_method": "",
+            "lifespan_days": 7
+        }
 
 
 expiration_ai_service = ExpirationAIService()

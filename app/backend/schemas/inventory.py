@@ -56,3 +56,11 @@ class InventorySummaryResponse(BaseModel):
     expired: int = Field(default=0, description="소비기한이 지난 식재료 개수")
     today_added: int = Field(default=0, description="오늘 입고된 식재료 개수")
     storage: StorageSummary = Field(default_factory=StorageSummary, description="보관 위치별 식재료 개수")
+
+
+class IngredientPredictionResponse(BaseModel):
+    """식재료명 입력 시 AI가 예측한 유효성, 보관 위치, 예상 기한 응답 스키마입니다."""
+
+    is_valid_food: bool
+    storage_method: str
+    lifespan_days: int

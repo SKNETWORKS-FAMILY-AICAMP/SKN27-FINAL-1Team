@@ -220,7 +220,8 @@ class InventoryService:
         expiration_date = self._parse_date(data.expiration_date)
 
         if expiration_date:
-            return self._normalize_storage(data.storage_method), expiration_date
+            storage_location, _ = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
+            return storage_location, expiration_date
 
         storage_location, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
         return storage_location, purchase_date + timedelta(days=lifespan_days)
