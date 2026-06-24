@@ -253,25 +253,47 @@ def normalize_ingredient_name(name: str) -> str:
 ### 7.1 목표 비교 축
 
 ```
-FridgeItem.ingredient_id  ↔  RecipeIngredient.ingredient_id
+FridgeItem.ingredient_id  ↔  RecipeIngredient.ingredient_id  (owned)
+냉장고 재료명 ↔ 레시피 재료명 문자열 포함              (maybe_owned)
 ```
 
-### 7.2 이미 구현된 보유 판단
+### 7.2 레시피 상세 보유 판단 (`GET /recipes/{id}`)
 
-`recipe_detail_service.py`의 `_split_owned_missing()` (L56–82):
+구현 위치:
 
-1. 사용자의 모든 `FridgeItem.ingredient_id` 집합 조회
-2. 레시피 재료별 `RecipeIngredient.ingredient_id`와 **exact ID 비교**
-3. `owned_ingredients` / `missing_ingredients` 분리
+- `app/backend/services/recommendation_service/ingredient_ownership_service.py` — 순수 분류·점수 로직
+- `app/backend/services/recommendation_service/recipe_detail_service.py` — DB 조회·응답 조립
 
-레시피 상세 API (`GET /recipes/{id}`) 응답의 `RecipeIngredientItem.ingredient_id`는 마스터 ID를 노출한다 (냉장고 API와 대조).
+**3분류 규칙**
 
-### 7.3 보유 판단 기준 불일치
+| 분류 | 조건 |
+|------|------|
+| `owned` | `RecipeIngredient.ingredient_id`가 사용자 냉장고 `FridgeItem.ingredient_id`에 존재 (exact match) |
+| `maybe_owned` | ID 불일치 + `recipe_name in fridge_name` 또는 `fridge_name in recipe_name` (`strip` 후) |
+| `missing` | 위 두 조건 모두 불충족 |
 
-| API | `FridgeItem.status` 필터 |
-|-----|--------------------------|
-| `GET /inventory` | `status == "normal"`만 |
-| 레시피 상세 보유 판단 | **필터 없음** (`used`/`expired`도 보유로 간주 가능) |
+냉장고 조회는 `status == "normal"`만 사용하며, `display_name` 우선·없으면 `Ingredient.name`으로 이름 비교한다.
+
+**점수 공식** (`MAYBE_OWNED_WEIGHT = 0.5`)
+
+```
+match_rate = (owned_count + maybe_owned_count * 0.5) / required_count * 100
+display_match_rate = (owned_count + maybe_owned_count) / required_count * 100
+```
+
+**응답 필드**
+
+- `owned_ingredients`, `maybe_owned_ingredients`, `missing_ingredients` (maybe는 missing에 포함하지 않음)
+- `match_rate`, `display_match_rate`
+- `maybe_owned_ingredients` 항목: `recipe_ingredient_name`, `fridge_ingredient_name`, `match_type`, `score` 필수
+
+### 7.3 현재 maybe_owned 한계
+
+- 문자열 **포함 비교만** 사용 (임베딩·alias·canonical mapping 미적용)
+- 수량·단위 비교 없음
+- 부분 포함 오탐 가능 (예: "소금" in "간장소금")
+
+후속 개선: threshold, 예외어, embedding, alias 연동 — §9.2 참고.
 
 ---
 
