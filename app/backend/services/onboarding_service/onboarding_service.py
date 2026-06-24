@@ -18,6 +18,7 @@ class OnboardingService:
                 "user_id": user_id,
                 "disliked_ingredients": [],
                 "allergy": [],
+                "preferred_ingredients": [],
                 "is_alert_allowed": True,
                 "updated_at": None
             }
@@ -27,6 +28,7 @@ class OnboardingService:
             "user_id": onboarding.user_id,
             "disliked_ingredients": [x.strip() for x in onboarding.disliked_ingredients.split(",") if x.strip()] if onboarding.disliked_ingredients else [],
             "allergy": [x.strip() for x in onboarding.allergies.split(",") if x.strip()] if onboarding.allergies else [],
+            "preferred_ingredients": [x.strip() for x in onboarding.preferred_ingredients.split(",") if x.strip()] if onboarding.preferred_ingredients else [],
             "is_alert_allowed": onboarding.allow_expiry_alert,
             "updated_at": None
         }
@@ -43,12 +45,16 @@ class OnboardingService:
         valid_allergies = [x.strip() for x in (data.allergy or []) if x.strip()]
         allergy_str = ",".join(valid_allergies) if valid_allergies else None
         
+        valid_preferred = [x.strip() for x in (data.preferred_ingredients or []) if x.strip()]
+        preferred_str = ",".join(valid_preferred) if valid_preferred else None
+        
         onboarding = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
         
         if onboarding:
             # 기존 레코드가 있으면 UPDATE
             onboarding.disliked_ingredients = disliked_str
             onboarding.allergies = allergy_str
+            onboarding.preferred_ingredients = preferred_str
             onboarding.allow_expiry_alert = data.is_alert_allowed
         else:
             # 기존 레코드가 없으면 INSERT
@@ -56,6 +62,7 @@ class OnboardingService:
                 user_id=user_id,
                 disliked_ingredients=disliked_str,
                 allergies=allergy_str,
+                preferred_ingredients=preferred_str,
                 allow_expiry_alert=data.is_alert_allowed
             )
             db.add(onboarding)

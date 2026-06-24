@@ -81,6 +81,7 @@ class Ingredient(Base):
     fridge_items = relationship("FridgeItem", back_populates="ingredient")
     guide = relationship("IngredientGuide", back_populates="ingredient", uselist=False, cascade="all, delete-orphan")
     recipe_ingredients = relationship("RecipeIngredient", back_populates="ingredient")
+    storage_standards = relationship("IngredientStorageStandard", back_populates="ingredient", cascade="all, delete-orphan")
 
 
 class IngredientAlias(Base):
@@ -99,6 +100,24 @@ class IngredientAlias(Base):
 
     # 별칭이 가리키는 식재료 마스터를 연결합니다.
     ingredient = relationship("Ingredient", back_populates="aliases")
+
+
+class IngredientStorageStandard(Base):
+    """식재료 보관 기준 (수명 캐시)을 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "ingredient_storage_standards"
+    __table_args__ = (
+        UniqueConstraint("ingredient_id", "storage_location", name="uq_ingredient_storage_standards"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="CASCADE"), nullable=False)
+    storage_location = Column(String(50), nullable=False)
+    lifespan_days = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 식재료 마스터와의 관계
+    ingredient = relationship("Ingredient", back_populates="storage_standards")
 
 
 class Receipt(Base):
