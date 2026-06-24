@@ -12,7 +12,7 @@ from app.backend.api.deps import get_current_user_required
 from app.backend.core.config import settings
 from app.backend.db.models import CalendarEventLog, CalendarIntegration, FridgeItem, RecommendationResult
 from app.backend.db.session import get_db
-from app.backend.services.calendar_mcp_client import enrich_calendar_events
+from app.backend.services.calendar_mcp_client import prepare_calendar_event
 
 
 router = APIRouter(prefix="/calendar", tags=["Calendar (캘린더 연동)"])
@@ -144,6 +144,7 @@ async def _create_event_once(
     user_id: int | None = None,
     source: str = "manual",
 ):
+    event = await prepare_calendar_event(user_id, event_key, event, source)
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
     existing_res = await client.get(
@@ -160,7 +161,8 @@ async def _create_event_once(
         item = existing[0]
         watched_fields = ("summary", "description", "start", "end", "colorId", "reminders")
         if any(item.get(field) != event.get(field) for field in watched_fields):
-            event["extendedProperties"] = {"private": {"bobbeoriKey": event_key}}
+            event.setdefault("extendedProperties", {}).setdefault("private", {})
+            event["extendedProperties"]["private"]["bobbeoriKey"] = event_key
             event_res = await client.patch(f"{url}/{item.get('id')}", headers=headers, json=event)
             if event_res.status_code >= 400:
                 _log_calendar_event(db, user_id, event_key, event, "failed", source, error_message=event_res.text[:500])
@@ -191,7 +193,8 @@ async def _create_event_once(
         )
         return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": True}
 
-    event["extendedProperties"] = {"private": {"bobbeoriKey": event_key}}
+    event.setdefault("extendedProperties", {}).setdefault("private", {})
+    event["extendedProperties"]["private"]["bobbeoriKey"] = event_key
     event_res = await client.post(url, headers=headers, json=event)
     if event_res.status_code >= 400:
         _log_calendar_event(db, user_id, event_key, event, "failed", source, error_message=event_res.text[:500])
@@ -364,7 +367,7 @@ async def list_google_calendar_events(
                 }
             )
 
-    return {"events": await enrich_calendar_events(current_user_id, start_date, end_date, events)}
+    return {"events": events}
 
 
 @router.post("/google/connect")

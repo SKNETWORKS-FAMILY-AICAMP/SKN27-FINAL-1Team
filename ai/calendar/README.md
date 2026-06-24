@@ -20,7 +20,7 @@ curl http://127.0.0.1:8000/health
 Backend `.env`:
 
 ```env
-RUNPOD_CALENDAR_MCP_URL=https://<pod-id>-8000.proxy.runpod.net/calendar/events
+RUNPOD_CALENDAR_MCP_URL=https://<pod-id>-8000.proxy.runpod.net/calendar/prepare-event
 RUNPOD_INTERNAL_TOKEN=<same-token-as-runpod>
 RUNPOD_TIMEOUT_SECONDS=20
 ```
