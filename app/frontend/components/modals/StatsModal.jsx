@@ -7,11 +7,13 @@ export default function StatsModal({ isOpen, onClose, summary }) {
   // 계산 로직 (간단한 프로그레스 바 너비용)
   const total = summary.total || 0
   const urgent = summary.expiring_soon || 0
+  const expired = summary.expired || 0
   const cold = summary.storage['냉장'] || 0
   const freeze = summary.storage['냉동'] || 0
   const room = summary.storage['실온'] || 0
 
   const urgentRatio = total > 0 ? Math.round((urgent / total) * 100) : 0
+  const expiredRatio = total > 0 ? Math.round((expired / total) * 100) : 0
   const coldRatio = total > 0 ? Math.round((cold / total) * 100) : 0
   const freezeRatio = total > 0 ? Math.round((freeze / total) * 100) : 0
   const roomRatio = total > 0 ? Math.round((room / total) * 100) : 0
