@@ -52,10 +52,6 @@ def recommend_recipes(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """
-    냉장고 재료, 취향, 소비 임박 정보를 종합해 레시피를 추천합니다.
-    현재는 API 계약 확인용 임시 응답을 반환합니다.
-    """
     recommendations = [
         {"recipe_id": 1, "title": "대파 볶음밥", "match_rate": 85},
         {"recipe_id": 2, "title": "두부 김치", "match_rate": 78},
@@ -67,7 +63,6 @@ def recommend_recipes(
         "fridge_based",
     )
     return recommendations
-
 
 @router.get("/{id}", response_model=RecipeDetailResponse)
 def get_recipe_detail(

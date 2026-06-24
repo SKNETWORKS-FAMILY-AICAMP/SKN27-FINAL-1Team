@@ -13,7 +13,6 @@ export default function OnboardingModal({ onClose }) {
   const [customAllergy, setCustomAllergy] = useState('');
   const [customDislike, setCustomDislike] = useState('');
   const [customPreferred, setCustomPreferred] = useState('');
-  const [isAlertAllowed, setIsAlertAllowed] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleSelection = (list, setList, item) => {
@@ -25,7 +24,7 @@ export default function OnboardingModal({ onClose }) {
   };
 
   const handleNext = () => {
-    if (step < 4) setStep(step + 1);
+    if (step < 3) setStep(step + 1);
     else handleSubmit();
   };
 
@@ -54,8 +53,7 @@ export default function OnboardingModal({ onClose }) {
     const payload = {
       allergy: finalAllergies,
       disliked_ingredients: finalDislikes,
-      preferred_ingredients: finalPreferred,
-      is_alert_allowed: isAlertAllowed
+      preferred_ingredients: finalPreferred
     };
 
     try {
@@ -75,10 +73,12 @@ export default function OnboardingModal({ onClose }) {
         console.warn('API POST failed, but continuing for UI completion.');
       }
       
+      localStorage.setItem('bobbeori-onboarding-settings', JSON.stringify(payload));
       localStorage.setItem('hasSeenOnboarding_v4', 'true');
       onClose();
     } catch (err) {
       console.error('온보딩 저장 중 오류:', err);
+      localStorage.setItem('bobbeori-onboarding-settings', JSON.stringify(payload));
       localStorage.setItem('hasSeenOnboarding_v4', 'true');
       onClose();
     } finally {
@@ -89,13 +89,8 @@ export default function OnboardingModal({ onClose }) {
   return (
     <div className="onboarding-overlay">
       <div className="onboarding-modal">
-        <button className="onboarding-close-btn" onClick={() => {
-          localStorage.setItem('hasSeenOnboarding_v4', 'true');
-          onClose();
-        }}>✕</button>
-        
         <div className="onboarding-progress">
-          {[1, 2, 3, 4].map(s => (
+          {[1, 2, 3].map(s => (
             <div key={s} className={`progress-dot ${step >= s ? 'active' : ''}`}></div>
           ))}
         </div>
@@ -179,30 +174,13 @@ export default function OnboardingModal({ onClose }) {
             </div>
           )}
 
-          {step === 4 && (
-            <div className="onboarding-step fade-in">
-              <div className="onboarding-title">유통기한 알림 받기</div>
-              <div className="onboarding-subtitle">식재료가 상하기 전에 똑똑하게 알려드릴게요.</div>
-              
-              <div className="toggle-group">
-                <div className="toggle-info">
-                  <div className="toggle-title">유통기한 임박 알림</div>
-                  <div className="toggle-desc">버려지는 식재료 없이 알뜰하게!</div>
-                </div>
-                <label className="switch">
-                  <input 
-                    type="checkbox" 
-                    checked={isAlertAllowed} 
-                    onChange={(e) => setIsAlertAllowed(e.target.checked)}
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="onboarding-footer">
+          <button className="btn-later" onClick={() => {
+            localStorage.setItem('hasSeenOnboarding_v4', 'true');
+            onClose();
+          }}>다음에 설정하기</button>
           {step > 1 && (
             <button className="btn-prev" onClick={handlePrev}>이전</button>
           )}
