@@ -103,8 +103,6 @@ function RecipeList() {
     [location.search],
   );
 
-  const shouldFetch = RecipeFilterConfig.shouldFetch(criteria);
-
   const [draftSearchTerm, setDraftSearchTerm] = useState(criteria.query);
 
   const [recipes, setRecipes] = useState([]);
@@ -147,20 +145,6 @@ function RecipeList() {
   }, [location.search, criteria.query]);
 
   useEffect(() => {
-    if (!shouldFetch) {
-      setRecipes([]);
-
-      setTotal(0);
-
-      setHasNext(false);
-
-      setError(null);
-
-      setIsLoading(false);
-
-      return undefined;
-    }
-
     const controller = new AbortController();
 
     const fetchRecipes = async () => {
@@ -217,9 +201,10 @@ function RecipeList() {
     fetchRecipes();
 
     return () => controller.abort();
-  }, [location.search, page, shouldFetch, criteria, fetchPage]);
+  }, [location.search, page, criteria, fetchPage]);
 
-  const hasActiveFilter = shouldFetch || showSavedOnly;
+  const hasActiveFilter =
+    hasActiveFilters(criteria) || criteria.browseAll || showSavedOnly;
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -326,10 +311,7 @@ function RecipeList() {
     navigate("/recipes");
   };
 
-  const showInitialPrompt = !shouldFetch;
-
-  const showNoResults =
-    shouldFetch && !isLoading && !error && recipes.length === 0;
+  const showNoResults = !isLoading && !error && recipes.length === 0;
 
   const resultsTitle = showSavedOnly
     ? "저장한 레시피"
@@ -341,7 +323,7 @@ function RecipeList() {
           ? "필터 결과"
           : "전체 레시피";
 
-  const resultsCount = shouldFetch ? total : 0;
+  const resultsCount = total;
 
   const isFilterSectionPending =
     !FEATURE_FLAGS.categoryFilter &&
@@ -560,17 +542,7 @@ function RecipeList() {
               : "recipe-list-grid"
           }
         >
-          {showInitialPrompt ? (
-            <article className="recipe-card recipe-card--empty">
-              <div className="recipe-card__body">
-                <h3>검색된 레시피가 없어요.</h3>
-
-                <p>레시피를 검색해 주세요.</p>
-              </div>
-            </article>
-          ) : null}
-
-          {shouldFetch && !error
+          {!error
             ? recipes.map((recipe) => (
                 <article
                   className="recipe-card"
@@ -643,7 +615,7 @@ function RecipeList() {
           ) : null}
         </div>
 
-        {shouldFetch && !error ? (
+        {!error ? (
           <button
             className="recipe-list-more"
             type="button"

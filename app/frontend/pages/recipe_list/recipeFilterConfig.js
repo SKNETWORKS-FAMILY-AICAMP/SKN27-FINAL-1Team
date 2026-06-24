@@ -121,20 +121,6 @@ export class RecipeFilterConfig {
 
   /**
    * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
-   * @returns {boolean}
-   */
-  static shouldFetch(criteria) {
-    return (
-      Boolean(criteria.browseAll) ||
-      Boolean((criteria.query ?? '').trim()) ||
-      criteria.category !== this.FILTER_ALL ||
-      criteria.timeFilter !== this.FILTER_ALL ||
-      criteria.levelFilter !== this.FILTER_ALL
-    )
-  }
-
-  /**
-   * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
    * @param {number} page
    * @param {number} pageSize
    * @returns {Record<string, string>}

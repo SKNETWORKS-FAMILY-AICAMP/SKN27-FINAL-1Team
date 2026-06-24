@@ -1,0 +1,238 @@
+.onboarding-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(46, 27, 18, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease;
+}
+
+.onboarding-modal {
+  background: var(--figma-bg);
+  width: 90%;
+  max-width: 480px;
+  border-radius: 24px;
+  border: 1px solid var(--figma-card-stroke);
+  box-shadow: 0 12px 32px rgba(46, 27, 18, 0.1);
+  padding: 32px 24px;
+  position: relative;
+  overflow: hidden;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.onboarding-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--figma-sub);
+  cursor: pointer;
+}
+
+.onboarding-progress {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.progress-dot {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--figma-line);
+  transition: background 0.3s ease;
+}
+
+.progress-dot.active {
+  background: var(--figma-coral);
+}
+
+.onboarding-content {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--figma-text);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.onboarding-subtitle {
+  font-size: 15px;
+  color: var(--figma-sub);
+  margin-bottom: 24px;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  padding: 10px 18px;
+  border-radius: 100px;
+  background: #fff;
+  border: 1px solid var(--figma-line);
+  color: var(--figma-sub);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip:hover {
+  border-color: var(--figma-coral);
+  color: var(--figma-coral);
+}
+
+.chip.selected {
+  background: #fff0f1; /* soft coral */
+  border-color: var(--figma-coral);
+  color: var(--figma-coral);
+}
+
+.custom-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--figma-line);
+  border-radius: 12px;
+  font-size: 15px;
+  box-sizing: border-box;
+  font-family: inherit;
+  margin-top: 8px;
+}
+
+.custom-input:focus {
+  outline: none;
+  border-color: var(--figma-coral);
+}
+
+.toggle-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--figma-line);
+  border-radius: 16px;
+  margin-top: 20px;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.toggle-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--figma-text);
+}
+
+.toggle-desc {
+  font-size: 13px;
+  color: var(--figma-sub);
+  margin-top: 4px;
+}
+
+/* Switch styling */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 28px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--figma-line);
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--figma-coral);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.onboarding-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.btn-prev, .btn-next {
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex: 1;
+}
+
+.btn-prev {
+  background: #fff;
+  border: 1px solid var(--figma-line);
+  color: var(--figma-sub);
+  flex: 0.5;
+}
+
+.btn-next {
+  background: var(--figma-coral);
+  border: none;
+  color: white;
+}
+
+.btn-next:disabled {
+  background: var(--figma-line);
+  cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
