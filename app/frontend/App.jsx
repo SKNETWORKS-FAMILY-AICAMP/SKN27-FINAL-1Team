@@ -1,5 +1,5 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { BrowserRouter as Router, Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
