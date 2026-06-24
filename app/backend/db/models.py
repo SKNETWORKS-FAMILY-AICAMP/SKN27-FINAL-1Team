@@ -45,6 +45,8 @@ class User(Base):
     fridge_items = relationship("FridgeItem", back_populates="user", cascade="all, delete-orphan")
     recommendation_results = relationship("RecommendationResult", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    calendar_integrations = relationship("CalendarIntegration", back_populates="user", cascade="all, delete-orphan")
+    calendar_event_logs = relationship("CalendarEventLog", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserPreference(Base):
@@ -62,6 +64,54 @@ class UserPreference(Base):
 
     # 설정 레코드가 소속된 사용자를 연결합니다.
     user = relationship("User", back_populates="preference")
+
+
+class CalendarIntegration(Base):
+    """사용자별 외부 캘린더 연동 토큰을 저장합니다."""
+
+    __tablename__ = "calendar_integrations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_calendar_integrations_user_provider"),
+        Index("idx_calendar_integrations_user_id", "user_id"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(50), nullable=False, server_default="google")
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    calendar_id = Column(String(255), nullable=False, server_default="primary")
+    connected_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="calendar_integrations")
+
+
+class CalendarEventLog(Base):
+    """Google Calendar event sync history."""
+
+    __tablename__ = "calendar_event_logs"
+    __table_args__ = (
+        Index("idx_calendar_event_logs_user_id", "user_id"),
+        Index("idx_calendar_event_logs_created_at", "created_at"),
+        Index("idx_calendar_event_logs_event_key", "event_key"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_key = Column(String(255), nullable=False)
+    event_type = Column(String(50), nullable=True)
+    summary = Column(String(255), nullable=True)
+    target_date = Column(Date, nullable=True)
+    google_event_id = Column(String(255), nullable=True)
+    html_link = Column(String(500), nullable=True)
+    status = Column(String(30), nullable=False)
+    source = Column(String(30), nullable=False, server_default="manual")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="calendar_event_logs")
 
 
 class Ingredient(Base):

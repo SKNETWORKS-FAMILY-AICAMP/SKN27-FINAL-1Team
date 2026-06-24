@@ -439,6 +439,33 @@ function ReceiptOcr() {
       }
     }
 
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (token) {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const calendarCostEnabled = window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false'
+
+      try {
+        await fetch(`${apiUrl}/api/v1/receipts/confirm`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            calendar_cost_enabled: calendarCostEnabled,
+            items: detectedRows.map((row) => ({
+              name: row.name,
+              quantity: toNumber(row.quantity, 1),
+              storage_method: '냉장',
+              price: toNumber(row.price, 0),
+            })),
+          }),
+        })
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
     window.localStorage.setItem('bobbeori-last-stocked-count', String(detectedRows.length))
     navigate('/fridge')
   }
