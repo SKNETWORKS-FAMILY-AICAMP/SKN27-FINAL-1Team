@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 from app.backend.core.config import settings
 
@@ -38,7 +39,7 @@ INGREDIENT_LIFESPAN_OVERRIDES = [
         "days": {"냉장": 21, "냉동": 60, "실온": 7},
     },
     {
-        "keywords": ["얼음", "ice", "생수", "물", "소금", "설탕", "꿀"],
+        "keywords": ["얼음", "ice", "생수", "소금", "설탕", "꿀"],
         "days": {"냉장": 730, "냉동": 730, "실온": 730},
     },
 ]
@@ -82,6 +83,25 @@ class ExpirationAIService:
                 return normalized_category
         return DEFAULT_CATEGORY
 
+    def is_valid_ingredient_name(self, ingredient_name: str) -> bool:
+        """초성 나열 같은 식재료가 아닌 입력을 최소 규칙으로 걸러냅니다."""
+        name = (ingredient_name or "").strip()
+        return bool(name and re.search(r"[가-힣A-Za-z]", name))
+
+    def get_ingredient_override_lifespan(self, ingredient_name: str, storage_method: str = None) -> tuple[str, int] | None:
+        """대표 식재료 예외 룰에 해당하면 보관 위치와 소비기한을 반환합니다."""
+        name = (ingredient_name or "").replace(" ", "").lower()
+        storage = self._normalize_storage_method(storage_method)
+
+        if "통조림" in name or name.endswith("캔") or name.startswith("캔"):
+            canned_days = {"냉장": 365, "냉동": 365, "실온": 730}
+            return storage, canned_days.get(storage, canned_days[DEFAULT_STORAGE])
+
+        for rule in INGREDIENT_LIFESPAN_OVERRIDES:
+            if any(keyword.replace(" ", "").lower() in name for keyword in rule["keywords"]):
+                return storage, rule["days"].get(storage, rule["days"][DEFAULT_STORAGE])
+        return None
+
     def _get_rule_based_lifespan(
         self,
         ingredient_name: str,
@@ -89,13 +109,11 @@ class ExpirationAIService:
         storage_method: str = None,
     ) -> tuple[str, int]:
         """예외 식재료 룰을 먼저 보고, 없으면 카테고리 기본 룰로 소비기한을 계산합니다."""
-        name = (ingredient_name or "").replace(" ", "").lower()
+        override = self.get_ingredient_override_lifespan(ingredient_name, storage_method)
+        if override:
+            return override
+
         storage = self._normalize_storage_method(storage_method)
-
-        for rule in INGREDIENT_LIFESPAN_OVERRIDES:
-            if any(keyword.replace(" ", "").lower() in name for keyword in rule["keywords"]):
-                return storage, rule["days"].get(storage, rule["days"][DEFAULT_STORAGE])
-
         normalized_category = self._normalize_category(category)
         category_days = CATEGORY_LIFESPAN_RULES[normalized_category]["days"]
         return storage, category_days.get(storage, category_days[DEFAULT_STORAGE])
@@ -133,6 +151,10 @@ class ExpirationAIService:
     ) -> tuple[str, int]:
         """식재료명과 보관 방법을 기준으로 권장 보관 위치와 소비기한 일수를 예측합니다."""
         normalized_storage = self._normalize_storage_method(storage_method)
+        override = self.get_ingredient_override_lifespan(ingredient_name, normalized_storage)
+        if override:
+            return override
+
         rule_storage, rule_days = self._get_rule_based_lifespan(ingredient_name, category, normalized_storage)
 
         if not self.openai_client:
@@ -244,13 +266,19 @@ class ExpirationAIService:
 
     def predict_ingredient_info(self, ingredient_name: str) -> dict:
         """식재료명만으로 유효성, 보관방법, 일수를 종합적으로 예측합니다."""
-        if not self.openai_client or not ingredient_name.strip():
+        if not self.is_valid_ingredient_name(ingredient_name):
             return {
-                "is_valid_food": True if ingredient_name.strip() else False,
+                "is_valid_food": False,
+                "storage_method": "",
+                "lifespan_days": 0
+            }
+
+        if not self.openai_client:
+            return {
+                "is_valid_food": True,
                 "storage_method": "",
                 "lifespan_days": 7
             }
-
         system_prompt = (
             "당신은 식재료 전문가 AI입니다.\n"
             "사용자가 입력한 단어가 먹을 수 있는 실제 식재료인지 판단하세요.\n"

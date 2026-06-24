@@ -68,6 +68,9 @@ function enrichIngredient(item) {
   }
 }
 
+// 초성 나열 같은 식재료가 아닌 입력을 등록 전에 걸러냅니다.
+const isValidIngredientName = (name) => /[가-힣A-Za-z]/.test((name || '').trim())
+
 // 재료 목록에서 화면 상단 요약 값을 계산합니다.
 function buildSummary(items) {
   const enrichedItems = items.map(enrichIngredient)
@@ -281,6 +284,10 @@ function Fridge() {
       return
     }
 
+    if (!isValidIngredientName(formData.name)) {
+      await showAlert('올바른 식재료 이름을 입력해주세요.', { title: '입력 확인' })
+      return
+    }
     const payload = {
       ...formData,
       quantity: Math.round(Number(formData.quantity) * 10) / 10,

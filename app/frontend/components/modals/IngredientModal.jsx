@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 
 const CATEGORY_OPTIONS = ['기타', '채소', '과일', '육류', '수산물', '유제품', '가공식품']
 const STORAGE_OPTIONS = ['냉장', '냉동', '실온']
-const UNIT_OPTIONS = ['개', '팩', '봉', 'g', 'kg', 'ml', 'L']
+const UNIT_OPTIONS = ['개', 'kg']
 
 // 식재료 추가/수정 폼을 표시하는 모달 컴포넌트입니다.
 export default function IngredientModal({
@@ -14,7 +14,6 @@ export default function IngredientModal({
   onSubmit,
   isSubmitting,
 }) {
-  const [isPredicting, setIsPredicting] = useState(false)
   const [predictError, setPredictError] = useState('')
 
   // 식재료명 입력이 끝났을 때 보관 위치를 한 번만 예측합니다.
@@ -23,13 +22,11 @@ export default function IngredientModal({
 
     if (!isOpen || !ingredientName) {
       setPredictError('')
-      setIsPredicting(false)
       return
     }
 
     if (formData.storage_method) return
 
-    setIsPredicting(true)
     setPredictError('')
 
     try {
@@ -53,8 +50,6 @@ export default function IngredientModal({
       }
     } catch (error) {
       console.error('AI 예측 실패:', error)
-    } finally {
-      setIsPredicting(false)
     }
   }
   useEffect(() => {
@@ -95,7 +90,6 @@ export default function IngredientModal({
           <div className="fridge-form-group">
             <label>
               재료명<span style={{ color: 'red' }}>*</span>
-              {isPredicting && <span style={{ marginLeft: '8px', fontSize: '13px', color: '#ff6b6b' }}>🤖 보관 위치 및 기한 분석 중...</span>}
             </label>
             <input
               type="text"
@@ -153,19 +147,11 @@ export default function IngredientModal({
               </select>
             </div>
           </div>
-
-          <div className="fridge-form-row">
-            <div className="fridge-form-group">
-              <label>구매일</label>
-              <input type="date" name="purchase_date" value={formData.purchase_date} onChange={handleFormChange} />
-            </div>
-
-            <div className="fridge-form-group">
-              <label>
-                소비기한 <small style={{ color: '#8b673e', fontWeight: 'normal' }}>(비우면 구매일 기준 자동 계산)</small>
-              </label>
-              <input type="date" name="expiration_date" value={formData.expiration_date} onChange={handleFormChange} />
-            </div>
+          <div className="fridge-form-group">
+            <label>
+              소비기한 <small style={{ color: '#8b673e', fontWeight: 'normal' }}>(비우면 자동 계산)</small>
+            </label>
+            <input type="date" name="expiration_date" value={formData.expiration_date} onChange={handleFormChange} />
           </div>
         </div>
 

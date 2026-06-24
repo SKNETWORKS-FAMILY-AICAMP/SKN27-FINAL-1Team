@@ -35,6 +35,14 @@ class InventoryService:
         """식재료 중복 등록을 줄이기 위해 이름을 비교용 문자열로 정규화합니다."""
         return name.strip().replace(" ", "").lower()
 
+
+    def _validate_ingredient_name(self, name: str) -> None:
+        """식재료가 아닌 입력은 DB 저장 전에 차단합니다."""
+        from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+
+        if not expiration_ai_service.is_valid_ingredient_name(name):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="올바른 식재료 이름을 입력해주세요.")
+
     def _get_status_from_d_day(self, d_day: Optional[int]) -> str:
         """D-day 값을 냉장고 항목 상태값으로 변환합니다."""
         if d_day is None:
@@ -83,6 +91,19 @@ class InventoryService:
             )
 
         if cached_rule:
+            try:
+                from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+
+                override = expiration_ai_service.get_ingredient_override_lifespan(
+                    ingredient.name,
+                    cached_rule.storage_location,
+                )
+                if override and override[1] > cached_rule.lifespan_days:
+                    cached_rule.lifespan_days = override[1]
+                    db.flush()
+                    return cached_rule.storage_location, cached_rule.lifespan_days
+            except Exception as exc:
+                logger.warning("보관 기간 캐시 보정 실패: %s", exc)
             return cached_rule.storage_location, cached_rule.lifespan_days
 
         try:
@@ -192,6 +213,7 @@ class InventoryService:
 
     def _get_or_create_ingredient(self, db: Session, data: IngredientCreate) -> Ingredient:
         """식재료 마스터를 조회하고 없으면 새로 생성합니다."""
+        self._validate_ingredient_name(data.name)
         normalized = self._normalize_ingredient_name(data.name)
         ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
         if ingredient:

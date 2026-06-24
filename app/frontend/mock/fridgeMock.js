@@ -40,7 +40,7 @@ export const demoIngredients = [
     name: '버섯',
     category: '채소',
     quantity: 1,
-    unit: '팩',
+    unit: '개',
     storage_method: '냉장',
     purchase_date: '2026-06-19',
     expiration_date: '2026-06-22',
