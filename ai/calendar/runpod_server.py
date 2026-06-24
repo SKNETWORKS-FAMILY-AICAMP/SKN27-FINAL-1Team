@@ -10,6 +10,12 @@ from pydantic import BaseModel, Field
 app = FastAPI(title="Bobbeori Calendar MCP Server")
 
 
+@app.on_event("startup")
+def require_internal_token() -> None:
+    if not os.getenv("RUNPOD_INTERNAL_TOKEN"):
+        raise RuntimeError("RUNPOD_INTERNAL_TOKEN is required")
+
+
 class CreateEventRequest(BaseModel):
     user_id: int | None = None
     calendar_id: str = "primary"
