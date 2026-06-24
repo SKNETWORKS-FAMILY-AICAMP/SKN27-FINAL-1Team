@@ -11,12 +11,24 @@ function Callback() {
 
   useEffect(() => {
     const code = searchParams.get('code')
-    
+    const returnedState = searchParams.get('state')
+    const savedStateKey = `bobbeori-oauth-state-${provider}`
+    const savedState = window.sessionStorage.getItem(savedStateKey)
+
     if (!code) {
       setError('인증 코드가 없습니다.')
       setTimeout(() => navigate('/login'), 2000)
       return
     }
+
+    // OAuth 요청과 콜백이 같은 브라우저 흐름에서 온 것인지 확인합니다.
+    if (!returnedState || !savedState || returnedState !== savedState) {
+      window.sessionStorage.removeItem(savedStateKey)
+      setError('로그인 요청 검증에 실패했습니다. 다시 시도해주세요.')
+      setTimeout(() => navigate('/login'), 2000)
+      return
+    }
+    window.sessionStorage.removeItem(savedStateKey)
 
     if (isFetching.current) return
     isFetching.current = true
@@ -33,6 +45,7 @@ function Callback() {
           body: JSON.stringify({
             provider: provider,
             code: code,
+            state: returnedState,
           }),
         })
 

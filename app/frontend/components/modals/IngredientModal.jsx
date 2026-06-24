@@ -93,7 +93,7 @@ export default function IngredientModal({
 
             <div className="fridge-form-group">
               <label>
-                소비기한 <small style={{ color: '#8b673e', fontWeight: 'normal' }}>(비우면 자동 계산)</small>
+                소비기한 <small style={{ color: '#8b673e', fontWeight: 'normal' }}>(비우면 구매일 기준 자동 계산)</small>
               </label>
               <input type="date" name="expiration_date" value={formData.expiration_date} onChange={handleFormChange} />
             </div>

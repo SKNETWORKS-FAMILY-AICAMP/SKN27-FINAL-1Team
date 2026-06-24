@@ -231,10 +231,18 @@ function Fridge() {
     })
   }
 
-  // 입력 폼의 단일 필드 변경을 반영합니다.
+  // 입력 폼의 단일 필드 변경을 반영하고, 수정 중 기준값이 바뀌면 소비기한을 자동 재계산 상태로 되돌립니다.
   const handleFormChange = (event) => {
     const { name, value } = event.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const nextFormData = { ...prev, [name]: value }
+
+      if (editingId !== null && ['category', 'storage_method', 'purchase_date'].includes(name)) {
+        nextFormData.expiration_date = ''
+      }
+
+      return nextFormData
+    })
   }
 
   // 등록/수정 모달을 닫고 폼을 초기화합니다.
@@ -251,7 +259,7 @@ function Fridge() {
     setIsModalOpen(true)
   }
 
-  // 기존 식재료 정보를 폼에 채우고 수정 모달을 엽니다.
+  // 기존 식재료 정보를 폼에 채우고, 소비기한은 비워 자동 재계산되도록 수정 모달을 엽니다.
   const openEditModal = (item) => {
     setFormData({
       name: item.name || '',
@@ -260,7 +268,7 @@ function Fridge() {
       quantity: Number(item.quantity) || 1,
       unit: item.unit || '개',
       purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
-      expiration_date: item.expiration_date || '',
+      expiration_date: '',
     })
     setEditingId(item.id)
     setIsModalOpen(true)

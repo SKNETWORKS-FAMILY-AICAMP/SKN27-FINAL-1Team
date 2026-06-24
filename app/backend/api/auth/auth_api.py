@@ -18,13 +18,14 @@ async def social_login(login_data: SocialLoginRequest, db: Session = Depends(get
     """
     provider = login_data.provider.lower()
     code = login_data.code
+    oauth_state = login_data.state
 
     # 소셜 제공자 확인 및 사용자 프로필 가져오기
     try:
         if provider == "kakao":
             user_info = await oauth_client.get_kakao_user(code)
         elif provider == "naver":
-            user_info = await oauth_client.get_naver_user(code)
+            user_info = await oauth_client.get_naver_user(code, oauth_state)
         elif provider == "google":
             user_info = await oauth_client.get_google_user(code)
         else:
