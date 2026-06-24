@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.backend.schemas.auth import SocialLoginRequest, TokenResponse, UserResponse
 from app.backend.db.session import get_db
@@ -27,7 +27,7 @@ async def social_login(login_data: SocialLoginRequest, db: Session = Depends(get
         elif provider == "naver":
             user_info = await oauth_client.get_naver_user(code, oauth_state)
         elif provider == "google":
-            user_info = await oauth_client.get_google_user(code)
+            user_info = await oauth_client.get_google_user(code, login_data.redirect_uri)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

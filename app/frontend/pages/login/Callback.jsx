@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+﻿import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import './Login.css'
 
@@ -54,7 +54,10 @@ function Callback() {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({
+              code,
+              redirect_uri: `${window.location.origin}/auth/callback/google-calendar`,
+            }),
           })
 
           if (!response.ok) {
@@ -75,6 +78,7 @@ function Callback() {
             provider,
             code,
             state: returnedState,
+            redirect_uri: `${window.location.origin}/auth/callback/${provider}`,
           }),
         })
 

@@ -1,4 +1,4 @@
-import httpx
+﻿import httpx
 from fastapi import HTTPException, status
 from app.backend.core.config import settings
 
@@ -99,7 +99,7 @@ class OAuthClient:
                 detail=f"네이버 인증 서버와 통신 중 오류가 발생했습니다: {str(e)}"
             )
 
-    async def get_google_user(self, code: str) -> dict:
+    async def get_google_user(self, code: str, redirect_uri: str | None = None) -> dict:
         """
         구글 인가 코드를 이용하여 액세스 토큰을 발급받고,
         해당 토큰으로 사용자 정보를 가져와 정제된 딕셔너리로 반환합니다.
@@ -113,7 +113,7 @@ class OAuthClient:
                         "grant_type": "authorization_code",
                         "client_id": settings.GOOGLE_CLIENT_ID,
                         "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                        "redirect_uri": redirect_uri or settings.GOOGLE_REDIRECT_URI,
                         "code": code,
                     },
                     headers={"Content-Type": "application/x-www-form-urlencoded"}
