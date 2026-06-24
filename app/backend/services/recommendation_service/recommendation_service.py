@@ -21,6 +21,10 @@ from app.backend.services.recommendation_service.ingredient_ownership_service im
 
 @dataclass(frozen=True)
 class RecipeRecommendConfig:
+    FRIDGE_CONSUME_LIMIT = 9
+    LIMIT_MIN = 1
+    LIMIT_MAX = 50
+
     query: str | None = None
     category: str | None = None
     difficulty: str | None = None
@@ -43,8 +47,29 @@ class RecipeRecommendConfig:
             require_any_owned=True,
             include_maybe_owned=True,
             use_expiry_priority=True,
-            limit=9,
+            limit=cls.FRIDGE_CONSUME_LIMIT,
         )
+
+    @classmethod
+    def menu_custom_preset(cls, limit: int) -> RecipeRecommendConfig:
+        return cls(
+            require_any_owned=False,
+            include_maybe_owned=True,
+            use_expiry_priority=False,
+            limit=cls.clamp_limit(limit),
+        )
+
+    @classmethod
+    def clamp_limit(cls, value: int) -> int:
+        return max(cls.LIMIT_MIN, min(cls.LIMIT_MAX, value))
+
+    @classmethod
+    def for_mode(cls, mode: str, *, request_limit: int) -> RecipeRecommendConfig | None:
+        if mode == "fridge_consume":
+            return cls.fridge_consume_preset()
+        if mode == "menu_custom":
+            return cls.menu_custom_preset(request_limit)
+        return None
 
 
 @dataclass(frozen=True)
@@ -59,7 +84,10 @@ class RecommendationService:
     MANUAL_SAVE_TYPE = "manual_save"
     FRIDGE_BASED_TYPE = "fridge_based"
 
-    DEFAULT_LIMIT = 9
+    FRIDGE_CONSUME_LIMIT = RecipeRecommendConfig.FRIDGE_CONSUME_LIMIT
+    RECOMMEND_LIMIT_MIN = RecipeRecommendConfig.LIMIT_MIN
+    RECOMMEND_LIMIT_MAX = RecipeRecommendConfig.LIMIT_MAX
+    DEFAULT_LIMIT = FRIDGE_CONSUME_LIMIT
     DEFAULT_EXPIRING_SOON_DAYS = 3
     DEFAULT_URGENCY_BASE = 4
     DEFAULT_EXPIRING_INGREDIENT_BONUS = 2

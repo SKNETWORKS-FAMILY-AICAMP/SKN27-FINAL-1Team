@@ -55,8 +55,12 @@ def recommend_recipes(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """냉장고 재료·유통기한 기준 레시피 추천. 결과는 자동 저장하지 않습니다."""
-    if request_data.mode != "fridge_consume":
+    """레시피 추천. fridge_consume은 limit 9 고정, menu_custom은 request limit 사용."""
+    config = RecipeRecommendConfig.for_mode(
+        request_data.mode,
+        request_limit=request_data.limit,
+    )
+    if config is None:
         return RecipeRecommendResponse(
             mode=request_data.mode,
             items=[],
@@ -64,7 +68,6 @@ def recommend_recipes(
             has_more=False,
         )
 
-    config = RecipeRecommendConfig.fridge_consume_preset()
     result = recommendation_service.recommend_recipes(
         db,
         current_user_id,

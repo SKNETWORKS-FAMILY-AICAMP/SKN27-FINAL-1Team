@@ -33,7 +33,28 @@ def test_fridge_consume_preset_flags():
     assert config.include_maybe_owned is True
     assert config.use_expiry_priority is True
     assert config.min_display_match_rate is None
-    assert config.limit == 9
+    assert config.limit == RecipeRecommendConfig.FRIDGE_CONSUME_LIMIT
+
+
+def test_for_mode_fridge_consume_ignores_request_limit():
+    config = RecipeRecommendConfig.for_mode("fridge_consume", request_limit=20)
+
+    assert config is not None
+    assert config.limit == RecipeRecommendConfig.FRIDGE_CONSUME_LIMIT
+
+
+def test_for_mode_menu_custom_uses_request_limit():
+    config = RecipeRecommendConfig.for_mode("menu_custom", request_limit=5)
+
+    assert config is not None
+    assert config.limit == 5
+    assert config.use_expiry_priority is False
+
+
+def test_clamp_limit():
+    assert RecipeRecommendConfig.clamp_limit(0) == RecipeRecommendConfig.LIMIT_MIN
+    assert RecipeRecommendConfig.clamp_limit(100) == RecipeRecommendConfig.LIMIT_MAX
+    assert RecipeRecommendConfig.clamp_limit(7) == 7
 
 
 def test_d_day_uses_expiry_date():

@@ -57,7 +57,6 @@ function FridgeRecipe() {
         },
         body: JSON.stringify({
           mode: 'fridge_consume',
-          limit: 9,
           exclude_recipe_ids: excludeIds,
           refresh_pool: refreshPool,
         }),

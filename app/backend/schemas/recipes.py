@@ -22,8 +22,16 @@ class RecipeSearchResponse(BaseModel):
 
 
 class RecipeRecommendRequest(BaseModel):
-    mode: Literal["fridge_consume"] = Field(default="fridge_consume", description="추천 모드")
-    limit: int = Field(default=9, ge=1, le=50, description="반환 개수")
+    mode: Literal["fridge_consume", "menu_custom"] = Field(
+        default="fridge_consume",
+        description="추천 모드 (fridge_consume | menu_custom)",
+    )
+    limit: int = Field(
+        default=9,
+        ge=1,
+        le=50,
+        description="반환 개수 (menu_custom). fridge_consume은 서버 고정 9",
+    )
     exclude_recipe_ids: list[int] = Field(default_factory=list, description="제외할 레시피 ID")
     refresh_pool: bool = Field(default=False, description="true면 검색 풀 재생성 후 exclude 무시")
 
