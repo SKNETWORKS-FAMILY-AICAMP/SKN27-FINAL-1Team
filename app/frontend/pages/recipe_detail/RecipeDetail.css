@@ -264,6 +264,22 @@
   white-space: nowrap;
 }
 
+.recipe-detail-ingredient-list article.is-maybe-owned .recipe-detail-ingredient__info {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recipe-detail-ingredient__fridge-hint {
+  color: #5a8f4a;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .recipe-detail-shopping {
   position: relative;
   overflow: hidden;

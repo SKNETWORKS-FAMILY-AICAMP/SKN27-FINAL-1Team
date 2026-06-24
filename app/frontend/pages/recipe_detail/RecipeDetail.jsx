@@ -181,11 +181,16 @@ function RecipeDetail() {
     return () => controller.abort()
   }, [recipeId])
 
-  const ownedIngredients = recipe?.owned_ingredients ?? []
+  const exactOwnedIngredients = recipe?.owned_ingredients ?? []
+  const maybeOwnedIngredients = recipe?.maybe_owned_ingredients ?? []
   const missingIngredients = recipe?.missing_ingredients ?? []
+  const displayOwnedIngredients = [
+    ...exactOwnedIngredients.map((item) => ({ ...item, ownershipType: 'exact' })),
+    ...maybeOwnedIngredients.map((item) => ({ ...item, ownershipType: 'maybe' })),
+  ]
   const steps = recipe?.steps ?? []
-  const totalIngredients = ownedIngredients.length + missingIngredients.length
-  const checkedCount = ownedIngredients.length
+  const totalIngredients = displayOwnedIngredients.length + missingIngredients.length
+  const checkedCount = displayOwnedIngredients.length
   const isLastStep = steps.length > 0 && currentStep >= steps.length - 1
   const servingLabel = recipe?.serving_count != null ? `${recipe.serving_count}인분 기준` : '1인분 기준'
 
@@ -281,23 +286,36 @@ function RecipeDetail() {
           </div>
 
           <div className="recipe-detail-ingredient-group">
-            <h3>보유 재료 ({ownedIngredients.length})</h3>
+            <h3>보유 재료 ({displayOwnedIngredients.length})</h3>
             <div className="recipe-detail-ingredient-list">
-              {ownedIngredients.length === 0 ? (
+              {displayOwnedIngredients.length === 0 ? (
                 <p className="recipe-detail-empty-note">보유 재료가 없어요. 로그인 후 냉장고를 등록하면 확인할 수 있어요.</p>
               ) : (
-                ownedIngredients.map((item, index) => (
-                  <article
-                    className="is-checked"
-                    key={`owned-${item.ingredient_id ?? item.name}-${index}`}
-                  >
-                    <ImageSlot className="recipe-detail-ingredient__image" />
-                    <div className="recipe-detail-ingredient__info">
-                      <strong>{item.name}</strong>
-                      <small>{item.amount || '-'}</small>
-                    </div>
-                  </article>
-                ))
+                displayOwnedIngredients.map((item, index) => {
+                  const isMaybe = item.ownershipType === 'maybe'
+                  const showFridgeHint = isMaybe
+                    && item.fridge_ingredient_name
+                    && item.fridge_ingredient_name !== item.name
+                  const keyPrefix = isMaybe ? 'maybe' : 'owned'
+
+                  return (
+                    <article
+                      className={`is-checked${isMaybe ? ' is-maybe-owned' : ''}`}
+                      key={`${keyPrefix}-${item.ingredient_id ?? item.name}-${index}`}
+                    >
+                      <ImageSlot className="recipe-detail-ingredient__image" />
+                      <div className="recipe-detail-ingredient__info">
+                        <strong>{item.name}</strong>
+                        {showFridgeHint ? (
+                          <small className="recipe-detail-ingredient__fridge-hint">
+                            냉장고: {item.fridge_ingredient_name}
+                          </small>
+                        ) : null}
+                        <small>{item.amount || '-'}</small>
+                      </div>
+                    </article>
+                  )
+                })
               )}
             </div>
           </div>
