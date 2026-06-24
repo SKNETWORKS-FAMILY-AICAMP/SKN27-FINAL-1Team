@@ -24,6 +24,12 @@ const weeklyPurchaseData = [
 
 const quantityUnitOptions = ['kg', '개']
 const storageOptions = ['냉동', '냉장', '실온']
+const aiAnalysisSteps = [
+  '이미지 업로드 중',
+  '영수증 내용 분석 중',
+  '표준 재료명 매칭 중',
+  '확인 화면 준비 중',
+]
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -160,6 +166,12 @@ function formatQuantity(row) {
   return `${row.quantityAmount ?? 1}${row.quantityUnit || '개'}`
 }
 
+function formatPriceInput(value) {
+  const numericValue = String(value ?? '').replace(/[^\d]/g, '')
+
+  return numericValue ? Number(numericValue).toLocaleString() : ''
+}
+
 function ReceiptOcr() {
   const navigate = useNavigate()
   const { dialogNode, showAlert, showConfirm, showPrompt } = useAppDialog()
@@ -167,10 +179,13 @@ function ReceiptOcr() {
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
   const [hasUploaded, setHasUploaded] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
-  const [detectedRows, setDetectedRows] = useState(() => normalizeReceiptRows(rows))
+  const [detectedRows, setDetectedRows] = useState(() =>
+    normalizeReceiptRows(rows).map((row) => ({ ...row, price: formatPriceInput(row.price) })),
+  )
   const [editingRows, setEditingRows] = useState(() => getInitialEditingRows(rows))
   const [receiptSource, setReceiptSource] = useState('샘플 영수증')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [analysisStep, setAnalysisStep] = useState(0)
   const [previewScale, setPreviewScale] = useState('normal')
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.raw]).length
@@ -183,6 +198,8 @@ function ReceiptOcr() {
   const currentStepLabel = steps[activeStep]
   const isReadyToStock = hasUploaded && activeStep >= steps.length - 1
   const isAllConfirmed = reviewCount === 0
+  const isShowingAnalysisProgress = isProcessing && activeStep === 1
+  const analysisProgressPercent = Math.round(((analysisStep + 1) / aiAnalysisSteps.length) * 100)
 
   const progressDescriptions = [
     '영수증을 올리거나 촬영하면 분석을 시작해요.',
@@ -207,6 +224,7 @@ function ReceiptOcr() {
 
     clearFlowTimers()
     setIsProcessing(false)
+    setAnalysisStep(0)
     setActiveStep(Math.max(0, Math.min(nextStep, steps.length - 1)))
   }
 
@@ -232,23 +250,26 @@ function ReceiptOcr() {
     setReceiptSource(source)
     setHasUploaded(true)
     setIsProcessing(true)
+    setAnalysisStep(0)
     setActiveStep(1)
 
-    const autoSteps = [2]
-    flowTimersRef.current = autoSteps.map((step, index) =>
+    flowTimersRef.current = [
+      ...aiAnalysisSteps.slice(1).map((_, index) =>
+        window.setTimeout(() => {
+          setAnalysisStep(index + 1)
+        }, (index + 1) * 800),
+      ),
       window.setTimeout(() => {
-        setActiveStep(step)
-
-        if (step === 2) {
-          setIsProcessing(false)
-        }
-      }, (index + 1) * 650),
-    )
+        setActiveStep(2)
+        setIsProcessing(false)
+      }, aiAnalysisSteps.length * 800),
+    ]
   }
 
   const proceedNextStep = async () => {
     clearFlowTimers()
     setIsProcessing(false)
+    setAnalysisStep(0)
 
     if (!hasUploaded) {
       await showAlert('먼저 영수증을 업로드하거나 촬영해주세요.', {
@@ -290,7 +311,7 @@ function ReceiptOcr() {
         quantity: '1개',
         quantityAmount: 1,
         quantityUnit: '개',
-        price: '0원',
+        price: '0',
         category: '기타',
         storage: '냉장',
         review: true,
@@ -352,7 +373,9 @@ function ReceiptOcr() {
 
   const updateRowField = (raw, field, value) => {
     setDetectedRows((prev) =>
-      prev.map((row) => (row.raw === raw ? { ...row, [field]: value, review: true } : row)),
+      prev.map((row) =>
+        row.raw === raw ? { ...row, [field]: field === 'price' ? formatPriceInput(value) : value, review: true } : row,
+      ),
     )
     setEditingRows((prev) => ({ ...prev, [raw]: true }))
     setActiveStep(2)
@@ -390,11 +413,12 @@ function ReceiptOcr() {
 
   const resetAnalysis = () => {
     clearFlowTimers()
-    setDetectedRows(normalizeReceiptRows(rows))
+    setDetectedRows(normalizeReceiptRows(rows).map((row) => ({ ...row, price: formatPriceInput(row.price) })))
     setEditingRows(getInitialEditingRows(rows))
     setReceiptSource('샘플 영수증')
     setHasUploaded(false)
     setIsProcessing(false)
+    setAnalysisStep(0)
     setActiveStep(0)
   }
 
@@ -494,16 +518,40 @@ function ReceiptOcr() {
               <h2 id="receipt-progress-title">{currentStepLabel}</h2>
               <p>{progressDescriptions[activeStep]}</p>
             </div>
-            <div className="receipt-progress-panel__bar" aria-label={`진행률 ${progressPercent}%`}>
-              <span style={{ width: `${progressPercent}%` }} />
-            </div>
+            {!isShowingAnalysisProgress ? (
+              <div className="receipt-progress-panel__bar" aria-label={`진행률 ${progressPercent}%`}>
+                <span style={{ width: `${progressPercent}%` }} />
+              </div>
+            ) : null}
+            {isShowingAnalysisProgress ? (
+              <div className="receipt-analysis-progress" aria-label="AI 분석 세부 진행 단계">
+                <div className="receipt-analysis-progress__bar">
+                  <span style={{ width: `${analysisProgressPercent}%` }} />
+                </div>
+                <ol>
+                  {aiAnalysisSteps.map((step, index) => (
+                    <li
+                      className={[
+                        index < analysisStep ? 'is-done' : '',
+                        index === analysisStep ? 'is-active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      key={step}
+                    >
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
             <button
               className="receipt-primary-button"
               type="button"
               disabled={isProcessing}
               onClick={proceedNextStep}
             >
-              {isProcessing ? 'OCR 진행 중...' : isReadyToStock ? '냉장고 입고 완료하기' : '다음 단계 진행'}
+              {isProcessing ? '분석 진행 중...' : isReadyToStock ? '냉장고 입고 완료하기' : '다음 단계 진행'}
             </button>
           </section>
 
@@ -523,7 +571,7 @@ function ReceiptOcr() {
                     <div key={row.raw}>
                       <dt>{row.raw}</dt>
                       <dd>{formatQuantity(row)}</dd>
-                      <dd>{row.price}</dd>
+                      <dd>{row.price}원</dd>
                     </div>
                   ))}
                 </dl>
@@ -578,7 +626,7 @@ function ReceiptOcr() {
                     <span className="receipt-mapping-name-cell" role="cell">
                       <ImageSlot className="receipt-mapping-row__image" src={row.image} />
                       <b>
-                        <small>원문: {row.raw}</small>
+                        <small>원재료명: {row.raw}</small>
                         {isEditing ? (
                           <input
                             aria-label={`${row.raw} 표준 재료명`}
@@ -638,10 +686,12 @@ function ReceiptOcr() {
                         </select>
                       </label>
                       <label>
-                        <small>금액</small>
+                        <small>금액(원)</small>
                         <input
                           aria-label={`${row.name} 금액`}
                           className="receipt-inline-input receipt-inline-input--price"
+                          inputMode="numeric"
+                          pattern="[0-9,]*"
                           type="text"
                           value={row.price}
                           disabled={!isEditing}
@@ -665,9 +715,6 @@ function ReceiptOcr() {
                       </select>
                     </span>
                     <span className="receipt-row-status" role="cell">
-                      <strong className={row.review || isEditing ? 'is-review' : ''}>
-                        {row.review || isEditing ? '확인 중' : '확정 완료'}
-                      </strong>
                       <label className={`receipt-confirm-toggle ${!row.review && !isEditing ? 'is-confirmed' : ''}`}>
                         <input
                           type="checkbox"
@@ -682,7 +729,7 @@ function ReceiptOcr() {
                           }}
                         />
                         <span aria-hidden="true" />
-                        <b>{!row.review && !isEditing ? '확정' : '수정 중'}</b>
+                        <b>{!row.review && !isEditing ? '확인 완료' : '확인 필요'}</b>
                       </label>
                     </span>
                   </div>

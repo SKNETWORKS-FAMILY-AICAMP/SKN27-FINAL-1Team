@@ -54,4 +54,12 @@ class Settings:
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
 
+    # Receipt OCR Settings
+    OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai_vision")
+    OCR_MODEL: str = os.getenv("OCR_MODEL", OPENAI_MODEL)
+    OCR_FALLBACK_MODEL: str = os.getenv("OCR_FALLBACK_MODEL", "")
+    OCR_UPLOAD_DIR: str = os.getenv("OCR_UPLOAD_DIR", "storage/raw/receipts")
+    OCR_OUTPUT_DIR: str = os.getenv("OCR_OUTPUT_DIR", "storage/processed/receipts")
+    MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 10))
+
 settings = Settings()

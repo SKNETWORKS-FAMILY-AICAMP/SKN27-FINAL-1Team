@@ -194,6 +194,11 @@
   gap: 18px;
 }
 
+.receipt-progress-panel > .receipt-primary-button {
+  grid-column: 3;
+  grid-row: 1;
+}
+
 .receipt-progress-panel span {
   color: var(--figma-coral);
   font-size: 12px;
@@ -229,6 +234,63 @@
   border-radius: inherit;
   background: var(--figma-coral);
   transition: width 180ms ease;
+}
+
+.receipt-analysis-progress {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.receipt-analysis-progress__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #fff4e3;
+  overflow: hidden;
+}
+
+.receipt-analysis-progress__bar span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff6975, #f2d46f);
+  transition: width 260ms ease;
+}
+
+.receipt-analysis-progress ol {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  list-style: none;
+}
+
+.receipt-analysis-progress li {
+  min-height: 30px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #efd8b8;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #8b673e;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.receipt-analysis-progress li.is-active {
+  border-color: var(--figma-coral-stroke);
+  background: #fff0f1;
+  color: var(--figma-coral);
+}
+
+.receipt-analysis-progress li.is-done {
+  border-color: #b9ddb5;
+  background: #f0fbec;
+  color: #246a35;
 }
 
 .receipt-panel {
@@ -834,11 +896,28 @@
 
 .receipt-mapping-row--head {
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-radius: 14px;
   background: #fff4e3;
   color: #8b673e;
   font-size: 12px;
+}
+
+.receipt-mapping-row--head span:nth-child(1) {
+  padding-left: 58px;
+}
+
+.receipt-mapping-row--head span:nth-child(2) {
+  padding-left: 0;
+}
+
+.receipt-mapping-row--head span:nth-child(3) {
+  text-align: center;
+}
+
+.receipt-mapping-row--head span:nth-child(4) {
+  padding-right: 18px;
+  text-align: center;
 }
 
 .receipt-mapping-row > span {
@@ -1011,27 +1090,10 @@
 }
 
 .receipt-row-status {
-  display: grid;
-  justify-items: end;
-  gap: 6px;
-}
-
-.receipt-row-status > strong {
-  min-height: 26px;
-  padding: 0 8px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #edfbea;
-  color: #2e7d32;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.receipt-row-status > strong.is-review {
-  background: #fff5df;
-  color: #9a6321;
+  justify-content: flex-end;
+  justify-items: end;
 }
 
 .receipt-confirm-toggle {
@@ -1236,7 +1298,13 @@
   }
 
   .receipt-progress-panel > .receipt-primary-button {
+    grid-column: auto;
+    grid-row: auto;
     width: 100%;
+  }
+
+  .receipt-analysis-progress ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .receipt-progress-panel h2 {
