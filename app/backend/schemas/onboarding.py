@@ -11,6 +11,10 @@ class OnboardingRequest(BaseModel):
         default_factory=list, 
         description="알레르기 유발 식품 목록 (예: ['땅콩', '우유'])"
     )
+    preferred_ingredients: List[str] = Field(
+        default_factory=list,
+        description="선호 식재료 목록 (예: ['소고기', '치즈'])"
+    )
     is_alert_allowed: bool = Field(
         default=True, 
         description="알림 수신 동의 여부"
