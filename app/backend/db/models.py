@@ -16,6 +16,7 @@ from sqlalchemy import (
     func,
     true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.backend.db.base import Base
