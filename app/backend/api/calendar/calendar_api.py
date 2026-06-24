@@ -1,16 +1,16 @@
 import base64
 import hashlib
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import httpx
 from cryptography.fernet import Fernet
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.backend.api.deps import get_current_user_required
 from app.backend.core.config import settings
-from app.backend.db.models import CalendarIntegration
+from app.backend.db.models import CalendarEventLog, CalendarIntegration, FridgeItem, RecommendationResult
 from app.backend.db.session import get_db
 
 
@@ -82,7 +82,56 @@ async def _get_access_token(integration: CalendarIntegration, db: Session) -> st
     return access_token
 
 
-async def _create_event_once(client: httpx.AsyncClient, calendar_id: str, access_token: str, event_key: str, event: dict):
+def _event_type(event_key: str) -> str:
+    return event_key.split("-", 1)[0]
+
+
+def _event_target_date(event: dict):
+    value = event.get("start", {}).get("date")
+    return date.fromisoformat(value) if value else None
+
+
+def _log_calendar_event(
+    db: Session | None,
+    user_id: int | None,
+    event_key: str,
+    event: dict,
+    status_value: str,
+    source: str,
+    google_event_id: str | None = None,
+    html_link: str | None = None,
+    error_message: str | None = None,
+):
+    if not db or not user_id:
+        return
+
+    db.add(
+        CalendarEventLog(
+            user_id=user_id,
+            event_key=event_key,
+            event_type=_event_type(event_key),
+            summary=event.get("summary"),
+            target_date=_event_target_date(event),
+            google_event_id=google_event_id,
+            html_link=html_link,
+            status=status_value,
+            source=source,
+            error_message=error_message,
+        )
+    )
+    db.commit()
+
+
+async def _create_event_once(
+    client: httpx.AsyncClient,
+    calendar_id: str,
+    access_token: str,
+    event_key: str,
+    event: dict,
+    db: Session | None = None,
+    user_id: int | None = None,
+    source: str = "manual",
+):
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
     existing_res = await client.get(
@@ -91,20 +140,122 @@ async def _create_event_once(client: httpx.AsyncClient, calendar_id: str, access
         params={"privateExtendedProperty": f"bobbeoriKey={event_key}", "singleEvents": "true", "maxResults": 1},
     )
     if existing_res.status_code >= 400:
+        _log_calendar_event(db, user_id, event_key, event, "failed", source, error_message=existing_res.text[:500])
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event lookup failed.")
 
     existing = existing_res.json().get("items", [])
     if existing:
         item = existing[0]
+        _log_calendar_event(
+            db,
+            user_id,
+            event_key,
+            event,
+            "duplicate",
+            source,
+            google_event_id=item.get("id"),
+            html_link=item.get("htmlLink"),
+        )
         return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": True}
 
     event["extendedProperties"] = {"private": {"bobbeoriKey": event_key}}
     event_res = await client.post(url, headers=headers, json=event)
     if event_res.status_code >= 400:
+        _log_calendar_event(db, user_id, event_key, event, "failed", source, error_message=event_res.text[:500])
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event creation failed.")
 
     item = event_res.json()
+    _log_calendar_event(
+        db,
+        user_id,
+        event_key,
+        event,
+        "created",
+        source,
+        google_event_id=item.get("id"),
+        html_link=item.get("htmlLink"),
+    )
     return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": False}
+
+
+def _build_daily_events(db: Session, user_id: int, target_date: date):
+    events = []
+    next_date = target_date + timedelta(days=1)
+
+    expiring_items = (
+        db.query(FridgeItem)
+        .filter(
+            FridgeItem.user_id == user_id,
+            FridgeItem.expiry_date == target_date,
+            FridgeItem.status != "used",
+        )
+        .all()
+    )
+    if expiring_items:
+        names = [item.display_name or item.ingredient.name for item in expiring_items[:3]]
+        suffix = f" 외 {len(expiring_items) - 3}개" if len(expiring_items) > 3 else ""
+        events.append(
+            (
+                f"ingredient-expiry-{user_id}-{target_date.isoformat()}",
+                {
+                    "summary": f"{', '.join(names)}{suffix} 오늘까지 사용 추천",
+                    "description": "소비기한 임박 재료를 먼저 사용해보세요.",
+                    "start": {"date": target_date.isoformat()},
+                    "end": {"date": next_date.isoformat()},
+                    "colorId": "11",
+                },
+            )
+        )
+
+    latest_recommendation = (
+        db.query(RecommendationResult)
+        .filter(RecommendationResult.user_id == user_id)
+        .order_by(RecommendationResult.created_at.desc())
+        .first()
+    )
+    if latest_recommendation and latest_recommendation.recipe:
+        events.append(
+            (
+                f"today-menu-{user_id}-{target_date.isoformat()}",
+                {
+                    "summary": f"저녁 추천: {latest_recommendation.recipe.title}",
+                    "description": "오늘의 추천 메뉴입니다.",
+                    "start": {"date": target_date.isoformat()},
+                    "end": {"date": next_date.isoformat()},
+                    "colorId": "2",
+                },
+            )
+        )
+
+    expiring_recipe_date = target_date - timedelta(days=7)
+    start_at = datetime.combine(expiring_recipe_date, time.min)
+    end_at = datetime.combine(expiring_recipe_date + timedelta(days=1), time.min)
+    expiring_recipes = (
+        db.query(RecommendationResult)
+        .filter(
+            RecommendationResult.user_id == user_id,
+            RecommendationResult.created_at >= start_at,
+            RecommendationResult.created_at < end_at,
+        )
+        .all()
+    )
+    if expiring_recipes:
+        title = expiring_recipes[0].recipe.title if expiring_recipes[0].recipe else "저장 레시피"
+        suffix = f" 외 {len(expiring_recipes) - 1}개" if len(expiring_recipes) > 1 else ""
+        events.append(
+            (
+                f"recipe-delete-{user_id}-{target_date.isoformat()}",
+                {
+                    "summary": f"{title}{suffix} 삭제 예정",
+                    "description": "등록해둔 레시피가 오늘 사라질 예정이에요.",
+                    "start": {"date": target_date.isoformat()},
+                    "end": {"date": next_date.isoformat()},
+                    "colorId": "5",
+                },
+            )
+        )
+
+    return events
 
 
 @router.get("/google/status")
@@ -125,6 +276,51 @@ def google_calendar_status(
         "connected": integration is not None,
         "calendar_id": integration.calendar_id if integration else None,
     }
+
+
+@router.get("/google/events")
+async def list_google_calendar_events(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    integration = _get_google_integration(db, current_user_id)
+    access_token = await _get_access_token(integration, db)
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"https://www.googleapis.com/calendar/v3/calendars/{integration.calendar_id}/events",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={
+                "timeMin": datetime.combine(start_date, time.min, timezone.utc).isoformat(),
+                "timeMax": datetime.combine(end_date, time.min, timezone.utc).isoformat(),
+                "singleEvents": "true",
+                "orderBy": "startTime",
+            },
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event lookup failed.")
+
+    events = []
+    for item in response.json().get("items", []):
+        if item.get("status") == "cancelled":
+            continue
+        start = item.get("start", {})
+        date_key = start.get("date") or start.get("dateTime", "")[:10]
+        if date_key:
+            events.append(
+                {
+                    "id": item.get("id"),
+                    "dateKey": date_key,
+                    "title": item.get("summary") or "제목 없는 일정",
+                    "colorId": item.get("colorId"),
+                    "htmlLink": item.get("htmlLink"),
+                }
+            )
+
+    return {"events": events}
 
 
 @router.post("/google/connect")
@@ -196,7 +392,27 @@ async def connect_google_calendar(
 
     db.commit()
 
-    return {"connected": True, "calendar_id": integration.calendar_id}
+    created = []
+    try:
+        events = _build_daily_events(db, current_user_id, date.today())
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            created = [
+                await _create_event_once(
+                    client,
+                    integration.calendar_id,
+                    access_token,
+                    event_key,
+                    event,
+                    db,
+                    current_user_id,
+                    "connect",
+                )
+                for event_key, event in events
+            ]
+    except Exception as exc:
+        print(f"[CalendarConnect] user_id={current_user_id} initial sync failed: {exc}")
+
+    return {"connected": True, "calendar_id": integration.calendar_id, "events": created}
 
 
 @router.delete("/google/disconnect")
@@ -228,40 +444,20 @@ async def create_google_calendar_test_event(
     integration = _get_google_integration(db, current_user_id)
     access_token = await _get_access_token(integration, db)
     today = date.today()
-    recipe_expiry_date = today + timedelta(days=7)
-    events = [
-        (
-            f"ingredient-expiry-{current_user_id}-{today.isoformat()}",
-            {
-                "summary": "대파 오늘까지 사용 추천",
-                "description": "소비기한 임박 재료를 먼저 사용해보세요.",
-                "start": {"date": today.isoformat()},
-                "end": {"date": (today + timedelta(days=1)).isoformat()},
-            },
-        ),
-        (
-            f"today-menu-{current_user_id}-{today.isoformat()}",
-            {
-                "summary": "저녁 추천: 대파 두부 계란찌개",
-                "description": "오늘의 추천 메뉴입니다.",
-                "start": {"date": today.isoformat()},
-                "end": {"date": (today + timedelta(days=1)).isoformat()},
-            },
-        ),
-        (
-            f"recipe-delete-{current_user_id}-{recipe_expiry_date.isoformat()}",
-            {
-                "summary": "저장 레시피 삭제 예정",
-                "description": "등록해둔 레시피가 오늘 사라질 예정이에요.",
-                "start": {"date": recipe_expiry_date.isoformat()},
-                "end": {"date": (recipe_expiry_date + timedelta(days=1)).isoformat()},
-            },
-        ),
-    ]
+    events = _build_daily_events(db, current_user_id, today)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         created = [
-            await _create_event_once(client, integration.calendar_id, access_token, event_key, event)
+            await _create_event_once(
+                client,
+                integration.calendar_id,
+                access_token,
+                event_key,
+                event,
+                db,
+                current_user_id,
+                "manual",
+            )
             for event_key, event in events
         ]
 

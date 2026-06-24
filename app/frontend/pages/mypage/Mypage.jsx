@@ -7,12 +7,12 @@ import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png
 import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
 import { serviceContext, userProfile } from '../../mock/userService.js'
+import { readStoredRecipes, removeStoredRecipe, saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const alerts = [
   { label: '소비 임박 알림', checked: true },
-  { label: '장보기 가격 변동 알림', checked: true },
-  { label: '추천 레시피 알림', checked: false },
-  { label: 'OCR 입고 완료 알림', checked: true },
+  { label: '오늘의 추천 메뉴', checked: true },
+  { label: '레시피 삭제 예정 알림', checked: true },
 ]
 
 const recentRecipes = [
@@ -31,20 +31,22 @@ const toLocalDateKey = (date) => {
   return localDate.toISOString().slice(0, 10)
 }
 
-const todayForCalendar = new Date()
-const recipeDeleteDate = new Date(todayForCalendar)
-recipeDeleteDate.setDate(todayForCalendar.getDate() + 7)
-
-const calendarEvents = [
-  { dateKey: toLocalDateKey(todayForCalendar), title: '대파 오늘까지 사용 추천', tone: 'danger' },
-  { dateKey: toLocalDateKey(todayForCalendar), title: '저녁 추천: 대파 두부 계란찌개', tone: 'green' },
-  { dateKey: toLocalDateKey(recipeDeleteDate), title: '저장 레시피 삭제 예정', tone: 'yellow' },
-]
-
 const tabs = [
   { id: 'profile', label: '내 정보' },
+  { id: 'saved', label: '저장된 레시피' },
   { id: 'alerts', label: '알림 및 캘린더' },
 ]
+
+const getDaysLeft = (expiresAt) =>
+  Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+
+const getCalendarTone = (event) =>
+  ({
+    11: 'danger',
+    2: 'green',
+    5: 'yellow',
+    6: 'info',
+  }[String(event.colorId)] || 'green')
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -66,10 +68,10 @@ function Toggle({ checked, label, onClick }) {
   )
 }
 
-function CalendarPreview({ connected }) {
+function CalendarPreview({ connected, events, monthDate, onChangeMonth }) {
   const today = new Date()
-  const year = today.getFullYear()
-  const month = today.getMonth()
+  const year = monthDate.getFullYear()
+  const month = monthDate.getMonth()
   const firstDay = new Date(year, month, 1).getDay()
   const lastDate = new Date(year, month + 1, 0).getDate()
   const days = [
@@ -85,9 +87,13 @@ function CalendarPreview({ connected }) {
       <div className="mypage-calendar-preview__head">
         <div>
           <h2 id="calendar-preview-title">밥벌이 캘린더</h2>
-          <p>{connected ? 'Google Calendar와 연결되어 있어요.' : '연동하면 일정 등록이 가능해요.'}</p>
+          <p>{connected ? 'Google Calendar 일정을 불러왔어요.' : '연동하면 일정 등록이 가능해요.'}</p>
         </div>
-        <strong>{year}.{String(month + 1).padStart(2, '0')}</strong>
+        <div className="mypage-calendar-preview__month">
+          <button type="button" onClick={() => onChangeMonth(-1)} aria-label="이전 달">‹</button>
+          <strong>{year}.{String(month + 1).padStart(2, '0')}</strong>
+          <button type="button" onClick={() => onChangeMonth(1)} aria-label="다음 달">›</button>
+        </div>
       </div>
       <div className="mypage-calendar-preview__week" aria-hidden="true">
         {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
@@ -96,15 +102,27 @@ function CalendarPreview({ connected }) {
       </div>
       <div className="mypage-calendar-preview__grid">
         {days.map((item) => {
-          const events = calendarEvents.filter((calendarEvent) => calendarEvent.dateKey === item.dateKey)
+          const dayEvents = events.filter((calendarEvent) => calendarEvent.dateKey === item.dateKey)
           return (
             <div
               className={`mypage-calendar-preview__day ${item.day === today.getDate() ? 'is-today' : ''}`}
               key={item.id}
             >
               {item.day ? <span>{item.day}</span> : null}
-              {events.map((event) => (
-                <b className={`is-${event.tone}`} key={event.title}>{event.title}</b>
+              {dayEvents.map((event) => (
+                event.htmlLink ? (
+                  <a
+                    className={`is-${getCalendarTone(event)}`}
+                    href={event.htmlLink}
+                    key={event.id || event.title}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {event.title}
+                  </a>
+                ) : (
+                  <b className={`is-${getCalendarTone(event)}`} key={event.id || event.title}>{event.title}</b>
+                )
               ))}
             </div>
           )
@@ -119,8 +137,13 @@ function Mypage() {
   const [alertSettings, setAlertSettings] = useState(alerts)
   const [activeTab, setActiveTab] = useState('profile')
   const [calendarEnabled, setCalendarEnabled] = useState(false)
-  const [calendarAutoAdd, setCalendarAutoAdd] = useState(true)
-  const [calendarTestEvent, setCalendarTestEvent] = useState(null)
+  const [googleCalendarEvents, setGoogleCalendarEvents] = useState([])
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date())
+  const [calendarCostEnabled, setCalendarCostEnabled] = useState(() =>
+    typeof window === 'undefined'
+      ? true
+      : window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false',
+  )
   const [profileName, setProfileName] = useState(userProfile.name)
   const [profileEmail, setProfileEmail] = useState('babbeori@example.com')
   const [isEditingProfile, setIsEditingProfile] = useState(false)
@@ -131,11 +154,20 @@ function Mypage() {
     expiring_soon: 0,
     storage: { 냉장: 0, 냉동: 0, 실온: 0, 기타: 0 },
   })
-  const [savedFridgeRecipe] = useState(() => {
-    if (typeof window === 'undefined') return null
+  const [savedRecipes, setSavedRecipes] = useState(() => {
+    if (typeof window === 'undefined') return []
 
-    const saved = window.localStorage.getItem('bobbeori-fridge-recipe')
-    return saved ? JSON.parse(saved) : null
+    const stored = readStoredRecipes()
+    const legacy = window.localStorage.getItem('bobbeori-fridge-recipe')
+    if (!legacy) return stored
+
+    try {
+      const recipe = JSON.parse(legacy)
+      if (!recipe?.id || stored.some((item) => item.id === recipe.id)) return stored
+      return [saveStoredRecipe({ ...recipe, source: recipe.source || '냉장고파먹기' }), ...stored]
+    } catch {
+      return stored
+    }
   })
   const authMode =
     typeof window === 'undefined' ? null : window.localStorage.getItem('bobbeori-auth-mode')
@@ -143,6 +175,15 @@ function Mypage() {
   const activeAlertsCount = useMemo(
     () => alertSettings.filter((alert) => alert.checked).length,
     [alertSettings],
+  )
+  const savedFridgeRecipe = savedRecipes[0] ?? null
+  const recommendedSavedRecipes = useMemo(
+    () => savedRecipes.filter((recipe) => recipe.savedType !== 'saved'),
+    [savedRecipes],
+  )
+  const manuallySavedRecipes = useMemo(
+    () => savedRecipes.filter((recipe) => recipe.savedType === 'saved'),
+    [savedRecipes],
   )
 
   const dynamicStats = [
@@ -154,6 +195,74 @@ function Mypage() {
     },
     { label: '추천 횟수', value: '24회', note: '이번 달 기준', image: iconAlarm },
   ]
+
+  const loadSavedRecipes = async () => {
+    const localRecipes = readStoredRecipes()
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token || isGuest) {
+      setSavedRecipes(localRecipes)
+      return
+    }
+
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiBaseUrl}/api/v1/recommendations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) {
+        setSavedRecipes(localRecipes)
+        return
+      }
+
+      const remoteRecipes = await response.json()
+      remoteRecipes.forEach((recipe) => {
+        const isManualSave = recipe.recommendation_type === 'manual_save'
+        saveStoredRecipe({
+          recipe_id: recipe.recipe_id,
+          recommendation_id: recipe.recommendation_id,
+          title: recipe.title,
+          description: recipe.description,
+          category: recipe.category,
+          image: recipe.image_url,
+          source: isManualSave ? '저장한 레시피' : '추천 레시피',
+          savedType: isManualSave ? 'saved' : 'recommended',
+          savedAt: recipe.created_at,
+          recommendation_type: recipe.recommendation_type,
+        })
+      })
+      setSavedRecipes(readStoredRecipes())
+    } catch {
+      setSavedRecipes(localRecipes)
+    }
+  }
+
+  const loadGoogleCalendarEvents = async () => {
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token || !calendarEnabled) {
+      setGoogleCalendarEvents([])
+      return
+    }
+
+    const startDate = toLocalDateKey(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1))
+    const endDate = toLocalDateKey(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
+
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(
+        `${apiBaseUrl}/api/v1/calendar/google/events?start_date=${startDate}&end_date=${endDate}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!response.ok) {
+        setGoogleCalendarEvents([])
+        return
+      }
+
+      const data = await response.json()
+      setGoogleCalendarEvents(data.events || [])
+    } catch {
+      setGoogleCalendarEvents([])
+    }
+  }
 
   useEffect(() => {
     if (isGuest) {
@@ -224,6 +333,22 @@ function Mypage() {
     fetchUser()
   }, [isGuest, navigate])
 
+  useEffect(() => {
+    if (activeTab === 'saved') {
+      loadSavedRecipes()
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab === 'alerts') {
+      loadGoogleCalendarEvents()
+    }
+  }, [activeTab, calendarEnabled, calendarMonth])
+
+  const changeCalendarMonth = (offset) => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1))
+  }
+
   const handleLogout = () => {
     window.localStorage.removeItem('bobbeori-token')
     window.localStorage.removeItem('bobbeori-auth-mode')
@@ -253,29 +378,62 @@ function Mypage() {
   }
 
   const connectGoogleCalendar = async () => {
+    if (calendarEnabled) {
+      const token = window.localStorage.getItem('bobbeori-token')
+      if (!token) {
+        navigate('/login')
+        return
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      await fetch(`${apiUrl}/api/v1/calendar/google/disconnect`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setCalendarEnabled(false)
+      setGoogleCalendarEvents([])
+      return
+    }
+
     navigate('/login?calendar=1')
   }
 
-  const createCalendarTestEvent = async () => {
-    const token = window.localStorage.getItem('bobbeori-token')
-    if (!token) {
-      navigate('/login')
-      return
-    }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    const response = await fetch(`${apiUrl}/api/v1/calendar/google/test-event`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+  const toggleCalendarCost = () => {
+    setCalendarCostEnabled((prev) => {
+      const next = !prev
+      window.localStorage.setItem('bobbeori-calendar-cost-enabled', String(next))
+      return next
     })
+  }
 
-    if (!response.ok) {
-      window.alert('Google Calendar 일정 생성에 실패했어요. 다시 연동해보세요.')
+  const deleteSavedRecipe = (recipe) => {
+    if (!window.confirm(`${recipe.title} 레시피를 정말 삭제할까요?`)) {
       return
     }
 
-    const data = await response.json()
-    setCalendarTestEvent(data.events?.find((event) => event.html_link) ?? null)
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (token && recipe.recommendationId) {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      fetch(`${apiUrl}/api/v1/recommendations/${recipe.recommendationId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {})
+    }
+
+    const next = removeStoredRecipe(recipe.storageId)
+    setSavedRecipes(next)
+
+    const legacy = window.localStorage.getItem('bobbeori-fridge-recipe')
+    if (!legacy) return
+
+    try {
+      const legacyRecipe = JSON.parse(legacy)
+      if (legacyRecipe?.id === recipe.id || legacyRecipe?.id === recipe.recipeId) {
+        window.localStorage.removeItem('bobbeori-fridge-recipe')
+      }
+    } catch {
+      window.localStorage.removeItem('bobbeori-fridge-recipe')
+    }
   }
 
   const profileDisplayName = isGuest ? '게스트님' : profileName
@@ -420,7 +578,7 @@ function Mypage() {
                         <span>{savedFridgeRecipe ? '저장됨' : selectedRecipe.category}</span>
                       </div>
                       <p>{selectedRecipe.reason}</p>
-                      <p>{savedFridgeRecipe ? `보유 재료 ${selectedRecipe.owned}/${selectedRecipe.total}개 · 부족 재료 ${selectedRecipe.missing.length}개` : '저장한 메뉴와 최근 본 레시피를 이어서 확인할 수 있어요.'}</p>
+                      <p>{savedFridgeRecipe ? `저장 후 ${getDaysLeft(selectedRecipe.expiresAt)}일 동안 확인할 수 있어요.` : '저장한 메뉴와 최근 본 레시피를 이어서 확인할 수 있어요.'}</p>
                       <div className="mypage-recipe-actions">
                         <button
                           className="mypage-primary-button"
@@ -489,6 +647,79 @@ function Mypage() {
             </>
           )}
 
+          {activeTab === 'saved' && (
+            <section className="mypage-panel mypage-saved" aria-labelledby="saved-recipes-title">
+              <div className="mypage-panel__title">
+                <div>
+                  <h2 id="saved-recipes-title">저장된 레시피</h2>
+                  <p className="mypage-setting-note">저장한 시점부터 7일 동안 보관돼요.</p>
+                </div>
+                <button className="mypage-soft-button" type="button" onClick={loadSavedRecipes}>
+                  새로고침
+                </button>
+              </div>
+
+              {savedRecipes.length === 0 ? (
+                <div className="mypage-saved-empty">
+                  <ImageSlot className="mypage-saved-empty__image" src={imageRecommendation} />
+                  <div>
+                    <h3>아직 저장된 레시피가 없어요</h3>
+                    <p>냉장고파먹기나 메뉴추천에서 마음에 드는 레시피를 저장해보세요.</p>
+                    <div className="mypage-saved-empty__actions">
+                      <button className="mypage-primary-button" type="button" onClick={() => navigate('/recipe-fridge')}>
+                        추천 받으러 가기
+                      </button>
+                      <button className="mypage-soft-button" type="button" onClick={() => navigate('/recipes')}>
+                        레시피 찾으러 가기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                [
+                  ['추천 레시피', '냉장고파먹기와 메뉴추천에서 저장한 레시피예요.', recommendedSavedRecipes],
+                  ['저장한 레시피', '상세 페이지에서 저장해 DB에 기록된 레시피예요.', manuallySavedRecipes],
+                ].map(([title, description, recipes]) => (
+                  recipes.length > 0 ? (
+                    <section className="mypage-saved-section" key={title} aria-label={title}>
+                      <div className="mypage-saved-section__head">
+                        <h3>{title}</h3>
+                        <p>{description}</p>
+                      </div>
+                      <div className="mypage-saved-list">
+                        {recipes.map((recipe) => (
+                          <article className="mypage-saved-card" key={recipe.storageId}>
+                            <ImageSlot
+                              className="mypage-saved-card__image"
+                              src={recipe.image || imageRecommendation}
+                              alt={recipe.title}
+                            />
+                            <div className="mypage-saved-card__body">
+                              <div className="mypage-recipe-title-row">
+                                <h3>{recipe.title}</h3>
+                                <span>{recipe.source || recipe.category || '저장 레시피'}</span>
+                              </div>
+                              <p>{recipe.reason || recipe.description || '저장한 레시피를 이어서 확인할 수 있어요.'}</p>
+                              <small>{getDaysLeft(recipe.expiresAt)}일 남음</small>
+                              <div className="mypage-recipe-actions">
+                                <button className="mypage-primary-button" type="button" onClick={() => navigate(`/recipes/${recipe.recipeId || recipe.id}`)}>
+                                  레시피 보기
+                                </button>
+                                <button className="mypage-soft-button" type="button" onClick={() => deleteSavedRecipe(recipe)}>
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null
+                ))
+              )}
+            </section>
+          )}
+
           {activeTab === 'alerts' && (
             <>
               <div className="mypage-alert-calendar">
@@ -512,15 +743,27 @@ function Mypage() {
                 <section className="mypage-panel mypage-settings" aria-labelledby="calendar-title">
                   <h2 id="calendar-title">캘린더 설정</h2>
                   <p className="mypage-setting-note">
-                    소비기한과 오늘 먹을 재료를 일정으로 받아봐요.
+                    Google Calendar 연동 후 필요한 알림만 자동으로 등록돼요.
                   </p>
                   <ul>
                     <li>
-                      <span>소비기한 일정 자동 등록</span>
+                      <span>소비기한 임박 재료</span>
+                      <b>자동 등록</b>
+                    </li>
+                    <li>
+                      <span>오늘의 추천 메뉴</span>
+                      <b>자동 등록</b>
+                    </li>
+                    <li>
+                      <span>레시피 삭제 예정 알림</span>
+                      <b>자동 등록</b>
+                    </li>
+                    <li>
+                      <span>사용비용 자동 등록</span>
                       <Toggle
-                        checked={calendarAutoAdd}
-                        label="소비기한 일정 자동 등록"
-                        onClick={() => setCalendarAutoAdd((prev) => !prev)}
+                        checked={calendarCostEnabled}
+                        label="사용비용 자동 등록"
+                        onClick={toggleCalendarCost}
                       />
                     </li>
                     <li>
@@ -534,19 +777,12 @@ function Mypage() {
               <section className="mypage-panel mypage-calendar-connect" aria-labelledby="google-calendar-title">
                 <div>
                   <h2 id="google-calendar-title">Google Calendar 연결</h2>
-                  <p>소비기한 임박 재료와 추천 식단 알림을 캘린더에 자동으로 등록해요.</p>
-                  {calendarTestEvent ? (
-                    <a href={calendarTestEvent.html_link} target="_blank" rel="noreferrer">
-                      생성한 캘린더 일정 확인하기
-                    </a>
-                  ) : null}
+                  <p>
+                    연동하면 오늘의 재료 알림, 저녁 추천, 레시피 삭제 예정 알림이 자동 등록돼요.
+                    사용비용은 OCR 입고 시 설정값에 따라 기록돼요.
+                  </p>
                 </div>
                 <div className="mypage-calendar-connect__actions">
-                  {calendarEnabled ? (
-                    <button className="mypage-soft-button" type="button" onClick={createCalendarTestEvent}>
-                      캘린더 알림 3개 추가
-                    </button>
-                  ) : null}
                   <button
                     className="mypage-primary-button"
                     type="button"
@@ -557,7 +793,12 @@ function Mypage() {
                 </div>
               </section>
 
-              <CalendarPreview connected={calendarEnabled} />
+              <CalendarPreview
+                connected={calendarEnabled}
+                events={googleCalendarEvents}
+                monthDate={calendarMonth}
+                onChangeMonth={changeCalendarMonth}
+              />
             </>
           )}
 
