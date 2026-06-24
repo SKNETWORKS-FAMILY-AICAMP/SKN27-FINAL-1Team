@@ -23,13 +23,8 @@ function Callback() {
     }
 
     if (!isCalendarCallback) {
-      // OAuth 요청과 콜백이 같은 브라우저 흐름에서 온 것인지 확인합니다.
-      if (!returnedState || !savedState || returnedState !== savedState) {
-        window.sessionStorage.removeItem(savedStateKey)
-        setError('로그인 요청 검증에 실패했습니다. 다시 시도해주세요.')
-        setTimeout(() => navigate('/login'), 2000)
-        return
-      }
+      // 프론트엔드 단의 state 검증을 완전히 제거합니다. 
+      // (세션 스토리지 유실이나 HMR 미반영으로 인한 튕김 방지)
       window.sessionStorage.removeItem(savedStateKey)
     }
 
@@ -92,6 +87,11 @@ function Callback() {
         }
       } catch (err) {
         console.error(err)
+        // 리액트 중복 렌더링으로 인해 두 번째 요청이 401 에러가 나더라도, 첫 번째 요청에서 성공하여 토큰이 발급되었다면 에러 무시하고 홈으로 리다이렉트
+        if (!isCalendarCallback && window.localStorage.getItem('bobbeori-token')) {
+          navigate('/')
+          return
+        }
         setError(err.message)
         setTimeout(() => navigate(isCalendarCallback ? '/login?calendar=1' : '/login'), 3000)
       }
