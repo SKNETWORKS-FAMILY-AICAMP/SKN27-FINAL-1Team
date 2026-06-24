@@ -16,6 +16,29 @@ function ImageSlot({ src, alt = '', className = '' }) {
   )
 }
 
+function IngredientCard({ item, variant, showFridgeHint }) {
+  const classNames = [
+    variant === 'owned' || variant === 'maybe' ? 'is-checked' : '',
+    variant === 'maybe' ? 'is-maybe-owned' : '',
+  ].filter(Boolean).join(' ')
+
+  return (
+    <article className={classNames || undefined}>
+      <div className="recipe-detail-ingredient__body">
+        <div className="recipe-detail-ingredient__primary">
+          <strong>{item.name}</strong>
+          <span className="recipe-detail-ingredient__amount">{item.amount || '-'}</span>
+        </div>
+        {showFridgeHint ? (
+          <p className="recipe-detail-ingredient__fridge-hint">
+            냉장고: {item.fridge_ingredient_name}
+          </p>
+        ) : null}
+      </div>
+    </article>
+  )
+}
+
 function formatCookingTime(minutes) {
   if (minutes == null) {
     return '조리 시간 확인 필요'
@@ -299,21 +322,12 @@ function RecipeDetail() {
                   const keyPrefix = isMaybe ? 'maybe' : 'owned'
 
                   return (
-                    <article
-                      className={`is-checked${isMaybe ? ' is-maybe-owned' : ''}`}
+                    <IngredientCard
                       key={`${keyPrefix}-${item.ingredient_id ?? item.name}-${index}`}
-                    >
-                      <ImageSlot className="recipe-detail-ingredient__image" />
-                      <div className="recipe-detail-ingredient__info">
-                        <strong>{item.name}</strong>
-                        {showFridgeHint ? (
-                          <small className="recipe-detail-ingredient__fridge-hint">
-                            냉장고: {item.fridge_ingredient_name}
-                          </small>
-                        ) : null}
-                        <small>{item.amount || '-'}</small>
-                      </div>
-                    </article>
+                      item={item}
+                      variant={isMaybe ? 'maybe' : 'owned'}
+                      showFridgeHint={showFridgeHint}
+                    />
                   )
                 })
               )}
@@ -327,13 +341,11 @@ function RecipeDetail() {
                 <p className="recipe-detail-empty-note">부족한 재료가 없어요.</p>
               ) : (
                 missingIngredients.map((item, index) => (
-                  <article key={`missing-${item.ingredient_id ?? item.name}-${index}`}>
-                    <ImageSlot className="recipe-detail-ingredient__image" />
-                    <div className="recipe-detail-ingredient__info">
-                      <strong>{item.name}</strong>
-                      <small>{item.amount || '-'}</small>
-                    </div>
-                  </article>
+                  <IngredientCard
+                    key={`missing-${item.ingredient_id ?? item.name}-${index}`}
+                    item={item}
+                    variant="missing"
+                  />
                 ))
               )}
             </div>
