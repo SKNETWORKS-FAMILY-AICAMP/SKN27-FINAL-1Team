@@ -1,24 +1,46 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
 
+from pydantic import BaseModel, Field
 
-class ReceiptParsedItem(BaseModel):
-    name: str = Field(..., description="OCR에서 추출한 식재료명")
-    qty: float = Field(default=1, description="영수증 기준 수량")
-    price: Optional[int] = Field(default=None, description="상품 가격")
+
+class ReceiptOcrItem(BaseModel):
+    raw_name: str = Field(..., description="Item name read from the receipt")
+    normalized_name: Optional[str] = Field(default=None, description="User-confirmed standard item name")
+    quantity: float = Field(default=1, description="Item quantity; decimal values are allowed")
+    unit: str = Field(default="개", description="Display unit. Use either '개' or 'kg'")
+    item_amount: Optional[int] = Field(default=None, description="Line item amount")
+    is_food: Optional[bool] = Field(default=None, description="Whether the item is food")
+    memo: Optional[str] = Field(default=None, description="User memo")
 
 
 class ReceiptUploadResponse(BaseModel):
-    items: List[ReceiptParsedItem] = Field(default_factory=list, description="OCR 파싱 결과")
+    receipt_id: Optional[int] = Field(default=None, description="Created receipt ID")
+    original_file_name: Optional[str] = Field(default=None, description="Uploaded file name")
+    original_file_path: Optional[str] = Field(default=None, description="Saved original image path")
+    store_name: Optional[str] = Field(default=None, description="Store name read from the receipt")
+    purchase_datetime: Optional[str] = Field(default=None, description="Purchase datetime: YYYY-MM-DD HH:mm:ss")
+    items: List[ReceiptOcrItem] = Field(default_factory=list, description="OCR item candidates")
+    total_item_count: Optional[float] = Field(default=None, description="Total item quantity")
+    total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
+    currency: str = Field(default="KRW", description="Currency code")
+    confidence_note: Optional[str] = Field(default=None, description="Uncertain OCR details")
 
 
 class ReceiptConfirmItem(BaseModel):
-    name: str = Field(..., description="최종 입고할 식재료명")
-    quantity: float = Field(default=1, description="최종 입고 수량")
-    storage_method: str = Field(default="냉장", description="보관 방법")
-    price: Optional[int] = Field(default=None, description="OCR 확인 금액")
+    raw_name: str = Field(..., description="Original receipt item name")
+    normalized_name: Optional[str] = Field(default=None, description="Final item name")
+    quantity: float = Field(default=1, description="Final quantity; decimal values are allowed")
+    unit: str = Field(default="개", description="Final unit. Use either '개' or 'kg'")
+    item_amount: Optional[int] = Field(default=None, description="Final line item amount")
+    is_food: Optional[bool] = Field(default=None, description="Whether the item is food")
+    storage_method: str = Field(default="냉장", description="Storage method")
+    memo: Optional[str] = Field(default=None, description="User memo")
 
 
 class ReceiptConfirmRequest(BaseModel):
-    items: List[ReceiptConfirmItem] = Field(default_factory=list, description="검수 완료된 입고 목록")
-    calendar_cost_enabled: bool = Field(default=True, description="캘린더 사용비용 자동 등록 여부")
+    receipt_id: int = Field(..., description="Receipt ID returned by upload API")
+    store_name: Optional[str] = Field(default=None, description="Final store name")
+    purchase_datetime: Optional[str] = Field(default=None, description="Final purchase datetime")
+    total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
+    items: List[ReceiptConfirmItem] = Field(default_factory=list, description="User-confirmed item list")
+    calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar cost event")

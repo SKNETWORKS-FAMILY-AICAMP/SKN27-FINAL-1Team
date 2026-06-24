@@ -9,7 +9,6 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -17,7 +16,6 @@ from sqlalchemy import (
     func,
     true,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.backend.db.base import Base
@@ -189,25 +187,6 @@ class Receipt(Base):
     # 영수증 소유자와 OCR로 추출된 품목을 연결합니다.
     user = relationship("User", back_populates="receipts")
     items = relationship("ReceiptItem", back_populates="receipt", cascade="all, delete-orphan")
-    ocr_results = relationship("ReceiptOcrResult", back_populates="receipt", cascade="all, delete-orphan")
-
-
-class ReceiptOcrResult(Base):
-    """Stores raw OCR output for a receipt upload."""
-
-    __tablename__ = "receipt_ocr_results"
-    __table_args__ = (Index("idx_receipt_ocr_results_receipt_id", "receipt_id"),)
-
-    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
-    receipt_id = Column(BigIntPrimaryKey, ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False)
-    ocr_engine = Column(String(50), nullable=False)
-    ocr_model = Column(String(100), nullable=False)
-    ocr_json_path = Column(String(500), nullable=True)
-    ocr_raw_json = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
-    confidence_note = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    receipt = relationship("Receipt", back_populates="ocr_results")
 
 
 class ReceiptItem(Base):

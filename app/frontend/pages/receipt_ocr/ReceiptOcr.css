@@ -310,6 +310,21 @@
   text-align: center;
 }
 
+.receipt-dropzone.is-dragging {
+  border-color: var(--figma-coral-stroke);
+  background: #fff5ee;
+}
+
+.receipt-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .receipt-dropzone__icon {
   width: 72px;
   height: 58px;
@@ -362,8 +377,7 @@
   color: #6d4128;
 }
 
-.receipt-tip,
-.receipt-success {
+.receipt-tip {
   margin: 18px 0 0;
   padding: 16px 18px;
   border: 1px solid #f1d9b3;
@@ -373,6 +387,124 @@
   font-size: 14px;
   font-weight: 900;
   line-height: 1.45;
+}
+
+.receipt-success {
+  margin: 18px 0 0;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  border: 1px solid #e4ddd5;
+  border-radius: 12px;
+  background: #fffdf9;
+  color: #3b2b22;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.receipt-success > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.receipt-success > span > em {
+  min-height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #f2f0eb;
+  color: #231914;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.receipt-success > span:nth-child(3) > em {
+  background: #e8f8ed;
+  color: #2e7d32;
+}
+
+.receipt-frequent-chart {
+  width: 100%;
+  min-height: 142px;
+  padding: 8px 4px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.receipt-frequent-chart__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.receipt-frequent-chart h3 {
+  margin: 0;
+  color: #2f2019;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.receipt-frequent-chart__title span {
+  flex: 0 0 auto;
+  color: #9a7350;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.receipt-frequent-chart ul {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.receipt-frequent-chart li {
+  display: grid;
+  grid-template-columns: 52px minmax(110px, 1fr) 30px;
+  align-items: center;
+  gap: 8px;
+  color: #4b3020;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.receipt-frequent-chart li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-frequent-chart li > div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f5ead7;
+}
+
+.receipt-frequent-chart li b {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd36d 0%, #ff6674 100%);
+}
+
+.receipt-frequent-chart strong {
+  color: #2f2019;
+  font-size: 12px;
+  text-align: right;
 }
 
 .receipt-login-notice {
@@ -619,10 +751,15 @@
 
 .receipt-chart {
   grid-area: chart;
-  min-height: 180px;
+  min-height: 224px;
   display: grid;
-  grid-template-columns: minmax(0, 0.62fr) minmax(280px, 0.38fr);
+  grid-template-columns: minmax(220px, 0.7fr) minmax(360px, 1fr);
   align-items: center;
+  gap: 24px;
+}
+
+.receipt-chart.is-logged-in {
+  grid-template-columns: minmax(210px, 0.72fr) minmax(360px, 1.18fr) minmax(250px, 0.82fr);
   gap: 22px;
 }
 
@@ -635,10 +772,11 @@
 }
 
 .receipt-week-chart {
-  min-height: 144px;
+  width: 100%;
+  min-height: 166px;
   padding: 12px 14px;
   display: grid;
-  grid-template-rows: auto minmax(94px, 1fr) auto;
+  grid-template-rows: auto minmax(100px, 1fr) auto;
   gap: 8px;
   border-radius: 14px;
   background: #fffaf2;
@@ -683,7 +821,7 @@
 
 .receipt-week-chart__plot svg {
   width: 100%;
-  height: 116px;
+  height: 112px;
   display: block;
   overflow: visible;
 }
@@ -740,7 +878,7 @@
   border-radius: 8px;
   background: #fffdf8;
   color: #8b673e;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   text-align: center;
 }
@@ -824,6 +962,10 @@
   font-weight: 800;
 }
 
+.receipt-paper .receipt-paper__empty {
+  color: #9b7a62;
+}
+
 .receipt-paper dt,
 .receipt-paper dd {
   margin: 0;
@@ -854,6 +996,11 @@
   color: var(--figma-coral);
 }
 
+.receipt-panel__actions button:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
 .receipt-mapping {
   overflow: hidden;
 }
@@ -867,10 +1014,71 @@
   line-height: 1.55;
 }
 
+.receipt-ocr-meta {
+  margin-top: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid #ecd9b8;
+  border-radius: 12px;
+  background: #fff9ef;
+  color: #5c3b27;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.receipt-ocr-meta span {
+  min-height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fffdf8;
+}
+
+.receipt-ocr-meta p {
+  width: 100%;
+  margin: 2px 0 0;
+  color: #7b5941;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .receipt-mapping-table {
   margin-top: 14px;
   display: grid;
   gap: 7px;
+}
+
+.receipt-empty-items {
+  min-height: 116px;
+  padding: 22px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 1px dashed #efd8b8;
+  border-radius: 16px;
+  background: #fffaf2;
+  color: #6f4b36;
+  text-align: center;
+}
+
+.receipt-empty-items strong {
+  color: #3c2a1f;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.receipt-empty-items p {
+  max-width: 440px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .receipt-mapping-row {
@@ -1167,36 +1375,82 @@
 .receipt-stock-button {
   box-sizing: border-box;
   width: 100%;
-  min-height: 72px;
+  min-height: 70px;
   margin-top: 16px;
-  padding: 0 22px;
+  padding: 10px 20px;
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr) 38px;
   grid-template-rows: auto auto;
   align-items: center;
-  column-gap: 12px;
+  column-gap: 14px;
+  row-gap: 3px;
   border: 1.6px solid var(--figma-coral-stroke);
   border-radius: 16px;
   background: var(--figma-coral);
   color: #fff;
   cursor: pointer;
   font: inherit;
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 900;
   text-align: left;
 }
 
+.receipt-stock-button:disabled {
+  border-color: #e3d2ba;
+  background: #eadfcc;
+  color: #9b7a62;
+  cursor: default;
+}
+
 .receipt-stock-button__icon {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   grid-row: 1 / 3;
+  justify-self: center;
   border-color: rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.14);
 }
 
+.receipt-stock-button:disabled .receipt-stock-button__icon {
+  opacity: 0.68;
+}
+
+.receipt-stock-button__title {
+  grid-column: 2;
+  align-self: end;
+  line-height: 1.12;
+}
+
 .receipt-stock-button small {
+  grid-column: 2;
+  align-self: start;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1.2;
+  opacity: 0.96;
+}
+
+.receipt-stock-button__arrow {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  justify-self: end;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.receipt-stock-button:disabled .receipt-stock-button__arrow {
+  background: rgba(255, 255, 255, 0.2);
+  color: #a9896f;
 }
 
 @media (max-width: 1120px) {
@@ -1228,6 +1482,20 @@
   .receipt-before-side,
   .receipt-chart {
     grid-area: auto;
+  }
+
+  .receipt-chart.is-logged-in {
+    grid-template-columns: minmax(300px, 0.95fr) minmax(420px, 1.15fr);
+    align-items: stretch;
+  }
+
+  .receipt-chart.is-logged-in > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .receipt-chart.is-logged-in .receipt-frequent-chart,
+  .receipt-chart.is-logged-in .receipt-week-chart {
+    min-height: 168px;
   }
 }
 
@@ -1368,10 +1636,20 @@
 
   .receipt-chart {
     grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .receipt-chart.is-logged-in {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-frequent-chart {
+    min-height: 0;
   }
 
   .receipt-week-chart {
     padding: 10px;
+    min-height: 0;
   }
 
   .receipt-week-chart__plot svg {
@@ -1411,10 +1689,37 @@
     font-size: 12px;
   }
 
-  .receipt-tip,
-  .receipt-success {
+  .receipt-tip {
     padding: 12px;
     font-size: 12px;
+  }
+
+  .receipt-success {
+    justify-content: flex-start;
+    gap: 10px 14px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .receipt-success > span > em {
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .receipt-frequent-chart {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .receipt-frequent-chart h3 {
+    font-size: 14px;
+  }
+
+  .receipt-frequent-chart li {
+    grid-template-columns: 52px minmax(0, 1fr) 30px;
+    gap: 7px;
+    font-size: 11px;
   }
 
   .receipt-panel__title,
@@ -1475,12 +1780,25 @@
 
   .receipt-stock-button {
     min-height: 62px;
-    padding: 10px 16px;
+    padding: 9px 14px;
+    grid-template-columns: 40px minmax(0, 1fr) 30px;
+    column-gap: 10px;
     font-size: 17px;
+  }
+
+  .receipt-stock-button__icon {
+    width: 38px;
+    height: 38px;
   }
 
   .receipt-stock-button small {
     font-size: 12px;
+  }
+
+  .receipt-stock-button__arrow {
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
   }
 }
 
