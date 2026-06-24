@@ -12,8 +12,7 @@ const customerServiceLinks = [
 const utilityLinks = [
   { href: 'mailto:bobbeori@bobbeori.com', label: '연락처' },
   { to: '/terms', label: '이용약관' },
-  { to: '/privacy-policy', label: '개인정보처리방침' },
-  { to: '/location-policy', label: '위치기반 서비스 약관' },
+  { to: '/privacy', label: '개인정보처리방침' },
 ]
 
 function FooterLink({ item }) {

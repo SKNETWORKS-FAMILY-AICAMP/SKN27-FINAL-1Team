@@ -5,6 +5,7 @@ import './RecipeDetail.css'
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrigerator.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -13,6 +14,29 @@ function ImageSlot({ src, alt = '', className = '' }) {
     <span className={`recipe-detail-image-slot ${src ? 'is-filled' : ''} ${className}`}>
       {src ? <img src={src} alt={alt} /> : null}
     </span>
+  )
+}
+
+function IngredientCard({ item, variant, showFridgeHint }) {
+  const classNames = [
+    variant === 'owned' || variant === 'maybe' ? 'is-checked' : '',
+    variant === 'maybe' ? 'is-maybe-owned' : '',
+  ].filter(Boolean).join(' ')
+
+  return (
+    <article className={classNames || undefined}>
+      <div className="recipe-detail-ingredient__body">
+        <div className="recipe-detail-ingredient__primary">
+          <strong>{item.name}</strong>
+          <span className="recipe-detail-ingredient__amount">{item.amount || '-'}</span>
+        </div>
+        {showFridgeHint ? (
+          <p className="recipe-detail-ingredient__fridge-hint">
+            냉장고: {item.fridge_ingredient_name}
+          </p>
+        ) : null}
+      </div>
+    </article>
   )
 }
 
@@ -90,7 +114,7 @@ function RecipeDetail() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ recipe_id: recipe.recipe_id }),
+        body: JSON.stringify({ recipe_id: recipe.recipe_id, recommendation_type: 'manual_save' }),
       })
 
       if (response.status === 401) {
@@ -115,6 +139,18 @@ function RecipeDetail() {
         return
       }
 
+      const savedResult = await response.json()
+      saveStoredRecipe({
+        recipe_id: recipe.recipe_id,
+        recommendation_id: savedResult.recommendation_id,
+        title: recipe.title,
+        description: buildDescription(recipe),
+        category: recipe.category,
+        image: recipe.main_image_url || imageEatRefrigerator,
+        source: '저장한 레시피',
+        savedType: 'saved',
+      })
+      setIsSaved(true)
       await showAlert('레시피를 추천 목록에 저장했어요.', {
         title: '저장 완료',
       })
@@ -181,11 +217,16 @@ function RecipeDetail() {
     return () => controller.abort()
   }, [recipeId])
 
-  const ownedIngredients = recipe?.owned_ingredients ?? []
+  const exactOwnedIngredients = recipe?.owned_ingredients ?? []
+  const maybeOwnedIngredients = recipe?.maybe_owned_ingredients ?? []
   const missingIngredients = recipe?.missing_ingredients ?? []
+  const displayOwnedIngredients = [
+    ...exactOwnedIngredients.map((item) => ({ ...item, ownershipType: 'exact' })),
+    ...maybeOwnedIngredients.map((item) => ({ ...item, ownershipType: 'maybe' })),
+  ]
   const steps = recipe?.steps ?? []
-  const totalIngredients = ownedIngredients.length + missingIngredients.length
-  const checkedCount = ownedIngredients.length
+  const totalIngredients = displayOwnedIngredients.length + missingIngredients.length
+  const checkedCount = displayOwnedIngredients.length
   const isLastStep = steps.length > 0 && currentStep >= steps.length - 1
   const servingLabel = recipe?.serving_count != null ? `${recipe.serving_count}인분 기준` : '1인분 기준'
 
@@ -281,23 +322,27 @@ function RecipeDetail() {
           </div>
 
           <div className="recipe-detail-ingredient-group">
-            <h3>보유 재료 ({ownedIngredients.length})</h3>
+            <h3>보유 재료 ({displayOwnedIngredients.length})</h3>
             <div className="recipe-detail-ingredient-list">
-              {ownedIngredients.length === 0 ? (
+              {displayOwnedIngredients.length === 0 ? (
                 <p className="recipe-detail-empty-note">보유 재료가 없어요. 로그인 후 냉장고를 등록하면 확인할 수 있어요.</p>
               ) : (
-                ownedIngredients.map((item, index) => (
-                  <article
-                    className="is-checked"
-                    key={`owned-${item.ingredient_id ?? item.name}-${index}`}
-                  >
-                    <ImageSlot className="recipe-detail-ingredient__image" />
-                    <div className="recipe-detail-ingredient__info">
-                      <strong>{item.name}</strong>
-                      <small>{item.amount || '-'}</small>
-                    </div>
-                  </article>
-                ))
+                displayOwnedIngredients.map((item, index) => {
+                  const isMaybe = item.ownershipType === 'maybe'
+                  const showFridgeHint = isMaybe
+                    && item.fridge_ingredient_name
+                    && item.fridge_ingredient_name !== item.name
+                  const keyPrefix = isMaybe ? 'maybe' : 'owned'
+
+                  return (
+                    <IngredientCard
+                      key={`${keyPrefix}-${item.ingredient_id ?? item.name}-${index}`}
+                      item={item}
+                      variant={isMaybe ? 'maybe' : 'owned'}
+                      showFridgeHint={showFridgeHint}
+                    />
+                  )
+                })
               )}
             </div>
           </div>
@@ -309,13 +354,11 @@ function RecipeDetail() {
                 <p className="recipe-detail-empty-note">부족한 재료가 없어요.</p>
               ) : (
                 missingIngredients.map((item, index) => (
-                  <article key={`missing-${item.ingredient_id ?? item.name}-${index}`}>
-                    <ImageSlot className="recipe-detail-ingredient__image" />
-                    <div className="recipe-detail-ingredient__info">
-                      <strong>{item.name}</strong>
-                      <small>{item.amount || '-'}</small>
-                    </div>
-                  </article>
+                  <IngredientCard
+                    key={`missing-${item.ingredient_id ?? item.name}-${index}`}
+                    item={item}
+                    variant="missing"
+                  />
                 ))
               )}
             </div>

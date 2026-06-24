@@ -13,6 +13,20 @@ services:
             DB_ENGINE: postgresql
             DB_HOST: postgres
             NEO4J_URI: bolt://neo4j:7687
+        volumes:
+            - ./app:/project/app
+        command:
+            [
+                "uvicorn",
+                "app.backend.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload",
+                "--reload-dir",
+                "/project/app/backend",
+            ]
         depends_on:
             postgres:
                 condition: service_healthy
@@ -41,6 +55,10 @@ services:
             - "5173:5173"
         environment:
             VITE_API_URL: http://localhost:${SERVER_PORT:-8000}
+            CHOKIDAR_USEPOLLING: "true"
+        volumes:
+            - ./app/frontend:/app
+            - /app/node_modules
         depends_on:
             backend:
                 condition: service_healthy

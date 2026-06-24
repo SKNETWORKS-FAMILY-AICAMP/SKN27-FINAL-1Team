@@ -12,6 +12,7 @@ from app.backend.schemas.recipes import (
 )
 from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
+from app.backend.services.recommendation_service.recommendation_service import recommendation_service
 
 router = APIRouter(prefix="/recipes", tags=["Recipes (레시피)"])
 
@@ -49,15 +50,23 @@ def search_recipes(
 def recommend_recipes(
     request_data: RecipeRecommendRequest,
     current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """
     냉장고 재료, 취향, 소비 임박 정보를 종합해 레시피를 추천합니다.
     현재는 API 계약 확인용 임시 응답을 반환합니다.
     """
-    return [
+    recommendations = [
         {"recipe_id": 1, "title": "대파 볶음밥", "match_rate": 85},
         {"recipe_id": 2, "title": "두부 김치", "match_rate": 78},
     ]
+    recommendation_service.save_many(
+        db,
+        current_user_id,
+        [item["recipe_id"] for item in recommendations],
+        "fridge_based",
+    )
+    return recommendations
 
 
 @router.get("/{id}", response_model=RecipeDetailResponse)

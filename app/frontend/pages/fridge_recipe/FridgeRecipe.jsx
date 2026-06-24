@@ -6,6 +6,7 @@ import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageMenuRecommendation from '../../assets/extracted/images/image_menu_recommendation.png'
 import { fridgeRecipeRecommendations as recommendations } from '../../mock/fridgeRecipeMock.js'
 import { userProfile } from '../../mock/userService.js'
+import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -55,9 +56,12 @@ function FridgeRecipe() {
       missing: recipe.missing,
     }
 
+    const saved = saveStoredRecipe({ ...nextRecipe, source: '냉장고파먹기', image: recipe.image })
+    saveRecommendationResult(recipe, 'fridge_based').catch(() => {})
+
     setSelectedRecipeId(recipe.id)
-    setSavedRecipe(nextRecipe)
-    window.localStorage.setItem('bobbeori-fridge-recipe', JSON.stringify(nextRecipe))
+    setSavedRecipe(saved)
+    window.localStorage.setItem('bobbeori-fridge-recipe', JSON.stringify(saved))
     window.localStorage.setItem('bobbeori-selected-recipe', recipe.title)
   }
 

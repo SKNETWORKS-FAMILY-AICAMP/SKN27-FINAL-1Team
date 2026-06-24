@@ -11,6 +11,7 @@ function Callback() {
 
   useEffect(() => {
     const code = searchParams.get('code')
+    const isCalendarCallback = provider === 'google-calendar'
     const returnedState = searchParams.get('state')
     const savedStateKey = `bobbeori-oauth-state-${provider}`
     const savedState = window.sessionStorage.getItem(savedStateKey)
@@ -21,14 +22,16 @@ function Callback() {
       return
     }
 
-    // OAuth 요청과 콜백이 같은 브라우저 흐름에서 온 것인지 확인합니다.
-    if (!returnedState || !savedState || returnedState !== savedState) {
+    if (!isCalendarCallback) {
+      // OAuth 요청과 콜백이 같은 브라우저 흐름에서 온 것인지 확인합니다.
+      if (!returnedState || !savedState || returnedState !== savedState) {
+        window.sessionStorage.removeItem(savedStateKey)
+        setError('로그인 요청 검증에 실패했습니다. 다시 시도해주세요.')
+        setTimeout(() => navigate('/login'), 2000)
+        return
+      }
       window.sessionStorage.removeItem(savedStateKey)
-      setError('로그인 요청 검증에 실패했습니다. 다시 시도해주세요.')
-      setTimeout(() => navigate('/login'), 2000)
-      return
     }
-    window.sessionStorage.removeItem(savedStateKey)
 
     if (isFetching.current) return
     isFetching.current = true
@@ -37,14 +40,38 @@ function Callback() {
 
     const fetchToken = async () => {
       try {
+        if (isCalendarCallback) {
+          const token = window.localStorage.getItem('bobbeori-token')
+          if (!token) {
+            throw new Error('캘린더 연동은 로그인이 필요합니다.')
+          }
+
+          const response = await fetch(`${apiUrl}/api/v1/calendar/google/connect`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ code }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.detail || 'Google Calendar 연동에 실패했습니다.')
+          }
+
+          navigate('/mypage')
+          return
+        }
+
         const response = await fetch(`${apiUrl}/api/v1/auth/social-login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            provider: provider,
-            code: code,
+            provider,
+            code,
             state: returnedState,
           }),
         })
@@ -66,7 +93,7 @@ function Callback() {
       } catch (err) {
         console.error(err)
         setError(err.message)
-        setTimeout(() => navigate('/login'), 3000)
+        setTimeout(() => navigate(isCalendarCallback ? '/login?calendar=1' : '/login'), 3000)
       }
     }
 
