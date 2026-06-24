@@ -5,6 +5,7 @@ import './MenuRecommend.css'
 import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageMenuRecommendation from '../../assets/extracted/images/image_menu_recommendation.png'
 import imageSearch from '../../assets/extracted/images/image_search.png'
+import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import {
   countOptions,
   mealOptions,
@@ -111,11 +112,26 @@ function MenuRecommend() {
     )
   }
 
+  const persistRecipe = (recipe) => {
+    saveStoredRecipe({
+      ...recipe,
+      source: '메뉴추천',
+      reason: recipe.reason,
+    })
+    saveRecommendationResult(recipe, 'menu_recommend').catch(() => {})
+  }
+
   const handleSave = () => {
+    generatedRecipes.filter((recipe) => selectedIds.includes(recipe.id)).forEach(persistRecipe)
     setSavedIds((prev) => Array.from(new Set([...prev, ...selectedIds])))
   }
 
   const saveSingleRecipe = (recipeId) => {
+    const recipe = recipes.find((item) => item.id === recipeId)
+    if (recipe) {
+      persistRecipe(recipe)
+    }
+
     setSavedIds((prev) => (prev.includes(recipeId) ? prev : [...prev, recipeId]))
   }
 

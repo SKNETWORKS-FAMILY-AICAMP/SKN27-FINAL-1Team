@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.backend.core.config import settings
@@ -14,6 +15,8 @@ from app.backend.api.recipes import recipes_api
 from app.backend.api.recommendations import recommendations_api
 from app.backend.api.shopping import shopping_api
 from app.backend.api.notifications import notifications_api
+from app.backend.api.calendar import calendar_api
+from app.backend.services.calendar_job import daily_calendar_loop
 
 
 app = FastAPI(
@@ -53,6 +56,19 @@ app.include_router(recipes_api.router, prefix=API_V1_PREFIX)
 app.include_router(recommendations_api.router, prefix=API_V1_PREFIX)
 app.include_router(shopping_api.router, prefix=API_V1_PREFIX)
 app.include_router(notifications_api.router, prefix=API_V1_PREFIX)
+app.include_router(calendar_api.router, prefix=API_V1_PREFIX)
+
+
+@app.on_event("startup")
+async def start_calendar_job():
+    app.state.calendar_job_task = asyncio.create_task(daily_calendar_loop())
+
+
+@app.on_event("shutdown")
+async def stop_calendar_job():
+    task = getattr(app.state, "calendar_job_task", None)
+    if task:
+        task.cancel()
 
 
 @app.get("/", tags=["Health"])

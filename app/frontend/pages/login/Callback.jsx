@@ -11,6 +11,7 @@ function Callback() {
 
   useEffect(() => {
     const code = searchParams.get('code')
+    const isCalendarCallback = provider === 'google-calendar'
     
     if (!code) {
       setError('인증 코드가 없습니다.')
@@ -25,6 +26,30 @@ function Callback() {
 
     const fetchToken = async () => {
       try {
+        if (isCalendarCallback) {
+          const token = window.localStorage.getItem('bobbeori-token')
+          if (!token) {
+            throw new Error('캘린더 연동은 로그인이 필요합니다.')
+          }
+
+          const response = await fetch(`${apiUrl}/api/v1/calendar/google/connect`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ code }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.detail || 'Google Calendar 연동에 실패했습니다.')
+          }
+
+          navigate('/mypage')
+          return
+        }
+
         const response = await fetch(`${apiUrl}/api/v1/auth/social-login`, {
           method: 'POST',
           headers: {
@@ -53,7 +78,7 @@ function Callback() {
       } catch (err) {
         console.error(err)
         setError(err.message)
-        setTimeout(() => navigate('/login'), 3000)
+        setTimeout(() => navigate(isCalendarCallback ? '/login?calendar=1' : '/login'), 3000)
       }
     }
 
