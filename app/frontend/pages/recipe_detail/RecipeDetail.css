@@ -214,8 +214,10 @@
 
 .recipe-detail-ingredient-list article {
   position: relative;
-  min-height: 101px;
-  padding: 8px 6px;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  box-sizing: border-box;
+  padding: 4px 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,7 +233,7 @@
 }
 
 .recipe-detail-ingredient-list article.is-maybe-owned {
-  padding-bottom: 22px;
+  padding-bottom: 16px;
 }
 
 .is-missing .recipe-detail-ingredient-list article {
@@ -241,6 +243,7 @@
 
 .recipe-detail-ingredient__body {
   width: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -610,12 +613,11 @@
   }
 
   .recipe-detail-ingredient-list article {
-    min-height: 94px;
-    padding: 6px 4px;
+    padding: 3px 4px;
   }
 
   .recipe-detail-ingredient-list article.is-maybe-owned {
-    padding-bottom: 20px;
+    padding-bottom: 14px;
   }
 
   .recipe-detail-ingredient-list strong {
