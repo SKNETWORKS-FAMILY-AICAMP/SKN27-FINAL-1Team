@@ -9,8 +9,6 @@ class ReceiptOcrItem(BaseModel):
     quantity: float = Field(default=1, description="Item quantity; decimal values are allowed")
     unit: str = Field(default="개", description="Display unit. Use either '개' or 'kg'")
     item_amount: Optional[int] = Field(default=None, description="Line item amount")
-    is_food: Optional[bool] = Field(default=None, description="Whether the item is food")
-    memo: Optional[str] = Field(default=None, description="User memo")
 
 
 class ReceiptUploadResponse(BaseModel):
@@ -32,9 +30,8 @@ class ReceiptConfirmItem(BaseModel):
     quantity: float = Field(default=1, description="Final quantity; decimal values are allowed")
     unit: str = Field(default="개", description="Final unit. Use either '개' or 'kg'")
     item_amount: Optional[int] = Field(default=None, description="Final line item amount")
-    is_food: Optional[bool] = Field(default=None, description="Whether the item is food")
     storage_method: str = Field(default="냉장", description="Storage method")
-    memo: Optional[str] = Field(default=None, description="User memo")
+    item_memo: Optional[str] = Field(default=None, description="User memo")
 
 
 class ReceiptConfirmRequest(BaseModel):

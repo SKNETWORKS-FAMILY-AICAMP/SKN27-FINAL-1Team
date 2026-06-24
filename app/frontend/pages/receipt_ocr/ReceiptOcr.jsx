@@ -257,7 +257,7 @@ function mapOcrItemsToRows(items = []) {
       quantityAmount: safeQuantityAmount,
       quantityUnit,
       price: formatPriceInput(item.item_amount),
-      category: item.is_food === false ? '기타' : '식재료',
+      category: '식재료',
       storage: '냉장',
       review: true,
     }
@@ -635,9 +635,8 @@ function ReceiptOcr() {
               quantity: toNumber(row.quantityAmount, 1),
               unit: row.quantityUnit || '개',
               item_amount: toNumber(row.price, 0),
-              is_food: row.category !== '기타',
               storage_method: row.storage || '냉장',
-              memo: null,
+              item_memo: null,
             })),
           }),
         })

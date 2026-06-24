@@ -9,7 +9,7 @@ from app.backend.api.deps import get_current_user_required
 from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
 from app.backend.schemas.receipts import ReceiptConfirmRequest, ReceiptUploadResponse
-from app.backend.services.receipt_ocr_service import receipt_ocr_service
+from app.backend.services.receipt_ocr_service import receipt_confirm_service, receipt_ocr_service
 
 
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
@@ -32,6 +32,11 @@ async def confirm_receipt_items(
     db: Session = Depends(get_db),
 ):
     """Confirm edited OCR results and prepare them for stock-in."""
+    saved_item_count = receipt_confirm_service.save_confirmed_items(
+        db=db,
+        user_id=current_user_id,
+        request_data=request_data,
+    )
     total_price = sum(item.item_amount or 0 for item in request_data.items)
 
     if request_data.calendar_cost_enabled and total_price > 0:
@@ -61,4 +66,4 @@ async def confirm_receipt_items(
         except Exception as exc:
             print(f"[ReceiptCalendar] user_id={current_user_id} failed: {exc}")
 
-    return {"message": "성공적으로 입고되었습니다."}
+    return {"message": f"성공적으로 {saved_item_count}개 품목을 저장했습니다."}

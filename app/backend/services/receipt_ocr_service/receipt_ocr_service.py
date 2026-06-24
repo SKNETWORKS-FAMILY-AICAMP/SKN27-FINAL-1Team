@@ -157,8 +157,6 @@ class ReceiptOcrService:
                     "quantity": self._nullable_number(item.get("quantity")),
                     "unit": unit if unit in ALLOWED_UNITS else "개",
                     "item_amount": self._nullable_int(item.get("item_amount")),
-                    "is_food": None,
-                    "memo": None,
                 }
             )
 

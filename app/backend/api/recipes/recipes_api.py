@@ -6,13 +6,16 @@ from app.backend.api.deps import get_current_user, get_current_user_required
 from app.backend.db.session import get_db
 from app.backend.schemas.recipes import (
     RecipeDetailResponse,
-    RecipeRecommendItem,
     RecipeRecommendRequest,
+    RecipeRecommendResponse,
     RecipeSearchResponse,
 )
 from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
-from app.backend.services.recommendation_service.recommendation_service import recommendation_service
+from app.backend.services.recommendation_service.recommendation_service import (
+    RecipeRecommendConfig,
+    recommendation_service,
+)
 
 router = APIRouter(prefix="/recipes", tags=["Recipes (레시피)"])
 
@@ -46,23 +49,39 @@ def search_recipes(
     )
 
 
-@router.post("/recommend", response_model=list[RecipeRecommendItem])
+@router.post("/recommend", response_model=RecipeRecommendResponse)
 def recommend_recipes(
     request_data: RecipeRecommendRequest,
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    recommendations = [
-        {"recipe_id": 1, "title": "대파 볶음밥", "match_rate": 85},
-        {"recipe_id": 2, "title": "두부 김치", "match_rate": 78},
-    ]
-    recommendation_service.save_many(
+    """레시피 추천. fridge_consume은 limit 9 고정, menu_custom은 request limit 사용."""
+    config = RecipeRecommendConfig.for_mode(
+        request_data.mode,
+        request_limit=request_data.limit,
+    )
+    if config is None:
+        return RecipeRecommendResponse(
+            mode=request_data.mode,
+            items=[],
+            returned_count=0,
+            has_more=False,
+        )
+
+    result = recommendation_service.recommend_recipes(
         db,
         current_user_id,
-        [item["recipe_id"] for item in recommendations],
-        "fridge_based",
+        config,
+        exclude_recipe_ids=request_data.exclude_recipe_ids,
+        refresh_pool=request_data.refresh_pool,
     )
-    return recommendations
+
+    return RecipeRecommendResponse(
+        mode=request_data.mode,
+        items=result["items"],
+        returned_count=result["returned_count"],
+        has_more=result["has_more"],
+    )
 
 @router.get("/{id}", response_model=RecipeDetailResponse)
 def get_recipe_detail(
