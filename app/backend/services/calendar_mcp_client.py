@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 import httpx
 
 from app.backend.core.config import settings
 
 
-async def enrich_calendar_events(user_id: int, start_date, end_date, events: list[dict]) -> list[dict]:
+async def prepare_calendar_event(user_id: int | None, event_key: str, event: dict, source: str) -> dict:
     if not settings.RUNPOD_CALENDAR_MCP_URL:
-        return events
+        return event
 
     headers = {"Content-Type": "application/json"}
     if settings.RUNPOD_INTERNAL_TOKEN:
@@ -19,16 +21,17 @@ async def enrich_calendar_events(user_id: int, start_date, end_date, events: lis
                 settings.RUNPOD_CALENDAR_MCP_URL,
                 json={
                     "user_id": user_id,
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "events": events,
+                    "event_key": event_key,
+                    "source": source,
+                    "event": event,
                 },
                 headers=headers,
             )
             response.raise_for_status()
             data = response.json()
-    except (httpx.HTTPError, ValueError):
-        return events
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"[CalendarMCP] Runpod request failed: {exc}")
+        return event
 
-    enriched = data.get("events") if isinstance(data, dict) else None
-    return enriched if isinstance(enriched, list) else events
+    prepared = data.get("event") if isinstance(data, dict) else None
+    return deepcopy(prepared) if isinstance(prepared, dict) else event
