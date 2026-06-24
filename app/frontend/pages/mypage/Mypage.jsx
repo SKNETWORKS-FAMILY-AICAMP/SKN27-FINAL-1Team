@@ -2,12 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './Mypage.css'
 
-import iconAlarm from '../../assets/extracted/icons/icon_alarm.png'
-import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
+import OnboardingModal from '../../components/OnboardingModal.jsx'
 import ConfirmModal from '../../components/modals/ConfirmModal'
-import { serviceContext, userProfile } from '../../mock/userService.js'
+import { userProfile } from '../../mock/userService.js'
 import { readStoredRecipes, removeStoredRecipe, saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const alerts = [
@@ -16,20 +15,25 @@ const alerts = [
   { label: '레시피 삭제 예정 알림', checked: true },
 ]
 
-const recentRecipes = [
-  { title: '버섯 들깨탕', meta: '최근 본 레시피' },
-  { title: '김치 참치 볶음밥', meta: '저장한 레시피' },
-]
-
-const cartHistory = [
-  { date: '2024.05.20', price: '11,140원' },
-  { date: '2024.05.16', price: '8,400원' },
-  { date: '2024.05.12', price: '7,380원' },
-]
-
 const toLocalDateKey = (date) => {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
   return localDate.toISOString().slice(0, 10)
+}
+
+const readOnboardingSettings = () => {
+  if (typeof window === 'undefined') {
+    return { allergy: [], disliked_ingredients: [], preferred_ingredients: [] }
+  }
+
+  try {
+    return JSON.parse(window.localStorage.getItem('bobbeori-onboarding-settings')) || {
+      allergy: [],
+      disliked_ingredients: [],
+      preferred_ingredients: [],
+    }
+  } catch {
+    return { allergy: [], disliked_ingredients: [], preferred_ingredients: [] }
+  }
 }
 
 const tabs = [
@@ -143,6 +147,8 @@ function Mypage() {
   const [googleCalendarEvents, setGoogleCalendarEvents] = useState([])
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingSettings, setOnboardingSettings] = useState(readOnboardingSettings)
   const [calendarCostEnabled, setCalendarCostEnabled] = useState(() =>
     typeof window === 'undefined'
       ? true
@@ -151,7 +157,6 @@ function Mypage() {
   const [profileName, setProfileName] = useState(userProfile.name)
   const [profileEmail, setProfileEmail] = useState('babbeori@example.com')
   const [isEditingProfile, setIsEditingProfile] = useState(false)
-  const [connectedSocials, setConnectedSocials] = useState(['카카오', '네이버', '구글'])
   const [userData, setUserData] = useState(null)
   const [inventorySummary, setInventorySummary] = useState({
     total: 0,
@@ -180,7 +185,6 @@ function Mypage() {
     () => alertSettings.filter((alert) => alert.checked).length,
     [alertSettings],
   )
-  const savedFridgeRecipe = savedRecipes[0] ?? null
   const recommendedSavedRecipes = useMemo(
     () => savedRecipes.filter((recipe) => recipe.savedType !== 'saved'),
     [savedRecipes],
@@ -189,16 +193,6 @@ function Mypage() {
     () => savedRecipes.filter((recipe) => recipe.savedType === 'saved'),
     [savedRecipes],
   )
-
-  const dynamicStats = [
-    { 
-      label: '보유 재료', 
-      value: `${inventorySummary.total}개`, 
-      note: `냉장 ${inventorySummary.storage['냉장']} · 냉동 ${inventorySummary.storage['냉동']} · 임박 ${inventorySummary.expiring_soon}`, 
-      image: iconRefrigerator 
-    },
-    { label: '추천 횟수', value: '24회', note: '이번 달 기준', image: iconAlarm },
-  ]
 
   const loadSavedRecipes = async () => {
     const localRecipes = readStoredRecipes()
@@ -312,19 +306,6 @@ function Mypage() {
 
         setProfileName(data.nickname ? `${data.nickname}님` : userProfile.name)
         setProfileEmail(data.email || 'babbeori@example.com')
-        setConnectedSocials((prev) => {
-          if (!data.provider) {
-            return prev
-          }
-
-          const providerLabel = {
-            kakao: '카카오',
-            naver: '네이버',
-            google: '구글',
-          }[data.provider] ?? data.provider
-
-          return prev.includes(providerLabel) ? prev : [providerLabel, ...prev]
-        })
       } catch (err) {
         console.error(err)
         window.localStorage.removeItem('bobbeori-token')
@@ -379,11 +360,6 @@ function Mypage() {
       'bobbeori-profile',
       JSON.stringify({ name: profileName, email: profileEmail }),
     )
-  }
-
-  const connectSocial = () => {
-    const nextSocial = connectedSocials.includes('구글') ? '애플' : '구글'
-    setConnectedSocials((prev) => (prev.includes(nextSocial) ? prev : [...prev, nextSocial]))
   }
 
   const connectGoogleCalendar = async () => {
@@ -447,12 +423,19 @@ function Mypage() {
   const profileCreatedAt = userData?.created_at
     ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}`
     : '가입일 2024. 05. 22'
-  const selectedRecipe = savedFridgeRecipe ?? {
-    id: 'green-onion-tofu-egg-stew',
-    title: serviceContext.selectedRecipe,
-    category: '기본 추천',
-    reason: `${userProfile.priority} 기준으로 이어볼 수 있는 추천 메뉴예요.`,
-  }
+  const provider = isGuest ? 'guest' : userData?.provider
+  const providerLabel = {
+    kakao: '카카오',
+    naver: '네이버',
+    google: '구글',
+    guest: '게스트',
+  }[provider] || '소셜 로그인'
+  const providerClass =
+    provider === 'kakao'
+      ? 'mypage-social__pill--kakao'
+      : provider === 'naver'
+        ? 'mypage-social__pill--naver'
+        : 'mypage-social__pill--google'
 
   return (
     <section className="mypage" aria-labelledby="mypage-title">
@@ -522,133 +505,59 @@ function Mypage() {
                   </div>
                 </div>
                 <div className="mypage-social">
-                  <strong>소셜 로그인 정보</strong>
+                  <strong>로그인 방식</strong>
                   <div>
-                    {connectedSocials.map((social) => {
-                      const className =
-                        social === '카카오'
-                          ? 'mypage-social__pill--kakao'
-                          : social === '구글'
-                            ? 'mypage-social__pill--google'
-                            : 'mypage-social__pill--naver'
-
-                      const isActive =
-                        (social === '카카오' && userData?.provider === 'kakao') ||
-                        (social === '네이버' && userData?.provider === 'naver') ||
-                        (social === '구글' && userData?.provider === 'google')
-
-                      return (
-                        <span
-                          className={`mypage-social__pill ${className} ${isActive ? 'is-active' : ''}`}
-                          key={social}
-                        >
-                          {social}
-                        </span>
-                      )
-                    })}
-                    <button className="mypage-connect-button" type="button" onClick={connectSocial}>
-                      + 연결하기
-                    </button>
+                    <span className={`mypage-social__pill ${providerClass} is-active`}>
+                      {providerLabel}
+                    </span>
                   </div>
                 </div>
               </section>
 
-              <div className="mypage-stats" aria-label="마이페이지 통계">
-                {dynamicStats.map((stat, index) => (
-                  <button
-                    className="mypage-panel mypage-stat"
-                    key={stat.label}
-                    type="button"
-                    onClick={() => navigate(index === 0 ? '/fridge' : '/recipe-fridge')}
-                  >
-                    <div>
-                      <span>{stat.label}</span>
-                      <strong>{stat.value}</strong>
-                      <p>{stat.note}</p>
-                    </div>
-                    <ImageSlot className="mypage-stat__image" src={stat.image} />
-                  </button>
-                ))}
-              </div>
-
-              <div className="mypage-history-grid">
-                <section className="mypage-panel mypage-recipe" aria-labelledby="selected-recipe-title">
+              <div className="mypage-info-grid">
+                <section className="mypage-panel mypage-account-info" aria-labelledby="account-info-title">
                   <div className="mypage-panel__title">
-                    <h2 id="selected-recipe-title">오늘 이어갈 추천</h2>
+                    <h2 id="account-info-title">계정 정보</h2>
                   </div>
-                  <article className="mypage-selected-recipe">
-                    <ImageSlot className="mypage-selected-recipe__image" src={imageRecommendation} />
-                    <div>
-                      <div className="mypage-recipe-title-row">
-                        <h3>{selectedRecipe.title}</h3>
-                        <span>{savedFridgeRecipe ? '저장됨' : selectedRecipe.category}</span>
-                      </div>
-                      <p>{selectedRecipe.reason}</p>
-                      <p>{savedFridgeRecipe ? `저장 후 ${getDaysLeft(selectedRecipe.expiresAt)}일 동안 확인할 수 있어요.` : '저장한 메뉴와 최근 본 레시피를 이어서 확인할 수 있어요.'}</p>
-                      <div className="mypage-recipe-actions">
-                        <button
-                          className="mypage-primary-button"
-                          type="button"
-                          onClick={() => navigate(`/recipes/${selectedRecipe.id}`)}
-                        >
-                          레시피 보기
-                        </button>
-                        <button className="mypage-soft-button" type="button" onClick={() => navigate('/shopping-list')}>
-                          장보기 이동
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-
-                  <div className="mypage-recent">
-                    <div className="mypage-subtitle-row">
-                      <strong>최근 선택 레시피</strong>
-                      <button type="button" onClick={() => navigate('/recipes')}>전체 보기</button>
-                    </div>
-                    <div className="mypage-recent-list">
-                      {recentRecipes.map((recipe) => (
-                        <button type="button" key={recipe.title} onClick={() => navigate('/recipes')}>
-                          <ImageSlot className="mypage-recent__image" />
-                          <div>
-                            <h3>{recipe.title}</h3>
-                            <p>{recipe.meta}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <dl>
+                    <div><dt>이메일</dt><dd>{profileDisplayEmail}</dd></div>
+                    <div><dt>로그인 방식</dt><dd>{providerLabel}</dd></div>
+                    <div><dt>회원 유형</dt><dd>{isGuest ? '게스트' : '일반 회원'}</dd></div>
+                    <div><dt>가입일</dt><dd>{profileCreatedAt.replace('가입일 ', '')}</dd></div>
+                    <div><dt>캘린더 연동</dt><dd>{calendarEnabled ? '연결됨' : '미연결'}</dd></div>
+                    <div><dt>보유 재료</dt><dd>{inventorySummary.total}개</dd></div>
+                  </dl>
                 </section>
 
-                <section className="mypage-panel mypage-usage" aria-labelledby="usage-title">
-                  <div className="mypage-subtitle-row">
-                    <h2 id="usage-title">이용 기록</h2>
-                    <button type="button" onClick={() => navigate('/shopping-list')}>전체 보기</button>
+                <section className="mypage-panel mypage-preferences" aria-labelledby="preferences-title">
+                  <div className="mypage-panel__title">
+                    <h2 id="preferences-title">나의 식재료 설정</h2>
                   </div>
-                  <div className="mypage-chart" aria-label="월별 사용 요약">
-                    {[52, 36, 64, 44, 70, 50, 40, 0].map((height, index) => (
-                      <span key={`${height}-${index}`} style={{ '--bar-height': `${height}%` }} />
-                    ))}
-                  </div>
-                  <div className="mypage-history">
-                    <strong>최근 장보기 기록</strong>
-                    {cartHistory.map((item) => (
-                      <div key={item.date}>
-                        <span>{item.date}</span>
-                        <b>{item.price}</b>
+                  {[
+                    ['알레르기', onboardingSettings.allergy],
+                    ['비선호 재료', onboardingSettings.disliked_ingredients],
+                    ['선호 재료', onboardingSettings.preferred_ingredients],
+                  ].map(([title, items]) => (
+                    <div className="mypage-preference-group" key={title}>
+                      <strong>{title}</strong>
+                      <div className="mypage-preference-chips">
+                        {items?.length ? (
+                          items.map((item) => <span key={`${title}-${item}`}>{item}</span>)
+                        ) : (
+                          <em>설정된 재료가 없어요</em>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </section>
               </div>
 
-              <section className="mypage-panel mypage-settings" aria-labelledby="account-title">
-                <h2 id="account-title">계정 관리</h2>
-                <p className="mypage-setting-note">서비스 이용 정보와 계정 상태를 관리해요.</p>
-                <ul>
-                  <li><span>개인정보 처리방침</span><button type="button">보기</button></li>
-                  <li><span>이용약관</span><button type="button">보기</button></li>
-                  <li><span>회원 탈퇴</span><button type="button">요청하기</button></li>
-                </ul>
+              <section className="mypage-panel mypage-settings" aria-labelledby="onboarding-title">
+                <h2 id="onboarding-title">맞춤 설정</h2>
+                <p className="mypage-setting-note">알레르기, 비선호 재료, 선호 재료를 다시 설정해요.</p>
+                <button className="mypage-primary-button mypage-onboarding-button" type="button" onClick={() => setShowOnboarding(true)}>
+                  온보딩 다시 하기
+                </button>
               </section>
             </>
           )}
@@ -817,6 +726,14 @@ function Mypage() {
         onConfirm={() => deleteTarget && deleteSavedRecipe(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
       />
+      {showOnboarding && (
+        <OnboardingModal
+          onClose={() => {
+            setShowOnboarding(false)
+            setOnboardingSettings(readOnboardingSettings())
+          }}
+        />
+      )}
     </section>
   )
 }

@@ -80,7 +80,6 @@ def recommend_recipes(
         has_more=result["has_more"],
     )
 
-
 @router.get("/{id}", response_model=RecipeDetailResponse)
 def get_recipe_detail(
     id: int,
