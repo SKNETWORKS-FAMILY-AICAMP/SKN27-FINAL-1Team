@@ -22,11 +22,26 @@ class RecipeSearchResponse(BaseModel):
 
 
 class RecipeRecommendRequest(BaseModel):
-    priority: str = Field(default="소비 임박 우선", description="추천 우선순위")
+    mode: Literal["fridge_consume"] = Field(default="fridge_consume", description="추천 모드")
+    limit: int = Field(default=9, ge=1, le=50, description="반환 개수")
+    exclude_recipe_ids: list[int] = Field(default_factory=list, description="제외할 레시피 ID")
+    refresh_pool: bool = Field(default=False, description="true면 검색 풀 재생성 후 exclude 무시")
 
 
 class RecipeRecommendItem(RecipeSearchItem):
-    match_rate: int = Field(..., ge=0, le=100, description="추천 매칭률")
+    match_rate: int = Field(..., ge=0, le=100, description="가중치 반영 매칭률")
+    display_match_rate: int = Field(..., ge=0, le=100, description="표시용 매칭률")
+    owned_ingredient_count: int = Field(..., ge=0, description="보유(부분 포함) 재료 수")
+    missing_ingredient_count: int = Field(..., ge=0, description="부족 재료 수")
+    expiry_score: int = Field(default=0, ge=0, description="유통기한 우선 점수")
+    reason: Optional[str] = Field(None, description="추천 이유 한 줄")
+
+
+class RecipeRecommendResponse(BaseModel):
+    mode: str = Field(..., description="추천 모드")
+    items: list[RecipeRecommendItem] = Field(default_factory=list, description="추천 결과")
+    returned_count: int = Field(..., description="반환된 결과 수")
+    has_more: bool = Field(..., description="같은 풀에서 추가 추천 가능 여부")
 
 
 class RecipeIngredientItem(BaseModel):

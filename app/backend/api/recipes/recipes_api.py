@@ -6,13 +6,16 @@ from app.backend.api.deps import get_current_user, get_current_user_required
 from app.backend.db.session import get_db
 from app.backend.schemas.recipes import (
     RecipeDetailResponse,
-    RecipeRecommendItem,
     RecipeRecommendRequest,
+    RecipeRecommendResponse,
     RecipeSearchResponse,
 )
 from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
-from app.backend.services.recommendation_service.recommendation_service import recommendation_service
+from app.backend.services.recommendation_service.recommendation_service import (
+    RecipeRecommendConfig,
+    recommendation_service,
+)
 
 router = APIRouter(prefix="/recipes", tags=["Recipes (레시피)"])
 
@@ -46,27 +49,36 @@ def search_recipes(
     )
 
 
-@router.post("/recommend", response_model=list[RecipeRecommendItem])
+@router.post("/recommend", response_model=RecipeRecommendResponse)
 def recommend_recipes(
     request_data: RecipeRecommendRequest,
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """
-    냉장고 재료, 취향, 소비 임박 정보를 종합해 레시피를 추천합니다.
-    현재는 API 계약 확인용 임시 응답을 반환합니다.
-    """
-    recommendations = [
-        {"recipe_id": 1, "title": "대파 볶음밥", "match_rate": 85},
-        {"recipe_id": 2, "title": "두부 김치", "match_rate": 78},
-    ]
-    recommendation_service.save_many(
+    """냉장고 재료·유통기한 기준 레시피 추천. 결과는 자동 저장하지 않습니다."""
+    if request_data.mode != "fridge_consume":
+        return RecipeRecommendResponse(
+            mode=request_data.mode,
+            items=[],
+            returned_count=0,
+            has_more=False,
+        )
+
+    config = RecipeRecommendConfig.fridge_consume_preset()
+    result = recommendation_service.recommend_recipes(
         db,
         current_user_id,
-        [item["recipe_id"] for item in recommendations],
-        "fridge_based",
+        config,
+        exclude_recipe_ids=request_data.exclude_recipe_ids,
+        refresh_pool=request_data.refresh_pool,
     )
-    return recommendations
+
+    return RecipeRecommendResponse(
+        mode=request_data.mode,
+        items=result["items"],
+        returned_count=result["returned_count"],
+        has_more=result["has_more"],
+    )
 
 
 @router.get("/{id}", response_model=RecipeDetailResponse)
