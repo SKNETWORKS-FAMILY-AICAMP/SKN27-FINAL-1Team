@@ -315,14 +315,13 @@ class InventoryService:
         if not fridge_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
 
-        ingredient = db.query(Ingredient).filter(Ingredient.id == fridge_item.ingredient_id).first()
-        if not ingredient:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="식재료 마스터 정보를 찾을 수 없습니다.")
-
+        # 수정된 재료명 기준으로 식재료 마스터를 다시 매핑합니다.
+        ingredient = self._get_or_create_ingredient(db, data)
         storage_location, expiration_date = self._resolve_item_dates_and_storage(db, ingredient, data)
         purchase_date = self._parse_date(data.purchase_date) or date.today()
         d_day = (expiration_date - date.today()).days
 
+        fridge_item.ingredient_id = ingredient.id
         fridge_item.display_name = data.name.strip()
         fridge_item.quantity = data.quantity
         fridge_item.unit = data.unit
