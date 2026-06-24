@@ -12,6 +12,7 @@ from app.backend.api.deps import get_current_user_required
 from app.backend.core.config import settings
 from app.backend.db.models import CalendarEventLog, CalendarIntegration, FridgeItem, RecommendationResult
 from app.backend.db.session import get_db
+from app.backend.services.calendar_mcp_client import create_calendar_event_with_mcp
 
 
 router = APIRouter(prefix="/calendar", tags=["Calendar (캘린더 연동)"])
@@ -143,6 +144,20 @@ async def _create_event_once(
     user_id: int | None = None,
     source: str = "manual",
 ):
+    mcp_result = await create_calendar_event_with_mcp(user_id, calendar_id, access_token, event_key, event, source)
+    if mcp_result:
+        _log_calendar_event(
+            db,
+            user_id,
+            event_key,
+            mcp_result.get("event") or event,
+            "updated" if mcp_result.get("updated") else "duplicate" if mcp_result.get("duplicate") else "created",
+            source,
+            google_event_id=mcp_result.get("event_id"),
+            html_link=mcp_result.get("html_link"),
+        )
+        return mcp_result
+
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
     existing_res = await client.get(
@@ -159,7 +174,8 @@ async def _create_event_once(
         item = existing[0]
         watched_fields = ("summary", "description", "start", "end", "colorId", "reminders")
         if any(item.get(field) != event.get(field) for field in watched_fields):
-            event["extendedProperties"] = {"private": {"bobbeoriKey": event_key}}
+            event.setdefault("extendedProperties", {}).setdefault("private", {})
+            event["extendedProperties"]["private"]["bobbeoriKey"] = event_key
             event_res = await client.patch(f"{url}/{item.get('id')}", headers=headers, json=event)
             if event_res.status_code >= 400:
                 _log_calendar_event(db, user_id, event_key, event, "failed", source, error_message=event_res.text[:500])
@@ -190,7 +206,8 @@ async def _create_event_once(
         )
         return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": True}
 
-    event["extendedProperties"] = {"private": {"bobbeoriKey": event_key}}
+    event.setdefault("extendedProperties", {}).setdefault("private", {})
+    event["extendedProperties"]["private"]["bobbeoriKey"] = event_key
     event_res = await client.post(url, headers=headers, json=event)
     if event_res.status_code >= 400:
         _log_calendar_event(db, user_id, event_key, event, "failed", source, error_message=event_res.text[:500])

@@ -57,5 +57,18 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    
+    # Runpod MCP / AI Server
+    RUNPOD_CALENDAR_MCP_URL: str = os.getenv("RUNPOD_CALENDAR_MCP_URL", "")
+    RUNPOD_INTERNAL_TOKEN: str = os.getenv("RUNPOD_INTERNAL_TOKEN", "")
+    RUNPOD_TIMEOUT_SECONDS: int = int(os.getenv("RUNPOD_TIMEOUT_SECONDS", 20))
+
+    # Receipt OCR Settings
+    OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai_vision")
+    OCR_MODEL: str = os.getenv("OCR_MODEL", OPENAI_MODEL)
+    OCR_FALLBACK_MODEL: str = os.getenv("OCR_FALLBACK_MODEL", "")
+    OCR_UPLOAD_DIR: str = os.getenv("OCR_UPLOAD_DIR", "storage/raw/receipts")
+    OCR_OUTPUT_DIR: str = os.getenv("OCR_OUTPUT_DIR", "storage/processed/receipts")
+    MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 10))
 
 settings = Settings()
