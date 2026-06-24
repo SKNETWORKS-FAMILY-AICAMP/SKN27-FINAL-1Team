@@ -12,6 +12,7 @@ from app.backend.api.deps import get_current_user_required
 from app.backend.core.config import settings
 from app.backend.db.models import CalendarEventLog, CalendarIntegration, FridgeItem, RecommendationResult
 from app.backend.db.session import get_db
+from app.backend.services.calendar_mcp_client import enrich_calendar_events
 
 
 router = APIRouter(prefix="/calendar", tags=["Calendar (캘린더 연동)"])
@@ -363,7 +364,7 @@ async def list_google_calendar_events(
                 }
             )
 
-    return {"events": events}
+    return {"events": await enrich_calendar_events(current_user_id, start_date, end_date, events)}
 
 
 @router.post("/google/connect")
