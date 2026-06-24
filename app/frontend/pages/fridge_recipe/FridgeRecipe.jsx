@@ -237,7 +237,7 @@ function FridgeRecipe() {
             <strong>{savedRecipe.title}</strong>
             <p>{userProfile.name} 마이페이지에서 다시 확인할 수 있어요.</p>
           </div>
-          <button type="button" onClick={() => navigate('/mypage')}>마이페이지에서 확인</button>
+          <button type="button" onClick={() => navigate('/mypage?tab=saved')}>마이페이지에서 확인</button>
         </section>
       ) : null}
     </section>
