@@ -1,63 +1,315 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Numeric, ForeignKey, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+    func,
+    true,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+
 from app.backend.db.base import Base
 
+
+# SQLite 개발 환경에서도 PK 자동 증가가 동작하도록 PostgreSQL의 BIGINT를 SQLite에서는 INTEGER로 매핑합니다.
+BigIntPrimaryKey = BigInteger().with_variant(Integer, "sqlite")
+
+
 class User(Base):
+    """사용자 테이블을 표현하는 ORM 모델입니다."""
+
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    email = Column(String(255), unique=True, index=True, nullable=True)
-    nickname = Column(String(100), nullable=True)
-    provider = Column("auth_provider", String(50), nullable=False)
-    provider_id = Column("provider_user_id", String(255), unique=True, index=True, nullable=False)
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    email = Column(String(255), nullable=False, unique=True)
+    nickname = Column(String(100), nullable=False)
+    provider = Column("auth_provider", String(50), nullable=True)
+    provider_id = Column("provider_user_id", String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # Relationships
-    fridge_items = relationship("FridgeItem", back_populates="user", cascade="all, delete-orphan")
+    # 사용자와 연결된 하위 도메인 데이터를 ORM 관계로 조회합니다.
     preference = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    receipts = relationship("Receipt", back_populates="user", cascade="all, delete-orphan")
+    fridge_items = relationship("FridgeItem", back_populates="user", cascade="all, delete-orphan")
+    recommendation_results = relationship("RecommendationResult", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+
 
 class UserPreference(Base):
+    """사용자별 식재료 선호/알림 설정을 표현하는 ORM 모델입니다."""
+
     __tablename__ = "user_preferences"
+    __table_args__ = (Index("idx_user_preferences_user_id", "user_id"),)
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
-    allergies = Column(String, nullable=True)
-    disliked_ingredients = Column(String, nullable=True)
-    preferred_ingredients = Column(String, nullable=True)
-    allow_expiry_alert = Column(Boolean, default=True, nullable=False)
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    allergies = Column(Text, nullable=True)
+    disliked_ingredients = Column(Text, nullable=True)
+    preferred_ingredients = Column(Text, nullable=True)
+    allow_expiry_alert = Column(Boolean, nullable=False, server_default=true())
 
-    # Relationships
+    # 설정 레코드가 소속된 사용자를 연결합니다.
     user = relationship("User", back_populates="preference")
 
+
 class Ingredient(Base):
+    """식재료 마스터 테이블을 표현하는 ORM 모델입니다."""
+
     __tablename__ = "ingredients"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     normalized_name = Column(String(100), nullable=False, unique=True)
     category = Column(String(100), nullable=True)
     default_unit = Column(String(30), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # Relationships
+    # 식재료와 연결된 별칭, 영수증 항목, 냉장고 항목, 레시피 데이터를 조회합니다.
+    aliases = relationship("IngredientAlias", back_populates="ingredient", cascade="all, delete-orphan")
+    receipt_items = relationship("ReceiptItem", back_populates="ingredient")
     fridge_items = relationship("FridgeItem", back_populates="ingredient")
+    guide = relationship("IngredientGuide", back_populates="ingredient", uselist=False, cascade="all, delete-orphan")
+    recipe_ingredients = relationship("RecipeIngredient", back_populates="ingredient")
+    storage_standards = relationship("IngredientStorageStandard", back_populates="ingredient", cascade="all, delete-orphan")
+
+
+class IngredientAlias(Base):
+    """식재료의 다른 이름을 저장하는 ORM 모델입니다."""
+
+    __tablename__ = "ingredient_aliases"
+    __table_args__ = (
+        UniqueConstraint("ingredient_id", "alias_name", name="uq_ingredient_aliases_ingredient_alias"),
+        Index("idx_ingredient_aliases_alias_name", "alias_name"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="CASCADE"), nullable=False)
+    alias_name = Column(String(100), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 별칭이 가리키는 식재료 마스터를 연결합니다.
+    ingredient = relationship("Ingredient", back_populates="aliases")
+
+
+class IngredientStorageStandard(Base):
+    """식재료 보관 기준 (수명 캐시)을 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "ingredient_storage_standards"
+    __table_args__ = (
+        UniqueConstraint("ingredient_id", "storage_location", name="uq_ingredient_storage_standards"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="CASCADE"), nullable=False)
+    storage_location = Column(String(50), nullable=False)
+    lifespan_days = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 식재료 마스터와의 관계
+    ingredient = relationship("Ingredient", back_populates="storage_standards")
+
+
+class Receipt(Base):
+    """사용자가 업로드한 영수증 정보를 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "receipts"
+    __table_args__ = (Index("idx_receipts_user_id", "user_id"),)
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    original_file_name = Column(String(255), nullable=True)
+    store_name = Column(Text, nullable=True)
+    purchased_at = Column(DateTime(timezone=True), nullable=True)
+    total_price = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 영수증 소유자와 OCR로 추출된 품목을 연결합니다.
+    user = relationship("User", back_populates="receipts")
+    items = relationship("ReceiptItem", back_populates="receipt", cascade="all, delete-orphan")
+
+
+class ReceiptItem(Base):
+    """영수증에서 추출된 개별 구매 품목을 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "receipt_items"
+    __table_args__ = (
+        Index("idx_receipt_items_receipt_id", "receipt_id"),
+        Index("idx_receipt_items_ingredient_id", "ingredient_id"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    receipt_id = Column(BigIntPrimaryKey, ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="SET NULL"), nullable=True)
+    raw_item_name = Column(String(255), nullable=False)
+    normalized_item_name = Column(String(255), nullable=True)
+    quantity = Column(Numeric(10, 2), nullable=True)
+    unit = Column(String(30), nullable=True)
+    price = Column(Integer, nullable=True)
+    is_food = Column(Boolean, nullable=True)
+    memo = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 원본 영수증, 매칭된 식재료, 냉장고 등록 항목을 연결합니다.
+    receipt = relationship("Receipt", back_populates="items")
+    ingredient = relationship("Ingredient", back_populates="receipt_items")
+    fridge_items = relationship("FridgeItem", back_populates="receipt_item")
+
 
 class FridgeItem(Base):
-    __tablename__ = "fridge_items"
+    """사용자가 보유한 냉장고 식재료를 표현하는 ORM 모델입니다."""
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    ingredient_id = Column(Integer, ForeignKey("ingredients.id", ondelete="RESTRICT"), nullable=False)
-    import_candidate_id = Column(Integer, unique=True, nullable=True) # ForeignKey 생략 (당장 구현 불필요)
+    __tablename__ = "fridge_items"
+    __table_args__ = (
+        CheckConstraint("status IN ('normal', 'expiring', 'expired', 'used')", name="ck_fridge_items_status"),
+        Index("idx_fridge_items_user_id", "user_id"),
+        Index("idx_fridge_items_ingredient_id", "ingredient_id"),
+        Index("idx_fridge_items_receipt_item_id", "receipt_item_id"),
+        Index("idx_fridge_items_expiry_date", "expiry_date"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="RESTRICT"), nullable=False)
+    receipt_item_id = Column(
+        BigIntPrimaryKey,
+        ForeignKey("receipt_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     display_name = Column(String(255), nullable=True)
     quantity = Column(Numeric(10, 2), nullable=True)
     unit = Column(String(30), nullable=True)
     storage_location = Column(String(50), nullable=True)
     purchased_date = Column(Date, nullable=True)
     expiry_date = Column(Date, nullable=True)
-    status = Column(String(30), nullable=False, default="normal")
+    status = Column(String(30), nullable=False, server_default="normal")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # Relationships
+    # 냉장고 항목의 소유자, 식재료, 영수증 등록 항목, 알림을 연결합니다.
     user = relationship("User", back_populates="fridge_items")
     ingredient = relationship("Ingredient", back_populates="fridge_items")
+    receipt_item = relationship("ReceiptItem", back_populates="fridge_items")
+    notifications = relationship("Notification", back_populates="fridge_item", cascade="all, delete-orphan")
+
+
+class IngredientGuide(Base):
+    """식재료별 보관/손질 가이드를 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "ingredient_guides"
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="CASCADE"), nullable=False, unique=True)
+    storage_location = Column(String(50), nullable=True)
+    storage_method = Column(Text, nullable=True)
+    prep_method = Column(Text, nullable=True)
+    wash_method = Column(Text, nullable=True)
+    freshness_check = Column(Text, nullable=True)
+    caution = Column(Text, nullable=True)
+    source_url = Column(String(500), nullable=True)
+    validation_status = Column(String(30), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 가이드가 설명하는 식재료 마스터를 연결합니다.
+    ingredient = relationship("Ingredient", back_populates="guide")
+
+
+class Recipe(Base):
+    """추천과 상세 조회에 사용하는 레시피 정보를 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "recipes"
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    serving_size = Column(Integer, nullable=True)
+    cooking_time = Column(Integer, nullable=True)
+    difficulty = Column(String(50), nullable=True)
+    image_url = Column(String(500), nullable=True)
+    source_url = Column(String(500), nullable=True)
+    recipe_steps = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    recipe_ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
+    recommendation_results = relationship("RecommendationResult", back_populates="recipe", cascade="all, delete-orphan")
+
+
+class RecipeIngredient(Base):
+    """레시피에 필요한 식재료와 수량을 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "recipe_ingredients"
+    __table_args__ = (
+        Index("idx_recipe_ingredients_recipe_id", "recipe_id"),
+        Index("idx_recipe_ingredients_ingredient_id", "ingredient_id"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    recipe_id = Column(BigIntPrimaryKey, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="RESTRICT"), nullable=False)
+    raw_ingredient_name = Column(String(255), nullable=True)
+    required_quantity = Column(Numeric(10, 2), nullable=True)
+    unit = Column(String(30), nullable=True)
+    is_main_ingredient = Column(Boolean, nullable=False, server_default=false())
+
+    # 레시피와 식재료 마스터를 연결합니다.
+    recipe = relationship("Recipe", back_populates="recipe_ingredients")
+    ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
+
+
+class RecommendationResult(Base):
+    """사용자별 레시피 추천 결과를 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "recommendation_results"
+    __table_args__ = (Index("idx_recommendation_results_user_id", "user_id"),)
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    recipe_id = Column(BigIntPrimaryKey, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    recommendation_type = Column(String(50), nullable=True)
+    match_score = Column(Numeric(5, 2), nullable=True)
+    owned_ingredient_count = Column(Integer, nullable=True)
+    missing_ingredient_count = Column(Integer, nullable=True)
+    missing_ingredients = Column(Text, nullable=True)
+    rank_no = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 추천 결과의 대상 사용자와 레시피를 연결합니다.
+    user = relationship("User", back_populates="recommendation_results")
+    recipe = relationship("Recipe", back_populates="recommendation_results")
+
+
+class Notification(Base):
+    """소비기한 관련 사용자 알림을 표현하는 ORM 모델입니다."""
+
+    __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint("notification_type IN ('expiring_soon', 'expired')", name="ck_notifications_type"),
+        CheckConstraint("status IN ('pending', 'sent', 'read', 'failed')", name="ck_notifications_status"),
+        Index("idx_notifications_user_id", "user_id"),
+        Index("idx_notifications_fridge_item_id", "fridge_item_id"),
+        Index("idx_notifications_status", "status"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    fridge_item_id = Column(BigIntPrimaryKey, ForeignKey("fridge_items.id", ondelete="CASCADE"), nullable=False)
+    notification_type = Column(String(50), nullable=False)
+    target_date = Column(Date, nullable=True)
+    message = Column(Text, nullable=True)
+    status = Column(String(30), nullable=False, server_default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    # 알림 수신 사용자와 대상 냉장고 항목을 연결합니다.
+    user = relationship("User", back_populates="notifications")
+    fridge_item = relationship("FridgeItem", back_populates="notifications")

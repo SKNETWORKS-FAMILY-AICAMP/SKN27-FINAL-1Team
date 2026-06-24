@@ -25,7 +25,8 @@ function getAuthMode() {
 }
 
 function Header() {
-  const { pathname } = useLocation()
+  const location = useLocation()
+  const { pathname } = location
   const navigate = useNavigate()
   const isRecipeActive = recipeItems.some((item) => item.to === pathname) || pathname.startsWith('/recipes/')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -41,7 +42,19 @@ function Header() {
     event.preventDefault()
     const query = searchTerm.trim()
 
-    navigate(query ? `/recipes?query=${encodeURIComponent(query)}` : '/recipes')
+    if (pathname.startsWith('/recipes')) {
+      const params = new URLSearchParams(location.search)
+      if (query) {
+        params.set('query', query)
+      } else {
+        params.delete('query')
+      }
+      params.delete('browse')
+      const search = params.toString()
+      navigate(search ? `/recipes?${search}` : '/recipes')
+    } else {
+      navigate(query ? `/recipes?query=${encodeURIComponent(query)}` : '/recipes')
+    }
     closeMobileMenu()
   }
 

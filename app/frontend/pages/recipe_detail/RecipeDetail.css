@@ -417,8 +417,13 @@
   min-height: 132px;
   padding: 12px;
   display: grid;
-  grid-template-columns: 28px 72px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'number title'
+    '. content';
+  align-content: start;
+  gap: 6px 10px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
   background: #fffdf8;
@@ -436,6 +441,8 @@
 }
 
 .recipe-detail-step-list article > span {
+  grid-area: number;
+  align-self: start;
   width: 26px;
   height: 26px;
   display: grid;
@@ -447,12 +454,9 @@
   font-weight: 900;
 }
 
-.recipe-detail-step__image {
-  width: 72px;
-  height: 72px;
-}
-
 .recipe-detail-step-list h3 {
+  grid-area: title;
+  align-self: center;
   margin: 0;
   color: var(--figma-text);
   font-size: 13px;
@@ -460,11 +464,13 @@
 }
 
 .recipe-detail-step-list p {
-  margin: 6px 0 0;
+  grid-area: content;
+  align-self: start;
+  margin: 0;
   color: #6f4b36;
   font-size: 11px;
   font-weight: 800;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 @media (max-width: 1120px) {
@@ -674,11 +680,6 @@
 
   .recipe-detail-step-list article {
     min-height: 82px;
-    grid-template-columns: 28px minmax(0, 1fr);
-  }
-
-  .recipe-detail-step__image {
-    display: none !important;
   }
 
   .recipe-detail-primary {
@@ -691,4 +692,22 @@
   .recipe-detail-main-image {
     height: 206px;
   }
+}
+
+.recipe-detail-status {
+  margin: 24px 0 16px;
+  color: #6f4b36;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.recipe-detail-status--error {
+  color: #b42318;
+}
+
+.recipe-detail-empty-note {
+  margin: 0;
+  color: #8a6a55;
+  font-size: 14px;
+  line-height: 1.5;
 }

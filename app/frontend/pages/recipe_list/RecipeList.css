@@ -204,6 +204,28 @@
   font-weight: 800;
 }
 
+.recipe-list-quick.is-pending .recipe-list-quick-card,
+.recipe-list-filter.is-pending select:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.recipe-list-quick.is-pending .recipe-list-quick-card:disabled {
+  pointer-events: none;
+}
+
+.recipe-list-pending-label {
+  margin-left: 8px;
+  color: #9a7a62;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recipe-card__media button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .recipe-list-filter {
   margin-top: 34px;
 }
@@ -237,9 +259,17 @@
 
 .recipe-list-filter__controls {
   display: grid;
-  grid-template-columns: 170px 170px 170px minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+}
+
+.recipe-list-filter__controls > select {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recipe-list-filter select,
@@ -324,6 +354,29 @@
 
 .recipe-list-results {
   margin-top: 28px;
+}
+
+.recipe-list-results__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.recipe-list-results__header h2 {
+  margin: 0;
+}
+
+.recipe-list-status {
+  margin: 0 0 14px;
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.recipe-list-status--error {
+  color: #b42318;
 }
 
 .recipe-list-grid {

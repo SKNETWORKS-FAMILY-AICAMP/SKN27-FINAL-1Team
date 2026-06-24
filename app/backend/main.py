@@ -11,6 +11,7 @@ from app.backend.api.onboarding import onboarding_api
 from app.backend.api.receipts import receipts_api
 from app.backend.api.guide import guide_api
 from app.backend.api.recipes import recipes_api
+from app.backend.api.recommendations import recommendations_api
 from app.backend.api.shopping import shopping_api
 from app.backend.api.notifications import notifications_api
 
@@ -49,6 +50,7 @@ app.include_router(inventory_api.router, prefix=API_V1_PREFIX)
 app.include_router(receipts_api.router, prefix=API_V1_PREFIX)
 app.include_router(guide_api.router, prefix=API_V1_PREFIX)
 app.include_router(recipes_api.router, prefix=API_V1_PREFIX)
+app.include_router(recommendations_api.router, prefix=API_V1_PREFIX)
 app.include_router(shopping_api.router, prefix=API_V1_PREFIX)
 app.include_router(notifications_api.router, prefix=API_V1_PREFIX)
 

@@ -10,13 +10,6 @@ import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
 import { serviceContext, userProfile } from '../../mock/userService.js'
 
-const stats = [
-  { label: '보유 재료', value: '28개', note: '냉장 18 · 냉동 7 · 임박 3', image: iconRefrigerator },
-  { label: '추천 횟수', value: '24회', note: '이번 달 기준', image: iconAlarm },
-  { label: '절약 금액', value: serviceContext.savedThisMonth, note: '직접 요리 기준', image: iconBasket },
-  { label: '이번 장보기', value: '15,690원', note: `${serviceContext.selectedMarket} 최저가`, image: iconCart },
-]
-
 const settings = [
   { label: '소비 임박 재료 우선 추천', checked: true },
   { label: '매운맛 선호', checked: false },
@@ -76,10 +69,15 @@ function Mypage() {
   const [profileName, setProfileName] = useState(userProfile.name)
   const [profileEmail, setProfileEmail] = useState('babbeori@example.com')
   const [isEditingProfile, setIsEditingProfile] = useState(false)
-  const [connectedSocials, setConnectedSocials] = useState(['카카오', '네이버'])
+  const [connectedSocials, setConnectedSocials] = useState(['카카오', '네이버', '구글'])
   const [completedSteps, setCompletedSteps] = useState(['프로필 확인'])
   const [saveMessage, setSaveMessage] = useState('추천 기준이 서비스에 반영되어 있어요.')
   const [userData, setUserData] = useState(null)
+  const [inventorySummary, setInventorySummary] = useState({
+    total: 0,
+    expiring_soon: 0,
+    storage: { 냉장: 0, 냉동: 0, 실온: 0, 기타: 0 },
+  })
   const [savedFridgeRecipe] = useState(() => {
     if (typeof window === 'undefined') return null
 
@@ -96,6 +94,18 @@ function Mypage() {
     () => alertSettings.filter((alert) => alert.checked).length,
     [alertSettings],
   )
+
+  const dynamicStats = [
+    { 
+      label: '보유 재료', 
+      value: `${inventorySummary.total}개`, 
+      note: `냉장 ${inventorySummary.storage['냉장']} · 냉동 ${inventorySummary.storage['냉동']} · 임박 ${inventorySummary.expiring_soon}`, 
+      image: iconRefrigerator 
+    },
+    { label: '추천 횟수', value: '24회', note: '이번 달 기준', image: iconAlarm },
+    { label: '절약 금액', value: serviceContext.savedThisMonth, note: '직접 요리 기준', image: iconBasket },
+    { label: '이번 장보기', value: '15,690원', note: `${serviceContext.selectedMarket} 최저가`, image: iconCart },
+  ]
 
   const completeStep = (step) => {
     setCompletedSteps((prev) => (prev.includes(step) ? prev : [...prev, step]))
@@ -114,18 +124,27 @@ function Mypage() {
     const fetchUser = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const [userDataResponse, summaryResponse] = await Promise.all([
+          fetch(`${apiUrl}/api/v1/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${apiUrl}/api/v1/inventory/summary`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ])
 
-        if (!response.ok) {
+        if (!userDataResponse.ok) {
           throw new Error('인증 실패')
         }
 
-        const data = await response.json()
+        const data = await userDataResponse.json()
         setUserData(data)
+        
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json()
+          setInventorySummary(summaryData)
+        }
+
         setProfileName(data.nickname ? `${data.nickname}님` : userProfile.name)
         setProfileEmail(data.email || 'babbeori@example.com')
         setConnectedSocials((prev) => {
@@ -297,11 +316,14 @@ function Mypage() {
                     ? 'mypage-social__pill--google'
                     : 'mypage-social__pill--naver'
 
+              const isActive =
+                (social === '카카오' && userData?.provider === 'kakao') ||
+                (social === '네이버' && userData?.provider === 'naver') ||
+                (social === '구글' && userData?.provider === 'google')
+
               return (
                 <span
-                  className={`mypage-social__pill ${className} ${
-                    userData?.provider && social.toLowerCase().includes(userData.provider) ? 'is-active' : ''
-                  }`}
+                  className={`mypage-social__pill ${className} ${isActive ? 'is-active' : ''}`}
                   key={social}
                 >
                   {social}
@@ -316,7 +338,7 @@ function Mypage() {
       </section>
 
       <div className="mypage-stats" aria-label="마이페이지 통계">
-        {stats.map((stat, index) => (
+        {dynamicStats.map((stat, index) => (
           <button
             className="mypage-panel mypage-stat"
             key={stat.label}
