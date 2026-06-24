@@ -143,8 +143,19 @@
 .receipt-guest-grid {
   display: grid;
   grid-template-columns: minmax(330px, 0.84fr) minmax(330px, 0.8fr);
+  grid-template-areas:
+    "upload login"
+    "chart chart";
   gap: 18px;
   align-items: stretch;
+}
+
+.receipt-guest-grid .receipt-upload {
+  grid-area: upload;
+}
+
+.receipt-login-notice {
+  grid-area: login;
 }
 
 .receipt-before-grid {
@@ -351,6 +362,14 @@
   white-space: nowrap;
 }
 
+.receipt-panel__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .receipt-panel__title button,
 .receipt-preview__title button,
 .receipt-preview-tools button {
@@ -371,6 +390,23 @@
   margin-top: 14px;
   display: grid;
   gap: 9px;
+}
+
+.receipt-rules--inline {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #f1d9b3;
+  border-radius: 14px;
+  background: #fffaf2;
+}
+
+.receipt-rules--inline h2 {
+  font-size: 16px;
+}
+
+.receipt-rules--inline .receipt-rule-list {
+  margin-top: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .receipt-history-list button,
@@ -536,6 +572,130 @@
   line-height: 1.5;
 }
 
+.receipt-week-chart {
+  min-height: 144px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-rows: auto minmax(94px, 1fr) auto;
+  gap: 8px;
+  border-radius: 14px;
+  background: #fffaf2;
+}
+
+.receipt-week-chart__legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  color: #6f4b36;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.receipt-week-chart__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.receipt-week-chart__legend span::before {
+  content: "";
+  width: 18px;
+  height: 8px;
+  display: block;
+  border-radius: 999px;
+}
+
+.receipt-week-chart__legend .is-amount::before {
+  background: linear-gradient(180deg, #ffd985, #fff2c4);
+}
+
+.receipt-week-chart__legend .is-items::before {
+  height: 3px;
+  background: #ff6975;
+}
+
+.receipt-week-chart__plot {
+  min-width: 0;
+}
+
+.receipt-week-chart__plot svg {
+  width: 100%;
+  height: 116px;
+  display: block;
+  overflow: visible;
+}
+
+.receipt-week-chart__grid {
+  fill: none;
+  stroke: #efd8b8;
+  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+}
+
+.receipt-week-chart__bar {
+  fill: url("#receipt-week-bar-gradient");
+}
+
+.receipt-week-chart__line {
+  fill: none;
+  stroke: #ff6975;
+  stroke-width: 3.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.receipt-week-chart__dot {
+  fill: #fffdf8;
+  stroke: #ff6975;
+  stroke-width: 3;
+}
+
+.receipt-week-chart__value,
+.receipt-week-chart__label {
+  fill: #6f4b36;
+  font-size: 10px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.receipt-week-chart__value {
+  fill: #3c2a1f;
+}
+
+.receipt-week-chart__summary {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  list-style: none;
+}
+
+.receipt-week-chart__summary li {
+  min-width: 0;
+  padding: 6px 5px;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #8b673e;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.receipt-week-chart__summary span,
+.receipt-week-chart__summary strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-week-chart__summary strong {
+  margin-top: 2px;
+  color: #3c2a1f;
+}
+
 .receipt-chart__bars {
   height: 116px;
   padding: 14px;
@@ -653,11 +813,11 @@
 
 .receipt-mapping-row {
   min-height: 72px;
-  padding: 12px 14px;
+  padding: 12px;
   display: grid;
-  grid-template-columns: minmax(190px, 0.95fr) minmax(210px, 0.82fr) minmax(90px, 0.34fr) minmax(176px, 0.62fr);
+  grid-template-columns: minmax(180px, 0.88fr) minmax(250px, 0.92fr) minmax(82px, 0.3fr) minmax(124px, 0.46fr);
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid #f1d9b3;
   border-radius: 16px;
   background: #fffdf8;
@@ -707,7 +867,7 @@
 
 .receipt-mapping-row small {
   display: block;
-  margin-top: 3px;
+  margin: 0 0 5px;
   color: #8b673e;
   font-size: 10px;
   font-weight: 800;
@@ -718,9 +878,9 @@
 
 .receipt-mapping-details {
   display: grid;
-  grid-template-columns: minmax(72px, 0.62fr) minmax(104px, 0.9fr);
+  grid-template-columns: minmax(150px, 1fr) minmax(96px, 0.66fr);
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 
 .receipt-mapping-details label {
@@ -754,37 +914,111 @@
   padding: 0 10px;
 }
 
+.receipt-inline-select {
+  min-height: 32px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid #efd8b8;
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #3c2a1f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .receipt-inline-input--price {
   color: #8b673e;
   text-align: right;
 }
 
-.receipt-inline-input:disabled {
+.receipt-inline-input:disabled,
+.receipt-inline-select:disabled {
   border-color: transparent;
   background-color: #fff7e8;
+  cursor: default;
   opacity: 1;
   -webkit-text-fill-color: currentColor;
 }
 
-.receipt-mapping-row .is-category {
-  min-height: 28px;
-  display: inline-flex;
+.receipt-quantity-field {
+  grid-template-columns: minmax(0, 1fr) 52px;
+  column-gap: 4px;
+}
+
+.receipt-quantity-field > small {
+  grid-column: 1 / -1;
+}
+
+.receipt-quantity-control {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px minmax(38px, 1fr) 24px;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
+}
+
+.receipt-quantity-control button {
+  width: 24px;
+  min-height: 32px;
+  border: 1px solid #efd8b8;
+  border-radius: 10px;
+  background: #fffaf2;
+  color: #7b5437;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.receipt-quantity-control button:disabled {
+  border-color: transparent;
+  background: #fff7e8;
+  color: #b59a7e;
+  cursor: default;
+}
+
+.receipt-quantity-control .receipt-inline-input {
+  padding: 0 6px;
+  text-align: center;
+}
+
+.receipt-storage-cell {
+  min-width: 0;
+}
+
+.receipt-storage-select {
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 0;
   border-radius: 999px;
   background: #e8f8d8;
   color: #3f8f38;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.receipt-storage-select:disabled {
+  cursor: default;
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
 }
 
 .receipt-row-status {
   display: grid;
   justify-items: end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .receipt-row-status > strong {
   min-height: 26px;
-  padding: 0 10px;
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -802,10 +1036,10 @@
 
 .receipt-confirm-toggle {
   min-height: 32px;
-  padding: 0 10px 0 6px;
+  padding: 0 8px 0 5px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid #f3c36c;
   border-radius: 999px;
   background: #fff5df;
@@ -823,7 +1057,7 @@
 }
 
 .receipt-confirm-toggle > span {
-  width: 36px;
+  width: 30px;
   height: 20px;
   padding: 2px;
   display: inline-flex;
@@ -856,7 +1090,7 @@
 }
 
 .receipt-confirm-toggle.is-confirmed > span::before {
-  transform: translateX(16px);
+  transform: translateX(10px);
 }
 
 .receipt-add-row {
@@ -926,7 +1160,9 @@
     grid-template-areas: none;
   }
 
+  .receipt-guest-grid .receipt-upload,
   .receipt-before-grid .receipt-upload,
+  .receipt-login-notice,
   .receipt-before-side,
   .receipt-chart {
     grid-area: auto;
@@ -1066,6 +1302,18 @@
     grid-template-columns: 1fr;
   }
 
+  .receipt-week-chart {
+    padding: 10px;
+  }
+
+  .receipt-week-chart__plot svg {
+    height: 104px;
+  }
+
+  .receipt-week-chart__summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .receipt-chart__bars {
     height: 92px;
   }
@@ -1112,6 +1360,10 @@
     font-size: 11px;
   }
 
+  .receipt-panel__actions {
+    justify-content: flex-start;
+  }
+
   .receipt-mapping-row,
   .receipt-mapping-row--head {
     grid-template-columns: 1fr 1fr;
@@ -1136,7 +1388,9 @@
     white-space: normal;
   }
 
-  .receipt-mapping-row .is-category,
+  .receipt-storage-cell,
+  .receipt-storage-select,
+  .receipt-inline-select,
   .receipt-inline-input,
   .receipt-row-status {
     width: 100%;
@@ -1196,7 +1450,8 @@
     gap: 8px;
   }
   .receipt-inline-input,
-  .is-category {
+  .receipt-inline-select,
+  .receipt-storage-select {
     width: 100% !important;
     box-sizing: border-box !important;
     min-width: 0 !important;

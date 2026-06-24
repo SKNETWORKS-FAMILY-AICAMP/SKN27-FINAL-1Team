@@ -14,11 +14,108 @@ import {
   receiptSteps as steps,
 } from '../../mock/receiptOcrMock.js'
 
+const weeklyPurchaseData = [
+  { week: '1주차', items: 8, amount: 32600 },
+  { week: '2주차', items: 12, amount: 48700 },
+  { week: '3주차', items: 9, amount: 35400 },
+  { week: '4주차', items: 15, amount: 61200 },
+  { week: '5주차', items: 11, amount: 42900 },
+]
+
+const quantityUnitOptions = ['kg', '개']
+const storageOptions = ['냉동', '냉장', '실온']
+
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
     <span className={`receipt-image-slot ${src ? 'is-filled' : ''} ${className}`}>
       {src ? <img src={src} alt={alt} /> : null}
     </span>
+  )
+}
+
+function PurchaseFlowChart({ isLoggedIn }) {
+  const weeklyChartMaxAmount = Math.max(...weeklyPurchaseData.map((data) => data.amount))
+  const weeklyChartMaxItems = Math.max(...weeklyPurchaseData.map((data) => data.items))
+  const weeklyChartPoints = weeklyPurchaseData.map((data, index) => {
+    const x = 18 + index * (164 / (weeklyPurchaseData.length - 1))
+    const y = 92 - (data.items / weeklyChartMaxItems) * 62
+    const barHeight = (data.amount / weeklyChartMaxAmount) * 58
+    const barY = 92 - barHeight
+
+    return { ...data, x, y, barHeight, barY }
+  })
+  const weeklyChartLine = weeklyChartPoints.map((point) => `${point.x},${point.y}`).join(' ')
+  const chartId = isLoggedIn ? 'receipt-chart-title' : 'receipt-guest-chart-title'
+
+  return (
+    <section className="receipt-panel receipt-chart" aria-labelledby={chartId}>
+      <div>
+        <h2 id={chartId}>식재료 구매 흐름</h2>
+        <p>
+          {isLoggedIn
+            ? '최근 구매일 기준으로 주차별 식재료 구매량과 금액을 보여줘요.'
+            : '최근 구매 금액과 월별 구매 횟수를 기준으로 보여줘요.'}
+        </p>
+      </div>
+      {isLoggedIn ? (
+        <div className="receipt-week-chart" role="img" aria-label="주차별 식재료 구매량과 금액 그래프">
+          <div className="receipt-week-chart__legend" aria-hidden="true">
+            <span className="is-amount">구매 금액</span>
+            <span className="is-items">품목 수</span>
+          </div>
+          <div className="receipt-week-chart__plot">
+            <svg viewBox="0 0 200 116" aria-hidden="true" focusable="false">
+              <defs>
+                <linearGradient id="receipt-week-bar-gradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#ffbe75" />
+                  <stop offset="100%" stopColor="#ffe9a8" />
+                </linearGradient>
+              </defs>
+              <path className="receipt-week-chart__grid" d="M18 30 H182 M18 61 H182 M18 92 H182" />
+              {weeklyChartPoints.map((point) => (
+                <rect
+                  className="receipt-week-chart__bar"
+                  height={point.barHeight}
+                  key={`${point.week}-amount`}
+                  rx="4"
+                  width="18"
+                  x={point.x - 9}
+                  y={point.barY}
+                />
+              ))}
+              <polyline className="receipt-week-chart__line" points={weeklyChartLine} />
+              {weeklyChartPoints.map((point) => (
+                <g key={point.week}>
+                  <circle className="receipt-week-chart__dot" cx={point.x} cy={point.y} r="4.5" />
+                  <text className="receipt-week-chart__value" x={point.x} y={point.y - 9}>
+                    {point.items}개
+                  </text>
+                  <text className="receipt-week-chart__label" x={point.x} y="108">
+                    {point.week}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+          <ul className="receipt-week-chart__summary" aria-label="주차별 구매 금액">
+            {weeklyPurchaseData.map((data) => (
+              <li key={data.week}>
+                <span>{data.week}</span>
+                <strong>{data.amount.toLocaleString()}원</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="receipt-chart__bars" aria-hidden="true">
+          <span style={{ height: '42%' }} />
+          <span style={{ height: '66%' }} />
+          <span style={{ height: '54%' }} />
+          <span style={{ height: '82%' }} />
+          <span style={{ height: '58%' }} />
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -40,6 +137,29 @@ function getInitialEditingRows(nextRows) {
   }, {})
 }
 
+function parseQuantity(quantity) {
+  const quantityText = String(quantity ?? '1개')
+  const amount = Number.parseFloat(quantityText.replace(/[^\d.]/g, ''))
+  const unit = quantityUnitOptions.find((option) => quantityText.includes(option))
+
+  return {
+    quantityAmount: Number.isFinite(amount) && amount > 0 ? amount : 1,
+    quantityUnit: unit || '개',
+  }
+}
+
+function normalizeReceiptRows(nextRows) {
+  return nextRows.map((row) => ({
+    ...row,
+    ...parseQuantity(row.quantity),
+    storage: row.storage || '냉장',
+  }))
+}
+
+function formatQuantity(row) {
+  return `${row.quantityAmount ?? 1}${row.quantityUnit || '개'}`
+}
+
 function ReceiptOcr() {
   const navigate = useNavigate()
   const { dialogNode, showAlert, showConfirm, showPrompt } = useAppDialog()
@@ -47,7 +167,7 @@ function ReceiptOcr() {
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
   const [hasUploaded, setHasUploaded] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
-  const [detectedRows, setDetectedRows] = useState(rows)
+  const [detectedRows, setDetectedRows] = useState(() => normalizeReceiptRows(rows))
   const [editingRows, setEditingRows] = useState(() => getInitialEditingRows(rows))
   const [receiptSource, setReceiptSource] = useState('샘플 영수증')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -62,6 +182,7 @@ function ReceiptOcr() {
   const progressPercent = hasUploaded ? Math.round(((activeStep + 1) / steps.length) * 100) : 0
   const currentStepLabel = steps[activeStep]
   const isReadyToStock = hasUploaded && activeStep >= steps.length - 1
+  const isAllConfirmed = reviewCount === 0
 
   const progressDescriptions = [
     '영수증을 올리거나 촬영하면 분석을 시작해요.',
@@ -167,13 +288,65 @@ function ReceiptOcr() {
         raw: name.trim(),
         name: name.trim(),
         quantity: '1개',
+        quantityAmount: 1,
+        quantityUnit: '개',
         price: '0원',
         category: '기타',
+        storage: '냉장',
         review: true,
       },
     ])
     setEditingRows((prev) => ({ ...prev, [name.trim()]: true }))
     setHasUploaded(true)
+    setActiveStep(2)
+  }
+
+  const updateQuantityAmount = (raw, nextAmount) => {
+    const numericAmount = Number.parseFloat(nextAmount)
+    const safeAmount = Number.isFinite(numericAmount) ? Math.max(0, numericAmount) : 0
+
+    setDetectedRows((prev) =>
+      prev.map((row) =>
+        row.raw === raw
+          ? {
+              ...row,
+              quantityAmount: safeAmount,
+              quantity: `${safeAmount}${row.quantityUnit || '개'}`,
+              review: true,
+            }
+          : row,
+      ),
+    )
+    setEditingRows((prev) => ({ ...prev, [raw]: true }))
+    setActiveStep(2)
+  }
+
+  const stepQuantityAmount = (raw, direction) => {
+    const targetRow = detectedRows.find((row) => row.raw === raw)
+    const currentAmount = Number.parseFloat(targetRow?.quantityAmount)
+    const nextAmount = Math.max(0, (Number.isFinite(currentAmount) ? currentAmount : 0) + direction)
+
+    updateQuantityAmount(raw, nextAmount)
+  }
+
+  const updateQuantityUnit = (raw, unit) => {
+    if (!quantityUnitOptions.includes(unit)) {
+      return
+    }
+
+    setDetectedRows((prev) =>
+      prev.map((row) =>
+        row.raw === raw
+          ? {
+              ...row,
+              quantityUnit: unit,
+              quantity: `${row.quantityAmount ?? 1}${unit}`,
+              review: true,
+            }
+          : row,
+      ),
+    )
+    setEditingRows((prev) => ({ ...prev, [raw]: true }))
     setActiveStep(2)
   }
 
@@ -202,9 +375,22 @@ function ReceiptOcr() {
     setActiveStep(2)
   }
 
+  const toggleAllRowsConfirmation = () => {
+    const nextReviewState = isAllConfirmed
+
+    setDetectedRows((prev) => prev.map((row) => ({ ...row, review: nextReviewState })))
+    setEditingRows(
+      detectedRows.reduce((nextEditingRows, row) => {
+        nextEditingRows[row.raw] = nextReviewState
+        return nextEditingRows
+      }, {}),
+    )
+    setActiveStep(2)
+  }
+
   const resetAnalysis = () => {
     clearFlowTimers()
-    setDetectedRows(rows)
+    setDetectedRows(normalizeReceiptRows(rows))
     setEditingRows(getInitialEditingRows(rows))
     setReceiptSource('샘플 영수증')
     setHasUploaded(false)
@@ -250,7 +436,7 @@ function ReceiptOcr() {
     <section className="receipt-page" aria-labelledby="receipt-title">
       <div className="receipt-hero">
         <div className="receipt-hero__copy">
-          <h1 id="receipt-title">영수증 OCR 입고</h1>
+          <h1 id="receipt-title">영수증 입고</h1>
           <p>영수증 한 장으로 재료를 똑똑하게 등록해요!</p>
         </div>
         <ImageSlot className="receipt-hero__image" src={imageReceipt} />
@@ -290,27 +476,15 @@ function ReceiptOcr() {
               로그인하러 가기
             </button>
           </section>
+          <PurchaseFlowChart isLoggedIn={false} />
         </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
           <UploadPanel onStartUpload={startUpload} />
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
-            <ReceiptRules />
           </aside>
-          <section className="receipt-panel receipt-chart" aria-labelledby="receipt-chart-title">
-            <div>
-              <h2 id="receipt-chart-title">식재료 구매 흐름</h2>
-              <p>최근 구매 금액과 월별 구매 횟수를 기준으로 보여줘요.</p>
-            </div>
-            <div className="receipt-chart__bars" aria-hidden="true">
-              <span style={{ height: '42%' }} />
-              <span style={{ height: '66%' }} />
-              <span style={{ height: '54%' }} />
-              <span style={{ height: '82%' }} />
-              <span style={{ height: '58%' }} />
-            </div>
-          </section>
+          <PurchaseFlowChart isLoggedIn />
         </div>
       ) : (
         <>
@@ -348,7 +522,7 @@ function ReceiptOcr() {
                   {detectedRows.map((row) => (
                     <div key={row.raw}>
                       <dt>{row.raw}</dt>
-                      <dd>{row.quantity}</dd>
+                      <dd>{formatQuantity(row)}</dd>
                       <dd>{row.price}</dd>
                     </div>
                   ))}
@@ -375,9 +549,15 @@ function ReceiptOcr() {
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
+              <ReceiptRules variant="inline" />
               <div className="receipt-panel__title">
                 <h2 id="mapping-title">표준 재료명 매칭</h2>
-                <span>전체 금액 {totalAmount.toLocaleString()}원</span>
+                <div className="receipt-panel__actions">
+                  <button type="button" onClick={toggleAllRowsConfirmation}>
+                    {isAllConfirmed ? '전체 확인 취소' : '전체 확인'}
+                  </button>
+                  <span>전체 금액 {totalAmount.toLocaleString()}원</span>
+                </div>
               </div>
               <p className="receipt-mapping__helper">
                 OCR 결과는 먼저 모두 수정 가능하게 열려 있어요. 수량과 금액을 확인한 뒤 확정을 누르면 해당 행이 잠깁니다.
@@ -387,7 +567,7 @@ function ReceiptOcr() {
                 <div className="receipt-mapping-row receipt-mapping-row--head" role="row">
                   <span role="columnheader">재료</span>
                   <span role="columnheader">입고 정보</span>
-                  <span role="columnheader">분류</span>
+                  <span role="columnheader">보관</span>
                   <span role="columnheader">확인</span>
                 </div>
                 {detectedRows.map((row) => {
@@ -398,6 +578,7 @@ function ReceiptOcr() {
                     <span className="receipt-mapping-name-cell" role="cell">
                       <ImageSlot className="receipt-mapping-row__image" src={row.image} />
                       <b>
+                        <small>원문: {row.raw}</small>
                         {isEditing ? (
                           <input
                             aria-label={`${row.raw} 표준 재료명`}
@@ -409,20 +590,52 @@ function ReceiptOcr() {
                         ) : (
                           row.name
                         )}
-                        <small>원문: {row.raw}</small>
                       </b>
                     </span>
                     <span className="receipt-mapping-details" role="cell">
-                      <label>
+                      <label className="receipt-quantity-field">
                         <small>수량</small>
-                        <input
-                          aria-label={`${row.name} 수량`}
-                          className="receipt-inline-input"
-                          type="text"
-                          value={row.quantity}
+                        <span className="receipt-quantity-control">
+                          <button
+                            aria-label={`${row.name} 수량 감소`}
+                            disabled={!isEditing}
+                            type="button"
+                            onClick={() => stepQuantityAmount(row.raw, -1)}
+                          >
+                            -
+                          </button>
+                          <input
+                            aria-label={`${row.name} 수량`}
+                            className="receipt-inline-input"
+                            min="0"
+                            step={row.quantityUnit === 'kg' ? '0.1' : '1'}
+                            type="number"
+                            value={row.quantityAmount ?? 1}
+                            disabled={!isEditing}
+                            onChange={(event) => updateQuantityAmount(row.raw, event.target.value)}
+                          />
+                          <button
+                            aria-label={`${row.name} 수량 증가`}
+                            disabled={!isEditing}
+                            type="button"
+                            onClick={() => stepQuantityAmount(row.raw, 1)}
+                          >
+                            +
+                          </button>
+                        </span>
+                        <select
+                          aria-label={`${row.name} 단위`}
+                          className="receipt-inline-select"
                           disabled={!isEditing}
-                          onChange={(event) => updateRowField(row.raw, 'quantity', event.target.value)}
-                        />
+                          value={row.quantityUnit || '개'}
+                          onChange={(event) => updateQuantityUnit(row.raw, event.target.value)}
+                        >
+                          {quantityUnitOptions.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unit}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <label>
                         <small>금액</small>
@@ -436,8 +649,20 @@ function ReceiptOcr() {
                         />
                       </label>
                     </span>
-                    <span role="cell" className="is-category">
-                      {row.category}
+                    <span role="cell" className="receipt-storage-cell">
+                      <select
+                        aria-label={`${row.name} 보관 방법`}
+                        className="receipt-storage-select"
+                        disabled={!isEditing}
+                        value={row.storage || '냉장'}
+                        onChange={(event) => updateRowField(row.raw, 'storage', event.target.value)}
+                      >
+                        {storageOptions.map((storage) => (
+                          <option key={storage} value={storage}>
+                            {storage}
+                          </option>
+                        ))}
+                      </select>
                     </span>
                     <span className="receipt-row-status" role="cell">
                       <strong className={row.review || isEditing ? 'is-review' : ''}>
@@ -493,7 +718,7 @@ function UploadPanel({ onStartUpload }) {
       <h2 id="upload-title">영수증 업로드</h2>
       <div className="receipt-dropzone">
         <ImageSlot className="receipt-dropzone__icon" src={iconReceipt} />
-        <p>영수증 사진을 드래그하거나 업로드/촬영 버튼을 눌러주세요.</p>
+        <p>영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.</p>
         <div>
           <button className="receipt-primary-button" type="button" onClick={() => onStartUpload('업로드 이미지')}>
             이미지 업로드
@@ -503,7 +728,7 @@ function UploadPanel({ onStartUpload }) {
           </button>
         </div>
       </div>
-      <p className="receipt-tip">사진은 정면에서 밝게 촬영하면 인식률이 올라가요.</p>
+      <p className="receipt-tip">영수증 전체가 보이도록 밝은 곳에서 정면으로 촬영해주세요.</p>
     </section>
   )
 }
@@ -516,7 +741,7 @@ function RecentHistory() {
   return (
     <section className="receipt-panel receipt-history" aria-labelledby="receipt-history-title">
       <div className="receipt-panel__title">
-        <h2 id="receipt-history-title">최근 OCR 내역</h2>
+        <h2 id="receipt-history-title">최근 영수증 내역</h2>
         <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
           {showAllHistory ? '접기' : '내역보기'}
         </button>
@@ -558,9 +783,12 @@ function RecentHistory() {
   )
 }
 
-function ReceiptRules() {
+function ReceiptRules({ variant = '' }) {
   return (
-    <section className="receipt-panel receipt-rules" aria-labelledby="receipt-rules-title">
+    <section
+      className={['receipt-rules', variant ? `receipt-rules--${variant}` : 'receipt-panel'].join(' ')}
+      aria-labelledby="receipt-rules-title"
+    >
       <h2 id="receipt-rules-title">입고 규칙</h2>
       <div className="receipt-rule-list">
         {receiptRules.map((rule) => (
