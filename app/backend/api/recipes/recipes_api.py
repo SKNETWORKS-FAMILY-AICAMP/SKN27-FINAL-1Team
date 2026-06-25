@@ -30,6 +30,7 @@ def _normalize_filter(value: str | None) -> str | None:
 @router.get("/search", response_model=RecipeSearchResponse)
 def search_recipes(
     query: str | None = None,
+    ingredient: str | None = None,
     category: str | None = None,
     difficulty: str | None = None,
     cooking_time_label: str | None = None,
@@ -41,6 +42,7 @@ def search_recipes(
     return recipe_search_service.search_recipes(
         db=db,
         query=query,
+        ingredient=ingredient,
         category=_normalize_filter(category),
         difficulty=_normalize_filter(difficulty),
         cooking_time_label=_normalize_filter(cooking_time_label),
