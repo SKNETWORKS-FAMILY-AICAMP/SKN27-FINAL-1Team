@@ -416,6 +416,14 @@
   gap: 16px;
 }
 
+.menu-recommend-results__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
 .menu-recommend-empty {
   min-height: 320px;
   display: grid;

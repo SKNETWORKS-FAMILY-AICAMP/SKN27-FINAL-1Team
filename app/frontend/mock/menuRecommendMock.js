@@ -134,10 +134,12 @@ const INGREDIENT_USAGE_MATCH_RATE = {
   HIGH: 70,
 }
 
-export function buildRecommendRequestBody(filters) {
+export function buildRecommendRequestBody(filters, { excludeIds = [], refreshPool = false } = {}) {
   const body = {
     mode: 'menu_custom',
     limit: filters.limit,
+    exclude_recipe_ids: excludeIds,
+    refresh_pool: refreshPool,
   }
 
   if (filters.cookTime !== 'ANY') {

@@ -46,10 +46,15 @@ function MenuRecommend() {
   const [savedIds, setSavedIds] = useState([])
   const [activeStep, setActiveStep] = useState(0)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [hasRequested, setHasRequested] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [excludedRecipeIds, setExcludedRecipeIds] = useState([])
+  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
 
   const activeTemplate = recommendTemplates.find((item) => item.id === templateId) ?? recommendTemplates[0]
   const displayedCount = generatedRecipes.length
+  const isEmptyResult = hasRequested && !isGenerating && !error && displayedCount === 0
 
   const clearFlowTimers = () => {
     flowTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
@@ -62,6 +67,9 @@ function MenuRecommend() {
     setSelectedIds([])
     setActiveStep(0)
     setIsGenerating(false)
+    setHasRequested(false)
+    setHasMore(false)
+    setExcludedRecipeIds([])
     setError('')
   }
 
@@ -92,7 +100,7 @@ function MenuRecommend() {
     )
   }
 
-  const handleGenerate = async () => {
+  const fetchRecommendations = async ({ refreshPool, excludeIds }) => {
     const token = window.localStorage.getItem('bobbeori-token')
     if (!token) {
       navigate('/login')
@@ -100,7 +108,6 @@ function MenuRecommend() {
     }
 
     clearFlowTimers()
-    setGeneratedRecipes([])
     setSelectedIds([])
     setActiveStep(0)
     setError('')
@@ -114,7 +121,7 @@ function MenuRecommend() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(buildRecommendRequestBody(filters)),
+        body: JSON.stringify(buildRecommendRequestBody(filters, { excludeIds, refreshPool })),
       })
 
       if (!response.ok) {
@@ -123,7 +130,13 @@ function MenuRecommend() {
 
       const data = await response.json()
       setGeneratedRecipes(data.items || [])
+      setHasMore(Boolean(data.has_more))
+      setHasRequested(true)
       setActiveStep(process.length - 1)
+
+      if (refreshPool) {
+        setExcludedRecipeIds([])
+      }
     } catch (fetchError) {
       setError(fetchError.message || '추천을 불러오지 못했어요.')
     } finally {
@@ -132,38 +145,79 @@ function MenuRecommend() {
     }
   }
 
+  const handleGenerate = () => {
+    setExcludedRecipeIds([])
+    fetchRecommendations({ refreshPool: hasRequested, excludeIds: [] })
+  }
+
+  const loadMoreRecommendations = () => {
+    const currentIds = generatedRecipes.map((recipe) => recipe.recipe_id)
+    const nextExclude = [...new Set([...excludedRecipeIds, ...currentIds])]
+    setExcludedRecipeIds(nextExclude)
+    fetchRecommendations({ refreshPool: false, excludeIds: nextExclude })
+  }
+
   const handleSelect = (recipeId) => {
     setSelectedIds((prev) =>
       prev.includes(recipeId) ? prev.filter((id) => id !== recipeId) : [...prev, recipeId],
     )
   }
 
-  const persistRecipe = (recipe) => {
+  const selectableIds = generatedRecipes.map((recipe) => recipe.recipe_id)
+  const allSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id))
+
+  const handleSelectAll = () => {
+    setSelectedIds(selectableIds)
+  }
+
+  const handleDeselectAll = () => {
+    setSelectedIds([])
+  }
+
+  const persistRecipe = async (recipe) => {
+    const savedResult = await saveRecommendationResult(recipe, 'menu_recommend')
     saveStoredRecipe({
       ...recipe,
       id: recipe.recipe_id,
       recipe_id: recipe.recipe_id,
+      recommendation_id: savedResult.recommendation_id,
       image: recipe.main_image_url,
       source: '메뉴추천',
       reason: recipe.reason,
     })
-    saveRecommendationResult(recipe, 'menu_recommend').catch(() => {})
+    return recipe.recipe_id
   }
 
-  const handleSave = () => {
-    generatedRecipes
-      .filter((recipe) => selectedIds.includes(recipe.recipe_id))
-      .forEach(persistRecipe)
-    setSavedIds((prev) => Array.from(new Set([...prev, ...selectedIds])))
+  const handleSave = async () => {
+    const selected = generatedRecipes.filter((recipe) => selectedIds.includes(recipe.recipe_id))
+    if (selected.length === 0 || isSaving) return
+
+    setIsSaving(true)
+
+    const results = await Promise.allSettled(selected.map(persistRecipe))
+    const succeeded = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
+    setSavedIds((prev) => Array.from(new Set([...prev, ...succeeded])))
+
+    setIsSaving(false)
   }
 
-  const saveSingleRecipe = (recipeId) => {
+  const saveSingleRecipe = async (recipeId) => {
+    if (savedIds.includes(recipeId) || isSaving) return
+
     const recipe = generatedRecipes.find((item) => item.recipe_id === recipeId)
-    if (recipe) {
-      persistRecipe(recipe)
-    }
+    if (!recipe) return
 
-    setSavedIds((prev) => (prev.includes(recipeId) ? prev : [...prev, recipeId]))
+    setIsSaving(true)
+
+    try {
+      await persistRecipe(recipe)
+      setSavedIds((prev) => (prev.includes(recipeId) ? prev : [...prev, recipeId]))
+    } catch {
+      // ponytail: 저장 실패 피드백 없음 — 카드 UI(저장 완료)만 상태 반영
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const goShopping = (recipe) => {
@@ -172,6 +226,14 @@ function MenuRecommend() {
   }
 
   useEffect(() => clearFlowTimers, [])
+
+  const resultsSubtitle = isGenerating
+    ? `${process[activeStep].title} 중이에요. 잠시만 기다려주세요.`
+    : displayedCount
+      ? `${displayedCount}개의 메뉴를 조건에 맞춰 골랐어요.`
+      : isEmptyResult
+        ? '조건에 맞는 메뉴를 찾지 못했어요.'
+        : `${activeTemplate.label} · ${getOptionLabel('cookTime', filters.cookTime)} · ${filters.limit}개`
 
   return (
     <section className="menu-recommend-page" aria-labelledby="menu-recommend-title">
@@ -328,37 +390,71 @@ function MenuRecommend() {
           <div className="menu-recommend-results__header">
             <div>
               <h2>추천 결과</h2>
-              <p>
-                {isGenerating
-                  ? `${process[activeStep].title} 중이에요. 잠시만 기다려주세요.`
-                  : displayedCount
-                    ? `${displayedCount}개의 메뉴를 조건에 맞춰 골랐어요.`
-                    : `${activeTemplate.label} · ${getOptionLabel('cookTime', filters.cookTime)} · ${filters.limit}개`}
-              </p>
+              <p>{resultsSubtitle}</p>
             </div>
-            <button
-              className="menu-recommend-save"
-              type="button"
-              disabled={selectedIds.length === 0}
-              onClick={handleSave}
-            >
-              선택 저장
-            </button>
+            <div className="menu-recommend-results__actions">
+              {hasRequested && hasMore ? (
+                <button
+                  className="menu-recommend-save"
+                  type="button"
+                  onClick={loadMoreRecommendations}
+                  disabled={isGenerating}
+                >
+                  다른 메뉴 보기
+                </button>
+              ) : null}
+              {displayedCount > 0 ? (
+                <>
+                  <button
+                    className="menu-recommend-save"
+                    type="button"
+                    onClick={handleSelectAll}
+                    disabled={isGenerating || isSaving || allSelected}
+                  >
+                    전체 선택
+                  </button>
+                  <button
+                    className="menu-recommend-save"
+                    type="button"
+                    onClick={handleDeselectAll}
+                    disabled={isGenerating || isSaving || selectedIds.length === 0}
+                  >
+                    선택 해제
+                  </button>
+                </>
+              ) : null}
+              <button
+                className="menu-recommend-save"
+                type="button"
+                disabled={selectedIds.length === 0 || isSaving}
+                onClick={handleSave}
+              >
+                {isSaving ? '저장 중' : '선택 저장'}
+              </button>
+            </div>
           </div>
 
           {error ? (
             <p className="menu-recommend-empty" role="alert">{error}</p>
           ) : null}
 
-          {displayedCount === 0 ? (
+          {isGenerating ? (
             <div className="menu-recommend-empty">
-              <ImageSlot src={isGenerating ? imageMenuRecommendation : imageSearch} alt="추천 대기 상태" />
-              <strong>{isGenerating ? '메뉴 후보를 고르는 중이에요.' : '조건을 고르고 추천을 시작해주세요.'}</strong>
-              <p>
-                {isGenerating
-                  ? `${activeTemplate.label} 조건에 맞는 메뉴를 정리하고 있어요.`
-                  : '선택한 필터에 맞춰 추천 결과가 달라져요.'}
-              </p>
+              <ImageSlot src={imageMenuRecommendation} alt="추천 진행 중" />
+              <strong>메뉴 후보를 고르는 중이에요.</strong>
+              <p>{activeTemplate.label} 조건에 맞는 메뉴를 정리하고 있어요.</p>
+            </div>
+          ) : isEmptyResult ? (
+            <div className="menu-recommend-empty">
+              <ImageSlot src={imageHello} alt="추천 결과 없음" />
+              <strong>조건에 맞는 메뉴를 찾지 못했어요.</strong>
+              <p>필터를 완화하거나 위에서 레시피 추천받기를 눌러보세요.</p>
+            </div>
+          ) : displayedCount === 0 ? (
+            <div className="menu-recommend-empty">
+              <ImageSlot src={imageSearch} alt="추천 대기 상태" />
+              <strong>조건을 고르고 추천을 시작해주세요.</strong>
+              <p>선택한 필터에 맞춰 추천 결과가 달라져요.</p>
             </div>
           ) : (
             <div className="menu-recommend-grid">
@@ -407,7 +503,7 @@ function MenuRecommend() {
                         <Link to={`/recipes/${recipeId}`}>레시피 보기</Link>
                         <button
                           type="button"
-                          disabled={isSaved}
+                          disabled={isSaved || isSaving}
                           onClick={() => saveSingleRecipe(recipeId)}
                         >
                           {isSaved ? '저장 완료' : '바로 저장'}

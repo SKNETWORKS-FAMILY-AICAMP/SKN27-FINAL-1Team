@@ -154,16 +154,6 @@ class RecommendationService:
     ) -> dict[str, Any]:
         return self.save_result(db, user_id, recipe_id, recommendation_type)
 
-    def save_many(
-        self,
-        db: Session,
-        user_id: int,
-        recipe_ids: list[int],
-        recommendation_type: str,
-    ) -> None:
-        for recipe_id in recipe_ids:
-            self.save_result(db, user_id, recipe_id, recommendation_type, strict=False)
-
     def list_user_recipes(self, db: Session, user_id: int) -> list[dict[str, Any]]:
         rows = (
             db.query(RecommendationResult)
