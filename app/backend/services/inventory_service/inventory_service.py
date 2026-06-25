@@ -238,6 +238,11 @@ class InventoryService:
         normalized = self._normalize_ingredient_name(data.name)
         ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
         if ingredient:
+            # 사용자가 명시적인 카테고리를 보냈다면 기존 데이터 업데이트
+            if data.category and ingredient.category != data.category:
+                ingredient.category = data.category
+                db.commit()
+                db.refresh(ingredient)
             return ingredient
 
         try:

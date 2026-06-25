@@ -5,15 +5,17 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
-from app.backend.db.models import Recipe
+from app.backend.db.models import Ingredient, Recipe, RecipeIngredient
 
 
 def build_recipe_query(
     db: Session,
     *,
     query: str | None = None,
+    ingredient: str | None = None,
     category: str | None = None,
     difficulty: str | None = None,
     max_cooking_time_min: int | None = None,
@@ -24,6 +26,22 @@ def build_recipe_query(
     normalized_query = (query or "").strip()
     if normalized_query:
         query_recipes = query_recipes.filter(Recipe.title.ilike(f"%{normalized_query}%"))
+
+    normalized_ingredient = (ingredient or "").strip()
+    if normalized_ingredient:
+        like_pattern = f"%{normalized_ingredient}%"
+        query_recipes = (
+            query_recipes.join(RecipeIngredient, RecipeIngredient.recipe_id == Recipe.id)
+            .join(Ingredient, Ingredient.id == RecipeIngredient.ingredient_id)
+            .filter(
+                or_(
+                    RecipeIngredient.raw_ingredient_name.ilike(like_pattern),
+                    Ingredient.name.ilike(like_pattern),
+                    Ingredient.normalized_name.ilike(like_pattern),
+                )
+            )
+            .distinct()
+        )
 
     normalized_category = (category or "").strip()
     if normalized_category and normalized_category != "전체":
