@@ -8,11 +8,29 @@ from app.backend.api.calendar.calendar_api import _create_event_once, _get_acces
 from app.backend.api.deps import get_current_user_required
 from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
-from app.backend.schemas.receipts import ReceiptConfirmRequest, ReceiptUploadResponse
-from app.backend.services.receipt_ocr_service import receipt_confirm_service, receipt_ocr_service
+from app.backend.schemas.receipts import (
+    ReceiptConfirmRequest,
+    ReceiptHistoryResponse,
+    ReceiptUploadResponse,
+)
+from app.backend.services.receipt_ocr_service import (
+    receipt_confirm_service,
+    receipt_history_service,
+    receipt_ocr_service,
+)
 
 
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
+
+
+@router.get("/history", response_model=ReceiptHistoryResponse)
+def get_receipt_history(
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Return the user's most recently registered receipts with their items."""
+    receipts = receipt_history_service.get_recent_receipts(db=db, user_id=current_user_id)
+    return {"receipts": receipts}
 
 
 @router.post("/upload", response_model=ReceiptUploadResponse)

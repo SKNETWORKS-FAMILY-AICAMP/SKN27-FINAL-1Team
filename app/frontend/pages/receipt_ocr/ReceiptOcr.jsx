@@ -67,107 +67,20 @@ function ImageSlot({ src, alt = '', className = '' }) {
   )
 }
 
-function FrequentIngredientsChart() {
-  const maxCount = Math.max(...frequentIngredientData.map((ingredient) => ingredient.count), 1)
-
-  return (
-    <section className="receipt-frequent-chart" aria-labelledby="receipt-frequent-title">
-      <div className="receipt-frequent-chart__title">
-        <h3 id="receipt-frequent-title">자주 구매한 재료</h3>
-        <span>최근 영수증 기준</span>
-      </div>
-      <ul>
-        {frequentIngredientData.map((ingredient) => (
-          <li key={ingredient.name}>
-            <span>{ingredient.name}</span>
-            <div aria-hidden="true">
-              <b style={{ width: `${Math.max((ingredient.count / maxCount) * 100, 18)}%` }} />
-            </div>
-            <strong>{ingredient.count}회</strong>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
+function formatManwon(amount) {
+  return `${(amount / 10000).toFixed(1)}만`
 }
 
 function PurchaseFlowChart({ isLoggedIn }) {
-  const weeklyChartMaxAmount = Math.max(...weeklyPurchaseData.map((data) => data.amount))
-  const weeklyChartMaxItems = Math.max(...weeklyPurchaseData.map((data) => data.items))
-  const weeklyChartPoints = weeklyPurchaseData.map((data, index) => {
-    const x = 18 + index * (164 / (weeklyPurchaseData.length - 1))
-    const y = 92 - (data.items / weeklyChartMaxItems) * 62
-    const barHeight = (data.amount / weeklyChartMaxAmount) * 58
-    const barY = 92 - barHeight
-
-    return { ...data, x, y, barHeight, barY }
-  })
-  const weeklyChartLine = weeklyChartPoints.map((point) => `${point.x},${point.y}`).join(' ')
   const chartId = isLoggedIn ? 'receipt-chart-title' : 'receipt-guest-chart-title'
 
-  return (
-    <section className={`receipt-panel receipt-chart ${isLoggedIn ? 'is-logged-in' : ''}`} aria-labelledby={chartId}>
-      <div>
-        <h2 id={chartId}>식재료 구매 흐름</h2>
-        <p>
-          {isLoggedIn
-            ? '최근 구매일 기준으로 주차별 식재료 구매량과 금액을 보여줘요.'
-            : '최근 구매 금액과 월별 구매 횟수를 기준으로 보여줘요.'}
-        </p>
-      </div>
-      {isLoggedIn ? (
-        <>
-          <div className="receipt-week-chart" role="img" aria-label="주차별 식재료 구매량과 금액 그래프">
-            <div className="receipt-week-chart__legend" aria-hidden="true">
-              <span className="is-amount">구매 금액</span>
-              <span className="is-items">품목 수</span>
-            </div>
-            <div className="receipt-week-chart__plot">
-              <svg viewBox="0 0 200 116" aria-hidden="true" focusable="false">
-                <defs>
-                  <linearGradient id="receipt-week-bar-gradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#ffbe75" />
-                    <stop offset="100%" stopColor="#ffe9a8" />
-                  </linearGradient>
-                </defs>
-                <path className="receipt-week-chart__grid" d="M18 30 H182 M18 61 H182 M18 92 H182" />
-                {weeklyChartPoints.map((point) => (
-                  <rect
-                    className="receipt-week-chart__bar"
-                    height={point.barHeight}
-                    key={`${point.week}-amount`}
-                    rx="4"
-                    width="18"
-                    x={point.x - 9}
-                    y={point.barY}
-                  />
-                ))}
-                <polyline className="receipt-week-chart__line" points={weeklyChartLine} />
-                {weeklyChartPoints.map((point) => (
-                  <g key={point.week}>
-                    <circle className="receipt-week-chart__dot" cx={point.x} cy={point.y} r="4.5" />
-                    <text className="receipt-week-chart__value" x={point.x} y={point.y - 9}>
-                      {point.items}개
-                    </text>
-                    <text className="receipt-week-chart__label" x={point.x} y="108">
-                      {point.week}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-            </div>
-            <ul className="receipt-week-chart__summary" aria-label="주차별 구매 금액">
-              {weeklyPurchaseData.map((data) => (
-                <li key={data.week}>
-                  <span>{data.week}</span>
-                  <strong>{data.amount.toLocaleString()}원</strong>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <FrequentIngredientsChart />
-        </>
-      ) : (
+  if (!isLoggedIn) {
+    return (
+      <section className="receipt-panel receipt-chart" aria-labelledby={chartId}>
+        <div>
+          <h2 id={chartId}>식재료 구매 흐름</h2>
+          <p>최근 구매 금액과 월별 구매 횟수를 기준으로 보여줘요.</p>
+        </div>
         <div className="receipt-chart__bars" aria-hidden="true">
           <span style={{ height: '42%' }} />
           <span style={{ height: '66%' }} />
@@ -175,7 +88,133 @@ function PurchaseFlowChart({ isLoggedIn }) {
           <span style={{ height: '82%' }} />
           <span style={{ height: '58%' }} />
         </div>
-      )}
+      </section>
+    )
+  }
+
+  const weekCount = weeklyPurchaseData.length
+  const maxAmount = Math.max(...weeklyPurchaseData.map((data) => data.amount))
+  const maxItems = Math.max(...weeklyPurchaseData.map((data) => data.items))
+  const totalAmount = weeklyPurchaseData.reduce((sum, data) => sum + data.amount, 0)
+  const totalItems = weeklyPurchaseData.reduce((sum, data) => sum + data.items, 0)
+
+  const baseline = 96
+  const points = weeklyPurchaseData.map((data, index) => {
+    const x = 30 + index * ((320 - 60) / (weekCount - 1))
+    const barHeight = (data.amount / maxAmount) * 56
+    const barY = baseline - barHeight
+    const dotY = 84 - (data.items / maxItems) * 40
+
+    return { ...data, x, barHeight, barY, dotY }
+  })
+  const linePoints = points.map((point) => `${point.x},${point.dotY}`).join(' ')
+
+  const sparkPoints = weeklyPurchaseData
+    .map((data, index) => {
+      const x = 6 + index * ((116 - 12) / (weekCount - 1))
+      const y = 38 - (data.amount / maxAmount) * 30
+      return `${x},${y}`
+    })
+    .join(' ')
+  const sparkArea = `6,40 ${sparkPoints} 110,40`
+
+  return (
+    <section className="receipt-panel receipt-chart is-logged-in" aria-labelledby={chartId}>
+      <div className="receipt-chart__head">
+        <h2 id={chartId}>식재료 구매 흐름</h2>
+        <p>최근 구매일 기준으로 주차별 식재료 구매량과 금액을 보여줘요.</p>
+      </div>
+
+      <div className="receipt-dashboard">
+        <article className="receipt-dash-card receipt-dash-trend" aria-label="주차별 구매 금액과 품목 수 그래프">
+          <header className="receipt-dash-card__head">
+            <h3>구매 트렌드</h3>
+            <span className="receipt-dash-pill">최근 {weekCount}주</span>
+          </header>
+          <div className="receipt-week-chart__plot">
+            <svg viewBox="0 0 320 124" focusable="false">
+              <defs>
+                <linearGradient id="receipt-week-bar-gradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#ffbe75" />
+                  <stop offset="100%" stopColor="#ffe9a8" />
+                </linearGradient>
+              </defs>
+              <path className="receipt-week-chart__grid" d="M24 34 H296 M24 65 H296 M24 96 H296" />
+              {points.map((point) => (
+                <g key={`${point.week}-bar`}>
+                  <rect
+                    className="receipt-week-chart__bar"
+                    height={point.barHeight}
+                    rx="5"
+                    width="26"
+                    x={point.x - 13}
+                    y={point.barY}
+                  />
+                  <text className="receipt-week-chart__amount" x={point.x} y={point.barY + 10}>
+                    {formatManwon(point.amount)}
+                  </text>
+                </g>
+              ))}
+              <polyline className="receipt-week-chart__line" points={linePoints} />
+              {points.map((point) => (
+                <g key={point.week}>
+                  <circle className="receipt-week-chart__dot" cx={point.x} cy={point.dotY} r="4.5" />
+                  <text className="receipt-week-chart__value" x={point.x} y={point.dotY - 8}>
+                    {point.items}개
+                  </text>
+                  <text className="receipt-week-chart__label" x={point.x} y="118">
+                    {point.week}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+          <div className="receipt-week-chart__legend">
+            <span className="is-amount">구매 금액</span>
+            <span className="is-items">품목 수</span>
+          </div>
+        </article>
+
+        <div className="receipt-dash-mini">
+          <article className="receipt-dash-card receipt-dash-stat">
+            <h4>월 지출</h4>
+            <strong>{totalAmount.toLocaleString()}원</strong>
+            <svg className="receipt-dash-spark" viewBox="0 0 116 44" focusable="false" aria-hidden="true">
+              <polygon className="receipt-dash-spark__area" points={sparkArea} />
+              <polyline className="receipt-dash-spark__line" points={sparkPoints} />
+            </svg>
+          </article>
+          <article className="receipt-dash-card receipt-dash-stat">
+            <h4>주별 품목</h4>
+            <strong>{totalItems}개</strong>
+            <svg className="receipt-dash-minibars" viewBox="0 0 116 44" focusable="false" aria-hidden="true">
+              {weeklyPurchaseData.map((data, index) => {
+                const height = (data.items / maxItems) * 34
+
+                return (
+                  <rect key={data.week} x={6 + index * 22} y={40 - height} width="14" height={height} rx="3" />
+                )
+              })}
+            </svg>
+          </article>
+        </div>
+
+        <article className="receipt-dash-card receipt-dash-frequent" aria-labelledby="receipt-frequent-title">
+          <header className="receipt-dash-card__head">
+            <h3 id="receipt-frequent-title">단골 재료</h3>
+            <span>최근 기준</span>
+          </header>
+          <ul>
+            {frequentIngredientData.map((ingredient, index) => (
+              <li key={ingredient.name}>
+                <i className="receipt-dash-frequent__dot" data-rank={index} aria-hidden="true" />
+                <b>{ingredient.name}</b>
+                <strong>{ingredient.count}회</strong>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </div>
     </section>
   )
 }
@@ -222,14 +261,24 @@ function createInitialReceiptRows() {
   return normalizeReceiptRows(rows).map((row) => ({ ...row, price: formatPriceInput(row.price) }))
 }
 
-function formatQuantity(row) {
-  return `${row.quantityAmount ?? 1}${row.quantityUnit || '개'}`
-}
-
 function formatPriceInput(value) {
   const numericValue = String(value ?? '').replace(/[^\d]/g, '')
 
   return numericValue ? Number(numericValue).toLocaleString() : ''
+}
+
+function toDateTimeLocalValue(value) {
+  if (!value) {
+    return ''
+  }
+
+  const normalized = String(value).trim().replace(' ', 'T')
+
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized) ? normalized : ''
+}
+
+function fromDateTimeLocalValue(value) {
+  return value ? String(value).replace('T', ' ') : ''
 }
 
 function toNumber(value, fallback = null) {
@@ -268,6 +317,7 @@ function ReceiptOcr() {
   const navigate = useNavigate()
   const { dialogNode, showAlert, showConfirm, showPrompt } = useAppDialog()
   const flowTimersRef = useRef([])
+  const previewImageUrlRef = useRef(null)
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
   const [hasUploaded, setHasUploaded] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
@@ -277,7 +327,7 @@ function ReceiptOcr() {
   const [receiptMeta, setReceiptMeta] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [analysisStep, setAnalysisStep] = useState(0)
-  const [previewScale, setPreviewScale] = useState('normal')
+  const [previewImageUrl, setPreviewImageUrl] = useState(null)
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -309,6 +359,16 @@ function ReceiptOcr() {
   const clearFlowTimers = () => {
     flowTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
     flowTimersRef.current = []
+  }
+
+  const setUploadedPreview = (file) => {
+    if (previewImageUrlRef.current) {
+      URL.revokeObjectURL(previewImageUrlRef.current)
+    }
+
+    const url = file ? URL.createObjectURL(file) : null
+    previewImageUrlRef.current = url
+    setPreviewImageUrl(url)
   }
 
   const moveToStep = (nextStep) => {
@@ -365,8 +425,11 @@ function ReceiptOcr() {
     }
 
     clearFlowTimers()
+    setUploadedPreview(file)
     setReceiptSource(file.name || source)
     setReceiptMeta(null)
+    setDetectedRows([])
+    setEditingRows({})
     setHasUploaded(true)
     setIsProcessing(true)
     setAnalysisStep(0)
@@ -392,6 +455,17 @@ function ReceiptOcr() {
         body: formData,
       })
       const data = await response.json().catch(() => ({}))
+
+      if (response.status === 401) {
+        window.localStorage.removeItem('bobbeori-token')
+        window.dispatchEvent(new Event('bobbeori-auth-change'))
+        setHasUploaded(false)
+        setActiveStep(0)
+        clearFlowTimers()
+        setIsProcessing(false)
+        requestLogin()
+        return
+      }
 
       if (!response.ok) {
         throw new Error(data.detail || '영수증 OCR 분석에 실패했어요.')
@@ -543,6 +617,19 @@ function ReceiptOcr() {
     setActiveStep(2)
   }
 
+  const updateReceiptMetaField = (field, value) => {
+    setReceiptMeta((prev) => {
+      if (!prev) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        [field]: field === 'totalAmount' ? formatPriceInput(value) : value,
+      }
+    })
+  }
+
   const setRowEditing = (rowId, isEditing) => {
     setEditingRows((prev) => ({ ...prev, [rowId]: isEditing }))
 
@@ -575,6 +662,7 @@ function ReceiptOcr() {
 
   const resetAnalysis = () => {
     clearFlowTimers()
+    setUploadedPreview(null)
     const initialRows = createInitialReceiptRows()
     setDetectedRows(initialRows)
     setEditingRows(getInitialEditingRows(initialRows))
@@ -666,6 +754,9 @@ function ReceiptOcr() {
 
     return () => {
       clearFlowTimers()
+      if (previewImageUrlRef.current) {
+        URL.revokeObjectURL(previewImageUrlRef.current)
+      }
       window.removeEventListener('bobbeori-auth-change', syncAuthState)
       window.removeEventListener('storage', syncAuthState)
     }
@@ -778,45 +869,7 @@ function ReceiptOcr() {
                   다시 촬영
                 </button>
               </div>
-              <article className={`receipt-paper receipt-paper--${previewScale}`}>
-                <strong>{receiptMeta?.storeName || 'BABBEORI MART'}</strong>
-                <span>{receiptMeta?.purchaseDatetime || '2026.06.18 14:32'}</span>
-                <dl>
-                  {detectedRows.length > 0 ? (
-                    detectedRows.map((row) => (
-                      <div key={row.id}>
-                        <dt>{row.raw}</dt>
-                        <dd>{formatQuantity(row)}</dd>
-                        <dd>{row.price}원</dd>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="receipt-paper__empty">
-                      <dt>인식된 품목 없음</dt>
-                      <dd>-</dd>
-                      <dd>-</dd>
-                    </div>
-                  )}
-                </dl>
-                <b>합계 {totalAmount.toLocaleString()}원</b>
-              </article>
-              <div className="receipt-preview-tools">
-                <span>영수증 확대</span>
-                <button
-                  className={previewScale === 'normal' ? 'is-active' : ''}
-                  type="button"
-                  onClick={() => setPreviewScale('normal')}
-                >
-                  기본
-                </button>
-                <button
-                  className={previewScale === 'large' ? 'is-active' : ''}
-                  type="button"
-                  onClick={() => setPreviewScale('large')}
-                >
-                  확대
-                </button>
-              </div>
+              <ReceiptImageViewer src={previewImageUrl} />
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
@@ -831,17 +884,44 @@ function ReceiptOcr() {
                 </div>
               </div>
               <p className="receipt-mapping__helper">
-                OCR 결과는 먼저 모두 수정 가능하게 열려 있어요. 수량과 금액을 확인한 뒤 확정을 누르면 해당 행이 잠깁니다.
+              맞게 인식됐는지 확인해주세요! 수정 후 확인 완료를 누르면 해당 항목이 저장돼요.
               </p>
               {receiptMeta ? (
                 <div className="receipt-ocr-meta" aria-label="OCR 분석 참고 정보">
-                  <span>{receiptMeta.storeName || '상호명 미확인'}</span>
-                  <span>{receiptMeta.purchaseDatetime || '구매일시 미확인'}</span>
-                  <span>
-                    OCR 총액{' '}
-                    {formatPriceInput(receiptMeta.totalAmount) ? `${formatPriceInput(receiptMeta.totalAmount)}원` : '미확인'}
-                  </span>
-                  {receiptMeta.confidenceNote ? <p>{receiptMeta.confidenceNote}</p> : null}
+                  <label className="receipt-ocr-meta__field">
+                    <small>매장명</small>
+                    <input
+                      className="receipt-inline-input"
+                      type="text"
+                      value={receiptMeta.storeName || ''}
+                      placeholder="상호명 미확인"
+                      onChange={(event) => updateReceiptMetaField('storeName', event.target.value)}
+                    />
+                  </label>
+                  <label className="receipt-ocr-meta__field">
+                    <small>날짜</small>
+                    <input
+                      className="receipt-inline-input receipt-inline-input--datetime"
+                      type="datetime-local"
+                      step="1"
+                      value={toDateTimeLocalValue(receiptMeta.purchaseDatetime)}
+                      onChange={(event) =>
+                        updateReceiptMetaField('purchaseDatetime', fromDateTimeLocalValue(event.target.value))
+                      }
+                    />
+                  </label>
+                  <label className="receipt-ocr-meta__field">
+                    <small>총액(원)</small>
+                    <input
+                      className="receipt-inline-input receipt-inline-input--price"
+                      inputMode="numeric"
+                      pattern="[0-9,]*"
+                      type="text"
+                      value={formatPriceInput(receiptMeta.totalAmount)}
+                      placeholder="미확인"
+                      onChange={(event) => updateReceiptMetaField('totalAmount', event.target.value)}
+                    />
+                  </label>
                 </div>
               ) : null}
 
@@ -858,7 +938,6 @@ function ReceiptOcr() {
                   return (
                   <div className={`receipt-mapping-row ${isEditing ? 'is-editing' : ''}`} role="row" key={row.id}>
                     <span className="receipt-mapping-name-cell" role="cell">
-                      <ImageSlot className="receipt-mapping-row__image" src={row.image} />
                       <b>
                         <small>원재료명: {row.raw}</small>
                         {isEditing ? (
@@ -970,10 +1049,17 @@ function ReceiptOcr() {
                   )
                 })}
                 {detectedRows.length === 0 ? (
-                  <div className="receipt-empty-items" role="row">
-                    <strong>인식된 품목이 없어요.</strong>
-                    <p>카드전표처럼 품목 리스트가 없는 영수증일 수 있어요. 필요한 품목은 아래에서 직접 추가해주세요.</p>
-                  </div>
+                  isProcessing ? (
+                    <div className="receipt-empty-items" role="row">
+                      <strong>영수증을 분석하고 있어요.</strong>
+                      <p>업로드한 영수증에서 품목과 금액을 읽는 중이에요. 잠시만 기다려주세요.</p>
+                    </div>
+                  ) : (
+                    <div className="receipt-empty-items" role="row">
+                      <strong>인식된 품목이 없어요.</strong>
+                      <p>카드전표처럼 품목 리스트가 없는 영수증일 수 있어요. 필요한 품목은 아래에서 직접 추가해주세요.</p>
+                    </div>
+                  )
                 ) : null}
               </div>
 
@@ -1009,6 +1095,119 @@ function ReceiptOcr() {
       )}
       {dialogNode}
     </section>
+  )
+}
+
+function ReceiptImageViewer({ src }) {
+  const minZoom = 1
+  const maxZoom = 4
+  const zoomStep = 0.4
+  const [zoom, setZoom] = useState(1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStateRef = useRef(null)
+
+  const clampZoom = (value) => Math.min(maxZoom, Math.max(minZoom, Math.round(value * 100) / 100))
+
+  const resetView = () => {
+    setZoom(1)
+    setOffset({ x: 0, y: 0 })
+  }
+
+  const zoomIn = () => setZoom((current) => clampZoom(current + zoomStep))
+  const zoomOut = () =>
+    setZoom((current) => {
+      const next = clampZoom(current - zoomStep)
+      if (next <= minZoom) {
+        setOffset({ x: 0, y: 0 })
+      }
+      return next
+    })
+
+  const isZoomed = zoom > minZoom
+
+  const handlePointerDown = (event) => {
+    if (!isZoomed) {
+      return
+    }
+
+    event.preventDefault()
+    dragStateRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: offset.x,
+      originY: offset.y,
+    }
+    setIsDragging(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const handlePointerMove = (event) => {
+    if (!dragStateRef.current) {
+      return
+    }
+
+    setOffset({
+      x: dragStateRef.current.originX + (event.clientX - dragStateRef.current.startX),
+      y: dragStateRef.current.originY + (event.clientY - dragStateRef.current.startY),
+    })
+  }
+
+  const handlePointerUp = (event) => {
+    if (!dragStateRef.current) {
+      return
+    }
+
+    dragStateRef.current = null
+    setIsDragging(false)
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+  }
+
+  const stageClassName = [
+    'receipt-image-viewer__stage',
+    isZoomed ? 'is-zoomable' : '',
+    isDragging ? 'is-dragging' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <div className="receipt-image-viewer">
+      <div
+        className={stageClassName}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        onDoubleClick={resetView}
+      >
+        {src ? (
+          <img
+            alt="업로드한 영수증 이미지"
+            draggable="false"
+            src={src}
+            style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+          />
+        ) : (
+          <div className="receipt-paper-image__empty">
+            <p>업로드한 영수증 이미지를 불러올 수 없어요.</p>
+          </div>
+        )}
+      </div>
+      <div className="receipt-image-viewer__controls">
+        <span>영수증 확대</span>
+        <button aria-label="축소" disabled={!src || zoom <= minZoom} type="button" onClick={zoomOut}>
+          −
+        </button>
+        <strong>{Math.round(zoom * 100)}%</strong>
+        <button aria-label="확대" disabled={!src || zoom >= maxZoom} type="button" onClick={zoomIn}>
+          +
+        </button>
+        <button className="receipt-image-viewer__reset" disabled={!src || (!isZoomed && offset.x === 0 && offset.y === 0)} type="button" onClick={resetView}>
+          원래대로
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -1083,52 +1282,142 @@ function UploadPanel({ onStartUpload }) {
   )
 }
 
+function formatHistoryItemLabel(item) {
+  const name = item.normalized_name || item.raw_name || '품목'
+
+  if (item.quantity == null) {
+    return name
+  }
+
+  const amount = Number.isInteger(item.quantity) ? item.quantity : Number(item.quantity)
+  return `${name} ${amount}${item.unit || ''}`.trim()
+}
+
+function mapHistoryEntry(entry) {
+  return {
+    id: entry.receipt_id,
+    title: entry.store_name || '영수증',
+    meta: `${entry.item_count}개 품목 등록`,
+    amount: entry.total_amount != null ? `${entry.total_amount.toLocaleString()}원` : '금액 미확인',
+    status: '완료',
+    date: entry.purchase_datetime || '구매일시 미확인',
+    store: entry.store_name || '상호명 미확인',
+    items: (entry.items || []).map(formatHistoryItemLabel),
+    note: `총 ${entry.item_count}개 품목이 냉장고에 등록된 영수증이에요.`,
+  }
+}
+
 function RecentHistory() {
-  const [selectedHistory, setSelectedHistory] = useState(receiptHistory[0])
+  const [history, setHistory] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
   const [showAllHistory, setShowAllHistory] = useState(false)
-  const visibleHistory = showAllHistory ? receiptHistory : receiptHistory.slice(0, 3)
+  const [status, setStatus] = useState('loading')
+
+  useEffect(() => {
+    const token = window.localStorage.getItem('bobbeori-token')
+
+    if (!token) {
+      setHistory([])
+      setStatus('ready')
+      return undefined
+    }
+
+    let active = true
+    setStatus('loading')
+
+    fetch(`${apiUrl}/api/v1/receipts/history`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('최근 영수증 내역을 불러오지 못했어요.')
+        }
+
+        const data = await response.json().catch(() => ({}))
+        return Array.isArray(data.receipts) ? data.receipts.map(mapHistoryEntry) : []
+      })
+      .then((entries) => {
+        if (!active) {
+          return
+        }
+
+        setHistory(entries)
+        setSelectedId(entries[0]?.id ?? null)
+        setStatus('ready')
+      })
+      .catch(() => {
+        if (active) {
+          setStatus('error')
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const visibleHistory = showAllHistory ? history : history.slice(0, 3)
+  const selectedHistory = history.find((item) => item.id === selectedId) || null
 
   return (
     <section className="receipt-panel receipt-history" aria-labelledby="receipt-history-title">
       <div className="receipt-panel__title">
         <h2 id="receipt-history-title">최근 영수증 내역</h2>
-        <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
-          {showAllHistory ? '접기' : '내역보기'}
-        </button>
-      </div>
-      <div className="receipt-history-list">
-        {visibleHistory.map((item) => (
-          <button
-            className={selectedHistory?.title === item.title ? 'is-active' : ''}
-            key={item.title}
-            type="button"
-            onClick={() => setSelectedHistory(item)}
-          >
-            <span aria-hidden="true" />
-            <div>
-              <strong>{item.title}</strong>
-              <p>{item.meta}</p>
-            </div>
-            <b>{item.amount}</b>
-            <em>{item.status}</em>
+        {history.length > 3 ? (
+          <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
+            {showAllHistory ? '접기' : '내역보기'}
           </button>
-        ))}
+        ) : null}
       </div>
-      {selectedHistory ? (
-        <article className="receipt-history-detail" aria-label={`${selectedHistory.title} 상세 내역`}>
-          <div>
-            <span>{selectedHistory.date}</span>
-            <strong>{selectedHistory.store}</strong>
-            <b>{selectedHistory.amount}</b>
-          </div>
-          <ul>
-            {selectedHistory.items.map((item) => (
-              <li key={item}>{item}</li>
+      {status === 'loading' ? (
+        <p className="receipt-history__placeholder">최근 영수증 내역을 불러오는 중이에요.</p>
+      ) : status === 'error' ? (
+        <p className="receipt-history__placeholder">내역을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+      ) : history.length === 0 ? (
+        <p className="receipt-history__placeholder">
+          아직 등록한 영수증이 없어요. 영수증을 업로드해 첫 내역을 만들어보세요.
+        </p>
+      ) : (
+        <>
+          <div className="receipt-history-list">
+            {visibleHistory.map((item) => (
+              <button
+                className={selectedId === item.id ? 'is-active' : ''}
+                key={item.id}
+                type="button"
+                onClick={() => setSelectedId(item.id)}
+              >
+                <span aria-hidden="true" />
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.meta}</p>
+                </div>
+                <b>{item.amount}</b>
+                <em>{item.status}</em>
+              </button>
             ))}
-          </ul>
-          <p>{selectedHistory.note}</p>
-        </article>
-      ) : null}
+          </div>
+          {selectedHistory ? (
+            <article className="receipt-history-detail" aria-label={`${selectedHistory.title} 상세 내역`}>
+              <div>
+                <span>{selectedHistory.date}</span>
+                <strong>{selectedHistory.store}</strong>
+                <b>{selectedHistory.amount}</b>
+              </div>
+              <ul>
+                {selectedHistory.items.length > 0 ? (
+                  selectedHistory.items.map((item, index) => (
+                    <li key={`${selectedHistory.id}-${index}`}>{item}</li>
+                  ))
+                ) : (
+                  <li>등록된 품목이 없어요.</li>
+                )}
+              </ul>
+              <p>{selectedHistory.note}</p>
+            </article>
+          ) : null}
+        </>
+      )}
     </section>
   )
 }
