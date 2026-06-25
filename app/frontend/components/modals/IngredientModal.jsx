@@ -1,24 +1,32 @@
 import React, { useState, useEffect } from 'react'
-import iconEgg from '../../assets/extracted/icons/icon_egg.png'
-import iconKimchi from '../../assets/extracted/icons/icon_kimchi.svg'
-import iconMushroom from '../../assets/extracted/icons/icon_mushroom.png'
-import iconOnion from '../../assets/extracted/icons/icon_onion.png'
-import iconTofu from '../../assets/extracted/icons/icon_tofu.svg'
-import iconGreenOnion from '../../assets/extracted/icons/icon_green_onion.svg'
 
 const CATEGORY_OPTIONS = ['기타', '채소', '과일', '육류', '수산물', '유제품', '가공식품']
 const STORAGE_OPTIONS = ['냉장', '냉동', '실온']
 const UNIT_OPTIONS = ['개', 'kg']
 
-// 자동완성 재료명에 맞는 대표 식재료 아이콘을 선택합니다.
+// 식재료 이미지 파일명을 검색용 키로 정규화합니다.
+function normalizeIngredientImageName(name = '') {
+  return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
+}
+
+const ingredientImages = Object.entries(
+  import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
+    eager: true,
+    import: 'default',
+  }),
+)
+  .map(([path, src]) => {
+    const fileName = path.split('/').pop() || ''
+    const name = fileName.replace(/\.[^.]+$/, '')
+    return { name, key: normalizeIngredientImageName(name), src }
+  })
+  .sort((a, b) => b.key.length - a.key.length)
+
+// 자동완성 재료명에 맞는 대표 식재료 이미지를 선택합니다.
 function getSuggestionIcon(name = '') {
-  if (name.includes('달걀') || name.includes('계란')) return iconEgg
-  if (name.includes('김치') || name.includes('깍두기')) return iconKimchi
-  if (name.includes('버섯')) return iconMushroom
-  if (name.includes('양파')) return iconOnion
-  if (name.includes('두부')) return iconTofu
-  if (name.includes('대파') || name.includes('쪽파') || name.includes('파')) return iconGreenOnion
-  return null
+  const key = normalizeIngredientImageName(name)
+  const image = ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
+  return image?.src || null
 }
 
 // 식재료 추가/수정 폼을 표시하는 모달 컴포넌트입니다.
