@@ -39,17 +39,19 @@
 .receipt-hero h1 {
   margin: 0;
   color: var(--figma-text);
-  font-size: clamp(42px, 5vw, 60px);
+  font-size: clamp(40px, 4.6vw, 56px);
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.14;
   letter-spacing: 0;
 }
 
 .receipt-hero p {
-  margin: 14px 0 0;
+  max-width: 520px;
+  margin: 16px 0 0;
   color: #5f4635;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
+  line-height: 1.55;
 }
 
 .receipt-hero__image {
@@ -783,14 +785,18 @@
 }
 
 .receipt-dashboard {
+  --receipt-dashboard-height: 316px;
   display: grid;
   grid-template-columns: minmax(0, 2.4fr) minmax(0, 0.8fr) minmax(0, 0.92fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
+  height: var(--receipt-dashboard-height);
 }
 
 .receipt-dash-card {
   min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
   padding: 14px 15px;
   display: flex;
   flex-direction: column;
@@ -801,6 +807,7 @@
 }
 
 .receipt-dash-card__head {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -831,8 +838,8 @@
 }
 
 .receipt-dash-trend .receipt-week-chart__plot svg {
-  height: auto;
-  max-height: 260px;
+  height: 100%;
+  max-height: none;
 }
 
 .receipt-dash-trend .receipt-week-chart__legend {
@@ -840,17 +847,52 @@
   margin-top: 6px;
 }
 
-.receipt-dash-mini {
+.receipt-dash-trend {
+  height: 100%;
+}
+
+.receipt-dash-trend .receipt-week-chart__plot {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+}
+
+.receipt-dash-mini {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
+.receipt-dash-frequent {
+  height: 100%;
+}
+
+.receipt-dash-stat {
+  justify-content: center;
+}
+
+.receipt-dash-stat__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .receipt-dash-stat h4 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 12px;
   font-weight: 900;
   color: #8a6c52;
+}
+
+.receipt-dash-stat__head span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #9b7a62;
 }
 
 .receipt-dash-stat strong {
@@ -862,8 +904,8 @@
 .receipt-dash-spark,
 .receipt-dash-minibars {
   width: 100%;
-  height: 42px;
-  margin-top: 8px;
+  height: 48px;
+  margin-top: 10px;
   display: block;
   overflow: visible;
 }
@@ -886,11 +928,13 @@
 }
 
 .receipt-dash-frequent ul {
+  flex: 1;
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
 }
 
 .receipt-dash-frequent li {
@@ -898,9 +942,9 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  padding: 8px 0;
+  padding: 5px 0;
   border-bottom: 1px dashed #f1e3cf;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -919,6 +963,17 @@
 .receipt-dash-frequent strong {
   color: #b5701e;
   font-weight: 900;
+}
+
+.receipt-dash-empty {
+  flex: 1;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: #9b7a62;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .receipt-dash-frequent__dot {
@@ -942,6 +997,18 @@
 
 .receipt-dash-frequent__dot[data-rank="3"] {
   background: #f6e4b0;
+}
+
+.receipt-dash-frequent__dot[data-rank="4"] {
+  background: #f3d998;
+}
+
+.receipt-dash-frequent__dot[data-rank="5"] {
+  background: #edd08c;
+}
+
+.receipt-dash-frequent__dot[data-rank="6"] {
+  background: #e6c77e;
 }
 
 .receipt-chart p {
@@ -1029,26 +1096,27 @@
 .receipt-week-chart__dot {
   fill: #fffdf8;
   stroke: #ff6975;
-  stroke-width: 3;
+  stroke-width: 2.3;
 }
 
 .receipt-week-chart__value,
 .receipt-week-chart__label {
   fill: #6f4b36;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 900;
   text-anchor: middle;
 }
 
 .receipt-week-chart__value {
   fill: #ff6975;
-  font-size: 9px;
+  font-size: 7.5px;
 }
 
 .receipt-week-chart__amount {
-  fill: #7a4a16;
-  font-size: 8px;
+  fill: #6f4518;
+  font-size: 6.8px;
   font-weight: 900;
+  dominant-baseline: middle;
   text-anchor: middle;
 }
 
@@ -1745,11 +1813,13 @@
   }
 
   .receipt-dashboard {
+    height: auto;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 
   .receipt-dash-trend {
     grid-column: 1 / -1;
+    min-height: 300px;
   }
 }
 
@@ -1768,11 +1838,11 @@
   }
 
   .receipt-hero h1 {
-    font-size: 29px;
+    font-size: 28px;
   }
 
   .receipt-hero p {
-    margin-top: 8px;
+    margin-top: 10px;
     font-size: 13px;
     line-height: 1.45;
   }
@@ -1898,12 +1968,22 @@
   }
 
   .receipt-dashboard {
+    height: auto;
     grid-template-columns: 1fr;
   }
 
   .receipt-dash-trend .receipt-week-chart__plot svg {
     height: auto;
     max-height: 220px;
+  }
+
+  .receipt-dash-trend {
+    min-height: 0;
+  }
+
+  .receipt-dash-mini,
+  .receipt-dash-frequent {
+    height: auto;
   }
 
   .receipt-frequent-chart {

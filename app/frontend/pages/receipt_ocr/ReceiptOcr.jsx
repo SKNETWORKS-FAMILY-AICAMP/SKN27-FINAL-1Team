@@ -14,13 +14,15 @@ import {
   receiptSteps as steps,
 } from '../../mock/receiptOcrMock.js'
 
-const weeklyPurchaseData = [
+const fallbackWeeklyPurchaseData = [
   { week: '1주차', items: 8, amount: 32600 },
   { week: '2주차', items: 12, amount: 48700 },
   { week: '3주차', items: 9, amount: 35400 },
   { week: '4주차', items: 15, amount: 61200 },
   { week: '5주차', items: 11, amount: 42900 },
 ]
+
+const purchaseFlowWeekCount = 5
 
 const quantityUnitOptions = ['kg', '개']
 const storageOptions = ['냉동', '냉장', '실온']
@@ -34,12 +36,20 @@ const aiAnalysisSteps = [
   '확인 화면 준비 중',
 ]
 
-function getFrequentIngredients(history) {
-  const counts = history.reduce((acc, receipt) => {
-    receipt.items.forEach((item) => {
-      const ingredientName = String(item)
-        .replace(/\s*\d+(?:\.\d+)?\s*(?:kg|g|개|단|팩|통|봉|송이)$/i, '')
-        .trim()
+function getItemDisplayName(item) {
+  const rawName = typeof item === 'string' ? item : item?.normalized_name || item?.raw_name || item?.name || ''
+
+  return String(rawName)
+    .replace(/\s*\d+(?:\.\d+)?\s*(?:kg|g|개|단|팩|통|봉|송이)$/i, '')
+    .trim()
+}
+
+function getFrequentIngredients(receipts) {
+  const counts = receipts.reduce((acc, receipt) => {
+    const receiptItems = receipt.items || []
+
+    receiptItems.forEach((item) => {
+      const ingredientName = getItemDisplayName(item)
 
       if (!ingredientName) {
         return
@@ -54,10 +64,113 @@ function getFrequentIngredients(history) {
   return Object.entries(counts)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, 4)
+    .slice(0, 7)
 }
 
-const frequentIngredientData = getFrequentIngredients(receiptHistory)
+function parseReceiptDate(value) {
+  if (!value) {
+    return null
+  }
+
+  const normalized = String(value).trim().replace(/\./g, '-').replace(' ', 'T')
+  const parsedDate = new Date(normalized)
+
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
+}
+
+function getReceiptAmount(receipt) {
+  if (receipt.total_amount != null) {
+    return Number(receipt.total_amount) || 0
+  }
+
+  if (receipt.amount != null) {
+    return Number(String(receipt.amount).replace(/[^\d.-]/g, '')) || 0
+  }
+
+  return (receipt.items || []).reduce((sum, item) => sum + (Number(item?.item_amount) || 0), 0)
+}
+
+function getReceiptItemCount(receipt) {
+  if (receipt.item_count != null) {
+    return Number(receipt.item_count) || 0
+  }
+
+  return Array.isArray(receipt.items) ? receipt.items.length : 0
+}
+
+function mapMockHistoryToReceipts(history) {
+  return history.map((receipt) => ({
+    purchase_datetime: receipt.date,
+    total_amount: getReceiptAmount(receipt),
+    item_count: getReceiptItemCount(receipt),
+    items: (receipt.items || []).map((item) => ({ raw_name: item, normalized_name: getItemDisplayName(item) })),
+  }))
+}
+
+function createEmptyWeeklyData(weekCount = purchaseFlowWeekCount) {
+  return Array.from({ length: weekCount }, (_, index) => ({
+    week: `${index + 1}주차`,
+    items: 0,
+    amount: 0,
+  }))
+}
+
+function buildPurchaseFlowData(receipts, options = {}) {
+  const weekCount = options.weekCount || purchaseFlowWeekCount
+  const fallbackToMock = options.fallbackToMock ?? false
+  const sourceReceipts = Array.isArray(receipts) ? receipts : []
+
+  if (sourceReceipts.length === 0) {
+    const weeklyData = fallbackToMock ? fallbackWeeklyPurchaseData : createEmptyWeeklyData(weekCount)
+    return {
+      weeklyData,
+      frequentIngredients: fallbackToMock ? getFrequentIngredients(mapMockHistoryToReceipts(receiptHistory)) : [],
+    }
+  }
+
+  const datedReceipts = sourceReceipts.map((receipt) => ({
+    ...receipt,
+    parsedDate: parseReceiptDate(receipt.purchase_datetime || receipt.date),
+  }))
+  const validDates = datedReceipts.map((receipt) => receipt.parsedDate).filter(Boolean)
+  const latestDate = validDates.length
+    ? new Date(Math.max(...validDates.map((date) => date.getTime())))
+    : new Date()
+  const dayInMs = 24 * 60 * 60 * 1000
+  const startTime = latestDate.getTime() - (weekCount - 1) * 7 * dayInMs
+
+  const weeklyData = createEmptyWeeklyData(weekCount)
+
+  datedReceipts.forEach((receipt) => {
+    const receiptDate = receipt.parsedDate || latestDate
+    const weekIndex = Math.floor((receiptDate.getTime() - startTime) / (7 * dayInMs))
+
+    if (weekIndex < 0 || weekIndex >= weekCount) {
+      return
+    }
+
+    weeklyData[weekIndex].amount += getReceiptAmount(receipt)
+    weeklyData[weekIndex].items += getReceiptItemCount(receipt)
+  })
+
+  return {
+    weeklyData,
+    frequentIngredients: getFrequentIngredients(datedReceipts),
+  }
+}
+
+const fallbackPurchaseFlowData = buildPurchaseFlowData(mapMockHistoryToReceipts(receiptHistory), {
+  fallbackToMock: true,
+})
+const staticSpendSparkPoints = '8,32 32,24 56,30 80,16 108,26'
+const staticSpendSparkArea = `8,40 ${staticSpendSparkPoints} 108,40`
+const staticItemBars = [
+  { x: 8, y: 22, height: 18 },
+  { x: 30, y: 12, height: 28 },
+  { x: 52, y: 24, height: 16 },
+  { x: 74, y: 8, height: 32 },
+  { x: 96, y: 18, height: 22 },
+]
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -73,6 +186,59 @@ function formatManwon(amount) {
 
 function PurchaseFlowChart({ isLoggedIn }) {
   const chartId = isLoggedIn ? 'receipt-chart-title' : 'receipt-guest-chart-title'
+  const [purchaseFlowData, setPurchaseFlowData] = useState(fallbackPurchaseFlowData)
+  const [purchaseFlowStatus, setPurchaseFlowStatus] = useState('idle')
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setPurchaseFlowData(fallbackPurchaseFlowData)
+      setPurchaseFlowStatus('idle')
+      return undefined
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+
+    if (!token) {
+      setPurchaseFlowData(fallbackPurchaseFlowData)
+      setPurchaseFlowStatus('ready')
+      return undefined
+    }
+
+    let active = true
+    setPurchaseFlowStatus('loading')
+
+    fetch(`${apiUrl}/api/v1/receipts/history?limit=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('식재료 구매 흐름을 불러오지 못했어요.')
+        }
+
+        const data = await response.json().catch(() => ({}))
+        return Array.isArray(data.receipts) ? data.receipts : []
+      })
+      .then((receipts) => {
+        if (!active) {
+          return
+        }
+
+        setPurchaseFlowData(buildPurchaseFlowData(receipts))
+        setPurchaseFlowStatus('ready')
+      })
+      .catch(() => {
+        if (!active) {
+          return
+        }
+
+        setPurchaseFlowData(fallbackPurchaseFlowData)
+        setPurchaseFlowStatus('error')
+      })
+
+    return () => {
+      active = false
+    }
+  }, [isLoggedIn])
 
   if (!isLoggedIn) {
     return (
@@ -92,34 +258,31 @@ function PurchaseFlowChart({ isLoggedIn }) {
     )
   }
 
+  const weeklyPurchaseData = purchaseFlowData.weeklyData
+  const frequentIngredientData = purchaseFlowData.frequentIngredients
   const weekCount = weeklyPurchaseData.length
-  const maxAmount = Math.max(...weeklyPurchaseData.map((data) => data.amount))
-  const maxItems = Math.max(...weeklyPurchaseData.map((data) => data.items))
+  const maxAmount = Math.max(...weeklyPurchaseData.map((data) => data.amount), 1)
+  const maxItems = Math.max(...weeklyPurchaseData.map((data) => data.items), 1)
   const totalAmount = weeklyPurchaseData.reduce((sum, data) => sum + data.amount, 0)
   const totalItems = weeklyPurchaseData.reduce((sum, data) => sum + data.items, 0)
 
   const baseline = 96
   const points = weeklyPurchaseData.map((data, index) => {
     const x = 30 + index * ((320 - 60) / (weekCount - 1))
-    const barHeight = (data.amount / maxAmount) * 56
+    const barHeight = data.amount > 0 ? Math.max((data.amount / maxAmount) * 56, 5) : 0
     const barY = baseline - barHeight
-    const dotY = 84 - (data.items / maxItems) * 40
+    const dotY = data.items > 0 ? 84 - (data.items / maxItems) * 40 : 84
 
     return { ...data, x, barHeight, barY, dotY }
   })
   const linePoints = points.map((point) => `${point.x},${point.dotY}`).join(' ')
 
-  const sparkPoints = weeklyPurchaseData
-    .map((data, index) => {
-      const x = 6 + index * ((116 - 12) / (weekCount - 1))
-      const y = 38 - (data.amount / maxAmount) * 30
-      return `${x},${y}`
-    })
-    .join(' ')
-  const sparkArea = `6,40 ${sparkPoints} 110,40`
-
   return (
-    <section className="receipt-panel receipt-chart is-logged-in" aria-labelledby={chartId}>
+    <section
+      className="receipt-panel receipt-chart is-logged-in"
+      aria-busy={purchaseFlowStatus === 'loading'}
+      aria-labelledby={chartId}
+    >
       <div className="receipt-chart__head">
         <h2 id={chartId}>식재료 구매 흐름</h2>
         <p>최근 구매일 기준으로 주차별 식재료 구매량과 금액을 보여줘요.</p>
@@ -150,7 +313,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
                     x={point.x - 13}
                     y={point.barY}
                   />
-                  <text className="receipt-week-chart__amount" x={point.x} y={point.barY + 10}>
+                  <text className="receipt-week-chart__amount" x={point.x} y={baseline - 8}>
                     {formatManwon(point.amount)}
                   </text>
                 </g>
@@ -158,7 +321,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
               <polyline className="receipt-week-chart__line" points={linePoints} />
               {points.map((point) => (
                 <g key={point.week}>
-                  <circle className="receipt-week-chart__dot" cx={point.x} cy={point.dotY} r="4.5" />
+                  <circle className="receipt-week-chart__dot" cx={point.x} cy={point.dotY} r="3.4" />
                   <text className="receipt-week-chart__value" x={point.x} y={point.dotY - 8}>
                     {point.items}개
                   </text>
@@ -177,42 +340,48 @@ function PurchaseFlowChart({ isLoggedIn }) {
 
         <div className="receipt-dash-mini">
           <article className="receipt-dash-card receipt-dash-stat">
-            <h4>월 지출</h4>
+            <div className="receipt-dash-stat__head">
+              <h4>총 지출</h4>
+              <span>최근 {weekCount}주</span>
+            </div>
             <strong>{totalAmount.toLocaleString()}원</strong>
             <svg className="receipt-dash-spark" viewBox="0 0 116 44" focusable="false" aria-hidden="true">
-              <polygon className="receipt-dash-spark__area" points={sparkArea} />
-              <polyline className="receipt-dash-spark__line" points={sparkPoints} />
+              <polygon className="receipt-dash-spark__area" points={staticSpendSparkArea} />
+              <polyline className="receipt-dash-spark__line" points={staticSpendSparkPoints} />
             </svg>
           </article>
           <article className="receipt-dash-card receipt-dash-stat">
-            <h4>주별 품목</h4>
+            <div className="receipt-dash-stat__head">
+              <h4>총 품목</h4>
+              <span>최근 {weekCount}주</span>
+            </div>
             <strong>{totalItems}개</strong>
             <svg className="receipt-dash-minibars" viewBox="0 0 116 44" focusable="false" aria-hidden="true">
-              {weeklyPurchaseData.map((data, index) => {
-                const height = (data.items / maxItems) * 34
-
-                return (
-                  <rect key={data.week} x={6 + index * 22} y={40 - height} width="14" height={height} rx="3" />
-                )
-              })}
+              {staticItemBars.map((bar) => (
+                <rect key={`${bar.x}-${bar.height}`} x={bar.x} y={bar.y} width="14" height={bar.height} rx="3" />
+              ))}
             </svg>
           </article>
         </div>
 
         <article className="receipt-dash-card receipt-dash-frequent" aria-labelledby="receipt-frequent-title">
           <header className="receipt-dash-card__head">
-            <h3 id="receipt-frequent-title">단골 재료</h3>
-            <span>최근 기준</span>
+            <h3 id="receipt-frequent-title">자주 산 재료</h3>
+            <span>최근 {weekCount}주</span>
           </header>
-          <ul>
-            {frequentIngredientData.map((ingredient, index) => (
-              <li key={ingredient.name}>
-                <i className="receipt-dash-frequent__dot" data-rank={index} aria-hidden="true" />
-                <b>{ingredient.name}</b>
-                <strong>{ingredient.count}회</strong>
-              </li>
-            ))}
-          </ul>
+          {frequentIngredientData.length > 0 ? (
+            <ul>
+              {frequentIngredientData.map((ingredient, index) => (
+                <li key={ingredient.name}>
+                  <i className="receipt-dash-frequent__dot" data-rank={index} aria-hidden="true" />
+                  <b>{ingredient.name}</b>
+                  <strong>{ingredient.count}회</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="receipt-dash-empty">최근 구매 데이터가 없어요.</p>
+          )}
         </article>
       </div>
     </section>
@@ -766,8 +935,12 @@ function ReceiptOcr() {
     <section className="receipt-page" aria-labelledby="receipt-title">
       <div className="receipt-hero">
         <div className="receipt-hero__copy">
-          <h1 id="receipt-title">영수증 입고</h1>
-          <p>영수증 한 장으로 재료를 똑똑하게 등록해요!</p>
+          <h1 id="receipt-title">
+            구매한 식재료를
+            <br />
+            한번에 정리하세요
+          </h1>
+          <p>영수증을 올리면 재료명, 수량, 금액을 확인해 냉장고 관리까지 이어져요.</p>
         </div>
         <ImageSlot className="receipt-hero__image" src={imageReceipt} />
       </div>
