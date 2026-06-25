@@ -10,6 +10,7 @@ uvicorn[standard]>=0.22.0
 sqlalchemy>=2.0.0
 alembic>=1.11.0
 psycopg2-binary>=2.9.0      # PostgreSQL 기준
+neo4j>=5.10.0               # Neo4j graph database driver
 
 # Data Validation & Security (인증 - 김재묵 담당)
 pydantic[email]>=2.0.0

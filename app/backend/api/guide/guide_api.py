@@ -1,40 +1,43 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.backend.api.deps import get_current_user_required
-from app.backend.schemas.guide import GuideResponse
+from app.backend.api.deps import get_current_user
+from app.backend.schemas.guide import GuideDetailResponse, GuideListResponse, GuideResponse
+from app.backend.services.guide_service.guide_service import guide_service
 
 
 router = APIRouter(prefix="/guide", tags=["Guide (식재료 가이드)"])
 
 
-@router.get("", response_model=GuideResponse)
+@router.get("", response_model=GuideListResponse)
 def search_ingredient_guide(
-    keyword: str = Query(..., description="검색할 식재료명"),
-    current_user_id: int = Depends(get_current_user_required),
+    keyword: str | None = Query(default=None, description="검색할 식재료명"),
+    limit: int = Query(default=60, ge=1, le=100, description="반환 개수"),
+    current_user_id: int = Depends(get_current_user),
 ):
-    """
-    특정 식재료의 보관법, 손질법, 신선도 판별법을 조회합니다.
-    현재는 API 계약 확인용 임시 응답을 반환합니다.
-    """
-    return {
-        "name": keyword,
-        "storage_tips": f"{keyword}는 상태에 따라 밀봉 후 적절한 온도에서 보관하세요.",
-        "prep_tips": "흙이나 이물질을 제거한 뒤 용도에 맞게 손질하세요.",
-        "freshness_tips": "색, 냄새, 물러짐 여부를 함께 확인하세요.",
-    }
+    """Neo4j에 적재된 식재료 가이드를 검색합니다."""
+    return guide_service.search_guides(keyword=keyword, limit=limit)
+
+
+@router.get("/detail/{code}", response_model=GuideDetailResponse)
+def get_ingredient_guide_detail(
+    code: str,
+    current_user_id: int = Depends(get_current_user),
+):
+    """식품 코드로 식재료 가이드 상세 정보를 조회합니다."""
+    guide = guide_service.get_guide_detail(code)
+    if guide is None:
+        raise HTTPException(status_code=404, detail="식재료 가이드를 찾을 수 없습니다.")
+    return guide
 
 
 @router.get("/urgent", response_model=GuideResponse)
 def get_urgent_guide(
-    current_user_id: int = Depends(get_current_user_required),
+    current_user_id: int = Depends(get_current_user),
 ):
-    """
-    소비 임박 식재료를 기준으로 긴급 보관 가이드를 추천합니다.
-    현재는 API 계약 확인용 임시 응답을 반환합니다.
-    """
+    """소비 임박 식재료용 기본 가이드. 재고 연동 전까지는 기본값을 반환합니다."""
     return {
-        "name": "두부",
-        "storage_tips": "개봉한 두부는 깨끗한 물에 담가 냉장 보관하고 빠르게 소비하세요.",
-        "prep_tips": "사용 전 물기를 제거하면 조리하기 좋습니다.",
-        "freshness_tips": "시큼한 냄새가 나거나 표면이 끈적하면 폐기하세요.",
+        "name": "파",
+        "storage_tips": "냉장 보관하고, 남은 것은 잘게 썰어 밀폐용기에 넣어 냉장 또는 냉동 보관하세요.",
+        "prep_tips": "시든 겉잎과 뿌리 부분을 정리한 뒤 용도에 맞게 손질하세요.",
+        "freshness_tips": "줄기가 단단하고 잎 색이 선명한지 확인하세요.",
     }

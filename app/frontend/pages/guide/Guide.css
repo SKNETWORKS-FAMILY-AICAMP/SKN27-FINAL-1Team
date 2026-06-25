@@ -129,7 +129,7 @@
 
 .guide-ingredient-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(116px, 1fr)) 44px;
+  grid-template-columns: repeat(6, minmax(116px, 1fr));
   align-items: center;
   gap: 18px;
 }
@@ -215,6 +215,12 @@
   height: 100%;
   display: block;
   object-fit: contain;
+}
+
+.guide-image-slot__text {
+  color: #8b673e;
+  font-size: 22px;
+  font-weight: 900;
 }
 
 .guide-ingredient__image {
@@ -406,6 +412,14 @@
   line-height: 1.45;
 }
 
+.guide-all-item small {
+  display: block;
+  margin-top: 6px;
+  color: #8b673e;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .guide-all-item > span[aria-hidden="true"] {
   width: 9px;
   height: 9px;
@@ -593,6 +607,48 @@
   line-height: 1.5;
 }
 
+.guide-tip-detail a {
+  color: #6d4128;
+  font-weight: 900;
+}
+
+.guide-error,
+.guide-empty,
+.guide-loading {
+  color: #7b5d46;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.guide-error {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #f2beb4;
+  border-radius: 12px;
+  background: #fff4f3;
+}
+
+.guide-nutrition-grid {
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guide-nutrition-grid strong {
+  min-height: 44px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  border: 1.4px solid #efd8b8;
+  border-radius: 12px;
+  background: #fffdf8;
+  color: #6d4128;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .guide-recipes {
   margin-top: 16px;
   padding: 18px 22px;
@@ -728,6 +784,10 @@
   }
 
   .guide-recipe-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-nutrition-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -958,6 +1018,10 @@
     grid-template-columns: 1fr;
     gap: 10px;
     overflow: visible;
+  }
+
+  .guide-nutrition-grid {
+    grid-template-columns: 1fr;
   }
 
   .guide-recipe-card,
