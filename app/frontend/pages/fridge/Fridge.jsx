@@ -64,7 +64,9 @@ const ingredientImages = Object.entries(
 // 재료 이름에 맞는 대표 식재료 이미지를 선택합니다.
 function getIngredientIcon(name = '') {
   const key = normalizeIngredientImageKey(name)
-  const image = ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
+  const image =
+    ingredientImages.find((item) => item.key === key) ||
+    ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
   return image?.src || null
 }
 
