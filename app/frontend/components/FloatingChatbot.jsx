@@ -10,13 +10,15 @@ const initialSettings = {
   excludeDislikes: true,
 }
 
+const initialMessages = [
+  { role: 'bot', text: '안녕하세요. 레시피, 보관법, 장보기를 도와드릴게요.' },
+]
+
 function FloatingChatbot() {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('chat')
   const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState([
-    { role: 'bot', text: '안녕하세요. 레시피, 보관법, 장보기를 도와드릴게요.' },
-  ])
+  const [messages, setMessages] = useState(initialMessages)
   const [settings, setSettings] = useState(initialSettings)
 
   const sendMessage = (event) => {
@@ -34,6 +36,12 @@ function FloatingChatbot() {
 
   const toggleSetting = (key) => {
     setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const resetMessages = () => {
+    if (window.confirm('대화를 정말 초기화할까요?')) {
+      setMessages(initialMessages)
+    }
   }
 
   return (
@@ -120,7 +128,7 @@ function FloatingChatbot() {
                 <i className={settings.excludeDislikes ? 'is-on' : ''} />
               </button>
 
-              <button className="floating-chatbot__reset" type="button" onClick={() => setMessages([])}>
+              <button className="floating-chatbot__reset" type="button" onClick={resetMessages}>
                 대화 초기화
               </button>
             </div>

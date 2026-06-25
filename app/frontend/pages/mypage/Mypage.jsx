@@ -181,10 +181,6 @@ function Mypage() {
   const authMode =
     typeof window === 'undefined' ? null : window.localStorage.getItem('bobbeori-auth-mode')
   const isGuest = authMode === 'guest'
-  const activeAlertsCount = useMemo(
-    () => alertSettings.filter((alert) => alert.checked).length,
-    [alertSettings],
-  )
   const recommendedSavedRecipes = useMemo(
     () => savedRecipes.filter((recipe) => recipe.savedType !== 'saved'),
     [savedRecipes],
@@ -573,23 +569,18 @@ function Mypage() {
             <section className="mypage-panel mypage-saved" aria-labelledby="saved-recipes-title">
               <div className="mypage-panel__title">
                 <div>
-                  <h2 id="saved-recipes-title">저장된 레시피</h2>
-                  <p className="mypage-setting-note">저장한 시점부터 7일 동안 보관돼요.</p>
+                  <h2 id="saved-recipes-title">저장된 레시피 <span>7일 보관</span></h2>
                 </div>
-                <button className="mypage-soft-button" type="button" onClick={loadSavedRecipes}>
-                  새로고침
-                </button>
               </div>
 
               <div className="mypage-saved-grid">
                 {[
-                  ['추천받은 레시피', '냉장고파먹기와 메뉴추천에서 저장한 레시피예요.', recommendedSavedRecipes, '/recipe-fridge', '추천 받으러 가기'],
-                  ['내가 저장한 레시피', '상세 페이지에서 직접 저장한 레시피예요.', manuallySavedRecipes, '/recipes', '레시피 찾으러 가기'],
-                ].map(([title, description, recipes, actionPath, actionLabel]) => (
+                  ['추천 레시피', recommendedSavedRecipes, '/recipe-fridge', '추천 받으러 가기'],
+                  ['저장한 레시피', manuallySavedRecipes, '/recipes', '레시피 찾으러 가기'],
+                ].map(([title, recipes, actionPath, actionLabel]) => (
                   <section className="mypage-saved-section" key={title} aria-label={title}>
                     <div className="mypage-saved-section__head">
                       <h3>{title}</h3>
-                      <p>{description}</p>
                     </div>
                     {recipes.length > 0 ? (
                       <div className="mypage-saved-list">
@@ -623,7 +614,7 @@ function Mypage() {
                       <div className="mypage-saved-column-empty">
                         <ImageSlot className="mypage-saved-empty__image" src={imageRecommendation} />
                         <h3>{title}가 없어요</h3>
-                        <p>{title === '추천받은 레시피' ? '추천 화면에서 마음에 드는 메뉴를 저장해보세요.' : '레시피 상세에서 저장하면 여기에 모여요.'}</p>
+                        <p>{title === '추천 레시피' ? '추천 화면에서 마음에 드는 메뉴를 저장해보세요.' : '레시피 상세에서 저장하면 여기에 모여요.'}</p>
                         <button className="mypage-primary-button" type="button" onClick={() => navigate(actionPath)}>
                           {actionLabel}
                         </button>
@@ -640,7 +631,6 @@ function Mypage() {
               <div className="mypage-alert-calendar">
                 <section className="mypage-panel mypage-settings" aria-labelledby="alerts-title">
                   <h2 id="alerts-title">서비스 알림</h2>
-                  <p className="mypage-setting-note">현재 {activeAlertsCount}개 알림이 켜져 있어요.</p>
                   <ul>
                     {alertSettings.map((alert) => (
                       <li key={alert.label}>
@@ -657,9 +647,6 @@ function Mypage() {
 
                 <section className="mypage-panel mypage-settings" aria-labelledby="calendar-title">
                   <h2 id="calendar-title">캘린더 설정</h2>
-                  <p className="mypage-setting-note">
-                    Google Calendar 연동 후 필요한 알림만 자동으로 등록돼요.
-                  </p>
                   <ul>
                     <li>
                       <span>소비기한 임박 재료</span>

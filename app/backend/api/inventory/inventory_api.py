@@ -3,14 +3,16 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.backend.db.session import get_db
 from app.backend.api.deps import get_current_user_required
-from app.backend.schemas.inventory import IngredientCreate, IngredientResponse, InventorySummaryResponse
+from app.backend.schemas.inventory import IngredientCreate, IngredientResponse, InventorySummaryResponse, IngredientPredictionResponse
 from app.backend.services.inventory_service.inventory_service import inventory_service
 
 router = APIRouter(prefix="/inventory", tags=["Inventory (나의 냉장고)"])
 
+from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+
 @router.get("/summary", response_model=InventorySummaryResponse)
 def get_inventory_summary_data(
-    current_user_id: int = Depends(get_current_user_required), 
+    current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -19,9 +21,30 @@ def get_inventory_summary_data(
     """
     return inventory_service.get_inventory_summary(db=db, user_id=current_user_id)
 
+@router.get("/predict", response_model=IngredientPredictionResponse)
+def predict_ingredient_info(
+    name: str,
+    current_user_id: int = Depends(get_current_user_required)
+):
+    """
+    식재료명 입력 시 AI가 해당 식재료가 맞는지 유효성을 검사하고,
+    추천 보관 위치, 예상 소비기한을 실시간으로 반환합니다.
+    """
+    return expiration_ai_service.predict_ingredient_info(name)
+
+@router.get("/suggestions", response_model=List[str])
+def suggest_ingredient_names(
+    q: str,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """재료명 입력 자동완성용 식재료 마스터명을 반환합니다."""
+    return inventory_service.search_ingredient_suggestions(db=db, keyword=q)
+
+
 @router.get("", response_model=List[IngredientResponse])
 def get_my_fridge_ingredients(
-    current_user_id: int = Depends(get_current_user_required), 
+    current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -32,8 +55,8 @@ def get_my_fridge_ingredients(
 
 @router.post("", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
 def add_ingredient_to_fridge(
-    request_data: IngredientCreate, 
-    current_user_id: int = Depends(get_current_user_required), 
+    request_data: IngredientCreate,
+    current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -45,7 +68,7 @@ def add_ingredient_to_fridge(
 @router.delete("/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ingredient_from_fridge(
     ingredient_id: int,
-    current_user_id: int = Depends(get_current_user_required), 
+    current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -65,8 +88,8 @@ def update_ingredient_in_fridge(
     기존에 등록된 식재료의 정보(수량, 유통기한 등)를 수정합니다.
     """
     return inventory_service.update_ingredient(
-        db=db, 
-        user_id=current_user_id, 
-        ingredient_id=ingredient_id, 
+        db=db,
+        user_id=current_user_id,
+        ingredient_id=ingredient_id,
         data=request_data
     )
