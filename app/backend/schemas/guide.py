@@ -16,6 +16,15 @@ class GuideListResponse(BaseModel):
     items: list[GuideListItem] = Field(default_factory=list, description="식재료 가이드 목록")
     total: int = Field(..., description="전체 검색 결과 수")
     returned_count: int = Field(..., description="반환 개수")
+    page: int = Field(..., description="현재 페이지")
+    page_size: int = Field(..., description="페이지 크기")
+    has_next: bool = Field(..., description="다음 페이지 존재 여부")
+
+
+class GuideCategoryOptions(BaseModel):
+    major_categories: list[str] = Field(default_factory=list, description="대분류 목록")
+    middle_categories: list[str] = Field(default_factory=list, description="중분류 목록")
+    minor_categories: list[str] = Field(default_factory=list, description="소분류 목록")
 
 
 class GuideResponse(BaseModel):

@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.backend.api.deps import get_current_user
-from app.backend.schemas.guide import GuideDetailResponse, GuideListResponse, GuideResponse
+from app.backend.schemas.guide import (
+    GuideCategoryOptions,
+    GuideDetailResponse,
+    GuideListResponse,
+    GuideResponse,
+)
 from app.backend.services.guide_service.guide_service import guide_service
 
 
@@ -11,11 +16,37 @@ router = APIRouter(prefix="/guide", tags=["Guide (식재료 가이드)"])
 @router.get("", response_model=GuideListResponse)
 def search_ingredient_guide(
     keyword: str | None = Query(default=None, description="검색할 식재료명"),
-    limit: int = Query(default=60, ge=1, le=100, description="반환 개수"),
+    page: int = Query(default=1, ge=1, description="페이지"),
+    page_size: int = Query(default=24, ge=1, le=60, description="페이지 크기"),
+    major_category: str | None = Query(default=None, description="대분류"),
+    middle_category: str | None = Query(default=None, description="중분류"),
+    minor_category: str | None = Query(default=None, description="소분류"),
     current_user_id: int = Depends(get_current_user),
 ):
     """Neo4j에 적재된 식재료 가이드를 검색합니다."""
-    return guide_service.search_guides(keyword=keyword, limit=limit)
+    return guide_service.search_guides(
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        major_category=major_category,
+        middle_category=middle_category,
+        minor_category=minor_category,
+    )
+
+
+@router.get("/categories", response_model=GuideCategoryOptions)
+def get_guide_categories(
+    keyword: str | None = Query(default=None, description="검색할 식재료명"),
+    major_category: str | None = Query(default=None, description="대분류"),
+    middle_category: str | None = Query(default=None, description="중분류"),
+    current_user_id: int = Depends(get_current_user),
+):
+    """식재료 가이드 분류 필터 옵션을 조회합니다."""
+    return guide_service.get_category_options(
+        keyword=keyword,
+        major_category=major_category,
+        middle_category=middle_category,
+    )
 
 
 @router.get("/detail/{code}", response_model=GuideDetailResponse)

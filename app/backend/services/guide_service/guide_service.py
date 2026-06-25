@@ -30,27 +30,66 @@ class GuideService:
         finally:
             session.close()
 
-    def search_guides(self, keyword: str | None = None, limit: int = 60) -> dict[str, Any]:
+    def _build_guide_filters(
+        self,
+        keyword: str | None = None,
+        major_category: str | None = None,
+        middle_category: str | None = None,
+        minor_category: str | None = None,
+    ) -> tuple[str, dict[str, Any]]:
         normalized_keyword = (keyword or "").strip().lower()
-        safe_limit = max(1, min(limit, 100))
-        where_clause = """
-        WHERE coalesce(g.rawName, g.representativeName, g.name) IS NOT NULL
-          AND NOT coalesce(g.rawName, g.representativeName, g.name) STARTS WITH "food-guide-"
-        """
-        params: dict[str, Any] = {"limit": safe_limit}
+        params: dict[str, Any] = {}
+        conditions = [
+            "coalesce(g.rawName, g.representativeName, g.name) IS NOT NULL",
+            'NOT coalesce(g.rawName, g.representativeName, g.name) STARTS WITH "food-guide-"',
+        ]
 
         if normalized_keyword:
-            where_clause = """
-            WHERE coalesce(g.rawName, g.representativeName, g.name) IS NOT NULL
-              AND NOT coalesce(g.rawName, g.representativeName, g.name) STARTS WITH "food-guide-"
-              AND (
-                  toLower(g.name) CONTAINS $keyword
-               OR toLower(coalesce(g.representativeName, "")) CONTAINS $keyword
-               OR toLower(coalesce(g.rawName, "")) CONTAINS $keyword
-               OR any(alias IN coalesce(g.aliases, []) WHERE toLower(alias) CONTAINS $keyword)
-              )
-            """
+            conditions.append(
+                """
+                (
+                    toLower(g.name) CONTAINS $keyword
+                 OR toLower(coalesce(g.representativeName, "")) CONTAINS $keyword
+                 OR toLower(coalesce(g.rawName, "")) CONTAINS $keyword
+                 OR any(alias IN coalesce(g.aliases, []) WHERE toLower(alias) CONTAINS $keyword)
+                )
+                """
+            )
             params["keyword"] = normalized_keyword
+
+        for field_name, value in (
+            ("majorCategory", major_category),
+            ("middleCategory", middle_category),
+            ("minorCategory", minor_category),
+        ):
+            normalized_value = (value or "").strip()
+            if not normalized_value:
+                continue
+            param_name = field_name[0].lower() + field_name[1:]
+            conditions.append(f"g.{field_name} = ${param_name}")
+            params[param_name] = normalized_value
+
+        return "WHERE " + "\n          AND ".join(conditions), params
+
+    def search_guides(
+        self,
+        keyword: str | None = None,
+        page: int = 1,
+        page_size: int = 24,
+        major_category: str | None = None,
+        middle_category: str | None = None,
+        minor_category: str | None = None,
+    ) -> dict[str, Any]:
+        safe_page = max(1, page)
+        safe_page_size = max(1, min(page_size, 60))
+        skip = (safe_page - 1) * safe_page_size
+        where_clause, params = self._build_guide_filters(
+            keyword=keyword,
+            major_category=major_category,
+            middle_category=middle_category,
+            minor_category=minor_category,
+        )
+        params.update({"skip": skip, "limit": safe_page_size})
 
         count_query = f"""
         MATCH (g:FoodGuide)
@@ -70,6 +109,7 @@ class GuideService:
                g.minorCategory AS minor_category,
                coalesce(g.seasonalMonths, []) AS seasonal_months
         ORDER BY name
+        SKIP $skip
         LIMIT $limit
         """
 
@@ -84,6 +124,39 @@ class GuideService:
             "items": items,
             "total": total,
             "returned_count": len(items),
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "has_next": skip + len(items) < total,
+        }
+
+    def get_category_options(
+        self,
+        keyword: str | None = None,
+        major_category: str | None = None,
+        middle_category: str | None = None,
+    ) -> dict[str, list[str]]:
+        where_clause, params = self._build_guide_filters(
+            keyword=keyword,
+            major_category=major_category,
+            middle_category=middle_category,
+        )
+        query = f"""
+        MATCH (g:FoodGuide)
+        {where_clause}
+        RETURN [value IN collect(DISTINCT g.majorCategory) WHERE value IS NOT NULL | value] AS major_categories,
+               [value IN collect(DISTINCT g.middleCategory) WHERE value IS NOT NULL | value] AS middle_categories,
+               [value IN collect(DISTINCT g.minorCategory) WHERE value IS NOT NULL | value] AS minor_categories
+        """
+        try:
+            with self.session() as session:
+                record = session.run(query, params).single()
+        except Neo4jError as exc:
+            raise RuntimeError(f"Neo4j guide categories failed: {exc}") from exc
+
+        return {
+            "major_categories": sorted(record["major_categories"] or []),
+            "middle_categories": sorted(record["middle_categories"] or []),
+            "minor_categories": sorted(record["minor_categories"] or []),
         }
 
     def get_guide_detail(self, code: str) -> dict[str, Any] | None:
