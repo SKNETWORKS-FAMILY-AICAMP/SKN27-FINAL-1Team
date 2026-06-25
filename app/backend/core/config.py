@@ -16,6 +16,12 @@ class Settings:
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
     DB_NAME: str = os.getenv("DB_NAME", "bobbeori_db")
 
+    # Neo4j Settings
+    NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "")
+    NEO4J_DATABASE: str = os.getenv("NEO4J_DATABASE", "neo4j")
+
     @property
     def DATABASE_URL(self) -> str:
         # PostgreSQL 연결 URL을 생성합니다.

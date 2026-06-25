@@ -22,12 +22,6 @@ const ingredientImages = Object.entries(
   })
   .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 
-// 자동완성 재료명에 맞는 대표 식재료 이미지를 선택합니다.
-function getSuggestionIcon(name = '') {
-  const key = normalizeIngredientImageName(name)
-  const image = ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
-  return image?.src || null
-}
 
 // 식재료 추가/수정 폼을 표시하는 모달 컴포넌트입니다.
 export default function IngredientModal({
@@ -90,9 +84,13 @@ export default function IngredientModal({
 
     setSuggestions(
       ingredientImages
-        .filter((item) => item.key !== key && item.key.includes(key))
-        // 입력값으로 시작하는 식재료를 먼저 보여줍니다.
-        .sort((a, b) => Number(b.key.startsWith(key)) - Number(a.key.startsWith(key)))
+        .filter((item) => item.key.includes(key))
+        // 정확히 일치하는 식재료를 먼저 보여줍니다.
+        .sort((a, b) =>
+          Number(b.key === key) - Number(a.key === key) ||
+          Number(b.key.startsWith(key)) - Number(a.key.startsWith(key)) ||
+          a.name.localeCompare(b.name, 'ko'),
+        )
         .slice(0, 6),
     )
   }, [formData.name, isOpen])

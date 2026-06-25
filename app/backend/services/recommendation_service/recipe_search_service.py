@@ -19,6 +19,7 @@ class RecipeSearchService:
         self,
         db: Session,
         query: str | None = None,
+        ingredient: str | None = None,
         category: str | None = None,
         difficulty: str | None = None,
         max_cooking_time_min: int | None = None,
@@ -35,6 +36,7 @@ class RecipeSearchService:
         query_recipes = build_recipe_query(
             db,
             query=query,
+            ingredient=ingredient,
             category=category,
             difficulty=difficulty,
             max_cooking_time_min=max_cooking_time_min,
