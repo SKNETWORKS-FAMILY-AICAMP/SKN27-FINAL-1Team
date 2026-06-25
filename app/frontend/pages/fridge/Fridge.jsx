@@ -521,10 +521,10 @@ function Fridge() {
 
             <div className="fridge-view-controls">
               <button type="button" onClick={toggleSort}>{getSortLabel()}</button>
-              <button className={viewMode === 'grid' ? 'is-active' : ''} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
+              <button className={viewMode === 'grid' ? 'fridge-view-button is-grid is-active' : 'fridge-view-button is-grid'} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
                 <span />
               </button>
-              <button className={viewMode === 'list' ? 'is-active' : ''} type="button" aria-label="리스트 보기" onClick={() => setViewMode('list')}>
+              <button className={viewMode === 'list' ? 'fridge-view-button is-list is-active' : 'fridge-view-button is-list'} type="button" aria-label="리스트 보기" onClick={() => setViewMode('list')}>
                 <span />
               </button>
             </div>
