@@ -22,8 +22,8 @@ from sqlalchemy.orm import relationship
 from app.backend.db.base import Base
 
 
-# SQLite 개발 환경에서도 PK 자동 증가가 동작하도록 PostgreSQL의 BIGINT를 SQLite에서는 INTEGER로 매핑합니다.
-BigIntPrimaryKey = BigInteger().with_variant(Integer, "sqlite")
+# 모든 주요 테이블에서 공통으로 사용하는 BIGINT 기본키 타입입니다.
+BigIntPrimaryKey = BigInteger
 
 
 class User(Base):
@@ -47,6 +47,10 @@ class User(Base):
     calendar_integrations = relationship("CalendarIntegration", back_populates="user", cascade="all, delete-orphan")
     calendar_event_logs = relationship("CalendarEventLog", back_populates="user", cascade="all, delete-orphan")
 
+    @property
+    def is_onboarded(self) -> bool:
+        """사용자 선호 설정 저장 여부로 온보딩 완료 상태를 반환합니다."""
+        return self.preference is not None
 
 class UserPreference(Base):
     """사용자별 식재료 선호/알림 설정을 표현하는 ORM 모델입니다."""
@@ -65,6 +69,7 @@ class UserPreference(Base):
     user = relationship("User", back_populates="preference")
 
 
+# Google Calendar 연동 토큰과 캘린더 ID를 사용자별로 저장한다.
 class CalendarIntegration(Base):
     """사용자별 외부 캘린더 연동 토큰을 저장합니다."""
 
@@ -87,6 +92,7 @@ class CalendarIntegration(Base):
     user = relationship("User", back_populates="calendar_integrations")
 
 
+# 캘린더 이벤트 생성/수정/중복/실패 결과를 기록한다.
 class CalendarEventLog(Base):
     """Google Calendar event sync history."""
 
@@ -217,6 +223,7 @@ class ReceiptItem(Base):
     fridge_items = relationship("FridgeItem", back_populates="receipt_item")
 
 
+# 사용자가 현재 냉장고에 보유한 재료와 소비기한 정보를 저장한다.
 class FridgeItem(Base):
     """사용자가 보유한 냉장고 식재료를 표현하는 ORM 모델입니다."""
 
@@ -317,6 +324,7 @@ class RecipeIngredient(Base):
     ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
 
 
+# 사용자가 저장하거나 추천받은 레시피 결과를 저장한다.
 class RecommendationResult(Base):
     """사용자별 레시피 추천 결과를 표현하는 ORM 모델입니다."""
 

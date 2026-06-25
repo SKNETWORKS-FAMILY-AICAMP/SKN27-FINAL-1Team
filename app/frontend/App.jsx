@@ -25,24 +25,41 @@ function AppLayout() {
   const isAuthPage = pathname === '/login' || pathname.startsWith('/auth/callback')
   
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingSeenKey, setOnboardingSeenKey] = useState('hasSeenOnboarding_v4')
 
   useEffect(() => {
-    const hasSeen = localStorage.getItem('hasSeenOnboarding_v4');
-    const token = localStorage.getItem('bobbeori-token');
-    const authMode = localStorage.getItem('bobbeori-auth-mode');
-    
-    // 비로그인 상태이거나 이미 온보딩을 봤다면 스킵
-    if (isAuthPage || hasSeen) return;
+    const token = localStorage.getItem('bobbeori-token')
+    const authMode = localStorage.getItem('bobbeori-auth-mode')
 
-    // 정상 로그인(토큰 존재) 이거나, 소셜 모의 로그인(kakao, naver 등 - guest 제외)일 경우 띄움
-    if (token || (authMode && authMode !== 'guest')) {
-      setShowOnboarding(true)
+    // 인증 페이지, 비로그인, 게스트는 온보딩 자동 노출 대상에서 제외합니다.
+    if (isAuthPage || !token || authMode === 'guest') return
+
+    let isCancelled = false
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+    // 현재 로그인한 사용자 기준으로 온보딩 완료 여부를 확인합니다.
+    fetch(`${apiUrl}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (!user || isCancelled) return
+        const seenKey = `hasSeenOnboarding_v4_${user.id}`
+        setOnboardingSeenKey(seenKey)
+        if (!user.is_onboarded && !localStorage.getItem(seenKey)) {
+          setShowOnboarding(true)
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      isCancelled = true
     }
   }, [pathname, isAuthPage])
 
   return (
     <div className={isAuthPage ? 'app-shell app-shell--auth' : 'app-shell'}>
-      {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
+      {showOnboarding && <OnboardingModal seenKey={onboardingSeenKey} onClose={() => setShowOnboarding(false)} />}
       {!isAuthPage && <Header />}
       <main className={isAuthPage ? 'app-main app-main--auth' : 'app-main'}>
         {!isAuthPage && <Breadcrumbs />}

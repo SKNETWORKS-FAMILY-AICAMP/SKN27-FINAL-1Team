@@ -39,7 +39,7 @@ async def upload_receipt(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Upload a receipt image and return OCR item candidates."""
+    """영수증 이미지를 OCR 분석하고, 사용자가 확인할 품목 후보를 반환한다."""
     return await receipt_ocr_service.analyze_upload(db=db, file=file, user_id=current_user_id)
 
 
@@ -49,7 +49,7 @@ async def confirm_receipt_items(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Confirm edited OCR results and prepare them for stock-in."""
+    """사용자가 확정한 OCR 품목을 냉장고에 입고하고, 사용비용 캘린더 이벤트를 선택 등록한다."""
     saved_item_count = receipt_confirm_service.save_confirmed_items(
         db=db,
         user_id=current_user_id,
@@ -59,6 +59,7 @@ async def confirm_receipt_items(
 
     if request_data.calendar_cost_enabled and total_price > 0:
         try:
+            # 영수증 입고 비용은 스케줄러가 아니라 확정 시점에 바로 캘린더에 남긴다.
             integration = _get_google_integration(db, current_user_id)
             access_token = await _get_access_token(integration, db)
             now = datetime.now(timezone(timedelta(hours=9)))

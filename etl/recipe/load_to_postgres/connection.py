@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import logging
+import time
 import psycopg
 
 from .config import build_dsn
@@ -29,7 +30,17 @@ class PostgreDB(metaclass=Singleton):
     """PostgreSQL 싱글톤 연결·쿼리 실행."""
 
     def __init__(self) -> None:
-        self.conn = psycopg.connect(build_dsn(), autocommit=True)
+        last_error = None
+        for _ in range(20):
+            try:
+                self.conn = psycopg.connect(build_dsn(), autocommit=True)
+                return
+            except psycopg.OperationalError as exc:
+                last_error = exc
+                time.sleep(1)
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("PostgreSQL connection failed")
 
     def get_conn(self):
         """연결된 psycopg 커넥션을 반환한다."""
