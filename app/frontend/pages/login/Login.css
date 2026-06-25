@@ -76,6 +76,10 @@
   gap: 22px;
 }
 
+.login-card__visual.is-calendar {
+  grid-template-columns: minmax(270px, 0.82fr) minmax(300px, 1fr);
+}
+
 .login-card__brand-logo {
   grid-column: 1 / -1;
   width: 118px;
@@ -153,6 +157,17 @@
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 18px 24px rgba(103, 64, 35, 0.12));
+}
+
+.login-card__visual.is-calendar .login-card__art-wrap {
+  width: min(100%, 390px);
+  align-self: center;
+}
+
+.login-card__visual.is-calendar .login-card__art-wrap::before {
+  inset: auto 2% 0 2%;
+  height: 24%;
+  background: #fff4e3;
 }
 
 .login-card__features {
@@ -244,7 +259,7 @@
 }
 
 .login-card__form.is-calendar {
-  min-height: 430px;
+  min-height: 540px;
   justify-content: center;
 }
 
@@ -270,6 +285,95 @@
   margin-top: 36px;
   display: grid;
   gap: 14px;
+}
+
+.login-card__form.is-calendar .login-card__buttons {
+  margin-top: 20px;
+}
+
+.login-calendar-preview {
+  width: 100%;
+  margin-top: 28px;
+  padding: 18px;
+  border: 1px solid #efd6b8;
+  border-radius: 18px;
+  background: #fffaf1;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.login-calendar-preview__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed #e7c894;
+  color: #2e1b12;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.login-calendar-preview__top strong {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ff6b74;
+  color: #fff;
+  font-size: 13px;
+}
+
+.login-calendar-preview__list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.login-calendar-preview__item {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.login-calendar-preview__item time {
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #e7f5ec;
+  color: #2f8f5b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.login-calendar-preview__item time.is-coral {
+  background: #fff0ec;
+  color: #df5147;
+}
+
+.login-calendar-preview__item time.is-yellow {
+  background: #fff3cc;
+  color: #9a6800;
+}
+
+.login-calendar-preview__item strong,
+.login-calendar-preview__item span {
+  display: block;
+}
+
+.login-calendar-preview__item strong {
+  color: #2e1b12;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.login-calendar-preview__item span {
+  margin-top: 3px;
+  color: #6f4b36;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .login-card__button {
@@ -401,6 +505,10 @@
     gap: 16px;
   }
 
+  .login-card__visual.is-calendar {
+    grid-template-columns: minmax(190px, 0.88fr) minmax(190px, 1fr);
+  }
+
   .login-card__brand-logo {
     width: 104px;
   }
@@ -420,6 +528,10 @@
   .login-card__art-wrap {
     width: min(100%, 260px);
     min-width: 0;
+  }
+
+  .login-card__visual.is-calendar .login-card__art-wrap {
+    width: min(100%, 310px);
   }
 
   .login-card__features {
@@ -450,6 +562,10 @@
     width: min(100%, 410px);
     min-height: 455px;
     padding: 42px 36px 38px;
+  }
+
+  .login-card__form.is-calendar {
+    min-height: 510px;
   }
 
   .login-card__form h2 {
@@ -542,6 +658,10 @@
     transform: none;
   }
 
+  .login-card__visual.is-calendar .login-card__art-wrap {
+    width: min(68vw, 250px);
+  }
+
   .login-card__form-wrap {
     width: 100%;
     align-items: start;
@@ -562,6 +682,10 @@
     box-shadow: none;
   }
 
+  .login-card__form.is-calendar {
+    min-height: 0;
+  }
+
   .login-card__form h2 {
     font-size: 28px;
   }
@@ -573,6 +697,15 @@
   .login-card__buttons {
     margin-top: 24px;
     gap: 10px;
+  }
+
+  .login-card__form.is-calendar .login-card__buttons {
+    margin-top: 16px;
+  }
+
+  .login-calendar-preview {
+    margin-top: 20px;
+    padding: 14px;
   }
 
   .login-card__button {
@@ -599,6 +732,10 @@
     width: min(58vw, 206px);
   }
 
+  .login-card__visual.is-calendar .login-card__art-wrap {
+    width: min(64vw, 220px);
+  }
+
   .login-card__form {
     width: min(calc(100% - 48px), 400px);
     padding-inline: 0;
@@ -606,6 +743,11 @@
 
   .login-card__helper {
     font-size: 14px;
+  }
+
+  .login-calendar-preview__item {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
   }
 
   .login-card__button {
@@ -645,6 +787,10 @@
     width: min(48vw, 150px);
   }
 
+  .login-card__visual.is-calendar .login-card__art-wrap {
+    width: min(52vw, 168px);
+  }
+
   .login-card__form {
     padding-top: 14px;
     padding-bottom: 14px;
@@ -663,6 +809,45 @@
   .login-card__buttons {
     margin-top: 14px;
     gap: 7px;
+  }
+
+  .login-calendar-preview {
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .login-calendar-preview__top {
+    padding-bottom: 9px;
+    font-size: 12px;
+  }
+
+  .login-calendar-preview__top strong {
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+
+  .login-calendar-preview__list {
+    gap: 8px;
+    margin-top: 9px;
+  }
+
+  .login-calendar-preview__item {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .login-calendar-preview__item time {
+    height: 28px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+
+  .login-calendar-preview__item strong {
+    font-size: 12px;
+  }
+
+  .login-calendar-preview__item span {
+    display: none;
   }
 
   .login-card__button {
