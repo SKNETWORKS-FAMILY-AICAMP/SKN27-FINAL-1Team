@@ -3,9 +3,6 @@ import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.backend.core.config import settings
-from app.backend.db.session import engine
-from app.backend.db.base import Base
-from app.backend.db import models
 from app.backend.api.auth import auth_api
 from app.backend.api.inventory import inventory_api
 from app.backend.api.onboarding import onboarding_api
@@ -35,15 +32,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 개발 모드에서는 SQLAlchemy 모델 기준으로 테이블을 자동 생성합니다.
-if settings.DEV_MODE:
-    try:
-        Base.metadata.create_all(bind=engine)
-        print(f"[DB Setup] DEV_MODE: {settings.DB_ENGINE} 테이블 확인/생성 완료")
-    except Exception as e:
-        print(f"[DB Setup] {settings.DB_ENGINE} 테이블 자동 생성 실패: {e}")
-
 
 API_V1_PREFIX = "/api/v1"
 
