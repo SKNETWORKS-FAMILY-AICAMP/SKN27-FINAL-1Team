@@ -20,7 +20,7 @@ const ingredientImages = Object.entries(
     const name = fileName.replace(/\.[^.]+$/, '')
     return { name, key: normalizeIngredientImageName(name), src }
   })
-  .sort((a, b) => b.key.length - a.key.length)
+  .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 
 // 자동완성 재료명에 맞는 대표 식재료 이미지를 선택합니다.
 function getSuggestionIcon(name = '') {
@@ -79,41 +79,27 @@ export default function IngredientModal({
       console.error('AI 예측 실패:', error)
     }
   }
-  // 재료명 입력값으로 식재료 마스터 자동완성 목록을 조회합니다.
+  // 재료명 입력값으로 assets에 있는 표준 식재료만 자동완성합니다.
   useEffect(() => {
     const keyword = formData.name.trim()
-    if (!isOpen || !keyword) {
+    const key = normalizeIngredientImageName(keyword)
+    if (!isOpen || !key) {
       setSuggestions([])
-      return undefined
+      return
     }
 
-    const token = window.localStorage.getItem('bobbeori-token')
-    if (!token) {
-      setSuggestions([])
-      return undefined
-    }
-
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-        const response = await fetch(apiUrl + '/api/v1/inventory/suggestions?q=' + encodeURIComponent(keyword), {
-          headers: { Authorization: 'Bearer ' + token },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setSuggestions(data.filter((name) => name !== keyword).slice(0, 6))
-        }
-      } catch (error) {
-        setSuggestions([])
-      }
-    }, 180)
-
-    return () => window.clearTimeout(timeoutId)
+    setSuggestions(
+      ingredientImages
+        .filter((item) => item.key !== key && item.key.includes(key))
+        // 입력값으로 시작하는 식재료를 먼저 보여줍니다.
+        .sort((a, b) => Number(b.key.startsWith(key)) - Number(a.key.startsWith(key)))
+        .slice(0, 6),
+    )
   }, [formData.name, isOpen])
 
   // 자동완성 항목을 선택하면 재료명 입력값에 바로 반영합니다.
-  const handleSelectSuggestion = (name) => {
-    handleFormChange({ target: { name: 'name', value: name } })
+  const handleSelectSuggestion = (suggestion) => {
+    handleFormChange({ target: { name: 'name', value: suggestion.name } })
     setSuggestions([])
     setIsSuggestionOpen(false)
     setPredictError('')
@@ -161,6 +147,7 @@ export default function IngredientModal({
             <input
               type="text"
               name="name"
+              autoComplete="off"
               placeholder="예: 양파, 두부, 우유"
               value={formData.name}
               onChange={(event) => {
@@ -175,17 +162,17 @@ export default function IngredientModal({
             />
             {isSuggestionOpen && suggestions.length > 0 ? (
               <div className="fridge-suggestion-list">
-                {suggestions.map((name) => (
+                {suggestions.map((suggestion) => (
                   <button
                     type="button"
-                    key={name}
+                    key={suggestion.key}
                     onMouseDown={(event) => {
                       event.preventDefault()
-                      handleSelectSuggestion(name)
+                      handleSelectSuggestion(suggestion)
                     }}
                   >
-                    {getSuggestionIcon(name) ? <img src={getSuggestionIcon(name)} alt="" /> : null}
-                    <span>{name}</span>
+                    <img src={suggestion.src} alt="" />
+                    <span>{suggestion.name}</span>
                   </button>
                 ))}
               </div>
