@@ -13,9 +13,11 @@ async def create_calendar_event_with_mcp(
     event: dict,
     source: str,
 ) -> dict | None:
+    """Runpod MCP에 캘린더 이벤트 생성을 위임하고, 실패하면 백엔드 fallback을 위해 None을 반환한다."""
     if not settings.RUNPOD_CALENDAR_MCP_URL:
         return None
 
+    # MCP는 JWT 대신 내부 서버 간 토큰으로만 호출을 허용한다.
     headers = {"Content-Type": "application/json"}
     if settings.RUNPOD_INTERNAL_TOKEN:
         headers["X-Internal-Token"] = settings.RUNPOD_INTERNAL_TOKEN
