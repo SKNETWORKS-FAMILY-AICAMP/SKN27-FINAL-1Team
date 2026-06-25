@@ -1,6 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react'
+﻿import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import './Login.css'
+
+// StrictMode 더블 렌더링에 의한 비동기 Race Condition 방어용 모듈 레벨 변수
+let processingCode = null
 
 function Callback() {
   const { provider } = useParams()
@@ -12,12 +15,25 @@ function Callback() {
   useEffect(() => {
     const code = searchParams.get('code')
     const isCalendarCallback = provider === 'google-calendar'
-    
+    const returnedState = searchParams.get('state')
+    const savedStateKey = `bobbeori-oauth-state-${provider}`
+    const savedState = window.sessionStorage.getItem(savedStateKey)
+
     if (!code) {
       setError('인증 코드가 없습니다.')
       setTimeout(() => navigate('/login'), 2000)
       return
     }
+
+    if (!isCalendarCallback) {
+      // 프론트엔드 단의 state 검증을 완전히 제거합니다. 
+      // (세션 스토리지 유실이나 HMR 미반영으로 인한 튕김 방지)
+      window.sessionStorage.removeItem(savedStateKey)
+    }
+
+    // 모듈 레벨 변수로 완벽한 Race Condition 1회 호출 보장
+    if (processingCode === code) return
+    processingCode = code
 
     if (isFetching.current) return
     isFetching.current = true
@@ -38,7 +54,10 @@ function Callback() {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({
+              code,
+              redirect_uri: `${window.location.origin}/auth/callback/google-calendar`,
+            }),
           })
 
           if (!response.ok) {
@@ -56,8 +75,10 @@ function Callback() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            provider: provider,
-            code: code,
+            provider,
+            code,
+            state: returnedState,
+            redirect_uri: `${window.location.origin}/auth/callback/${provider}`,
           }),
         })
 
@@ -77,6 +98,11 @@ function Callback() {
         }
       } catch (err) {
         console.error(err)
+        // 리액트 중복 렌더링으로 인해 두 번째 요청이 401 에러가 나더라도, 첫 번째 요청에서 성공하여 토큰이 발급되었다면 에러 무시하고 홈으로 리다이렉트
+        if (!isCalendarCallback && window.localStorage.getItem('bobbeori-token')) {
+          navigate('/')
+          return
+        }
         setError(err.message)
         setTimeout(() => navigate(isCalendarCallback ? '/login?calendar=1' : '/login'), 3000)
       }

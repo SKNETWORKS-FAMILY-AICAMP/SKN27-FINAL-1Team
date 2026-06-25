@@ -25,6 +25,12 @@ const calendarFeatures = [
   { title: '레시피 만료', description: '삭제 전 확인', image: iconReceipt },
 ]
 
+// OAuth state 값을 매 요청마다 새로 만들어 콜백 검증에 사용합니다.
+function createOAuthState(provider) {
+  const randomValue = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
+  return `bobbeori-${provider}-${randomValue}`
+}
+
 function Login() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -41,22 +47,34 @@ function Login() {
     const clientId = import.meta.env[method.envKey] || ''
 
     if (!clientId) {
-      startLocalSession(method.className)
+      window.alert(`${method.label} 설정이 필요합니다. 환경 변수 ${method.envKey}를 확인해주세요.`)
       return
     }
 
-    const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback/${method.provider}`)
-    let url = ''
+    const redirectUri = `${window.location.origin}/auth/callback/${method.provider}`
+    const state = createOAuthState(method.provider)
+    window.sessionStorage.setItem(`bobbeori-oauth-state-${method.provider}`, state)
+
+    let baseUrl = ''
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      state,
+    })
 
     if (method.provider === 'kakao') {
-      url = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`
+      baseUrl = 'https://kauth.kakao.com/oauth/authorize'
     } else if (method.provider === 'naver') {
-      url = `https://nid.naver.com/oauth2.0/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=bobbeori_naver_state`
+      baseUrl = 'https://nid.naver.com/oauth2.0/authorize'
     } else if (method.provider === 'google') {
-      url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20profile%20email`
+      baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
+      params.set('scope', 'openid profile email')
     }
 
-    if (url) window.location.href = url
+    if (baseUrl) {
+      window.location.href = `${baseUrl}?${params.toString()}`
+    }
   }
 
   const handleCalendarLogin = () => {

@@ -1,10 +1,12 @@
-from pydantic import BaseModel, EmailStr
+﻿from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
 class SocialLoginRequest(BaseModel):
     provider: str  # kakao, naver, google
     code: str      # 인가 코드 (OAuth2 Authorization Code)
+    state: Optional[str] = None  # OAuth 요청 위조 방지를 위한 state 값
+    redirect_uri: Optional[str] = None  # 프론트에서 실제 사용한 콜백 주소
 
 class TokenResponse(BaseModel):
     access_token: str
