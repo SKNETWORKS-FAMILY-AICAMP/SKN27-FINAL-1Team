@@ -483,12 +483,12 @@ function MenuRecommend() {
                       {isSelected ? '선택됨' : '선택'}
                     </button>
                     <div className="menu-recommend-card__media">
-                      <span>{recipe.category || '추천 메뉴'}</span>
                       <ImageSlot
                         className="menu-recommend-card__image"
                         src={recipe.main_image_url}
                         alt={recipe.main_image_url ? recipe.title : ''}
                       />
+                      <span className="menu-recommend-card__category">{recipe.category || '추천 메뉴'}</span>
                     </div>
                     <div className="menu-recommend-card__body">
                       <h3>{recipe.title}</h3>
