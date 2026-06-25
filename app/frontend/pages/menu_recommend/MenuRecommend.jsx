@@ -8,11 +8,12 @@ import imageSearch from '../../assets/extracted/images/image_search.png'
 import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import {
   countOptions,
-  mealOptions,
+  defaultFilters,
+  filterGroups,
+  filterOptions,
   menuRecommendProcess as process,
   menuRecommendRecipes as recipes,
-  moodOptions,
-  priorityOptions,
+  recommendTemplates,
 } from '../../mock/menuRecommendMock.js'
 
 function ImageSlot({ src, alt = '', className = '' }) {
@@ -23,40 +24,34 @@ function ImageSlot({ src, alt = '', className = '' }) {
   )
 }
 
-function getRecipeScore(recipe, mood, meal, priority) {
-  return [
-    recipe.moods?.includes(mood),
-    recipe.meals?.includes(meal),
-    recipe.priorities?.includes(priority),
-  ].filter(Boolean).length
+function getOptionLabel(key, value) {
+  return filterOptions[key]?.find((option) => option.value === value)?.label ?? value
 }
 
 function MenuRecommend() {
   const navigate = useNavigate()
   const flowTimersRef = useRef([])
-  const [selectedCount, setSelectedCount] = useState(5)
+  const quickTemplate = recommendTemplates[0]
+  const [templateId, setTemplateId] = useState(quickTemplate.id)
+  const [filters, setFilters] = useState(() => ({
+    ...defaultFilters,
+    ...quickTemplate.preset,
+  }))
+  const [settingsOpen, setSettingsOpen] = useState(true)
   const [generatedCount, setGeneratedCount] = useState(0)
   const [selectedIds, setSelectedIds] = useState([])
   const [savedIds, setSavedIds] = useState([])
-  const [selectedMood, setSelectedMood] = useState(moodOptions[0])
-  const [selectedMeal, setSelectedMeal] = useState(mealOptions[2])
-  const [selectedPriority, setSelectedPriority] = useState(priorityOptions[0])
   const [activeStep, setActiveStep] = useState(0)
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const sortedRecipes = useMemo(() => {
-    return recipes
-      .map((recipe) => ({
-        ...recipe,
-        matchScore: getRecipeScore(recipe, selectedMood, selectedMeal, selectedPriority),
-      }))
-      .sort((a, b) => b.matchScore - a.matchScore || Number.parseInt(a.time, 10) - Number.parseInt(b.time, 10))
-  }, [selectedMeal, selectedMood, selectedPriority])
+  const activeTemplate = recommendTemplates.find((item) => item.id === templateId) ?? recommendTemplates[0]
 
+  // ponytail: filter values ignored until API phase; upgrade path → menu_custom API
   const generatedRecipes = useMemo(
-    () => sortedRecipes.slice(0, generatedCount),
-    [generatedCount, sortedRecipes],
+    () => recipes.slice(0, generatedCount),
+    [generatedCount],
   )
+  const displayedCount = generatedRecipes.length
 
   const clearFlowTimers = () => {
     flowTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
@@ -71,8 +66,22 @@ function MenuRecommend() {
     setIsGenerating(false)
   }
 
-  const handleFilterChange = (setter) => (value) => {
-    setter(value)
+  const handleTemplateSelect = (template) => {
+    setTemplateId(template.id)
+    if (template.preset) {
+      setFilters((prev) => ({ ...defaultFilters, ...template.preset, limit: prev.limit }))
+    }
+    resetGeneratedState()
+  }
+
+  const handleFilterChange = (key, value) => {
+    setTemplateId('custom')
+    setFilters((prev) => ({ ...prev, [key]: value }))
+    resetGeneratedState()
+  }
+
+  const handleLimitChange = (limit) => {
+    setFilters((prev) => ({ ...prev, limit }))
     resetGeneratedState()
   }
 
@@ -91,17 +100,8 @@ function MenuRecommend() {
 
     flowTimersRef.current.push(
       window.setTimeout(() => {
-        setGeneratedCount(selectedCount)
+        setGeneratedCount(filters.limit)
         setIsGenerating(false)
-        window.localStorage.setItem(
-          'bobbeori-last-menu-recommend',
-          JSON.stringify({
-            count: selectedCount,
-            mood: selectedMood,
-            meal: selectedMeal,
-            priority: selectedPriority,
-          }),
-        )
       }, 420 * process.length),
     )
   }
@@ -147,9 +147,7 @@ function MenuRecommend() {
       <div className="menu-recommend-hero">
         <div className="menu-recommend-hero__copy">
           <h1 id="menu-recommend-title">메뉴 추천</h1>
-          <p>
-            지금 먹고 싶은 분위기와 식사 시간에 맞춰 만들기 좋은 메뉴를 추천받아보세요.
-          </p>
+          <p>상황에 맞는 템플릿을 고르거나 직접 조건을 설정해 만들기 좋은 메뉴를 추천받아보세요.</p>
         </div>
         <ImageSlot
           className="menu-recommend-hero__image"
@@ -158,69 +156,141 @@ function MenuRecommend() {
         />
       </div>
 
-      <section className="menu-recommend-builder" aria-labelledby="builder-title">
-        <div className="menu-recommend-builder__title">
-          <h2 id="builder-title">추천 조건</h2>
-          <p>{selectedMeal} · {selectedMood} · {selectedPriority} · {selectedCount}개</p>
-        </div>
-        <div className="menu-recommend-options">
-          <div className="menu-recommend-filter" role="group" aria-label="분위기 선택">
-            <span>분위기</span>
-            {moodOptions.map((mood) => (
+      <div className="menu-recommend-filters">
+        <section
+          className="menu-recommend-panel menu-recommend-panel--templates"
+          aria-labelledby="builder-title"
+        >
+          <div className="menu-recommend-panel__heading">
+            <span className="menu-recommend-panel__step">1</span>
+            <div>
+              <h2 id="builder-title">추천 템플릿 선택</h2>
+              <p>상황에 맞는 템플릿을 고르면 조건이 자동으로 설정됩니다.</p>
+            </div>
+          </div>
+          <div className="menu-recommend-templates" role="list">
+            {recommendTemplates.map((template) => (
               <button
-                className={selectedMood === mood ? 'is-active' : ''}
-                key={mood}
+                className={[
+                  'menu-recommend-template-card',
+                  templateId === template.id ? 'is-active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                key={template.id}
                 type="button"
-                onClick={() => handleFilterChange(setSelectedMood)(mood)}
+                role="listitem"
+                aria-pressed={templateId === template.id}
+                onClick={() => handleTemplateSelect(template)}
               >
-                {mood}
+                <span className="menu-recommend-template-card__icon" aria-hidden="true">
+                  {template.icon}
+                </span>
+                <strong>{template.label}</strong>
+                <span>{template.desc}</span>
               </button>
             ))}
           </div>
-          <div className="menu-recommend-filter" role="group" aria-label="식사 시간 선택">
-            <span>식사</span>
-            {mealOptions.map((meal) => (
-              <button
-                className={selectedMeal === meal ? 'is-active' : ''}
-                key={meal}
-                type="button"
-                onClick={() => handleFilterChange(setSelectedMeal)(meal)}
-              >
-                {meal}
-              </button>
-            ))}
+          <p className="menu-recommend-panel__hint">
+            템플릿을 선택하면 아래 설정이 자동으로 바뀌며, 이후 수동으로 조정할 수 있어요.
+          </p>
+        </section>
+
+        <section className="menu-recommend-panel menu-recommend-panel--settings">
+          <div className="menu-recommend-panel__heading menu-recommend-panel__heading--split">
+            <div className="menu-recommend-panel__heading-copy">
+              <span className="menu-recommend-panel__step">2</span>
+              <div>
+                <h2>추천 설정</h2>
+                <p>원하는 조건을 직접 설정해 맞춤 추천을 받아보세요.</p>
+              </div>
+            </div>
+            <button
+              className="menu-recommend-settings-toggle"
+              type="button"
+              aria-expanded={settingsOpen}
+              aria-controls="menu-recommend-settings"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              {settingsOpen ? '접기' : '펼치기'}
+            </button>
           </div>
-          <div className="menu-recommend-filter" role="group" aria-label="우선순위 선택">
-            <span>우선</span>
-            {priorityOptions.map((priority) => (
-              <button
-                className={selectedPriority === priority ? 'is-active' : ''}
-                key={priority}
-                type="button"
-                onClick={() => handleFilterChange(setSelectedPriority)(priority)}
-              >
-                {priority}
-              </button>
-            ))}
+
+          <section
+            className="menu-recommend-settings"
+            id="menu-recommend-settings"
+            hidden={!settingsOpen}
+          >
+            <div className="menu-recommend-settings__grid">
+              {filterGroups.map((group) => (
+                <div className="menu-recommend-settings__column" key={group.key}>
+                  <div className="menu-recommend-settings__column-head">
+                    <span aria-hidden="true">{group.icon}</span>
+                    <div>
+                      <strong>{group.label}</strong>
+                      {group.subtitle ? <small>{group.subtitle}</small> : null}
+                    </div>
+                  </div>
+                  {group.type === 'select' ? (
+                    <select
+                      className="menu-recommend-settings__select"
+                      value={filters[group.key]}
+                      onChange={(event) => handleFilterChange(group.key, event.target.value)}
+                      aria-label={group.label}
+                    >
+                      {filterOptions[group.key].map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="menu-recommend-settings__pills" role="group" aria-label={group.label}>
+                      {filterOptions[group.key].map((option) => (
+                        <button
+                          className={filters[group.key] === option.value ? 'is-active' : ''}
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleFilterChange(group.key, option.value)}
+                        >
+                          <span>{option.label}</span>
+                          <small>{option.hint || '\u00A0'}</small>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        </section>
+
+        <section className="menu-recommend-panel menu-recommend-panel--actions">
+          <div className="menu-recommend-panel__actions">
+            <div className="menu-recommend-filter menu-recommend-filter--count" role="group" aria-label="추천 개수 선택">
+              <span>추천 개수</span>
+              {countOptions.map((count) => (
+                <button
+                  className={filters.limit === count ? 'is-active' : ''}
+                  key={count}
+                  type="button"
+                  onClick={() => handleLimitChange(count)}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+            <button
+              className="menu-recommend-primary"
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+            >
+              {isGenerating ? '추천 중' : `레시피 추천받기 (${filters.limit}개)`}
+            </button>
           </div>
-          <div className="menu-recommend-filter" role="group" aria-label="추천 개수 선택">
-            <span>개수</span>
-            {countOptions.map((count) => (
-              <button
-                className={selectedCount === count ? 'is-active' : ''}
-                key={count}
-                type="button"
-                onClick={() => handleFilterChange(setSelectedCount)(count)}
-              >
-                {count}개
-              </button>
-            ))}
-          </div>
-        </div>
-        <button className="menu-recommend-primary" type="button" onClick={handleGenerate} disabled={isGenerating}>
-          {isGenerating ? '추천 중' : `${selectedCount}개 추천받기`}
-        </button>
-      </section>
+        </section>
+      </div>
 
       <div className="menu-recommend-content">
         <main className="menu-recommend-results">
@@ -230,9 +300,9 @@ function MenuRecommend() {
               <p>
                 {isGenerating
                   ? `${process[activeStep].title} 중이에요. 잠시만 기다려주세요.`
-                  : generatedCount
-                    ? `${generatedCount}개의 메뉴를 조건에 맞춰 골랐어요.`
-                    : '조건을 고르고 추천받기를 눌러주세요.'}
+                  : displayedCount
+                    ? `${displayedCount}개의 메뉴를 조건에 맞춰 골랐어요.`
+                    : `${activeTemplate.label} · ${getOptionLabel('cookTime', filters.cookTime)} · ${filters.limit}개`}
               </p>
             </div>
             <button
@@ -245,13 +315,13 @@ function MenuRecommend() {
             </button>
           </div>
 
-          {generatedCount === 0 ? (
+          {displayedCount === 0 ? (
             <div className="menu-recommend-empty">
               <ImageSlot src={isGenerating ? imageMenuRecommendation : imageSearch} alt="추천 대기 상태" />
               <strong>{isGenerating ? '메뉴 후보를 고르는 중이에요.' : '조건을 고르고 추천을 시작해주세요.'}</strong>
               <p>
                 {isGenerating
-                  ? `${selectedMeal}에 어울리는 ${selectedMood} 메뉴를 정리하고 있어요.`
+                  ? `${activeTemplate.label} 조건에 맞는 메뉴를 정리하고 있어요.`
                   : '선택한 필터에 맞춰 추천 결과가 달라져요.'}
               </p>
             </div>
@@ -291,7 +361,7 @@ function MenuRecommend() {
                     <div className="menu-recommend-card__body">
                       <h3>{recipe.title}</h3>
                       <p>
-                        {recipe.time} · {recipe.level} · 조건 {recipe.matchScore}/3
+                        {recipe.time} · {recipe.level}
                       </p>
                       <div>
                         <b>추천 이유</b>
