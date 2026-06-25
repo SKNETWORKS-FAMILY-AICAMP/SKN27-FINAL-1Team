@@ -32,6 +32,16 @@ def predict_ingredient_info(
     """
     return expiration_ai_service.predict_ingredient_info(name)
 
+@router.get("/suggestions", response_model=List[str])
+def suggest_ingredient_names(
+    q: str,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """재료명 입력 자동완성용 식재료 마스터명을 반환합니다."""
+    return inventory_service.search_ingredient_suggestions(db=db, keyword=q)
+
+
 @router.get("", response_model=List[IngredientResponse])
 def get_my_fridge_ingredients(
     current_user_id: int = Depends(get_current_user_required),
