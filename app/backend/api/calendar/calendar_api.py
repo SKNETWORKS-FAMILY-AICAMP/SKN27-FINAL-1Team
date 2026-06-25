@@ -50,6 +50,7 @@ def _get_google_integration(db: Session, user_id: int) -> CalendarIntegration:
 
 
 async def _get_access_token(integration: CalendarIntegration, db: Session) -> str:
+    """저장된 Google Calendar 토큰을 복호화하거나 만료 시 refresh_token으로 갱신한다."""
     expires_at = integration.expires_at
     if expires_at and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -144,6 +145,7 @@ async def _create_event_once(
     user_id: int | None = None,
     source: str = "manual",
 ):
+    """event_key 기준으로 같은 캘린더 이벤트를 중복 생성하지 않고 생성/수정한다."""
     mcp_result = await create_calendar_event_with_mcp(user_id, calendar_id, access_token, event_key, event, source)
     if mcp_result:
         _log_calendar_event(
@@ -228,6 +230,7 @@ async def _create_event_once(
 
 
 def _build_daily_events(db: Session, user_id: int, target_date: date):
+    """사용자의 냉장고/추천 데이터를 보고 해당 날짜에 등록할 밥벌이 캘린더 이벤트를 만든다."""
     events = []
     expiring_until = target_date + timedelta(days=3)
 
