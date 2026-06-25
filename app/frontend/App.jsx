@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
+import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import MobileBottomNav from './components/MobileBottomNav.jsx'
@@ -140,6 +141,7 @@ function AppLayout() {
       </main>
       {!isAuthPage && <Footer />}
       {!isAuthPage && <MobileBottomNav />}
+      {!isAuthPage && <FloatingChatbot />}
     </div>
   )
 }
