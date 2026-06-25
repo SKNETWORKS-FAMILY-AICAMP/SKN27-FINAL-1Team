@@ -69,6 +69,7 @@ class UserPreference(Base):
     user = relationship("User", back_populates="preference")
 
 
+# Google Calendar 연동 토큰과 캘린더 ID를 사용자별로 저장한다.
 class CalendarIntegration(Base):
     """사용자별 외부 캘린더 연동 토큰을 저장합니다."""
 
@@ -91,6 +92,7 @@ class CalendarIntegration(Base):
     user = relationship("User", back_populates="calendar_integrations")
 
 
+# 캘린더 이벤트 생성/수정/중복/실패 결과를 기록한다.
 class CalendarEventLog(Base):
     """Google Calendar event sync history."""
 
@@ -221,6 +223,7 @@ class ReceiptItem(Base):
     fridge_items = relationship("FridgeItem", back_populates="receipt_item")
 
 
+# 사용자가 현재 냉장고에 보유한 재료와 소비기한 정보를 저장한다.
 class FridgeItem(Base):
     """사용자가 보유한 냉장고 식재료를 표현하는 ORM 모델입니다."""
 
@@ -321,6 +324,7 @@ class RecipeIngredient(Base):
     ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
 
 
+# 사용자가 저장하거나 추천받은 레시피 결과를 저장한다.
 class RecommendationResult(Base):
     """사용자별 레시피 추천 결과를 표현하는 ORM 모델입니다."""
 

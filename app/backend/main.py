@@ -49,11 +49,13 @@ app.include_router(calendar_api.router, prefix=API_V1_PREFIX)
 
 @app.on_event("startup")
 async def start_calendar_job():
+    """서버 시작 시 백그라운드 캘린더 스케줄러를 함께 실행한다."""
     app.state.calendar_job_task = asyncio.create_task(daily_calendar_loop())
 
 
 @app.on_event("shutdown")
 async def stop_calendar_job():
+    """서버 종료 시 백그라운드 캘린더 스케줄러 작업을 정리한다."""
     task = getattr(app.state, "calendar_job_task", None)
     if task:
         task.cancel()
