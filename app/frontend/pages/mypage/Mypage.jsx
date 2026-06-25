@@ -594,10 +594,8 @@ function Mypage() {
                             <div className="mypage-saved-card__body">
                               <div className="mypage-recipe-title-row">
                                 <h3>{recipe.title}</h3>
-                                <span>{recipe.source || recipe.category || '저장 레시피'}</span>
+                                <small>{getDaysLeft(recipe.expiresAt)}일 남음</small>
                               </div>
-                              <p>{recipe.reason || recipe.description || '저장한 레시피를 이어서 확인할 수 있어요.'}</p>
-                              <small>{getDaysLeft(recipe.expiresAt)}일 남음</small>
                               <div className="mypage-recipe-actions">
                                 <button className="mypage-primary-button" type="button" onClick={() => navigate(`/recipes/${recipe.recipeId || recipe.id}`)}>
                                   레시피 보기
@@ -642,24 +640,6 @@ function Mypage() {
                         />
                       </li>
                     ))}
-                  </ul>
-                </section>
-
-                <section className="mypage-panel mypage-settings" aria-labelledby="calendar-title">
-                  <h2 id="calendar-title">캘린더 설정</h2>
-                  <ul>
-                    <li>
-                      <span>소비기한 임박 재료</span>
-                      <b>자동 등록</b>
-                    </li>
-                    <li>
-                      <span>오늘의 추천 메뉴</span>
-                      <b>자동 등록</b>
-                    </li>
-                    <li>
-                      <span>레시피 삭제 예정 알림</span>
-                      <b>자동 등록</b>
-                    </li>
                     <li>
                       <span>사용비용 자동 등록</span>
                       <Toggle
@@ -668,32 +648,30 @@ function Mypage() {
                         onClick={toggleCalendarCost}
                       />
                     </li>
-                    <li>
-                      <span>등록 캘린더</span>
-                      <b>{calendarEnabled ? '밥벌이 냉장고' : '연동 후 선택 가능'}</b>
-                    </li>
                   </ul>
                 </section>
-              </div>
 
-              <section className="mypage-panel mypage-calendar-connect" aria-labelledby="google-calendar-title">
-                <div>
-                  <h2 id="google-calendar-title">Google Calendar 연결</h2>
-                  <p>
-                    연동하면 오늘의 재료 알림, 저녁 추천, 레시피 삭제 예정 알림이 자동 등록돼요.
-                    사용비용은 OCR 입고 시 설정값에 따라 기록돼요.
-                  </p>
-                </div>
-                <div className="mypage-calendar-connect__actions">
-                  <button
-                    className="mypage-primary-button"
-                    type="button"
-                    onClick={connectGoogleCalendar}
-                  >
-                    {calendarEnabled ? '연동 해제' : 'Google Calendar 연결'}
-                  </button>
-                </div>
-              </section>
+                <section className="mypage-panel mypage-calendar-connect" aria-labelledby="google-calendar-title">
+                  <div>
+                    <h2 id="google-calendar-title">Google Calendar 연결</h2>
+                    <p>연동하면 필요한 알림과 사용비용 기록을 캘린더에 자동 등록해요.</p>
+                    <ul className="mypage-calendar-connect__list">
+                      <li>소비 임박 재료는 아침에 확인할 수 있어요.</li>
+                      <li>저녁 추천 메뉴와 레시피 삭제 예정일을 놓치지 않아요.</li>
+                      <li>OCR 입고 비용은 사용비용 기록으로 남길 수 있어요.</li>
+                    </ul>
+                  </div>
+                  <div className="mypage-calendar-connect__actions">
+                    <button
+                      className="mypage-primary-button"
+                      type="button"
+                      onClick={connectGoogleCalendar}
+                    >
+                      {calendarEnabled ? '연동 해제' : 'Google Calendar 연결'}
+                    </button>
+                  </div>
+                </section>
+              </div>
 
               <CalendarPreview
                 connected={calendarEnabled}

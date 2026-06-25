@@ -435,6 +435,7 @@
   padding: 16px 0 0;
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
   gap: 16px;
 }
 
@@ -467,6 +468,10 @@
   color: #b06f21;
   font-size: 12px;
   font-weight: 900;
+}
+
+.mypage-saved-card .mypage-recipe-title-row small {
+  margin-top: 0;
 }
 
 .mypage-saved-empty {
@@ -822,7 +827,8 @@
 .mypage-calendar-connect {
   padding: 20px 24px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: space-between;
   gap: 18px;
 }
@@ -838,6 +844,33 @@
   font-weight: 800;
 }
 
+.mypage-calendar-connect__list {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.mypage-calendar-connect__list li {
+  position: relative;
+  padding-left: 18px;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mypage-calendar-connect__list li::before {
+  position: absolute;
+  top: 0.45em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--figma-coral);
+  content: '';
+}
+
 .mypage-calendar-connect a {
   display: inline-block;
   margin-top: 10px;
@@ -849,9 +882,10 @@
 
 .mypage-calendar-connect__actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
+}
+
+.mypage-calendar-connect__actions .mypage-primary-button {
+  width: 100%;
 }
 
 .mypage-calendar-preview {
@@ -1220,6 +1254,10 @@
   .mypage-saved-card small {
     margin-top: 6px;
     font-size: 10px;
+  }
+
+  .mypage-saved-card .mypage-recipe-title-row small {
+    margin-top: 0;
   }
 
   .mypage-saved-empty {
