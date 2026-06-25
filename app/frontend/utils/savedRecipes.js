@@ -62,10 +62,15 @@ export function removeStoredRecipe(storageId) {
 export async function saveRecommendationResult(recipe, recommendationType) {
   const recipeId = Number(recipe.recipe_id || recipe.recipeId || recipe.id)
   const token = window.localStorage.getItem('bobbeori-token')
-  if (!token || !Number.isInteger(recipeId)) return
+  if (!token) {
+    throw new Error('로그인이 필요해요.')
+  }
+  if (!Number.isInteger(recipeId)) {
+    throw new Error('레시피 정보가 올바르지 않아요.')
+  }
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  await fetch(`${apiUrl}/api/v1/recommendations`, {
+  const response = await fetch(`${apiUrl}/api/v1/recommendations`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -76,4 +81,10 @@ export async function saveRecommendationResult(recipe, recommendationType) {
       recommendation_type: recommendationType,
     }),
   })
+
+  if (!response.ok) {
+    throw new Error(`저장 실패 (${response.status})`)
+  }
+
+  return response.json()
 }

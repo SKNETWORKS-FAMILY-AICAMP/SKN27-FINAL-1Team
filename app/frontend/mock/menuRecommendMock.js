@@ -1,108 +1,172 @@
-import imageEatRefrigerator from '../assets/extracted/images/image_eat_refrigerator.png'
+export const countOptions = [3, 5, 7, 10]
 
-export const countOptions = [3, 5, 7]
-export const moodOptions = ['든든하게', '가볍게', '따뜻하게', '빠르게']
-export const mealOptions = ['아침', '점심', '저녁', '야식']
-export const priorityOptions = ['조리시간 짧게', '실패 확률 낮게', '반찬 위주', '절약 메뉴']
+export const defaultFilters = {
+  limit: 5,
+  cookTime: 'ANY',
+  difficulty: 'ANY',
+  ingredientUsage: 'NORMAL',
+  allowMissing: 'ALLOW',
+  expiryPriority: 'ANY',
+  category: 'ALL',
+}
+
+export const filterOptions = {
+  cookTime: [
+    { value: 'ANY', label: '상관없음' },
+    { value: '15분이내', label: '15분 이하' },
+    { value: '30분이내', label: '30분 이하' },
+    { value: '60분이내', label: '60분 이하' },
+    { value: '2시간이상', label: '2시간 이상' },
+  ],
+  difficulty: [
+    { value: 'ANY', label: '상관없음' },
+    { value: '초급', label: '쉬움' },
+    { value: '중급', label: '보통' },
+    { value: '고급', label: '어려움' },
+    { value: '아무나', label: '아무나' },
+  ],
+  ingredientUsage: [
+    { value: 'ANY', label: '상관없음' },
+    { value: 'LOW', label: '낮음', hint: '적당히 활용' },
+    { value: 'NORMAL', label: '보통', hint: '적당히 활용' },
+    { value: 'HIGH', label: '높음', hint: '최대한 활용' },
+  ],
+  allowMissing: [
+    { value: 'ANY', label: '상관없음' },
+    { value: 'DENY', label: '허용 안 함', hint: '보유 재료만' },
+    { value: 'ALLOW', label: '허용', hint: '추가 구매 가능' },
+  ],
+  expiryPriority: [
+    { value: 'ANY', label: '상관없음' },
+    { value: 'PRIORITIZE', label: '우선 사용' },
+  ],
+  category: [
+    { value: 'ALL', label: '전체' },
+    { value: '밥/죽/떡', label: '밥/죽/떡' },
+    { value: '국/탕', label: '국/탕' },
+    { value: '찌개', label: '찌개' },
+    { value: '메인반찬', label: '메인반찬' },
+    { value: '밑반찬', label: '밑반찬' },
+    { value: '면/만두', label: '면/만두' },
+    { value: '디저트', label: '디저트' },
+  ],
+}
+
+export const filterGroups = [
+  { key: 'cookTime', label: '조리 시간', icon: '🕐', type: 'pills' },
+  { key: 'difficulty', label: '난이도', icon: '👨‍🍳', type: 'pills' },
+  { key: 'ingredientUsage', label: '활용 재료', icon: '🥬', subtitle: '보유 재료 기준', type: 'pills' },
+  { key: 'allowMissing', label: '부족 재료 허용', icon: '🛒', type: 'pills' },
+  { key: 'category', label: '카테고리', icon: '📁', type: 'select' },
+  { key: 'expiryPriority', label: '유통기한 임박 재료 우선', icon: '📅', type: 'pills' },
+]
+
+export const recommendTemplates = [
+  {
+    id: 'quick',
+    label: '빠르게 만들기',
+    icon: '⚡',
+    desc: '조리 시간이 짧은 레시피',
+    preset: { cookTime: '15분이내', difficulty: '초급', ingredientUsage: 'NORMAL' },
+  },
+  {
+    id: 'low_fail',
+    label: '실패 확률 낮게',
+    icon: '🛡️',
+    desc: '초보자도 성공하기 쉬운 레시피',
+    preset: { difficulty: '초급', ingredientUsage: 'NORMAL' },
+  },
+  {
+    id: 'hearty',
+    label: '든든한 한 끼',
+    icon: '🍲',
+    desc: '포만감 있는 레시피',
+    preset: { difficulty: '중급', cookTime: 'ANY' },
+  },
+  {
+    id: 'side_dish',
+    label: '반찬 위주',
+    icon: '🥗',
+    desc: '밑반찬·곁들임 레시피',
+    preset: { category: '밑반찬', ingredientUsage: 'NORMAL' },
+  },
+  {
+    id: 'budget',
+    label: '절약 메뉴',
+    icon: '💰',
+    desc: '재료비 부담이 적은 레시피',
+    preset: { ingredientUsage: 'NORMAL', allowMissing: 'ALLOW' },
+  },
+  {
+    id: 'consume',
+    label: '재료 소진 우선',
+    icon: '♻️',
+    desc: '냉장고 재료를 활용하는 레시피',
+    preset: { ingredientUsage: 'HIGH', expiryPriority: 'PRIORITIZE' },
+  },
+  {
+    id: 'custom',
+    label: '추천 설정',
+    icon: '⚙️',
+    desc: '조건을 직접 설정',
+    preset: null,
+  },
+]
 
 export const menuRecommendProcess = [
   {
     title: '조건 확인',
-    description: '선택한 분위기, 식사 시간, 우선순위에 맞춰 추천을 준비합니다.',
+    description: '선택한 템플릿과 필터에 맞춰 추천을 준비합니다.',
   },
   {
     title: '메뉴 후보 생성',
-    description: '지금 먹기 좋은 메뉴를 조건별로 골라냅니다.',
+    description: '조건에 맞는 메뉴 후보를 골라냅니다.',
   },
   {
     title: '결과 정렬',
-    description: '조리 난이도와 우선순위를 기준으로 추천 순서를 정리합니다.',
+    description: '추천 점수를 기준으로 순서를 정리합니다.',
   },
 ]
 
-export const menuRecommendRecipes = [
-  {
-    id: 'green-onion-tofu-egg-stew',
-    title: '대파 두부 계란찜',
-    category: '든든한 한 끼',
-    time: '20분',
-    level: '쉬움',
-    reason: '계란과 두부로 포만감이 좋고 실패 확률이 낮아 편하게 만들 수 있어요.',
-    moods: ['든든하게', '따뜻하게'],
-    meals: ['아침', '점심', '저녁'],
-    priorities: ['실패 확률 낮게', '절약 메뉴'],
-    image: imageEatRefrigerator,
-  },
-  {
-    id: 'tomato-pasta',
-    title: '토마토 파스타',
-    category: '가벼운 면요리',
-    time: '15분',
-    level: '쉬움',
-    reason: '짧은 시간에 완성하기 좋고 점심이나 저녁 메뉴로 부담이 적어요.',
-    moods: ['가볍게', '빠르게'],
-    meals: ['점심', '저녁'],
-    priorities: ['조리시간 짧게', '실패 확률 낮게'],
-    image: imageEatRefrigerator,
-  },
-  {
-    id: 'mushroom-perilla-soup',
-    title: '버섯 들깨국',
-    category: '따뜻한 국물',
-    time: '25분',
-    level: '보통',
-    reason: '고소하고 따뜻해서 저녁에 잘 어울리고 남은 버섯을 쓰기 좋아요.',
-    moods: ['따뜻하게', '가볍게'],
-    meals: ['아침', '저녁'],
-    priorities: ['절약 메뉴', '반찬 위주'],
-    image: imageEatRefrigerator,
-  },
-  {
-    id: 'kimchi-fried-rice',
-    title: '김치볶음밥',
-    category: '빠른 한 그릇',
-    time: '15분',
-    level: '쉬움',
-    reason: '재료가 단순하고 조리가 빨라 바쁜 점심이나 야식에 좋아요.',
-    moods: ['든든하게', '빠르게'],
-    meals: ['점심', '야식'],
-    priorities: ['조리시간 짧게', '절약 메뉴'],
-    image: imageEatRefrigerator,
-  },
-  {
-    id: 'rolled-egg',
-    title: '계란말이',
-    category: '간단 반찬',
-    time: '10분',
-    level: '쉬움',
-    reason: '반찬으로 곁들이기 좋고 적은 재료로 빠르게 만들 수 있어요.',
-    moods: ['가볍게', '빠르게'],
-    meals: ['아침', '저녁'],
-    priorities: ['조리시간 짧게', '반찬 위주', '실패 확률 낮게'],
-    image: imageEatRefrigerator,
-  },
-  {
-    id: 'tofu-soy-braise',
-    title: '두부 간장조림',
-    category: '절약 반찬',
-    time: '20분',
-    level: '쉬움',
-    reason: '재료비 부담이 낮고 밥반찬으로 오래 활용하기 좋아요.',
-    moods: ['든든하게', '따뜻하게'],
-    meals: ['점심', '저녁'],
-    priorities: ['절약 메뉴', '반찬 위주'],
-    image: imageEatRefrigerator,
-  },
-  {
-    id: 'pork-soy-stir-fry',
-    title: '돼지고기 간장볶음',
-    category: '든든한 고기 메뉴',
-    time: '18분',
-    level: '쉬움',
-    reason: '메인 요리감이 확실해서 든든한 저녁 메뉴로 잘 맞아요.',
-    moods: ['든든하게', '빠르게'],
-    meals: ['저녁', '야식'],
-    priorities: ['조리시간 짧게', '실패 확률 낮게'],
-    image: imageEatRefrigerator,
-  },
-]
+const INGREDIENT_USAGE_MATCH_RATE = {
+  LOW: 30,
+  NORMAL: 50,
+  HIGH: 70,
+}
+
+export function buildRecommendRequestBody(filters, { excludeIds = [], refreshPool = false } = {}) {
+  const body = {
+    mode: 'menu_custom',
+    limit: filters.limit,
+    exclude_recipe_ids: excludeIds,
+    refresh_pool: refreshPool,
+  }
+
+  if (filters.cookTime !== 'ANY') {
+    body.cooking_time_label = filters.cookTime
+  }
+  if (filters.difficulty !== 'ANY') {
+    body.difficulty = filters.difficulty
+  }
+  if (filters.category !== 'ALL') {
+    body.category = filters.category
+  }
+  if (filters.ingredientUsage !== 'ANY') {
+    body.min_display_match_rate = INGREDIENT_USAGE_MATCH_RATE[filters.ingredientUsage]
+  }
+  if (filters.allowMissing === 'DENY') {
+    body.require_any_owned = true
+  }
+  if (filters.expiryPriority === 'PRIORITIZE') {
+    body.use_expiry_priority = true
+  }
+
+  return body
+}
+
+export function formatCookingTime(minutes) {
+  if (minutes == null) {
+    return '-'
+  }
+  return `${minutes}분`
+}

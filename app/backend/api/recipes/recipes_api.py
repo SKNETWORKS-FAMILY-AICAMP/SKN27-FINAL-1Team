@@ -56,10 +56,24 @@ def recommend_recipes(
     db: Session = Depends(get_db),
 ):
     """레시피 추천. fridge_consume은 limit 9 고정, menu_custom은 request limit 사용."""
-    config = RecipeRecommendConfig.for_mode(
-        request_data.mode,
-        request_limit=request_data.limit,
-    )
+    if request_data.mode == "menu_custom":
+        config = RecipeRecommendConfig.menu_custom_preset(
+            request_data.limit,
+            query=(request_data.query or "").strip() or None,
+            category=_normalize_filter(request_data.category),
+            difficulty=_normalize_filter(request_data.difficulty),
+            cooking_time_label=_normalize_filter(request_data.cooking_time_label),
+            min_display_match_rate=request_data.min_display_match_rate,
+            require_any_owned=request_data.require_any_owned,
+            use_expiry_priority=request_data.use_expiry_priority,
+            pool_multiplier=request_data.pool_multiplier,
+        )
+    else:
+        config = RecipeRecommendConfig.for_mode(
+            request_data.mode,
+            request_limit=request_data.limit,
+        )
+
     if config is None:
         return RecipeRecommendResponse(
             mode=request_data.mode,

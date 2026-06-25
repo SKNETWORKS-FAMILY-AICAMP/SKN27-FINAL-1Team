@@ -34,6 +34,22 @@ class RecipeRecommendRequest(BaseModel):
     )
     exclude_recipe_ids: list[int] = Field(default_factory=list, description="제외할 레시피 ID")
     refresh_pool: bool = Field(default=False, description="true면 검색 풀 재생성 후 exclude 무시")
+    query: Optional[str] = Field(None, description="레시피명 검색 (menu_custom)")
+    category: Optional[str] = Field(None, description="카테고리 필터 (menu_custom)")
+    difficulty: Optional[str] = Field(None, description="난이도 필터 (menu_custom)")
+    cooking_time_label: Optional[str] = Field(None, description="조리시간 라벨 필터 (menu_custom)")
+    min_display_match_rate: Optional[int] = Field(
+        None, ge=0, le=100, description="최소 보유 재료 매칭률 (menu_custom)"
+    )
+    require_any_owned: bool = Field(
+        default=False, description="보유 재료 1개 이상 필수 (menu_custom)"
+    )
+    use_expiry_priority: bool = Field(
+        default=False, description="유통기한 임박 재료 우선 (menu_custom)"
+    )
+    pool_multiplier: int = Field(
+        default=3, ge=1, le=10, description="후보 풀 크기 = limit * pool_multiplier (menu_custom)"
+    )
 
 
 class RecipeRecommendItem(RecipeSearchItem):
