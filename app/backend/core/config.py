@@ -10,25 +10,17 @@ class Settings:
     DEV_MODE: bool = os.getenv("DEV_MODE", "True").lower() == "true"
     
     # Database Settings
-    DB_ENGINE: str = os.getenv("DB_ENGINE", "sqlite")
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
     DB_PORT: int = int(os.getenv("DB_PORT", 5432))
     DB_USER: str = os.getenv("DB_USER", "bobbeori_user")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
     DB_NAME: str = os.getenv("DB_NAME", "bobbeori_db")
-    
-    # SQLite Fallback (DB 인프라 미구축 시 가볍게 로컬 파일 DB 사용)
-    SQLITE_URL: str = "sqlite:///./test2.db"
-    
+
     @property
     def DATABASE_URL(self) -> str:
-        # DB_ENGINE이 postgresql로 명시되어 있으면 무조건 도커/실제 DB 연결
-        if self.DB_ENGINE == "postgresql":
-            return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        
-        # 그 외의 경우(기본값) 가벼운 로컬 SQLite 사용 (팀원들 도커 없이 테스트용)
-        return self.SQLITE_URL
-    
+        # PostgreSQL 연결 URL을 생성합니다.
+        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
     # JWT Settings
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "YOUR_JWT_SECRET_KEY_HERE")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
