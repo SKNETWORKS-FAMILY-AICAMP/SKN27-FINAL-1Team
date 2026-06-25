@@ -143,7 +143,6 @@ function Guide() {
   const [hasNextPage, setHasNextPage] = useState(false)
   const [selectedGuide, setSelectedGuide] = useState(null)
   const [recommendedRecipes, setRecommendedRecipes] = useState([])
-  const [pageInput, setPageInput] = useState('1')
   const [isListLoading, setIsListLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isRecipeLoading, setIsRecipeLoading] = useState(false)
@@ -315,10 +314,6 @@ function Guide() {
   const selectedTip = guideTips.find((tip) => tip.title === selectedTipTitle) ?? guideTips[0]
 
   useEffect(() => {
-    setPageInput(String(page))
-  }, [page])
-
-  useEffect(() => {
     if (!guideTips.some((tip) => tip.title === selectedTipTitle)) {
       setSelectedTipTitle(guideTips[0].title)
     }
@@ -331,11 +326,6 @@ function Guide() {
   const goToPage = (nextPage) => {
     const normalizedPage = Math.min(Math.max(Number(nextPage) || 1, 1), totalPages)
     setPage(normalizedPage)
-  }
-
-  const submitPageJump = (event) => {
-    event.preventDefault()
-    goToPage(pageInput)
   }
 
   const clearFilters = () => {
@@ -521,22 +511,6 @@ function Guide() {
               끝
             </button>
 
-            <form className="guide-pagination__jump" onSubmit={submitPageJump}>
-              <label>
-                <span>페이지</span>
-                <input
-                  min="1"
-                  max={totalPages}
-                  type="number"
-                  value={pageInput}
-                  disabled={isListLoading}
-                  onChange={(event) => setPageInput(event.target.value)}
-                />
-              </label>
-              <button type="submit" disabled={isListLoading}>
-                이동
-              </button>
-            </form>
           </div>
         </section>
       ) : (

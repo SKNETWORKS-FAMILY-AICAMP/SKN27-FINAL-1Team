@@ -353,8 +353,7 @@
 }
 
 .guide-filter-bar button,
-.guide-pagination button,
-.guide-pagination__jump input {
+.guide-pagination button {
   min-height: 40px;
   padding: 0 14px;
   border: 1.4px solid #c79a74;
@@ -368,11 +367,9 @@
 }
 
 .guide-filter-bar button:hover,
-.guide-pagination button:hover:not(:disabled),
-.guide-pagination__jump input:focus {
+.guide-pagination button:hover:not(:disabled) {
   border-color: var(--figma-coral);
   box-shadow: 0 8px 16px rgba(255, 107, 116, 0.1);
-  outline: 0;
 }
 
 .guide-pagination button:disabled {
@@ -521,27 +518,6 @@
   background: var(--figma-coral);
   color: #fff;
   box-shadow: 0 8px 16px rgba(255, 107, 116, 0.16);
-}
-
-.guide-pagination__jump {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.guide-pagination__jump label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #6f4b36;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.guide-pagination__jump input {
-  box-sizing: border-box;
-  width: 72px;
-  text-align: center;
 }
 
 .guide-list-back {
