@@ -66,6 +66,19 @@ def test_menu_custom_pool_multiplier():
     assert config.pool_size == 20
 
 
+def test_menu_custom_preset_api_filters_no_duplicate_kwargs():
+    config = RecipeRecommendConfig.menu_custom_preset(
+        5,
+        require_any_owned=True,
+        use_expiry_priority=True,
+        min_display_match_rate=70,
+    )
+
+    assert config.require_any_owned is True
+    assert config.use_expiry_priority is True
+    assert config.min_display_match_rate == 70
+
+
 def test_menu_custom_pool_multiplier_clamped():
     config = RecipeRecommendConfig.menu_custom_preset(5, pool_multiplier=99)
 

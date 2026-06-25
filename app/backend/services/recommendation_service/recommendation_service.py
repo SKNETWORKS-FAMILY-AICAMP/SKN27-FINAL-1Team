@@ -62,9 +62,7 @@ class RecipeRecommendConfig:
         pool_multiplier = filters.pop("pool_multiplier", cls.DEFAULT_POOL_MULTIPLIER)
         return cls(
             mode="menu_custom",
-            require_any_owned=False,
             include_maybe_owned=True,
-            use_expiry_priority=False,
             limit=cls.clamp_limit(limit),
             pool_multiplier=cls.clamp_pool_multiplier(pool_multiplier),
             **filters,
