@@ -665,6 +665,14 @@
   margin-top: 16px;
 }
 
+.mypage-preferences__reset {
+  margin-top: 18px;
+}
+
+.mypage-content > .mypage-settings[aria-labelledby="onboarding-title"] {
+  display: none;
+}
+
 .mypage-settings ul {
   margin: 14px 0 0;
   padding: 0;

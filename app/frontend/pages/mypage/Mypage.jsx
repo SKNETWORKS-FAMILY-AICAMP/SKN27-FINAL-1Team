@@ -549,6 +549,13 @@ function Mypage() {
                       </div>
                     </div>
                   ))}
+                  <button
+                    className="mypage-soft-button mypage-preferences__reset"
+                    type="button"
+                    onClick={() => setShowOnboarding(true)}
+                  >
+                    다시 설정하기
+                  </button>
                 </section>
               </div>
 
