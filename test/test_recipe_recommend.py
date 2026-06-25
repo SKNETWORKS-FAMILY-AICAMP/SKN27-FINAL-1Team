@@ -1,9 +1,16 @@
 import os
+import random
 import sys
 from datetime import date, timedelta
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from app.backend.services.recommendation_service.fridge_suitability_scorer import (
+    FridgeContext,
+    score_fridge_suitability,
+)
 from app.backend.services.recommendation_service.recommendation_service import (
     FridgeExpiryRow,
     RecipeRecommendConfig,
@@ -47,8 +54,71 @@ def test_for_mode_menu_custom_uses_request_limit():
     config = RecipeRecommendConfig.for_mode("menu_custom", request_limit=5)
 
     assert config is not None
+    assert config.mode == "menu_custom"
     assert config.limit == 5
     assert config.use_expiry_priority is False
+
+
+def test_menu_custom_pool_multiplier():
+    config = RecipeRecommendConfig.menu_custom_preset(5, pool_multiplier=4)
+
+    assert config.pool_multiplier == 4
+    assert config.pool_size == 20
+
+
+def test_menu_custom_pool_multiplier_clamped():
+    config = RecipeRecommendConfig.menu_custom_preset(5, pool_multiplier=99)
+
+    assert config.pool_multiplier == RecipeRecommendConfig.POOL_MULTIPLIER_MAX
+    assert config.pool_size == 5 * RecipeRecommendConfig.POOL_MULTIPLIER_MAX
+
+
+def test_score_fridge_suitability_deterministic_with_rng():
+    rng = random.Random(42)
+    score_a = score_fridge_suitability({}, FridgeContext(user_id=1, fridge_snapshots=[]), rng=rng)
+    score_b = score_fridge_suitability({}, FridgeContext(user_id=1, fridge_snapshots=[]), rng=rng)
+
+    assert 0 <= score_a < 1
+    assert 0 <= score_b < 1
+    assert score_a != score_b
+
+
+def test_menu_custom_pipeline_slices_to_limit():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(id=index, title=f"recipe-{index}", category="국/탕", difficulty="초급", cooking_time=20, serving_size=2, image_url=None)
+        for index in range(1, 11)
+    ]
+    query_chain = MagicMock()
+    query_chain.order_by.return_value.limit.return_value.all.return_value = recipes
+
+    ingredient_rows = {
+        recipe.id: [{"name": "대파", "amount": None, "ingredient_id": 1}]
+        for recipe in recipes
+    }
+
+    with (
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.build_recipe_query",
+            return_value=query_chain,
+        ) as build_query,
+        patch.object(service, "_fetch_fridge_items_with_expiry", return_value=[]),
+        patch.object(service, "_load_recipe_ingredients_bulk", return_value=ingredient_rows),
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.score_fridge_suitability",
+            side_effect=lambda candidate, fridge_context, rng=None: candidate["recipe_id"] / 100,
+        ),
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(5, pool_multiplier=2)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    build_query.assert_called_once()
+    query_chain.order_by.assert_called_once()
+    query_chain.order_by.return_value.limit.assert_called_once_with(config.pool_size)
+    assert result["returned_count"] == 5
+    assert len(result["items"]) == 5
+    assert result["has_more"] is True
 
 
 def test_clamp_limit():

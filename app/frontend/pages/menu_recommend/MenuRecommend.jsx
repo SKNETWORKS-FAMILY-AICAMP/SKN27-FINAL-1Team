@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import './MenuRecommend.css'
 
@@ -7,14 +7,17 @@ import imageMenuRecommendation from '../../assets/extracted/images/image_menu_re
 import imageSearch from '../../assets/extracted/images/image_search.png'
 import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import {
+  buildRecommendRequestBody,
   countOptions,
   defaultFilters,
   filterGroups,
   filterOptions,
+  formatCookingTime,
   menuRecommendProcess as process,
-  menuRecommendRecipes as recipes,
   recommendTemplates,
 } from '../../mock/menuRecommendMock.js'
+
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -38,19 +41,14 @@ function MenuRecommend() {
     ...quickTemplate.preset,
   }))
   const [settingsOpen, setSettingsOpen] = useState(true)
-  const [generatedCount, setGeneratedCount] = useState(0)
+  const [generatedRecipes, setGeneratedRecipes] = useState([])
   const [selectedIds, setSelectedIds] = useState([])
   const [savedIds, setSavedIds] = useState([])
   const [activeStep, setActiveStep] = useState(0)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState('')
 
   const activeTemplate = recommendTemplates.find((item) => item.id === templateId) ?? recommendTemplates[0]
-
-  // ponytail: filter values ignored until API phase; upgrade path → menu_custom API
-  const generatedRecipes = useMemo(
-    () => recipes.slice(0, generatedCount),
-    [generatedCount],
-  )
   const displayedCount = generatedRecipes.length
 
   const clearFlowTimers = () => {
@@ -60,10 +58,11 @@ function MenuRecommend() {
 
   const resetGeneratedState = () => {
     clearFlowTimers()
-    setGeneratedCount(0)
+    setGeneratedRecipes([])
     setSelectedIds([])
     setActiveStep(0)
     setIsGenerating(false)
+    setError('')
   }
 
   const handleTemplateSelect = (template) => {
@@ -85,25 +84,52 @@ function MenuRecommend() {
     resetGeneratedState()
   }
 
-  const handleGenerate = () => {
-    clearFlowTimers()
-    setGeneratedCount(0)
-    setSelectedIds([])
-    setActiveStep(0)
-    setIsGenerating(true)
-
+  const startProgressAnimation = () => {
     flowTimersRef.current = process.slice(1).map((_, index) =>
       window.setTimeout(() => {
         setActiveStep(index + 1)
       }, 420 * (index + 1)),
     )
+  }
 
-    flowTimersRef.current.push(
-      window.setTimeout(() => {
-        setGeneratedCount(filters.limit)
-        setIsGenerating(false)
-      }, 420 * process.length),
-    )
+  const handleGenerate = async () => {
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    clearFlowTimers()
+    setGeneratedRecipes([])
+    setSelectedIds([])
+    setActiveStep(0)
+    setError('')
+    setIsGenerating(true)
+    startProgressAnimation()
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/recipes/recommend`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildRecommendRequestBody(filters)),
+      })
+
+      if (!response.ok) {
+        throw new Error('추천을 불러오지 못했어요.')
+      }
+
+      const data = await response.json()
+      setGeneratedRecipes(data.items || [])
+      setActiveStep(process.length - 1)
+    } catch (fetchError) {
+      setError(fetchError.message || '추천을 불러오지 못했어요.')
+    } finally {
+      clearFlowTimers()
+      setIsGenerating(false)
+    }
   }
 
   const handleSelect = (recipeId) => {
@@ -115,6 +141,9 @@ function MenuRecommend() {
   const persistRecipe = (recipe) => {
     saveStoredRecipe({
       ...recipe,
+      id: recipe.recipe_id,
+      recipe_id: recipe.recipe_id,
+      image: recipe.main_image_url,
       source: '메뉴추천',
       reason: recipe.reason,
     })
@@ -122,12 +151,14 @@ function MenuRecommend() {
   }
 
   const handleSave = () => {
-    generatedRecipes.filter((recipe) => selectedIds.includes(recipe.id)).forEach(persistRecipe)
+    generatedRecipes
+      .filter((recipe) => selectedIds.includes(recipe.recipe_id))
+      .forEach(persistRecipe)
     setSavedIds((prev) => Array.from(new Set([...prev, ...selectedIds])))
   }
 
   const saveSingleRecipe = (recipeId) => {
-    const recipe = recipes.find((item) => item.id === recipeId)
+    const recipe = generatedRecipes.find((item) => item.recipe_id === recipeId)
     if (recipe) {
       persistRecipe(recipe)
     }
@@ -315,6 +346,10 @@ function MenuRecommend() {
             </button>
           </div>
 
+          {error ? (
+            <p className="menu-recommend-empty" role="alert">{error}</p>
+          ) : null}
+
           {displayedCount === 0 ? (
             <div className="menu-recommend-empty">
               <ImageSlot src={isGenerating ? imageMenuRecommendation : imageSearch} alt="추천 대기 상태" />
@@ -328,8 +363,9 @@ function MenuRecommend() {
           ) : (
             <div className="menu-recommend-grid">
               {generatedRecipes.map((recipe) => {
-                const isSelected = selectedIds.includes(recipe.id)
-                const isSaved = savedIds.includes(recipe.id)
+                const recipeId = recipe.recipe_id
+                const isSelected = selectedIds.includes(recipeId)
+                const isSaved = savedIds.includes(recipeId)
 
                 return (
                   <article
@@ -340,39 +376,39 @@ function MenuRecommend() {
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    key={recipe.id}
+                    key={recipeId}
                   >
                     <button
                       className="menu-recommend-card__select"
                       type="button"
-                      onClick={() => handleSelect(recipe.id)}
+                      onClick={() => handleSelect(recipeId)}
                       aria-pressed={isSelected}
                     >
                       {isSelected ? '선택됨' : '선택'}
                     </button>
                     <div className="menu-recommend-card__media">
-                      <span>{recipe.category}</span>
+                      <span>{recipe.category || '추천 메뉴'}</span>
                       <ImageSlot
                         className="menu-recommend-card__image"
-                        src={recipe.image}
-                        alt={recipe.image ? recipe.title : ''}
+                        src={recipe.main_image_url}
+                        alt={recipe.main_image_url ? recipe.title : ''}
                       />
                     </div>
                     <div className="menu-recommend-card__body">
                       <h3>{recipe.title}</h3>
                       <p>
-                        {recipe.time} · {recipe.level}
+                        {formatCookingTime(recipe.cooking_time_min)} · {recipe.difficulty || '-'}
                       </p>
                       <div>
                         <b>추천 이유</b>
-                        <span>{recipe.reason}</span>
+                        <span>{recipe.reason || '조건에 맞는 메뉴예요.'}</span>
                       </div>
                       <div className="menu-recommend-card__actions">
-                        <Link to={`/recipes/${recipe.id}`}>레시피 보기</Link>
+                        <Link to={`/recipes/${recipeId}`}>레시피 보기</Link>
                         <button
                           type="button"
                           disabled={isSaved}
-                          onClick={() => saveSingleRecipe(recipe.id)}
+                          onClick={() => saveSingleRecipe(recipeId)}
                         >
                           {isSaved ? '저장 완료' : '바로 저장'}
                         </button>

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import FridgeItem, Ingredient, Recipe, RecipeIngredient, RecommendationResult
 from app.backend.services.recommendation_service._recipe_query import build_recipe_query, recipe_to_list_item
+from app.backend.services.recommendation_service.fridge_suitability_scorer import FridgeContext, score_fridge_suitability
 from app.backend.services.recommendation_service.ingredient_ownership_service import (
     FridgeItemSnapshot,
     OwnershipResult,
@@ -24,7 +25,11 @@ class RecipeRecommendConfig:
     FRIDGE_CONSUME_LIMIT = 9
     LIMIT_MIN = 1
     LIMIT_MAX = 50
+    DEFAULT_POOL_MULTIPLIER = 3
+    POOL_MULTIPLIER_MIN = 1
+    POOL_MULTIPLIER_MAX = 10
 
+    mode: Literal["fridge_consume", "menu_custom"] = "fridge_consume"
     query: str | None = None
     category: str | None = None
     difficulty: str | None = None
@@ -40,10 +45,12 @@ class RecipeRecommendConfig:
     expiring_ingredient_bonus: int = 2
 
     limit: int = 9
+    pool_multiplier: int = DEFAULT_POOL_MULTIPLIER
 
     @classmethod
     def fridge_consume_preset(cls) -> RecipeRecommendConfig:
         return cls(
+            mode="fridge_consume",
             require_any_owned=True,
             include_maybe_owned=True,
             use_expiry_priority=True,
@@ -51,17 +58,29 @@ class RecipeRecommendConfig:
         )
 
     @classmethod
-    def menu_custom_preset(cls, limit: int) -> RecipeRecommendConfig:
+    def menu_custom_preset(cls, limit: int, **filters: Any) -> RecipeRecommendConfig:
+        pool_multiplier = filters.pop("pool_multiplier", cls.DEFAULT_POOL_MULTIPLIER)
         return cls(
+            mode="menu_custom",
             require_any_owned=False,
             include_maybe_owned=True,
             use_expiry_priority=False,
             limit=cls.clamp_limit(limit),
+            pool_multiplier=cls.clamp_pool_multiplier(pool_multiplier),
+            **filters,
         )
 
     @classmethod
     def clamp_limit(cls, value: int) -> int:
         return max(cls.LIMIT_MIN, min(cls.LIMIT_MAX, value))
+
+    @classmethod
+    def clamp_pool_multiplier(cls, value: int) -> int:
+        return max(cls.POOL_MULTIPLIER_MIN, min(cls.POOL_MULTIPLIER_MAX, value))
+
+    @property
+    def pool_size(self) -> int:
+        return self.limit * self.pool_multiplier
 
     @classmethod
     def for_mode(cls, mode: str, *, request_limit: int) -> RecipeRecommendConfig | None:
@@ -196,6 +215,31 @@ class RecommendationService:
         exclude_recipe_ids: list[int] | None = None,
         refresh_pool: bool = False,
     ) -> dict[str, Any]:
+        if config.mode == "menu_custom":
+            return self._recommend_menu_custom(
+                db,
+                user_id,
+                config,
+                exclude_recipe_ids=exclude_recipe_ids,
+                refresh_pool=refresh_pool,
+            )
+        return self._recommend_fridge_consume(
+            db,
+            user_id,
+            config,
+            exclude_recipe_ids=exclude_recipe_ids,
+            refresh_pool=refresh_pool,
+        )
+
+    def _recommend_fridge_consume(
+        self,
+        db: Session,
+        user_id: int,
+        config: RecipeRecommendConfig,
+        *,
+        exclude_recipe_ids: list[int] | None = None,
+        refresh_pool: bool = False,
+    ) -> dict[str, Any]:
         # ponytail: ~3k full scan; growth → candidate cap or SQL prefilter
         recipes = (
             build_recipe_query(
@@ -259,6 +303,116 @@ class RecommendationService:
             key=lambda row: (
                 -row["_sort_expiry"],
                 -row["_sort_match"],
+                -row["recipe_id"],
+            )
+        )
+
+        effective_exclude = [] if refresh_pool else (exclude_recipe_ids or [])
+        items, has_more = self._rank_and_slice(ranked, effective_exclude, config.limit)
+
+        response_items = []
+        for row in items:
+            base = recipe_to_list_item(row["recipe"])
+            response_items.append(
+                {
+                    **base,
+                    "match_rate": row["match_rate"],
+                    "display_match_rate": row["display_match_rate"],
+                    "owned_ingredient_count": row["owned_ingredient_count"],
+                    "missing_ingredient_count": row["missing_ingredient_count"],
+                    "expiry_score": row["expiry_score"],
+                    "reason": row["reason"],
+                }
+            )
+
+        return {
+            "items": response_items,
+            "returned_count": len(response_items),
+            "has_more": has_more,
+        }
+
+    def _recommend_menu_custom(
+        self,
+        db: Session,
+        user_id: int,
+        config: RecipeRecommendConfig,
+        *,
+        exclude_recipe_ids: list[int] | None = None,
+        refresh_pool: bool = False,
+    ) -> dict[str, Any]:
+        # Step1: 설정 기반 후보 검색 (limit * n)
+        # ponytail: id desc 고정; upgrade → 인기/랜덤 시드
+        recipes = (
+            build_recipe_query(
+                db,
+                query=config.query,
+                category=config.category,
+                difficulty=config.difficulty,
+                cooking_time_label=config.cooking_time_label,
+            )
+            .order_by(Recipe.id.desc())
+            .limit(config.pool_size)
+            .all()
+        )
+
+        expiry_rows = self._fetch_fridge_items_with_expiry(db, user_id)
+        fridge_snapshots = [
+            FridgeItemSnapshot(ingredient_id=row.ingredient_id, fridge_name=row.fridge_name)
+            for row in expiry_rows
+        ]
+        fridge_context = FridgeContext(user_id=user_id, fridge_snapshots=fridge_snapshots)
+        fridge_by_id = {row.ingredient_id: row for row in expiry_rows}
+        fridge_by_name = {row.fridge_name.strip(): row for row in expiry_rows if row.fridge_name.strip()}
+
+        ingredients_by_recipe = self._load_recipe_ingredients_bulk(db, [recipe.id for recipe in recipes])
+        today = date.today()
+
+        ranked: list[dict[str, Any]] = []
+        for recipe in recipes:
+            recipe_ingredients = ingredients_by_recipe.get(recipe.id, [])
+            if not recipe_ingredients:
+                continue
+
+            ownership = classify_ingredients(recipe_ingredients, fridge_snapshots)
+            counts = self._ownership_counts(ownership, config)
+            if not self._passes_ownership_filter(counts, ownership, recipe_ingredients, config):
+                continue
+
+            expiry_score, expiring_count = self._score_expiry(
+                ownership,
+                fridge_by_id,
+                fridge_by_name,
+                config,
+                today,
+            )
+            reason = self._build_reason(expiring_count, counts["display_match_rate"])
+
+            # Step2: 가중치 점수 — ponytail: 임시 합산; upgrade → 가중치 설계
+            weight_score = counts["display_match_rate"] + expiry_score
+
+            candidate_row = {
+                "recipe_id": recipe.id,
+                "recipe": recipe,
+                "match_rate": ownership.match_rate,
+                "display_match_rate": counts["display_match_rate"],
+                "owned_ingredient_count": counts["owned_ingredient_count"],
+                "missing_ingredient_count": counts["missing_ingredient_count"],
+                "expiry_score": expiry_score,
+                "reason": reason,
+                "_weight_score": weight_score,
+            }
+
+            # Step3: ML stub
+            ml_score = score_fridge_suitability(candidate_row, fridge_context)
+
+            # Step4: 합산 정렬 키 — ponytail: ml_score*100 임시 스케일
+            candidate_row["_total_score"] = weight_score + ml_score * 100
+            ranked.append(candidate_row)
+
+        ranked.sort(
+            key=lambda row: (
+                -row["_total_score"],
+                -row["display_match_rate"],
                 -row["recipe_id"],
             )
         )
