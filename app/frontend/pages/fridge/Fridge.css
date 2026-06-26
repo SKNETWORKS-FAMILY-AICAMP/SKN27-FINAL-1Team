@@ -1257,13 +1257,18 @@
 }
 
 .btn-select-all {
-  background: transparent;
+  background-color: #f5f5f5;
   border: none;
-  color: var(--figma-text);
+  color: #666;
   font-weight: 700;
   cursor: pointer;
-  padding: 8px 12px;
-  text-decoration: underline;
+  padding: 8px 16px;
+  border-radius: 20px;
+  transition: all 0.2s;
+}
+.btn-select-all.is-active {
+  background-color: #333;
+  color: #fff;
 }
 
 .fridge-bulk-bar__count {
@@ -1295,4 +1300,9 @@
 .fridge-bulk-bar__actions .btn-submit:disabled {
   background-color: #ccc;
   cursor: not-allowed;
+}
+
+/* 편집 모드일 때 개별 액션 버튼 클릭 이벤트 투과 (시각적으로는 원본 유지) */
+.fridge-item__actions.is-edit-mode {
+  pointer-events: none;
 }

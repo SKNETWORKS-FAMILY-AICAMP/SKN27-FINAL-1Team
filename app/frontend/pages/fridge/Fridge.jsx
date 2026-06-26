@@ -412,12 +412,12 @@ function Fridge() {
     })
   }
 
-  // 전체 선택 토글
+  // 전체 선택 토글 (현재 화면에 필터링/검색되어 보이는 재료 기준)
   const toggleSelectAll = () => {
-    if (selectedIds.size === ingredients.length) {
+    if (selectedIds.size === sortedIngredients.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(ingredients.map((item) => item.id)))
+      setSelectedIds(new Set(sortedIngredients.map((item) => item.id)))
     }
   }
 
@@ -692,7 +692,7 @@ function Fridge() {
                         </div>
                       </dl>
                     </div>
-                    <div className="fridge-item__actions">
+                    <div className={`fridge-item__actions ${isEditMode ? 'is-edit-mode' : ''}`}>
                       <button type="button" onClick={() => openEditModal(item)}>수정</button>
                       <button type="button" onClick={() => handleConsumeClick(item)}>소비</button>
                       <button type="button" onClick={() => handleDeleteClick(item.id, item.name)}>폐기</button>
@@ -762,8 +762,12 @@ function Fridge() {
       {isEditMode && (
         <div className="fridge-bulk-bar">
           <div className="fridge-bulk-bar__content">
-            <button type="button" className="btn-select-all" onClick={toggleSelectAll}>
-              {selectedIds.size === ingredients.length ? '전체 해제' : '전체 선택'}
+            <button 
+              type="button" 
+              className={`btn-select-all ${selectedIds.size > 0 && selectedIds.size === sortedIngredients.length ? 'is-active' : ''}`} 
+              onClick={toggleSelectAll}
+            >
+              {selectedIds.size > 0 && selectedIds.size === sortedIngredients.length ? '전체 해제' : '전체 선택'}
             </button>
             <span className="fridge-bulk-bar__count">
               {selectedIds.size}개 선택됨
