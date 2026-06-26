@@ -168,27 +168,3 @@ def ownership_counts(
         "missing_ingredient_count": missing_count,
         "display_match_rate": rates.display_match_rate,
     }
-
-
-def passes_preference_gate(
-    ownership: OwnershipResult,
-    recipe_ingredients: list[dict[str, Any]],
-    config: RecipeRecommendConfig,
-) -> bool:
-    """Preference gate: require_any_owned·min_display_match_rate (tier에서 완화 가능)."""
-    owned_count = len(ownership.owned)
-    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
-
-    if config.require_any_owned and (owned_count + maybe_count) < 1:
-        return False
-
-    if config.min_display_match_rate is not None:
-        rates = compute_match_rates(
-            owned_count,
-            maybe_count,
-            len(recipe_ingredients),
-        )
-        if rates.display_match_rate < config.min_display_match_rate:
-            return False
-
-    return True

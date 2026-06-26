@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import Any
 
 from app.backend.services.recommendation_service._recipe_query import recipe_to_list_item
-from app.backend.services.recommendation_service.ingredient_ownership_service import passes_preference_gate
+from app.backend.services.recommendation_service.preference_scorer import preference_penalty
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
 
@@ -28,11 +28,12 @@ def preference_pool(
     return [
         row
         for row in scored
-        if passes_preference_gate(
+        if preference_penalty(
             row["_ownership"],
             row["_recipe_ingredients"],
             tier_config,
         )
+        == 0
     ]
 
 

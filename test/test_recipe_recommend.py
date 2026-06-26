@@ -8,6 +8,11 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.backend.services.recommendation_service.expiry_scorer import d_day, score_expiry, urgency
+from app.backend.services.recommendation_service.ingredient_ownership_service import OwnershipResult
+from app.backend.services.recommendation_service.preference_scorer import (
+    build_final_score,
+    preference_penalty,
+)
 from app.backend.services.recommendation_service.preference_slice import preference_tiers
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommendation_service import RecommendationService
@@ -79,6 +84,49 @@ def test_menu_custom_pool_multiplier_clamped():
 
     assert config.pool_multiplier == RecipeRecommendConfig.POOL_MULTIPLIER_MAX
     assert config.pool_size == 5 * RecipeRecommendConfig.POOL_MULTIPLIER_MAX
+
+
+def test_preference_penalty_require_any_owned():
+    config = RecipeRecommendConfig.menu_custom_preset(5, require_any_owned=True)
+    empty = OwnershipResult(owned=[], maybe_owned=[], missing=[{"name": "대파"}], match_rate=0, display_match_rate=0)
+    owned = OwnershipResult(
+        owned=[{"name": "대파"}],
+        maybe_owned=[],
+        missing=[],
+        match_rate=100,
+        display_match_rate=100,
+    )
+
+    assert preference_penalty(empty, [{"name": "대파"}], config) == 1
+    assert preference_penalty(owned, [{"name": "대파"}], config) == 0
+
+
+def test_preference_penalty_min_display_match_rate():
+    config = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
+    low_match = OwnershipResult(
+        owned=[{"name": "대파"}],
+        maybe_owned=[],
+        missing=[{"name": "양파"}, {"name": "당근"}],
+        match_rate=33,
+        display_match_rate=33,
+    )
+    high_match = OwnershipResult(
+        owned=[{"name": "대파"}, {"name": "양파"}, {"name": "당근"}],
+        maybe_owned=[],
+        missing=[],
+        match_rate=100,
+        display_match_rate=100,
+    )
+
+    assert preference_penalty(low_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 1
+    assert preference_penalty(high_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 0
+
+
+def test_build_final_score_fridge_expiry_order():
+    low_expiry_high_match = build_final_score("fridge_consume", fridge_score=90, expiry_score=1, preference_score=0, missing_penalty=0)
+    high_expiry_low_match = build_final_score("fridge_consume", fridge_score=50, expiry_score=10, preference_score=0, missing_penalty=0)
+
+    assert high_expiry_low_match > low_expiry_high_match
 
 
 def test_menu_custom_pipeline_slices_to_limit():

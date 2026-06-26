@@ -21,6 +21,10 @@ from app.backend.services.recommendation_service.ingredient_ownership_service im
     classify_ingredients,
     ownership_counts,
 )
+from app.backend.services.recommendation_service.preference_scorer import (
+    build_final_score,
+    preference_score_for_rank,
+)
 from app.backend.services.recommendation_service.preference_slice import (
     build_recommend_result,
     empty_recommend_result,
@@ -123,23 +127,33 @@ class RecipeRecommendEngine:
                 today,
             )
             reason = build_reason(expiring_count, counts["display_match_rate"])
-            display_match_rate = counts["display_match_rate"]
+            fridge_score = counts["display_match_rate"]
+            preference_score = preference_score_for_rank(ownership, recipe_ingredients, config)
+            missing_penalty = 0
+            final_score = build_final_score(
+                config.mode,
+                fridge_score,
+                expiry_score,
+                preference_score,
+                missing_penalty,
+            )
 
             ranked.append(
                 {
                     "recipe_id": recipe.id,
                     "recipe": recipe,
                     "match_rate": ownership.match_rate,
-                    "display_match_rate": display_match_rate,
+                    "display_match_rate": fridge_score,
                     "owned_ingredient_count": counts["owned_ingredient_count"],
                     "missing_ingredient_count": counts["missing_ingredient_count"],
                     "expiry_score": expiry_score,
                     "reason": reason,
                     "_ownership": ownership,
                     "_recipe_ingredients": recipe_ingredients,
-                    "_sort_score": display_match_rate + expiry_score,
-                    "_sort_expiry": expiry_score,
-                    "_sort_match": display_match_rate,
+                    "fridge_score": fridge_score,
+                    "preference_score": preference_score,
+                    "missing_penalty": missing_penalty,
+                    "final_score": final_score,
                 }
             )
 
@@ -147,20 +161,11 @@ class RecipeRecommendEngine:
 
     @staticmethod
     def _rank_candidates(ranked: list[dict[str, Any]], config: RecipeRecommendConfig) -> None:
-        if config.mode == "menu_custom":
-            ranked.sort(
-                key=lambda row: (
-                    -row["_sort_score"],
-                    -row["display_match_rate"],
-                    -row["recipe_id"],
-                )
-            )
-            return
-
+        del config
         ranked.sort(
             key=lambda row: (
-                -row["_sort_expiry"],
-                -row["_sort_match"],
+                -row["final_score"],
+                -row["display_match_rate"],
                 -row["recipe_id"],
             )
         )
