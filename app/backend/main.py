@@ -49,8 +49,8 @@ app.include_router(calendar_api.router, prefix=API_V1_PREFIX)
 
 
 @app.on_event("startup")
-async def start_calendar_job():
-    """서버 시작 시 백그라운드 캘린더 스케줄러를 함께 실행한다."""
+def seed_inventory_standards():
+    """서버 시작 시 자주 쓰는 식재료 보관 기준을 준비합니다."""
     try:
         created_ingredients, created_standards = seed_common_inventory_standards()
         print(
@@ -60,6 +60,10 @@ async def start_calendar_job():
     except Exception as exc:
         print(f"[InventorySeed] 자주 쓰는 식재료 보관 기준 생성 실패: {exc}")
 
+
+@app.on_event("startup")
+async def start_calendar_job():
+    """서버 시작 시 백그라운드 캘린더 스케줄러를 함께 실행한다."""
     app.state.calendar_job_task = asyncio.create_task(daily_calendar_loop())
 
 
