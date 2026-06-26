@@ -341,7 +341,7 @@ class InventoryService:
         if not fridge_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
 
-        db.delete(fridge_item)
+        fridge_item.status = "used"
         db.commit()
 
     def update_ingredient(self, db: Session, user_id: int, ingredient_id: int, data: IngredientCreate):
