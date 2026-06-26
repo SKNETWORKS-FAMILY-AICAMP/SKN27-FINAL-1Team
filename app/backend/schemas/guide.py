@@ -10,6 +10,8 @@ class GuideListItem(BaseModel):
     middle_category: str | None = Field(default=None, description="중분류")
     minor_category: str | None = Field(default=None, description="소분류")
     seasonal_months: list[int] = Field(default_factory=list, description="제철 월")
+    seasonal_source_name: str | None = Field(default=None, description="제철 출처명")
+    seasonal_source_url: str | None = Field(default=None, description="제철 출처 URL")
 
 
 class GuideListResponse(BaseModel):
