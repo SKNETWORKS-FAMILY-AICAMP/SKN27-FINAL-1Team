@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_STORAGE = "냉장"
 VALID_STORAGE_METHODS = {"냉장", "냉동", "실온"}
 DEFAULT_CATEGORY = "기타"
+DRIED_SEAWEED_NAMES = {"김", "구운김", "조미김", "김가루", "마른김"}
 
 # 카테고리만으로 판단하기 어려운 대표 식재료만 예외 룰로 관리합니다.
 INGREDIENT_LIFESPAN_OVERRIDES = [
@@ -37,6 +38,10 @@ INGREDIENT_LIFESPAN_OVERRIDES = [
     {
         "keywords": ["계란", "달걀"],
         "days": {"냉장": 21, "냉동": 60, "실온": 7},
+    },
+    {
+        "keywords": ["스팸"],
+        "days": {"냉장": 365, "냉동": 365, "실온": 730},
     },
     {
         "keywords": ["얼음", "ice", "생수", "소금", "설탕", "꿀"],
@@ -91,11 +96,27 @@ class ExpirationAIService:
     def get_ingredient_override_lifespan(self, ingredient_name: str, storage_method: str = None) -> tuple[str, int] | None:
         """대표 식재료 예외 룰에 해당하면 보관 위치와 소비기한을 반환합니다."""
         name = (ingredient_name or "").replace(" ", "").lower()
+
+        # 얼음은 보관 위치가 비어 있으면 냉동을 기본값으로 사용합니다.
+        if "얼음" in name or "ice" in name:
+            storage = storage_method if storage_method in VALID_STORAGE_METHODS else "냉동"
+            return storage, 730
+
         storage = self._normalize_storage_method(storage_method)
+
+        # 김은 한 글자라 김치 같은 다른 식재료와 섞이지 않게 정확한 이름만 보정합니다.
+        if name in DRIED_SEAWEED_NAMES:
+            seaweed_days = {"냉장": 180, "냉동": 365, "실온": 180}
+            return storage, seaweed_days.get(storage, seaweed_days[DEFAULT_STORAGE])
 
         if "통조림" in name or name.endswith("캔") or name.startswith("캔"):
             canned_days = {"냉장": 365, "냉동": 365, "실온": 730}
             return storage, canned_days.get(storage, canned_days[DEFAULT_STORAGE])
+
+        # 소스류는 사용자가 카테고리를 고르지 않아도 조미료 기준을 적용합니다.
+        if "소스" in name:
+            sauce_days = CATEGORY_LIFESPAN_RULES["조미료"]["days"]
+            return storage, sauce_days.get(storage, sauce_days[DEFAULT_STORAGE])
 
         for rule in INGREDIENT_LIFESPAN_OVERRIDES:
             if any(keyword.replace(" ", "").lower() in name for keyword in rule["keywords"]):
@@ -151,7 +172,7 @@ class ExpirationAIService:
     ) -> tuple[str, int]:
         """식재료명과 보관 방법을 기준으로 권장 보관 위치와 소비기한 일수를 예측합니다."""
         normalized_storage = self._normalize_storage_method(storage_method)
-        override = self.get_ingredient_override_lifespan(ingredient_name, normalized_storage)
+        override = self.get_ingredient_override_lifespan(ingredient_name, storage_method)
         if override:
             return override
 
