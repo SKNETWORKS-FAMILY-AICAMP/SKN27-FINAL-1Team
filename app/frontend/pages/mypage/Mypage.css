@@ -303,6 +303,16 @@
   letter-spacing: 0;
 }
 
+.mypage-panel__title h2 span {
+  margin-left: 8px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #b06f21;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
 .mypage-subtitle-row button {
   border: 0;
   background: transparent;
@@ -363,7 +373,12 @@
 }
 
 .mypage-saved {
-  padding: 18px;
+  padding: 24px;
+}
+
+.mypage-saved #saved-recipes-title {
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.1;
 }
 
 .mypage-saved-list {
@@ -376,18 +391,36 @@
   margin-top: 18px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0;
 }
 
 .mypage-saved-section {
   min-width: 0;
+  padding-right: 20px;
+}
+
+.mypage-saved-section + .mypage-saved-section {
+  padding-right: 0;
+  padding-left: 20px;
+  border-left: 1px solid #f0d7b1;
 }
 
 .mypage-saved-section__head h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0;
-  color: var(--figma-text);
+  color: var(--figma-coral);
   font-size: 18px;
   font-weight: 900;
+}
+
+.mypage-saved-section__head h3::before {
+  width: 34px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
 }
 
 .mypage-saved-section__head p {
@@ -399,13 +432,11 @@
 
 .mypage-saved-card,
 .mypage-saved-empty {
-  padding: 16px;
+  padding: 16px 0 0;
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
   gap: 16px;
-  border: 1px solid #f1d9b3;
-  border-radius: 14px;
-  background: #fffdf8;
 }
 
 .mypage-saved-card__image,
@@ -439,6 +470,10 @@
   font-weight: 900;
 }
 
+.mypage-saved-card .mypage-recipe-title-row small {
+  margin-top: 0;
+}
+
 .mypage-saved-empty {
   margin-top: 16px;
   align-items: center;
@@ -446,14 +481,11 @@
 
 .mypage-saved-column-empty {
   margin-top: 16px;
-  padding: 16px;
+  padding: 18px 0 0;
   display: grid;
   gap: 10px;
   justify-items: center;
   text-align: center;
-  border: 1px solid #f1d9b3;
-  border-radius: 14px;
-  background: #fffdf8;
 }
 
 .mypage-saved-column-empty h3 {
@@ -665,6 +697,14 @@
   margin-top: 16px;
 }
 
+.mypage-preferences__reset {
+  margin-top: 18px;
+}
+
+.mypage-content > .mypage-settings[aria-labelledby="onboarding-title"] {
+  display: none;
+}
+
 .mypage-settings ul {
   margin: 14px 0 0;
   padding: 0;
@@ -787,7 +827,8 @@
 .mypage-calendar-connect {
   padding: 20px 24px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: space-between;
   gap: 18px;
 }
@@ -803,6 +844,33 @@
   font-weight: 800;
 }
 
+.mypage-calendar-connect__list {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.mypage-calendar-connect__list li {
+  position: relative;
+  padding-left: 18px;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mypage-calendar-connect__list li::before {
+  position: absolute;
+  top: 0.45em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--figma-coral);
+  content: '';
+}
+
 .mypage-calendar-connect a {
   display: inline-block;
   margin-top: 10px;
@@ -814,9 +882,10 @@
 
 .mypage-calendar-connect__actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
+}
+
+.mypage-calendar-connect__actions .mypage-primary-button {
+  width: 100%;
 }
 
 .mypage-calendar-preview {
@@ -1153,10 +1222,22 @@
 
   .mypage-saved-grid {
     grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .mypage-saved-section {
+    padding-right: 0;
+  }
+
+  .mypage-saved-section + .mypage-saved-section {
+    padding-top: 18px;
+    padding-left: 0;
+    border-top: 1px solid #f0d7b1;
+    border-left: 0;
   }
 
   .mypage-saved-card {
-    padding: 10px;
+    padding: 10px 0 0;
     grid-template-columns: 82px minmax(0, 1fr);
     gap: 10px;
   }
@@ -1173,6 +1254,10 @@
   .mypage-saved-card small {
     margin-top: 6px;
     font-size: 10px;
+  }
+
+  .mypage-saved-card .mypage-recipe-title-row small {
+    margin-top: 0;
   }
 
   .mypage-saved-empty {

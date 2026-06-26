@@ -8,7 +8,7 @@ import imagePutting from '../../assets/extracted/images/image_putting.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
-import { demoIngredients, initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
+import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 
 const FILTER_TYPES = [
   { label: '전체', tone: '' },
@@ -64,7 +64,9 @@ const ingredientImages = Object.entries(
 // 재료 이름에 맞는 대표 식재료 이미지를 선택합니다.
 function getIngredientIcon(name = '') {
   const key = normalizeIngredientImageKey(name)
-  const image = ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
+  const image =
+    ingredientImages.find((item) => item.key === key) ||
+    ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
   return image?.src || null
 }
 
@@ -138,8 +140,8 @@ function Fridge() {
   const navigate = useNavigate()
   const { dialogNode, showAlert } = useAppDialog()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  const [ingredients, setIngredients] = useState(demoIngredients.map(normalizeIngredient))
-  const [summary, setSummary] = useState(buildSummary(demoIngredients))
+  const [ingredients, setIngredients] = useState([])
+  const [summary, setSummary] = useState(buildSummary([]))
   const [activeFilter, setActiveFilter] = useState('전체')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState('grid')
@@ -161,8 +163,8 @@ function Fridge() {
   // 인증 실패 시 토큰을 제거하고 demo 데이터 화면으로 복귀합니다.
   const handleAuthFailure = async () => {
     window.localStorage.removeItem('bobbeori-token')
-    setIngredients(demoIngredients.map(normalizeIngredient))
-    setSummary(buildSummary(demoIngredients))
+    setIngredients([])
+    setSummary(buildSummary([]))
     await showAlert('로그인이 만료되었습니다. 다시 로그인한 뒤 이용해주세요.', { title: '로그인 만료' })
   }
 
