@@ -77,9 +77,6 @@ def _apply_cooking_time_label_filter(query_recipes: Query, label: str | None) ->
     if not normalized_label or normalized_label == "전체":
         return query_recipes
 
-    if normalized_label == "확인필요":
-        return query_recipes.filter(Recipe.cooking_time.is_(None))
-
     if normalized_label == "2시간이상":
         return query_recipes.filter(
             Recipe.cooking_time.isnot(None),
@@ -107,3 +104,31 @@ def _parse_time_label_to_minutes(label: str) -> int | None:
     if "분" in label:
         return amount
     return amount
+
+
+def load_recipe_ingredients_bulk(
+    db: Session,
+    recipe_ids: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    if not recipe_ids:
+        return {}
+
+    rows = (
+        db.query(RecipeIngredient)
+        .filter(RecipeIngredient.recipe_id.in_(recipe_ids))
+        .order_by(RecipeIngredient.is_main_ingredient.desc(), RecipeIngredient.id)
+        .all()
+    )
+
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        if not row.raw_ingredient_name:
+            continue
+        grouped.setdefault(row.recipe_id, []).append(
+            {
+                "name": row.raw_ingredient_name or "",
+                "amount": None,
+                "ingredient_id": int(row.ingredient_id) if row.ingredient_id else None,
+            }
+        )
+    return grouped
