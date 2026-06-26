@@ -41,3 +41,27 @@ class ReceiptConfirmRequest(BaseModel):
     total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
     items: List[ReceiptConfirmItem] = Field(default_factory=list, description="User-confirmed item list")
     calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar cost event")
+
+
+class ReceiptHistoryItem(BaseModel):
+    raw_name: str = Field(..., description="Original receipt item name")
+    normalized_name: Optional[str] = Field(default=None, description="Confirmed item name")
+    quantity: Optional[float] = Field(default=None, description="Item quantity")
+    unit: Optional[str] = Field(default=None, description="Item unit")
+    item_amount: Optional[int] = Field(default=None, description="Line item amount")
+    storage_method: Optional[str] = Field(default=None, description="Storage method")
+
+
+class ReceiptHistoryEntry(BaseModel):
+    receipt_id: int = Field(..., description="Receipt ID")
+    store_name: Optional[str] = Field(default=None, description="Store name")
+    purchase_datetime: Optional[str] = Field(default=None, description="Purchase datetime: YYYY-MM-DD HH:mm")
+    total_amount: Optional[int] = Field(default=None, description="Receipt total amount")
+    item_count: int = Field(default=0, description="Number of registered items")
+    original_file_name: Optional[str] = Field(default=None, description="Uploaded file name")
+    original_file_path: Optional[str] = Field(default=None, description="Saved original image path")
+    items: List[ReceiptHistoryItem] = Field(default_factory=list, description="Registered items")
+
+
+class ReceiptHistoryResponse(BaseModel):
+    receipts: List[ReceiptHistoryEntry] = Field(default_factory=list, description="Recent registered receipts")

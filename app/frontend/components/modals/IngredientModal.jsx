@@ -4,6 +4,25 @@ const CATEGORY_OPTIONS = ['기타', '채소', '과일', '육류', '수산물', '
 const STORAGE_OPTIONS = ['냉장', '냉동', '실온']
 const UNIT_OPTIONS = ['개', 'kg']
 
+// 식재료 이미지 파일명을 검색용 키로 정규화합니다.
+function normalizeIngredientImageName(name = '') {
+  return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
+}
+
+const ingredientImages = Object.entries(
+  import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
+    eager: true,
+    import: 'default',
+  }),
+)
+  .map(([path, src]) => {
+    const fileName = path.split('/').pop() || ''
+    const name = fileName.replace(/\.[^.]+$/, '')
+    return { name, key: normalizeIngredientImageName(name), src }
+  })
+  .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+
+
 // 식재료 추가/수정 폼을 표시하는 모달 컴포넌트입니다.
 export default function IngredientModal({
   isOpen,
@@ -15,6 +34,8 @@ export default function IngredientModal({
   isSubmitting,
 }) {
   const [predictError, setPredictError] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
 
   // 식재료명 입력이 끝났을 때 보관 위치를 한 번만 예측합니다.
   const handlePredictIngredient = async () => {
@@ -52,6 +73,36 @@ export default function IngredientModal({
       console.error('AI 예측 실패:', error)
     }
   }
+  // 재료명 입력값으로 assets에 있는 표준 식재료만 자동완성합니다.
+  useEffect(() => {
+    const keyword = formData.name.trim()
+    const key = normalizeIngredientImageName(keyword)
+    if (!isOpen || !key) {
+      setSuggestions([])
+      return
+    }
+
+    setSuggestions(
+      ingredientImages
+        .filter((item) => item.key.includes(key))
+        // 정확히 일치하는 식재료를 먼저 보여줍니다.
+        .sort((a, b) =>
+          Number(b.key === key) - Number(a.key === key) ||
+          Number(b.key.startsWith(key)) - Number(a.key.startsWith(key)) ||
+          a.name.localeCompare(b.name, 'ko'),
+        )
+        .slice(0, 6),
+    )
+  }, [formData.name, isOpen])
+
+  // 자동완성 항목을 선택하면 재료명 입력값에 바로 반영합니다.
+  const handleSelectSuggestion = (suggestion) => {
+    handleFormChange({ target: { name: 'name', value: suggestion.name } })
+    setSuggestions([])
+    setIsSuggestionOpen(false)
+    setPredictError('')
+  }
+
   useEffect(() => {
     if (!isOpen) return
 
@@ -94,11 +145,36 @@ export default function IngredientModal({
             <input
               type="text"
               name="name"
+              autoComplete="off"
               placeholder="예: 양파, 두부, 우유"
               value={formData.name}
-              onChange={handleFormChange}
-              onBlur={handlePredictIngredient}
+              onChange={(event) => {
+                setIsSuggestionOpen(true)
+                handleFormChange(event)
+              }}
+              onFocus={() => setIsSuggestionOpen(true)}
+              onBlur={() => {
+                setIsSuggestionOpen(false)
+                handlePredictIngredient()
+              }}
             />
+            {isSuggestionOpen && suggestions.length > 0 ? (
+              <div className="fridge-suggestion-list">
+                {suggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion.key}
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      handleSelectSuggestion(suggestion)
+                    }}
+                  >
+                    <img src={suggestion.src} alt="" />
+                    <span>{suggestion.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {predictError && <p style={{ color: 'red', fontSize: '12px', marginTop: '4px' }}>🔴 {predictError}</p>}
           </div>
 

@@ -287,26 +287,61 @@
   font-weight: 900;
 }
 
-.fridge-view-controls button:not(:first-child) {
-  width: 38px;
+.fridge-view-controls .fridge-view-button {
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 10px;
+  background: #fffdf8;
 }
 
-.fridge-view-controls button.is-active {
+.fridge-view-controls .fridge-view-button.is-active {
   color: var(--figma-coral);
   border-color: #ffb8bd;
   background: #fff0f1;
 }
 
-.fridge-view-controls span {
-  width: 14px;
-  height: 14px;
+.fridge-view-button span {
+  width: 18px;
+  height: 18px;
   display: block;
-  border-radius: 4px;
-  border: 2px solid currentColor;
+}
+
+.fridge-view-button.is-grid span {
+  background:
+    radial-gradient(circle, currentColor 0 2.5px, transparent 3px) 0 0 / 9px 9px;
+}
+
+.fridge-view-button.is-list span {
+  position: relative;
+  color: currentColor;
+}
+
+.fridge-view-button.is-list span::before {
+  width: 4px;
+  height: 4px;
+  position: absolute;
+  left: 1px;
+  top: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
+  content: "";
+}
+
+.fridge-view-button.is-list span::after {
+  width: 11px;
+  height: 2px;
+  position: absolute;
+  right: 1px;
+  top: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
+  content: "";
 }
 
 .fridge-card-grid {
@@ -747,18 +782,6 @@
     display: inline;
   }
 
-  .fridge-dday-urgent {
-    font-size: 12px;
-    padding: 1px 5px;
-  }
-
-  .fridge-dday-date {
-    display: inline;
-    margin-top: 0;
-    margin-left: 3px;
-    font-size: 10px;
-  }
-
   .fridge-item__actions {
     grid-column: 1 / -1;
     height: 34px;
@@ -961,9 +984,58 @@
 }
 
 .fridge-form-group {
+  position: relative;
   margin-bottom: 16px;
 }
 
+.fridge-suggestion-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #e0cdb2;
+  border-radius: 12px;
+  background: #fffdf8;
+  box-shadow: 0 10px 24px rgba(69, 42, 25, 0.12);
+}
+
+.fridge-suggestion-list button {
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fridge-suggestion-list img {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.fridge-suggestion-list span {
+  min-width: 0;
+}
+
+.fridge-suggestion-list button:hover {
+  background: #fff0f1;
+  color: var(--figma-coral);
+}
 .fridge-form-group label {
   display: block;
   margin-bottom: 6px;
@@ -1002,26 +1074,36 @@
    ========================================================================== */
 
 .fridge-dday-urgent {
-  color: #d32f2f !important;
-  font-weight: 900 !important;
+  min-width: 86px;
+  padding: 5px 10px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 16px;
+  background: #ffe0e5;
+  color: #c62828 !important;
   font-size: 14px;
-  text-shadow: 0 1px 2px rgba(211, 47, 47, 0.2);
-  display: inline-block;
-  background: #ffebee;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 900 !important;
+  line-height: 1.25;
+  text-shadow: none;
 }
 
 .fridge-dday-normal {
+  min-width: 86px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   color: var(--figma-text) !important;
 }
 
 .fridge-dday-date {
   display: block;
-  font-size: 11px;
+  margin-top: 2px;
   color: #999;
-  margin-top: 4px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
   text-shadow: none;
   background: transparent;
   padding: 0;

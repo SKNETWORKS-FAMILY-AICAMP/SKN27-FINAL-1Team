@@ -2,16 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Fridge.css'
 
-import iconEgg from '../../assets/extracted/icons/icon_egg.png'
-import iconMushroom from '../../assets/extracted/icons/icon_mushroom.png'
-import iconOnion from '../../assets/extracted/icons/icon_onion.png'
 import iconReceipt from '../../assets/extracted/icons/icon_receipt.png'
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
-import { demoIngredients, initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
+import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 
 const FILTER_TYPES = [
   { label: '전체', tone: '' },
@@ -32,12 +29,45 @@ function ImageSlot({ src, alt = '', className = '' }) {
   )
 }
 
-// 재료 이름에 맞는 간단한 아이콘을 선택합니다.
+// 식재료 이미지 파일명을 검색용 키로 정규화합니다.
+function normalizeIngredientImageName(name = '') {
+  return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
+}
+
+const INGREDIENT_IMAGE_ALIASES = {
+  계란: '달걀',
+  쇠고기: '소고기',
+  돈육: '돼지고기',
+  고추가루: '고춧가루',
+  케찹: '케첩',
+}
+
+// 이미지 파일명이 다른 동의어를 대표 이미지명으로 맞춥니다.
+function normalizeIngredientImageKey(name = '') {
+  const key = normalizeIngredientImageName(name)
+  return INGREDIENT_IMAGE_ALIASES[key] || key
+}
+
+const ingredientImages = Object.entries(
+  import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
+    eager: true,
+    import: 'default',
+  }),
+)
+  .map(([path, src]) => {
+    const fileName = path.split('/').pop() || ''
+    const name = fileName.replace(/\.[^.]+$/, '')
+    return { name, key: normalizeIngredientImageName(name), src }
+  })
+  .sort((a, b) => b.key.length - a.key.length)
+
+// 재료 이름에 맞는 대표 식재료 이미지를 선택합니다.
 function getIngredientIcon(name = '') {
-  if (name.includes('양파')) return iconOnion
-  if (name.includes('버섯')) return iconMushroom
-  if (name.includes('계란') || name.includes('달걀')) return iconEgg
-  return null
+  const key = normalizeIngredientImageKey(name)
+  const image =
+    ingredientImages.find((item) => item.key === key) ||
+    ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
+  return image?.src || null
 }
 
 // 날짜 문자열을 로컬 Date 객체로 변환합니다.
@@ -110,8 +140,8 @@ function Fridge() {
   const navigate = useNavigate()
   const { dialogNode, showAlert } = useAppDialog()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  const [ingredients, setIngredients] = useState(demoIngredients.map(normalizeIngredient))
-  const [summary, setSummary] = useState(buildSummary(demoIngredients))
+  const [ingredients, setIngredients] = useState([])
+  const [summary, setSummary] = useState(buildSummary([]))
   const [activeFilter, setActiveFilter] = useState('전체')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState('grid')
@@ -133,8 +163,8 @@ function Fridge() {
   // 인증 실패 시 토큰을 제거하고 demo 데이터 화면으로 복귀합니다.
   const handleAuthFailure = async () => {
     window.localStorage.removeItem('bobbeori-token')
-    setIngredients(demoIngredients.map(normalizeIngredient))
-    setSummary(buildSummary(demoIngredients))
+    setIngredients([])
+    setSummary(buildSummary([]))
     await showAlert('로그인이 만료되었습니다. 다시 로그인한 뒤 이용해주세요.', { title: '로그인 만료' })
   }
 
@@ -521,10 +551,10 @@ function Fridge() {
 
             <div className="fridge-view-controls">
               <button type="button" onClick={toggleSort}>{getSortLabel()}</button>
-              <button className={viewMode === 'grid' ? 'is-active' : ''} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
+              <button className={viewMode === 'grid' ? 'fridge-view-button is-grid is-active' : 'fridge-view-button is-grid'} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
                 <span />
               </button>
-              <button className={viewMode === 'list' ? 'is-active' : ''} type="button" aria-label="리스트 보기" onClick={() => setViewMode('list')}>
+              <button className={viewMode === 'list' ? 'fridge-view-button is-list is-active' : 'fridge-view-button is-list'} type="button" aria-label="리스트 보기" onClick={() => setViewMode('list')}>
                 <span />
               </button>
             </div>

@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -52,6 +53,26 @@ class InventoryService:
         if d_day <= 3:
             return "expiring"
         return "normal"
+
+    def search_ingredient_suggestions(self, db: Session, keyword: str, limit: int = 6) -> list[str]:
+        """입력한 키워드가 포함된 식재료 마스터명을 반환합니다."""
+        normalized = self._normalize_ingredient_name(keyword)
+        if not normalized:
+            return []
+
+        rows = (
+            db.query(Ingredient.name)
+            .filter(
+                or_(
+                    Ingredient.name.ilike(f"%{keyword.strip()}%"),
+                    Ingredient.normalized_name.ilike(f"%{normalized}%"),
+                )
+            )
+            .order_by(Ingredient.name.asc())
+            .limit(limit)
+            .all()
+        )
+        return [name for (name,) in rows]
 
     def get_recommended_lifespan(self, name: str, category: Optional[str], storage_method: str = DEFAULT_STORAGE) -> int:
         """AI 서비스에서 권장 보관 가능 일수를 가져오고 실패하면 기본 7일을 반환합니다."""
@@ -217,6 +238,11 @@ class InventoryService:
         normalized = self._normalize_ingredient_name(data.name)
         ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
         if ingredient:
+            # 사용자가 명시적인 카테고리를 보냈다면 기존 데이터 업데이트
+            if data.category and ingredient.category != data.category:
+                ingredient.category = data.category
+                db.commit()
+                db.refresh(ingredient)
             return ingredient
 
         try:
