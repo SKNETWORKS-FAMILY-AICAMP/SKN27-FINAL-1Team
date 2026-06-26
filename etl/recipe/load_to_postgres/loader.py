@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from fractions import Fraction
+from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -239,6 +240,39 @@ def load_dataframes(recipe_csv: str, cooking_steps_csv: str) -> pd.DataFrame:
     )
 
 
+def drop_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """적재 전 데이터 검사 — 조건에 맞지 않는 행을 제외한다."""
+
+    def _missing_cooking_steps(row: pd.Series) -> bool:
+        """조리단계(RECIPE_DATA) 결측 또는 유효 단계 없음."""
+        return not bool(build_recipe_steps(row.get("RECIPE_DATA")))
+
+    # ponytail: 드랍 조건 추가 시 (사유, row→드랍 여부) 튜플을 append
+    drop_checks: list[tuple[str, Callable[[pd.Series], bool]]] = [
+        ("missing_cooking_steps", _missing_cooking_steps),
+    ]
+
+    before = len(df)
+    drop_mask = pd.Series(False, index=df.index)
+
+    for reason, should_drop in drop_checks:
+        mask = df.apply(should_drop, axis=1)
+        if not mask.any():
+            continue
+        for _, row in df.loc[mask].iterrows():
+            logger.warning(
+                "적재 제외 [%s] RCP_SNO=%s title=%s",
+                reason,
+                row["RCP_SNO"],
+                row.get("CKG_NM", ""),
+            )
+        drop_mask |= mask
+
+    kept = df.loc[~drop_mask].reset_index(drop=True)
+    logger.info("적재 대상 필터: %d → %d (제외 %d건)", before, len(kept), before - len(kept))
+    return kept
+
+
 def clear_recipe_tables(db: PostgreDB) -> None:
     """기존 레시피 관련 데이터를 삭제한다."""
     for sql in (
@@ -346,6 +380,7 @@ def load_recipes_to_postgres(recipe_csv: str, cooking_steps_csv: str) -> None:
     validate_schema(db)
 
     df = load_dataframes(recipe_csv, cooking_steps_csv)
+    df = drop_invalid_rows(df)
 
     clear_recipe_tables(db)
 
@@ -375,3 +410,12 @@ def load_recipes_to_postgres(recipe_csv: str, cooking_steps_csv: str) -> None:
         len(recipe_ingredient_params),
         len(ingredient_cache),
     )
+
+
+if __name__ == "__main__":
+    from .config import COOKING_STEPS_CSV, RECIPE_FIX_CSV
+
+    _df = load_dataframes(str(RECIPE_FIX_CSV), str(COOKING_STEPS_CSV))
+    _filtered = drop_invalid_rows(_df)
+    assert _filtered["RCP_SNO"].isin([7029209, 7035727]).sum() == 0
+    assert len(_filtered) == len(_df) - 2

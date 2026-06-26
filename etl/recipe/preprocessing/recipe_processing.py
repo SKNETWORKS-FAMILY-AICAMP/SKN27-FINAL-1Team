@@ -1,6 +1,13 @@
 import pathlib
+import re
 
 import pandas as pd
+
+
+# 조리법·보관·손질 튜토리얼 제목 접미사 (CKG_NM 끝 일치)
+_NON_RECIPE_TITLE_SUFFIX = re.compile(
+    r"(?:관법|는법|방법|은법|질법|척법|하는법|손질)$"
+)
 
 
 ########################### 함수 정의 ################################
@@ -30,6 +37,16 @@ def drop_cols(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 def process_recipe_name(df: pd.DataFrame) -> pd.DataFrame:
     """레시피 이름 정규화 (앞뒤 공백 제거, 소문자로)"""
     df["CKG_NM"] = df["CKG_NM"].str.strip().str.lower()
+    return df
+
+def rm_non_recipe_titles(df: pd.DataFrame, *, title_col: str = "CKG_NM") -> pd.DataFrame:
+    """제목이 보관·손질·기본 조리 안내(~법/~손질)인 행 제거."""
+    titles = df[title_col].astype(str).str.strip()
+    mask = titles.str.contains(_NON_RECIPE_TITLE_SUFFIX, regex=True)
+    removed = int(mask.sum())
+    df = df.loc[~mask].copy()
+    print("--------------------------------")
+    print(f"비조리법 제목 제거 완료: {removed}건 제외, {len(df)}건 유지")
     return df
 
 def sort_by_view_count(df: pd.DataFrame) -> pd.DataFrame:
@@ -128,7 +145,7 @@ def main():
     # 파일 경로 지정 
     root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
     file_path       = root / "storage" / "raw" / "recipe" / "recipe.csv"
-    new_file_path   = root / "storage" / "processed" / "recipe" / "recipe_fix.csv"
+    new_file_path   = root / "storage" / "processed" / "recipe" / "recipe_process.csv"
     
     # 파일 로드 
     df = load_recipe_data(file_path)
@@ -141,6 +158,9 @@ def main():
 
     # 레시피 이름 정규화 
     df_recipe = process_recipe_name(df_recipe)
+
+    # 보관·손질·~법 튜토리얼 제목 제거
+    df_recipe = rm_non_recipe_titles(df_recipe)
 
     # 조회수 내림차순으로 정렬
     df_recipe = sort_by_view_count(df_recipe)
