@@ -23,6 +23,3 @@ jupyter==1.1.1
 
 # postgresql
 psycopg[binary]==3.3.3
-
-# Scheduler for periodic Neo4j upload
-schedule>=1.2.0
