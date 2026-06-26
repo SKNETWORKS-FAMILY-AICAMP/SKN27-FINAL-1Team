@@ -170,6 +170,8 @@ class GuideService:
                g.middleCategory AS middle_category,
                g.minorCategory AS minor_category,
                coalesce(g.seasonalMonths, []) AS seasonal_months,
+               g.seasonalSourceName AS seasonal_source_name,
+               g.seasonalSourceUrl AS seasonal_source_url,
                coalesce(g.aliases, []) AS aliases,
                g.existingDisplayName AS existing_display_name,
                g.storageTip AS storage_tips,
