@@ -34,6 +34,8 @@ services:
                 condition: service_started
             recipe_load:
                 condition: service_completed_successfully
+            food_guide_load:
+                condition: service_completed_successfully
         healthcheck:
             test:
                 [
@@ -83,6 +85,24 @@ services:
             neo4j:
                 condition: service_started
 
+    food_guide_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_food_guide_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            NEO4J_URI: bolt://neo4j:7687
+        volumes:
+            - ./storage:/project/storage:ro
+            - ./.env:/project/.env:ro
+        command: ["python", "-m", "etl.load_to_neo4j.cron_loader", "--once"]
+        depends_on:
+            neo4j:
+                condition: service_healthy
+
     postgres:
         image: postgres:15
         container_name: bobbeori_postgres
@@ -121,3 +141,9 @@ services:
             - ./storage/neo4j/backups/neo4j_logs:/logs
             - ./storage/neo4j/import:/var/lib/neo4j/import
             - ./storage/neo4j/backups/neo4j_plugins:/plugins
+        healthcheck:
+            test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" 'RETURN 1'"]
+            interval: 10s
+            timeout: 10s
+            retries: 10
+            start_period: 30s

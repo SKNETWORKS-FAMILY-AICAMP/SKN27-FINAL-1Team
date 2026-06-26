@@ -152,6 +152,8 @@ function Fridge() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
   const [consumeTarget, setConsumeTarget] = useState(null)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
   const [stockedCount, setStockedCount] = useState(() => {
     if (typeof window === 'undefined') return 0
     return Number(window.localStorage.getItem('bobbeori-last-stocked-count') ?? 0)
@@ -392,11 +394,73 @@ function Fridge() {
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
         fetchFridgeData()
       } else {
-        await showAlert('삭제에 실패했습니다.', { title: '삭제 실패' })
+        await showAlert('폐기에 실패했습니다.', { title: '폐기 실패' })
       }
     } catch (err) {
       console.error(err)
-      await showAlert('서버 오류로 삭제하지 못했습니다.', { title: '서버 오류' })
+      await showAlert('서버 오류로 폐기하지 못했습니다.', { title: '서버 오류' })
+    }
+  }
+
+  // 다중 폐기를 위한 선택 토글
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // 전체 선택 토글 (현재 화면에 필터링/검색되어 보이는 재료 기준)
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sortedIngredients.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(sortedIngredients.map((item) => item.id)))
+    }
+  }
+
+  // 다중 삭제 실행
+  const executeBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+
+    const token = getToken()
+    const idsArray = Array.from(selectedIds)
+
+    if (!token) {
+      setIngredients((prev) => prev.filter((item) => !selectedIds.has(item.id)))
+      setSelectedIds(new Set())
+      setIsEditMode(false)
+      setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
+      return
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/inventory/bulk`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ingredient_ids: idsArray }),
+      })
+      
+      if (response.status === 401 || response.status === 403) {
+        await handleAuthFailure()
+        return
+      }
+      if (response.ok) {
+        setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
+        setSelectedIds(new Set())
+        setIsEditMode(false)
+        fetchFridgeData()
+      } else {
+        await showAlert('일괄 폐기에 실패했습니다.', { title: '폐기 실패' })
+      }
+    } catch (err) {
+      console.error(err)
+      await showAlert('서버 오류로 폐기하지 못했습니다.', { title: '서버 오류' })
     }
   }
 
@@ -404,11 +468,11 @@ function Fridge() {
   const handleDeleteClick = (id, name) => {
     setConfirmModal({
       isOpen: true,
-      title: '재료 삭제',
+      title: '재료 폐기',
       message: (
         <>
           <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{name}</span>을<br />
-          냉장고에서 완전히 삭제하시겠습니까?
+          냉장고에서 완전히 폐기하시겠습니까?
         </>
       ),
       onConfirm: () => executeDelete(id),
@@ -550,6 +614,16 @@ function Fridge() {
             </div>
 
             <div className="fridge-view-controls">
+              <button 
+                type="button" 
+                className={`fridge-edit-toggle ${isEditMode ? 'is-active' : ''}`}
+                onClick={() => {
+                  setIsEditMode(!isEditMode)
+                  setSelectedIds(new Set())
+                }}
+              >
+                {isEditMode ? '선택 취소' : '선택 폐기'}
+              </button>
               <button type="button" onClick={toggleSort}>{getSortLabel()}</button>
               <button className={viewMode === 'grid' ? 'fridge-view-button is-grid is-active' : 'fridge-view-button is-grid'} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
                 <span />
@@ -576,7 +650,24 @@ function Fridge() {
             ) : (
               <>
                 {sortedIngredients.map((item) => (
-                  <article className={`fridge-item ${item.is_expiring_soon || item.is_expired ? 'is-urgent' : ''}`} key={item.id}>
+                  <article 
+                    className={`fridge-item ${item.is_expiring_soon || item.is_expired ? 'is-urgent' : ''} ${selectedIds.has(item.id) ? 'is-selected' : ''}`} 
+                    key={item.id}
+                    onClick={() => {
+                      if (isEditMode) toggleSelect(item.id)
+                    }}
+                    style={{ cursor: isEditMode ? 'pointer' : 'default' }}
+                  >
+                    {isEditMode && (
+                      <div className="fridge-item__checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.has(item.id)} 
+                          onChange={() => toggleSelect(item.id)} 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    )}
                     <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
@@ -601,10 +692,10 @@ function Fridge() {
                         </div>
                       </dl>
                     </div>
-                    <div className="fridge-item__actions">
+                    <div className={`fridge-item__actions ${isEditMode ? 'is-edit-mode' : ''}`}>
                       <button type="button" onClick={() => openEditModal(item)}>수정</button>
                       <button type="button" onClick={() => handleConsumeClick(item)}>소비</button>
-                      <button type="button" onClick={() => handleDeleteClick(item.id, item.name)}>삭제</button>
+                      <button type="button" onClick={() => handleDeleteClick(item.id, item.name)}>폐기</button>
                     </div>
                   </article>
                 ))}
@@ -668,6 +759,50 @@ function Fridge() {
 
       {dialogNode}
 
+      {isEditMode && (
+        <div className="fridge-bulk-bar">
+          <div className="fridge-bulk-bar__content">
+            <button 
+              type="button" 
+              className={`btn-select-all ${selectedIds.size > 0 && selectedIds.size === sortedIngredients.length ? 'is-active' : ''}`} 
+              onClick={toggleSelectAll}
+            >
+              {selectedIds.size > 0 && selectedIds.size === sortedIngredients.length ? '전체 해제' : '전체 선택'}
+            </button>
+            <span className="fridge-bulk-bar__count">
+              {selectedIds.size}개 선택됨
+            </span>
+            <div className="fridge-bulk-bar__actions">
+              <button 
+                type="button" 
+                className="btn-cancel" 
+                onClick={() => {
+                  setIsEditMode(false)
+                  setSelectedIds(new Set())
+                }}
+              >
+                취소
+              </button>
+              <button 
+                type="button" 
+                className="btn-submit btn-danger" 
+                onClick={() => {
+                  if(selectedIds.size === 0) return
+                  setConfirmModal({
+                    isOpen: true,
+                    title: '다중 폐기',
+                    message: <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>선택한 {selectedIds.size}개의 재료를 일괄 폐기하시겠습니까?</span>,
+                    onConfirm: executeBulkDelete,
+                  })
+                }}
+                disabled={selectedIds.size === 0}
+              >
+                선택 항목 폐기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="fridge-bottom-tip">
         <strong>활용 팁</strong>
         <span>소비 임박 재료로 만들 수 있는 레시피를 추천받아 보세요.</span>

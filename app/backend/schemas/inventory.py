@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -64,3 +64,8 @@ class IngredientPredictionResponse(BaseModel):
     is_valid_food: bool
     storage_method: str
     lifespan_days: int
+
+
+class IngredientBulkDeleteRequest(BaseModel):
+    """여러 식재료를 한 번에 폐기하기 위한 요청 스키마입니다."""
+    ingredient_ids: List[int]

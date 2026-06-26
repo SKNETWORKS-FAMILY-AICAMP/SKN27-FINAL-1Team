@@ -39,11 +39,10 @@ export class RecipeFilterConfig {
     '90분이내',
     '2시간이내',
     '2시간이상',
-    '확인필요',
   ]
 
   /** CKG_DODF_NM */
-  static difficulties = ['초급', '중급', '고급', '아무나']
+  static difficulties = ['초급', '중급', '고급']
 
   /** 정렬 — UI 유지, FEATURE_FLAGS.sortFilter 연동 전까지 비활성 */
   static sortOptions = [

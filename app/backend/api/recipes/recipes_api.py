@@ -82,6 +82,7 @@ def recommend_recipes(
             items=[],
             returned_count=0,
             has_more=False,
+            empty_reason="no_sql_match",
         )
 
     result = recommendation_service.recommend_recipes(
@@ -97,6 +98,9 @@ def recommend_recipes(
         items=result["items"],
         returned_count=result["returned_count"],
         has_more=result["has_more"],
+        applied_tier=result["applied_tier"],
+        fallback_used=result["fallback_used"],
+        empty_reason=result["empty_reason"],
     )
 
 @router.get("/{id}", response_model=RecipeDetailResponse)

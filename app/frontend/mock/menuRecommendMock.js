@@ -23,7 +23,6 @@ export const filterOptions = {
     { value: '초급', label: '쉬움' },
     { value: '중급', label: '보통' },
     { value: '고급', label: '어려움' },
-    { value: '아무나', label: '아무나' },
   ],
   ingredientUsage: [
     { value: 'ANY', label: '상관없음' },
