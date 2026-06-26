@@ -1,7 +1,6 @@
 import logging
 from datetime import date, datetime, timedelta
-from typing import Optional
-
+from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -343,6 +342,23 @@ class InventoryService:
 
         fridge_item.status = "used"
         db.commit()
+
+    def delete_ingredients_bulk(self, db: Session, user_id: int, ingredient_ids: List[int]):
+        """사용자 냉장고에서 여러 식재료를 한 번에 삭제(폐기)합니다."""
+        if not ingredient_ids:
+            return
+
+        fridge_items = (
+            db.query(FridgeItem)
+            .filter(FridgeItem.id.in_(ingredient_ids), FridgeItem.user_id == user_id)
+            .all()
+        )
+
+        for item in fridge_items:
+            item.status = "used"
+        
+        db.commit()
+
 
     def update_ingredient(self, db: Session, user_id: int, ingredient_id: int, data: IngredientCreate):
         """사용자 냉장고 식재료 정보를 수정합니다."""
