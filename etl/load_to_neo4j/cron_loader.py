@@ -1,24 +1,40 @@
-import os, time
-from .upload import load_csv, upload
+from __future__ import annotations
 
-CSV_PATH = r"c:/dev/project/SKN27-FINAL-1Team/storage/processed/food_guide/food_guide_v1.csv"
-CHECK_INTERVAL = 60  # seconds
+import argparse
+import logging
+import time
+from pathlib import Path
 
-def main():
+from etl.food_guide.load_to_neo4j.config import DEFAULT_FOOD_GUIDE_CSV
+from etl.food_guide.load_to_neo4j.loader import load_food_guide_to_neo4j
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Reload food guide CSV into Neo4j when the CSV changes.")
+    parser.add_argument("--csv", default=str(DEFAULT_FOOD_GUIDE_CSV))
+    parser.add_argument("--interval", type=int, default=60)
+    parser.add_argument("--clear", action="store_true")
+    parser.add_argument("--once", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
     last_mtime = None
+
     while True:
-        try:
-            mtime = os.path.getmtime(CSV_PATH)
-            if last_mtime is None or mtime > last_mtime:
-                print(f"[cron_loader] 파일 변경 감지 (mtime={mtime}), Neo4j 적재 시작")
-                df = load_csv(CSV_PATH)
-                upload(df)
-                last_mtime = mtime
-            else:
-                print("[cron_loader] 변경 없음")
-        except Exception as e:
-            print(f"[cron_loader] 오류: {e}")
-        time.sleep(CHECK_INTERVAL)
+        mtime = Path(args.csv).stat().st_mtime
+        if last_mtime is None or mtime > last_mtime:
+            logger.info("Food guide CSV changed; loading to Neo4j")
+            load_food_guide_to_neo4j(args.csv, clear=args.clear)
+            last_mtime = mtime
+        if args.once:
+            return
+        time.sleep(args.interval)
+
 
 if __name__ == "__main__":
     main()
