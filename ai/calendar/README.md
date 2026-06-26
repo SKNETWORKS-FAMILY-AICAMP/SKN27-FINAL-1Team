@@ -1,4 +1,4 @@
-# Runpod Calendar MCP Server
+# Bobbeori Calendar MCP Server
 
 Run this inside the Runpod pod:
 
@@ -20,7 +20,11 @@ curl http://127.0.0.1:8000/health
 Backend `.env`:
 
 ```env
-RUNPOD_CALENDAR_MCP_URL=https://<pod-id>-8000.proxy.runpod.net/calendar/create-event
+RUNPOD_CALENDAR_MCP_URL=https://<pod-id>-8000.proxy.runpod.net/mcp
 RUNPOD_INTERNAL_TOKEN=<same-token-as-runpod>
 RUNPOD_TIMEOUT_SECONDS=20
 ```
+
+MCP tool:
+
+- `create_calendar_event`: creates or updates one Google Calendar event using `bobbeoriKey`.
