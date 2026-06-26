@@ -13,6 +13,7 @@ from app.backend.schemas.inventory import IngredientCreate
 logger = logging.getLogger(__name__)
 
 DEFAULT_STORAGE = "냉장"
+DEFAULT_CATEGORY = "기타"
 STORAGE_KEYS = ("냉장", "냉동", "실온")
 ACTIVE_STATUSES = ("normal", "expiring", "expired")
 
@@ -93,14 +94,25 @@ class InventoryService:
     ) -> tuple[str, int]:
         """식재료와 보관 위치 기준 보관 기간 캐시를 조회하거나 새로 생성합니다."""
         requested_storage = storage_method if storage_method in STORAGE_KEYS else None
+        preferred_storage = requested_storage
         cached_rule = None
 
-        if requested_storage:
+        if not preferred_storage:
+            try:
+                from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+
+                override = expiration_ai_service.get_ingredient_override_lifespan(ingredient.name, None)
+                if override:
+                    preferred_storage = override[0]
+            except Exception as exc:
+                logger.warning("권장 보관 위치 확인 실패: %s", exc)
+
+        if preferred_storage:
             cached_rule = (
                 db.query(IngredientStorageStandard)
                 .filter(
                     IngredientStorageStandard.ingredient_id == ingredient.id,
-                    IngredientStorageStandard.storage_location == requested_storage,
+                    IngredientStorageStandard.storage_location == preferred_storage,
                 )
                 .first()
             )
@@ -237,10 +249,11 @@ class InventoryService:
         self._validate_ingredient_name(data.name)
         normalized = self._normalize_ingredient_name(data.name)
         ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
+        incoming_category = data.category if data.category and data.category != DEFAULT_CATEGORY else None
         if ingredient:
-            # 사용자가 명시적인 카테고리를 보냈다면 기존 데이터 업데이트
-            if data.category and ingredient.category != data.category:
-                ingredient.category = data.category
+            # 기본값 기타는 식재료 마스터의 기존 카테고리를 덮어쓰지 않습니다.
+            if incoming_category and ingredient.category != incoming_category:
+                ingredient.category = incoming_category
                 db.commit()
                 db.refresh(ingredient)
             return ingredient
@@ -250,7 +263,7 @@ class InventoryService:
                 ingredient = Ingredient(
                     name=data.name.strip(),
                     normalized_name=normalized,
-                    category=data.category,
+                    category=incoming_category or data.category,
                     default_unit=data.unit,
                 )
                 db.add(ingredient)

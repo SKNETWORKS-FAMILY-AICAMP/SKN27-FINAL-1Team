@@ -91,6 +91,12 @@ class ExpirationAIService:
     def get_ingredient_override_lifespan(self, ingredient_name: str, storage_method: str = None) -> tuple[str, int] | None:
         """대표 식재료 예외 룰에 해당하면 보관 위치와 소비기한을 반환합니다."""
         name = (ingredient_name or "").replace(" ", "").lower()
+
+        # 얼음은 보관 위치가 비어 있으면 냉동을 기본값으로 사용합니다.
+        if "얼음" in name or "ice" in name:
+            storage = storage_method if storage_method in VALID_STORAGE_METHODS else "냉동"
+            return storage, 730
+
         storage = self._normalize_storage_method(storage_method)
 
         if "통조림" in name or name.endswith("캔") or name.startswith("캔"):
@@ -151,7 +157,7 @@ class ExpirationAIService:
     ) -> tuple[str, int]:
         """식재료명과 보관 방법을 기준으로 권장 보관 위치와 소비기한 일수를 예측합니다."""
         normalized_storage = self._normalize_storage_method(storage_method)
-        override = self.get_ingredient_override_lifespan(ingredient_name, normalized_storage)
+        override = self.get_ingredient_override_lifespan(ingredient_name, storage_method)
         if override:
             return override
 
