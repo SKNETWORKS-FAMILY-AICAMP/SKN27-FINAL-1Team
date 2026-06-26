@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+
 MAYBE_OWNED_WEIGHT = 0.5
 MAYBE_MATCH_SCORE = 1.0
 
@@ -146,3 +148,47 @@ def classify_ingredients(
         match_rate=rates.match_rate,
         display_match_rate=rates.display_match_rate,
     )
+
+
+def ownership_counts(
+    ownership: OwnershipResult,
+    config: RecipeRecommendConfig,
+) -> dict[str, int]:
+    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
+    owned_count = len(ownership.owned)
+    missing_count = len(ownership.missing)
+    if not config.include_maybe_owned:
+        missing_count += len(ownership.maybe_owned)
+
+    total_required = owned_count + maybe_count + missing_count
+    rates = compute_match_rates(owned_count, maybe_count, total_required)
+
+    return {
+        "owned_ingredient_count": owned_count + maybe_count,
+        "missing_ingredient_count": missing_count,
+        "display_match_rate": rates.display_match_rate,
+    }
+
+
+def passes_ownership_filter(
+    counts: dict[str, int],
+    ownership: OwnershipResult,
+    recipe_ingredients: list[dict[str, Any]],
+    config: RecipeRecommendConfig,
+) -> bool:
+    owned_count = len(ownership.owned)
+    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
+
+    if config.require_any_owned and (owned_count + maybe_count) < 1:
+        return False
+
+    if config.min_display_match_rate is not None:
+        rates = compute_match_rates(
+            owned_count,
+            maybe_count,
+            len(recipe_ingredients),
+        )
+        if rates.display_match_rate < config.min_display_match_rate:
+            return False
+
+    return True

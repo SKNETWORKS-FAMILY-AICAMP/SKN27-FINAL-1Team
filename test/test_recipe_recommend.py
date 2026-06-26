@@ -8,15 +8,14 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from app.backend.services.recommendation_service.expiry_scorer import d_day, score_expiry, urgency
 from app.backend.services.recommendation_service.fridge_suitability_scorer import (
     FridgeContext,
     score_fridge_suitability,
 )
-from app.backend.services.recommendation_service.recommendation_service import (
-    FridgeExpiryRow,
-    RecipeRecommendConfig,
-    RecommendationService,
-)
+from app.backend.services.recommendation_service.ownership_tier_service import ownership_tiers, rank_and_slice
+from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommendation_service import RecommendationService
 
 
 def _row(
@@ -114,13 +113,19 @@ def test_menu_custom_pipeline_slices_to_limit():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recommendation_service.build_recipe_query",
+            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
             return_value=query_chain,
         ) as build_query,
-        patch.object(service, "_fetch_fridge_items_with_expiry", return_value=[]),
-        patch.object(service, "_load_recipe_ingredients_bulk", return_value=ingredient_rows),
         patch(
-            "app.backend.services.recommendation_service.recommendation_service.score_fridge_suitability",
+            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            return_value=[],
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            return_value=ingredient_rows,
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.score_fridge_suitability",
             side_effect=lambda candidate, fridge_context, rng=None: candidate["recipe_id"] / 100,
         ),
     ):
@@ -145,23 +150,23 @@ def test_d_day_uses_expiry_date():
     today = date(2026, 6, 24)
     row = _row(1, "대파", expiry_date=date(2026, 6, 23))
 
-    assert RecommendationService._d_day(row, today, 7) == -1
+    assert d_day(row, today, 7) == -1
 
 
 def test_d_day_fallback_from_purchased_date():
     today = date(2026, 6, 24)
     row = _row(1, "대파", purchased_date=date(2026, 6, 20))
 
-    assert RecommendationService._d_day(row, today, 7) == 3
+    assert d_day(row, today, 7) == 3
 
 
 def test_urgency_higher_when_closer_to_expiry():
     config = RecipeRecommendConfig.fridge_consume_preset()
 
-    assert RecommendationService._urgency(0, config) == 4
-    assert RecommendationService._urgency(1, config) == 3
-    assert RecommendationService._urgency(3, config) == 1
-    assert RecommendationService._urgency(4, config) == 0
+    assert urgency(0, config) == 4
+    assert urgency(1, config) == 3
+    assert urgency(3, config) == 1
+    assert urgency(4, config) == 0
 
 
 def test_score_expiry_prioritizes_sooner_items():
@@ -191,14 +196,14 @@ def test_score_expiry_prioritizes_sooner_items():
         2: _row(2, "양파", expiry_date=today + timedelta(days=10)),
     }
 
-    score_soon, expiring_soon = service._score_expiry(
+    score_soon, expiring_soon = score_expiry(
         ownership_owned,
         fridge_by_id,
         {},
         config,
         today,
     )
-    score_later, expiring_later = service._score_expiry(
+    score_later, expiring_later = score_expiry(
         ownership_later,
         fridge_by_id,
         {},
@@ -214,7 +219,7 @@ def test_score_expiry_prioritizes_sooner_items():
 def test_rank_and_slice_returns_nine_and_has_more():
     candidates = [{"recipe_id": index} for index in range(1, 16)]
 
-    items, has_more = RecommendationService._rank_and_slice(candidates, [1, 2], 9)
+    items, has_more = rank_and_slice(candidates, [1, 2], 9)
 
     assert len(items) == 9
     assert items[0]["recipe_id"] == 3
@@ -224,7 +229,7 @@ def test_rank_and_slice_returns_nine_and_has_more():
 def test_rank_and_slice_has_more_false_when_exhausted():
     candidates = [{"recipe_id": index} for index in range(1, 6)]
 
-    items, has_more = RecommendationService._rank_and_slice(candidates, [], 9)
+    items, has_more = rank_and_slice(candidates, [], 9)
 
     assert len(items) == 5
     assert has_more is False
@@ -236,20 +241,20 @@ def test_ownership_tiers_dedupes():
     fridge = RecipeRecommendConfig.fridge_consume_preset()
     open_only = RecipeRecommendConfig.menu_custom_preset(5)
 
-    assert [name for name, _ in RecommendationService._ownership_tiers(high)] == [
+    assert [name for name, _ in ownership_tiers(high)] == [
         "strict",
         "relaxed",
         "open",
     ]
-    assert [name for name, _ in RecommendationService._ownership_tiers(high_relaxed_only)] == [
+    assert [name for name, _ in ownership_tiers(high_relaxed_only)] == [
         "strict",
         "relaxed",
     ]
-    assert [name for name, _ in RecommendationService._ownership_tiers(fridge)] == [
+    assert [name for name, _ in ownership_tiers(fridge)] == [
         "strict",
         "open",
     ]
-    assert [name for name, _ in RecommendationService._ownership_tiers(open_only)] == ["strict"]
+    assert [name for name, _ in ownership_tiers(open_only)] == ["strict"]
 
 
 @contextmanager
@@ -259,13 +264,19 @@ def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recommendation_service.build_recipe_query",
+            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
             return_value=query_chain,
         ),
-        patch.object(service, "_fetch_fridge_items_with_expiry", return_value=fridge_rows or []),
-        patch.object(service, "_load_recipe_ingredients_bulk", return_value=ingredient_rows),
         patch(
-            "app.backend.services.recommendation_service.recommendation_service.score_fridge_suitability",
+            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            return_value=fridge_rows or [],
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            return_value=ingredient_rows,
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.score_fridge_suitability",
             side_effect=lambda candidate, fridge_context, rng=None: candidate["recipe_id"] / 100,
         ),
     ):
@@ -352,11 +363,17 @@ def test_no_fallback_when_sql_empty():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recommendation_service.build_recipe_query",
+            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
             return_value=query_chain,
         ),
-        patch.object(service, "_fetch_fridge_items_with_expiry", return_value=[]),
-        patch.object(service, "_load_recipe_ingredients_bulk", return_value={}),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            return_value=[],
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            return_value={},
+        ),
     ):
         config = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
         result = service.recommend_recipes(db, user_id=1, config=config)
