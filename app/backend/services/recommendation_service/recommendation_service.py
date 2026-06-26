@@ -21,12 +21,6 @@ __all__ = [
 
 class RecommendationService:
     MANUAL_SAVE_TYPE = "manual_save"
-    FRIDGE_BASED_TYPE = "fridge_based"
-
-    FRIDGE_CONSUME_LIMIT = RecipeRecommendConfig.FRIDGE_CONSUME_LIMIT
-    RECOMMEND_LIMIT_MIN = RecipeRecommendConfig.LIMIT_MIN
-    RECOMMEND_LIMIT_MAX = RecipeRecommendConfig.LIMIT_MAX
-    DEFAULT_LIMIT = FRIDGE_CONSUME_LIMIT
 
     def save_result(
         self,
@@ -34,14 +28,10 @@ class RecommendationService:
         user_id: int,
         recipe_id: int,
         recommendation_type: str,
-        *,
-        strict: bool = True,
     ) -> dict[str, Any]:
         """레시피를 recommendation_results에 저장한다. 중복 검사 없이 매번 새 행을 만든다."""
         recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
         if recipe is None:
-            if not strict:
-                return {}
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="레시피를 찾을 수 없습니다.",

@@ -135,15 +135,3 @@ def build_recommend_result(
         "fallback_used": fallback_used,
         "empty_reason": empty_reason,
     }
-
-
-def rank_and_slice(
-    candidates: list[dict[str, Any]],
-    exclude_recipe_ids: list[int],
-    limit: int,
-) -> tuple[list[dict[str, Any]], bool]:
-    exclude = set(exclude_recipe_ids)
-    filtered = [candidate for candidate in candidates if candidate["recipe_id"] not in exclude]
-    items = filtered[:limit]
-    has_more = len(filtered) > limit
-    return items, has_more
