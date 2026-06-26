@@ -292,6 +292,7 @@
   color: #3c7a33;
   font-size: 13px;
   font-weight: 900;
+  text-decoration: none;
 }
 
 .guide-owned-badge::after {
@@ -501,23 +502,16 @@
   font-weight: 900;
 }
 
-.guide-pagination__pages {
-  display: flex;
+.guide-pagination__status {
+  min-width: 72px;
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-}
-
-.guide-pagination__pages button {
-  min-width: 40px;
-  padding: 0 10px;
-}
-
-.guide-pagination__pages button.is-active {
-  border-color: var(--figma-coral);
-  background: var(--figma-coral);
-  color: #fff;
-  box-shadow: 0 8px 16px rgba(255, 107, 116, 0.16);
+  border: 1.4px solid #efd8b8;
+  border-radius: 12px;
+  background: #fff4e3;
 }
 
 .guide-list-back {
@@ -782,6 +776,12 @@
   gap: 12px;
 }
 
+.guide-recipes__header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .guide-recipes__header span {
   min-height: 26px;
   padding: 0 12px;
@@ -842,6 +842,37 @@
   color: #8b673e;
   font-size: 11px;
   font-weight: 900;
+}
+
+.guide-recipe-carousel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.guide-recipe-carousel .guide-recipe-list:first-child,
+.guide-recipe-carousel .guide-recipe-list:last-child {
+  grid-column: 1 / -1;
+}
+
+.guide-recipe-arrow {
+  width: 48px;
+  height: 48px;
+  border: 1.4px solid #c79a74;
+  border-radius: 50%;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.guide-recipe-arrow:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .guide-recipe-card p {
@@ -1150,6 +1181,21 @@
 
   .guide-recipes {
     margin-top: 12px;
+  }
+
+  .guide-recipes__header,
+  .guide-recipes__header > div:first-child {
+    flex-wrap: wrap;
+  }
+
+  .guide-recipe-carousel {
+    grid-template-columns: repeat(2, auto);
+    justify-content: center;
+  }
+
+  .guide-recipe-carousel .guide-recipe-list {
+    grid-column: 1 / -1;
+    order: -1;
   }
 
   .guide-recipe-list {
