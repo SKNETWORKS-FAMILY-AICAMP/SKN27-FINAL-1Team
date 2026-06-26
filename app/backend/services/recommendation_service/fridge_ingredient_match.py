@@ -32,7 +32,7 @@ class MatchRates:
 
 
 @dataclass(frozen=True)
-class OwnershipResult:
+class FridgeMatchResult:
     owned: list[dict[str, Any]]
     maybe_owned: list[dict[str, Any]]
     missing: list[dict[str, Any]]
@@ -104,10 +104,10 @@ def find_maybe_match(
     return best
 
 
-def classify_ingredients(
+def classify_fridge_match(
     recipe_ingredients: list[dict[str, Any]],
     fridge_items: list[FridgeItemSnapshot],
-) -> OwnershipResult:
+) -> FridgeMatchResult:
     owned_ids = {item.ingredient_id for item in fridge_items}
 
     owned: list[dict[str, Any]] = []
@@ -141,7 +141,7 @@ def classify_ingredients(
         required_count=len(recipe_ingredients),
     )
 
-    return OwnershipResult(
+    return FridgeMatchResult(
         owned=owned,
         maybe_owned=maybe_owned,
         missing=missing,
@@ -150,15 +150,15 @@ def classify_ingredients(
     )
 
 
-def ownership_counts(
-    ownership: OwnershipResult,
+def fridge_match_counts(
+    fridge_match: FridgeMatchResult,
     config: RecipeRecommendConfig,
 ) -> dict[str, int]:
-    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
-    owned_count = len(ownership.owned)
-    missing_count = len(ownership.missing)
+    maybe_count = len(fridge_match.maybe_owned) if config.include_maybe_owned else 0
+    owned_count = len(fridge_match.owned)
+    missing_count = len(fridge_match.missing)
     if not config.include_maybe_owned:
-        missing_count += len(ownership.maybe_owned)
+        missing_count += len(fridge_match.maybe_owned)
 
     total_required = owned_count + maybe_count + missing_count
     rates = compute_match_rates(owned_count, maybe_count, total_required)

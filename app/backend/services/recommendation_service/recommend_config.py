@@ -24,7 +24,7 @@ class RecipeRecommendConfig:
     difficulty: str | None = None
     cooking_time_label: str | None = None
 
-    # Preference (완화 가능; preference_slice gate)
+    # Preference (완화 가능; recommend_tier_slice gate)
     require_any_owned: bool = False
     include_maybe_owned: bool = True
     min_display_match_rate: int | None = None

@@ -1,11 +1,11 @@
-"""Preference 점수·패널티 (tier slice + final_score 합산)."""
+"""Evaluation: tier penalty + final_score 합산."""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from app.backend.services.recommendation_service.ingredient_ownership_service import (
-    OwnershipResult,
+from app.backend.services.recommendation_service.fridge_ingredient_match import (
+    FridgeMatchResult,
     compute_match_rates,
 )
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
@@ -14,14 +14,14 @@ from app.backend.services.recommendation_service.recommend_config import RecipeR
 EXPIRY_WEIGHT_FRIDGE_CONSUME = 1000
 
 
-def preference_penalty(
-    ownership: OwnershipResult,
+def tier_config_penalty(
+    fridge_match: FridgeMatchResult,
     recipe_ingredients: list[dict[str, Any]],
     config: RecipeRecommendConfig,
 ) -> int:
-    """미충족 시 양수 패널티, 충족 시 0 (preference_slice tier pool)."""
-    owned_count = len(ownership.owned)
-    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
+    """미충족 시 양수 패널티, 충족 시 0 (recommend_tier_slice pool)."""
+    owned_count = len(fridge_match.owned)
+    maybe_count = len(fridge_match.maybe_owned) if config.include_maybe_owned else 0
 
     if config.require_any_owned and (owned_count + maybe_count) < 1:
         return 1
@@ -38,13 +38,13 @@ def preference_penalty(
     return 0
 
 
-def preference_score_for_rank(
-    ownership: OwnershipResult,
+def strict_tier_bonus(
+    fridge_match: FridgeMatchResult,
     recipe_ingredients: list[dict[str, Any]],
     config: RecipeRecommendConfig,
 ) -> int:
-    """strict config 충족 시 소량 보너스; 미충족은 slice fallback이 처리."""
-    return 1 if preference_penalty(ownership, recipe_ingredients, config) == 0 else 0
+    """strict config 충족 시 소량 보너스; 미충족은 tier fallback이 처리."""
+    return 1 if tier_config_penalty(fridge_match, recipe_ingredients, config) == 0 else 0
 
 
 def build_final_score(

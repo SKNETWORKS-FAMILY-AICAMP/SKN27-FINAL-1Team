@@ -8,33 +8,38 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe
-from app.backend.services.recommendation_service._fridge_loader import fetch_fridge_items_with_expiry
-from app.backend.services.recommendation_service._recipe_query import build_recipe_query, load_recipe_ingredients_bulk
 from app.backend.services.recommendation_service.expiry_scorer import build_reason, score_expiry
+from app.backend.services.recommendation_service.fridge_ingredient_match import (
+    FridgeItemSnapshot,
+    classify_fridge_match,
+    fridge_match_counts,
+)
+from app.backend.services.recommendation_service.fridge_loader import fetch_fridge_items_with_expiry
 from app.backend.services.recommendation_service.hard_filter import (
     filter_candidates_by_id,
     filter_scored_by_banned,
     load_hard_filter_context,
 )
-from app.backend.services.recommendation_service.ingredient_ownership_service import (
-    FridgeItemSnapshot,
-    classify_ingredients,
-    ownership_counts,
-)
-from app.backend.services.recommendation_service.preference_scorer import (
-    build_final_score,
-    preference_score_for_rank,
-)
-from app.backend.services.recommendation_service.preference_slice import (
-    build_recommend_result,
-    empty_recommend_result,
-    preference_tiers,
-    slice_by_preference_tiers,
+from app.backend.services.recommendation_service.recipe_candidate_query import (
+    build_recipe_query,
+    load_recipe_ingredients_bulk,
 )
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommend_evaluation import (
+    build_final_score,
+    strict_tier_bonus,
+)
+from app.backend.services.recommendation_service.recommend_response import (
+    build_recommend_result,
+    empty_recommend_result,
+)
+from app.backend.services.recommendation_service.recommend_tier_slice import (
+    slice_with_tier_fallback,
+    tier_fallback_configs,
+)
 
 
-class RecipeRecommendEngine:
+class RecommendPipeline:
     def recommend(
         self,
         db: Session,
@@ -76,9 +81,9 @@ class RecipeRecommendEngine:
 
         self._rank_candidates(scored, config)
 
-        items, has_more, applied_tier, fallback_used, empty_reason = slice_by_preference_tiers(
+        items, has_more, applied_tier, fallback_used, empty_reason = slice_with_tier_fallback(
             scored,
-            preference_tiers(config),
+            tier_fallback_configs(config),
             config.limit,
         )
 
@@ -117,10 +122,10 @@ class RecipeRecommendEngine:
             if not recipe_ingredients:
                 continue
 
-            ownership = classify_ingredients(recipe_ingredients, fridge_snapshots)
-            counts = ownership_counts(ownership, config)
+            fridge_match = classify_fridge_match(recipe_ingredients, fridge_snapshots)
+            counts = fridge_match_counts(fridge_match, config)
             expiry_score, expiring_count = score_expiry(
-                ownership,
+                fridge_match,
                 fridge_by_id,
                 fridge_by_name,
                 config,
@@ -128,7 +133,7 @@ class RecipeRecommendEngine:
             )
             reason = build_reason(expiring_count, counts["display_match_rate"])
             fridge_score = counts["display_match_rate"]
-            preference_score = preference_score_for_rank(ownership, recipe_ingredients, config)
+            preference_score = strict_tier_bonus(fridge_match, recipe_ingredients, config)
             missing_penalty = 0
             final_score = build_final_score(
                 config.mode,
@@ -142,13 +147,13 @@ class RecipeRecommendEngine:
                 {
                     "recipe_id": recipe.id,
                     "recipe": recipe,
-                    "match_rate": ownership.match_rate,
+                    "match_rate": fridge_match.match_rate,
                     "display_match_rate": fridge_score,
                     "owned_ingredient_count": counts["owned_ingredient_count"],
                     "missing_ingredient_count": counts["missing_ingredient_count"],
                     "expiry_score": expiry_score,
                     "reason": reason,
-                    "_ownership": ownership,
+                    "_fridge_match": fridge_match,
                     "_recipe_ingredients": recipe_ingredients,
                     "fridge_score": fridge_score,
                     "preference_score": preference_score,
@@ -171,4 +176,4 @@ class RecipeRecommendEngine:
         )
 
 
-recipe_recommend_engine = RecipeRecommendEngine()
+recommend_pipeline = RecommendPipeline()

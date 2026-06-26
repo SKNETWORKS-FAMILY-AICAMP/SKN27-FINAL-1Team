@@ -1,16 +1,15 @@
-"""Preference 슬라이스: 완화 가능한 선호 조건 gate + limit 채우기."""
+"""Preference tier fallback 슬라이스."""
 
 from __future__ import annotations
 
 from dataclasses import replace
 from typing import Any
 
-from app.backend.services.recommendation_service._recipe_query import recipe_to_list_item
-from app.backend.services.recommendation_service.preference_scorer import preference_penalty
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommend_evaluation import tier_config_penalty
 
 
-def preference_tiers(config: RecipeRecommendConfig) -> list[tuple[str, RecipeRecommendConfig]]:
+def tier_fallback_configs(config: RecipeRecommendConfig) -> list[tuple[str, RecipeRecommendConfig]]:
     tiers: list[tuple[str, RecipeRecommendConfig]] = [("strict", config)]
     relaxed = replace(config, min_display_match_rate=None)
     if relaxed != config:
@@ -21,15 +20,15 @@ def preference_tiers(config: RecipeRecommendConfig) -> list[tuple[str, RecipeRec
     return tiers
 
 
-def preference_pool(
+def candidates_for_tier(
     scored: list[dict[str, Any]],
     tier_config: RecipeRecommendConfig,
 ) -> list[dict[str, Any]]:
     return [
         row
         for row in scored
-        if preference_penalty(
-            row["_ownership"],
+        if tier_config_penalty(
+            row["_fridge_match"],
             row["_recipe_ingredients"],
             tier_config,
         )
@@ -37,7 +36,7 @@ def preference_pool(
     ]
 
 
-def slice_by_preference_tiers(
+def slice_with_tier_fallback(
     scored: list[dict[str, Any]],
     tiers: list[tuple[str, RecipeRecommendConfig]],
     limit: int,
@@ -49,7 +48,7 @@ def slice_by_preference_tiers(
     exhausted = False
 
     for tier_name, tier_config in tiers:
-        pool = preference_pool(scored, tier_config)
+        pool = candidates_for_tier(scored, tier_config)
         available = [row for row in pool if row["recipe_id"] not in picked_ids]
 
         if pool and not available:
@@ -70,7 +69,7 @@ def slice_by_preference_tiers(
     has_more = False
     if not exhausted:
         for _, tier_config in tiers:
-            pool = preference_pool(scored, tier_config)
+            pool = candidates_for_tier(scored, tier_config)
             remaining = [row for row in pool if row["recipe_id"] not in picked_ids]
             if remaining:
                 has_more = True
@@ -84,46 +83,3 @@ def slice_by_preference_tiers(
         empty_reason = "ownership_blocked"
 
     return picked, has_more, applied_tier, fallback_used, empty_reason
-
-
-def empty_recommend_result(empty_reason: str) -> dict[str, Any]:
-    return {
-        "items": [],
-        "returned_count": 0,
-        "has_more": False,
-        "applied_tier": "strict",
-        "fallback_used": False,
-        "empty_reason": empty_reason,
-    }
-
-
-def build_recommend_result(
-    items: list[dict[str, Any]],
-    has_more: bool,
-    applied_tier: str,
-    fallback_used: bool,
-    empty_reason: str,
-) -> dict[str, Any]:
-    response_items = []
-    for row in items:
-        base = recipe_to_list_item(row["recipe"])
-        response_items.append(
-            {
-                **base,
-                "match_rate": row["match_rate"],
-                "display_match_rate": row["display_match_rate"],
-                "owned_ingredient_count": row["owned_ingredient_count"],
-                "missing_ingredient_count": row["missing_ingredient_count"],
-                "expiry_score": row["expiry_score"],
-                "reason": row["reason"],
-            }
-        )
-
-    return {
-        "items": response_items,
-        "returned_count": len(response_items),
-        "has_more": has_more,
-        "applied_tier": applied_tier,
-        "fallback_used": fallback_used,
-        "empty_reason": empty_reason,
-    }

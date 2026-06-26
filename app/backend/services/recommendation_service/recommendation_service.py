@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecommendationResult
-from app.backend.services.recommendation_service.recipe_recommend_engine import recipe_recommend_engine
+from app.backend.services.recommendation_service.recommend_pipeline import recommend_pipeline
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
 __all__ = [
@@ -110,7 +110,7 @@ class RecommendationService:
         exclude_recipe_ids: list[int] | None = None,
         refresh_pool: bool = False,
     ) -> dict[str, Any]:
-        return recipe_recommend_engine.recommend(
+        return recommend_pipeline.recommend(
             db,
             user_id,
             config,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import FridgeItem, Ingredient
-from app.backend.services.recommendation_service.ingredient_ownership_service import FridgeItemSnapshot
+from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeItemSnapshot
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow
 
 

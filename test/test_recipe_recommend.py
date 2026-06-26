@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.backend.services.recommendation_service.expiry_scorer import d_day, score_expiry, urgency
-from app.backend.services.recommendation_service.ingredient_ownership_service import OwnershipResult
-from app.backend.services.recommendation_service.preference_scorer import (
+from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeMatchResult
+from app.backend.services.recommendation_service.recommend_evaluation import (
     build_final_score,
-    preference_penalty,
+    tier_config_penalty,
 )
-from app.backend.services.recommendation_service.preference_slice import preference_tiers
+from app.backend.services.recommendation_service.recommend_tier_slice import tier_fallback_configs
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommendation_service import RecommendationService
 
@@ -86,10 +86,10 @@ def test_menu_custom_pool_multiplier_clamped():
     assert config.pool_size == 5 * RecipeRecommendConfig.POOL_MULTIPLIER_MAX
 
 
-def test_preference_penalty_require_any_owned():
+def test_tier_config_penalty_require_any_owned():
     config = RecipeRecommendConfig.menu_custom_preset(5, require_any_owned=True)
-    empty = OwnershipResult(owned=[], maybe_owned=[], missing=[{"name": "대파"}], match_rate=0, display_match_rate=0)
-    owned = OwnershipResult(
+    empty = FridgeMatchResult(owned=[], maybe_owned=[], missing=[{"name": "대파"}], match_rate=0, display_match_rate=0)
+    owned = FridgeMatchResult(
         owned=[{"name": "대파"}],
         maybe_owned=[],
         missing=[],
@@ -97,20 +97,20 @@ def test_preference_penalty_require_any_owned():
         display_match_rate=100,
     )
 
-    assert preference_penalty(empty, [{"name": "대파"}], config) == 1
-    assert preference_penalty(owned, [{"name": "대파"}], config) == 0
+    assert tier_config_penalty(empty, [{"name": "대파"}], config) == 1
+    assert tier_config_penalty(owned, [{"name": "대파"}], config) == 0
 
 
-def test_preference_penalty_min_display_match_rate():
+def test_tier_config_penalty_min_display_match_rate():
     config = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
-    low_match = OwnershipResult(
+    low_match = FridgeMatchResult(
         owned=[{"name": "대파"}],
         maybe_owned=[],
         missing=[{"name": "양파"}, {"name": "당근"}],
         match_rate=33,
         display_match_rate=33,
     )
-    high_match = OwnershipResult(
+    high_match = FridgeMatchResult(
         owned=[{"name": "대파"}, {"name": "양파"}, {"name": "당근"}],
         maybe_owned=[],
         missing=[],
@@ -118,8 +118,8 @@ def test_preference_penalty_min_display_match_rate():
         display_match_rate=100,
     )
 
-    assert preference_penalty(low_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 1
-    assert preference_penalty(high_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 0
+    assert tier_config_penalty(low_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 1
+    assert tier_config_penalty(high_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 0
 
 
 def test_build_final_score_fridge_expiry_order():
@@ -146,15 +146,15 @@ def test_menu_custom_pipeline_slices_to_limit():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ) as build_query,
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=[],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
         ),
     ):
@@ -245,26 +245,26 @@ def test_score_expiry_prioritizes_sooner_items():
     assert expiring_later == 0
 
 
-def test_preference_tiers_dedupes():
+def test_tier_fallback_configs_dedupes():
     high = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70, require_any_owned=True)
     high_relaxed_only = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
     fridge = RecipeRecommendConfig.fridge_consume_preset()
     open_only = RecipeRecommendConfig.menu_custom_preset(5)
 
-    assert [name for name, _ in preference_tiers(high)] == [
+    assert [name for name, _ in tier_fallback_configs(high)] == [
         "strict",
         "relaxed",
         "open",
     ]
-    assert [name for name, _ in preference_tiers(high_relaxed_only)] == [
+    assert [name for name, _ in tier_fallback_configs(high_relaxed_only)] == [
         "strict",
         "relaxed",
     ]
-    assert [name for name, _ in preference_tiers(fridge)] == [
+    assert [name for name, _ in tier_fallback_configs(fridge)] == [
         "strict",
         "open",
     ]
-    assert [name for name, _ in preference_tiers(open_only)] == ["strict"]
+    assert [name for name, _ in tier_fallback_configs(open_only)] == ["strict"]
 
 
 @contextmanager
@@ -274,15 +274,15 @@ def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=fridge_rows or [],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
         ),
     ):
@@ -369,15 +369,15 @@ def test_no_fallback_when_sql_empty():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=[],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value={},
         ),
     ):
@@ -413,15 +413,15 @@ def test_hard_filter_excludes_before_eval():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=[_row(1, "대파")],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
         ) as load_bulk,
     ):
