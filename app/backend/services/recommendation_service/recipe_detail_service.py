@@ -6,11 +6,9 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.backend.db.models import FridgeItem, Ingredient, Recipe, RecipeIngredient
-from app.backend.services.recommendation_service.ingredient_ownership_service import (
-    FridgeItemSnapshot,
-    classify_ingredients,
-)
+from app.backend.db.models import Recipe, RecipeIngredient
+from app.backend.services.recommendation_service._fridge_loader import fetch_fridge_snapshots
+from app.backend.services.recommendation_service.ingredient_ownership_service import classify_ingredients
 
 
 class RecipeDetailService:
@@ -60,25 +58,6 @@ class RecipeDetailService:
             if row.raw_ingredient_name
         ]
 
-    def _fetch_fridge_snapshots(self, db: Session, user_id: int) -> list[FridgeItemSnapshot]:
-        rows = (
-            db.query(FridgeItem, Ingredient)
-            .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
-            .filter(
-                FridgeItem.user_id == user_id,
-                FridgeItem.status == "normal",
-            )
-            .all()
-        )
-
-        return [
-            FridgeItemSnapshot(
-                ingredient_id=int(fridge_item.ingredient_id),
-                fridge_name=fridge_item.display_name or ingredient.name,
-            )
-            for fridge_item, ingredient in rows
-        ]
-
     def _classify_ownership(
         self,
         ingredients: list[dict[str, Any]],
@@ -88,7 +67,7 @@ class RecipeDetailService:
         if user_id <= 0:
             return classify_ingredients(ingredients, [])
 
-        fridge_items = self._fetch_fridge_snapshots(db, user_id)
+        fridge_items = fetch_fridge_snapshots(db, user_id)
         return classify_ingredients(ingredients, fridge_items)
 
     def _format_amount(self, quantity: Decimal | float | int | None, unit: str | None) -> str | None:

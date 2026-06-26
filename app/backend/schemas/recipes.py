@@ -66,6 +66,17 @@ class RecipeRecommendResponse(BaseModel):
     items: list[RecipeRecommendItem] = Field(default_factory=list, description="추천 결과")
     returned_count: int = Field(..., description="반환된 결과 수")
     has_more: bool = Field(..., description="같은 풀에서 추가 추천 가능 여부")
+    applied_tier: Literal["strict", "relaxed", "open"] = Field(
+        default="strict", description="결과에 기여한 가장 완화된 보유 재료 tier"
+    )
+    fallback_used: bool = Field(default=False, description="relaxed/open tier 보충 사용 여부")
+    empty_reason: Literal[
+        "none",
+        "no_sql_match",
+        "no_scorable_recipes",
+        "ownership_blocked",
+        "exhausted",
+    ] = Field(default="none", description="빈 결과 사유")
 
 
 class RecipeIngredientItem(BaseModel):
