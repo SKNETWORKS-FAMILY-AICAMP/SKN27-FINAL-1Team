@@ -1,4 +1,4 @@
-"""보유 재료 tier fallback 및 추천 응답 조립."""
+"""Preference 슬라이스: 완화 가능한 선호 조건 gate + limit 채우기."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from dataclasses import replace
 from typing import Any
 
 from app.backend.services.recommendation_service._recipe_query import recipe_to_list_item
-from app.backend.services.recommendation_service.ingredient_ownership_service import passes_ownership_filter
+from app.backend.services.recommendation_service.ingredient_ownership_service import passes_preference_gate
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
 
-def ownership_tiers(config: RecipeRecommendConfig) -> list[tuple[str, RecipeRecommendConfig]]:
+def preference_tiers(config: RecipeRecommendConfig) -> list[tuple[str, RecipeRecommendConfig]]:
     tiers: list[tuple[str, RecipeRecommendConfig]] = [("strict", config)]
     relaxed = replace(config, min_display_match_rate=None)
     if relaxed != config:
@@ -21,14 +21,14 @@ def ownership_tiers(config: RecipeRecommendConfig) -> list[tuple[str, RecipeReco
     return tiers
 
 
-def tier_pool(
+def preference_pool(
     scored: list[dict[str, Any]],
     tier_config: RecipeRecommendConfig,
 ) -> list[dict[str, Any]]:
     return [
         row
         for row in scored
-        if passes_ownership_filter(
+        if passes_preference_gate(
             row["_counts"],
             row["_ownership"],
             row["_recipe_ingredients"],
@@ -37,13 +37,11 @@ def tier_pool(
     ]
 
 
-def fill_by_ownership_tiers(
+def slice_by_preference_tiers(
     scored: list[dict[str, Any]],
     tiers: list[tuple[str, RecipeRecommendConfig]],
-    exclude_recipe_ids: list[int],
     limit: int,
 ) -> tuple[list[dict[str, Any]], bool, str, bool, str]:
-    exclude = set(exclude_recipe_ids)
     picked: list[dict[str, Any]] = []
     picked_ids: set[int] = set()
     applied_tier = "strict"
@@ -51,10 +49,8 @@ def fill_by_ownership_tiers(
     exhausted = False
 
     for tier_name, tier_config in tiers:
-        pool = tier_pool(scored, tier_config)
-        available = [
-            row for row in pool if row["recipe_id"] not in exclude and row["recipe_id"] not in picked_ids
-        ]
+        pool = preference_pool(scored, tier_config)
+        available = [row for row in pool if row["recipe_id"] not in picked_ids]
 
         if pool and not available:
             exhausted = True
@@ -74,12 +70,8 @@ def fill_by_ownership_tiers(
     has_more = False
     if not exhausted:
         for _, tier_config in tiers:
-            pool = tier_pool(scored, tier_config)
-            remaining = [
-                row
-                for row in pool
-                if row["recipe_id"] not in exclude and row["recipe_id"] not in picked_ids
-            ]
+            pool = preference_pool(scored, tier_config)
+            remaining = [row for row in pool if row["recipe_id"] not in picked_ids]
             if remaining:
                 has_more = True
                 break

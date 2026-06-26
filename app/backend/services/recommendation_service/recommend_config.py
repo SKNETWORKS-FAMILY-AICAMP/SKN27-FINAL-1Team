@@ -17,20 +17,23 @@ class RecipeRecommendConfig:
     POOL_MULTIPLIER_MAX = 10
 
     mode: Literal["fridge_consume", "menu_custom"] = "fridge_consume"
+
+    # Request / Candidate Generation (요청 컨텍스트 필터)
     query: str | None = None
     category: str | None = None
     difficulty: str | None = None
     cooking_time_label: str | None = None
 
+    # Preference (완화 가능; preference_slice gate)
     require_any_owned: bool = False
     include_maybe_owned: bool = True
     min_display_match_rate: int | None = None
-
     use_expiry_priority: bool = False
     expiring_soon_days: int = 3
     urgency_base: int = 4
     expiring_ingredient_bonus: int = 2
 
+    # Pagination
     limit: int = 9
     pool_multiplier: int = DEFAULT_POOL_MULTIPLIER
 

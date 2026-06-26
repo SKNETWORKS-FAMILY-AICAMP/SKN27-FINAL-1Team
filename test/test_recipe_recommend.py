@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.backend.services.recommendation_service.expiry_scorer import d_day, score_expiry, urgency
-from app.backend.services.recommendation_service.ownership_tier_service import ownership_tiers
+from app.backend.services.recommendation_service.preference_slice import preference_tiers
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommendation_service import RecommendationService
 
@@ -197,26 +197,26 @@ def test_score_expiry_prioritizes_sooner_items():
     assert expiring_later == 0
 
 
-def test_ownership_tiers_dedupes():
+def test_preference_tiers_dedupes():
     high = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70, require_any_owned=True)
     high_relaxed_only = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
     fridge = RecipeRecommendConfig.fridge_consume_preset()
     open_only = RecipeRecommendConfig.menu_custom_preset(5)
 
-    assert [name for name, _ in ownership_tiers(high)] == [
+    assert [name for name, _ in preference_tiers(high)] == [
         "strict",
         "relaxed",
         "open",
     ]
-    assert [name for name, _ in ownership_tiers(high_relaxed_only)] == [
+    assert [name for name, _ in preference_tiers(high_relaxed_only)] == [
         "strict",
         "relaxed",
     ]
-    assert [name for name, _ in ownership_tiers(fridge)] == [
+    assert [name for name, _ in preference_tiers(fridge)] == [
         "strict",
         "open",
     ]
-    assert [name for name, _ in ownership_tiers(open_only)] == ["strict"]
+    assert [name for name, _ in preference_tiers(open_only)] == ["strict"]
 
 
 @contextmanager
@@ -341,6 +341,55 @@ def test_no_fallback_when_sql_empty():
     assert result["fallback_used"] is False
 
 
+def test_hard_filter_excludes_before_eval():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=index,
+            title=f"recipe-{index}",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+        for index in range(1, 6)
+    ]
+    query_chain = MagicMock()
+    query_chain.order_by.return_value.limit.return_value.all.return_value = recipes
+    ingredient_rows = {
+        recipe.id: [{"name": "대파", "amount": None, "ingredient_id": 1}]
+        for recipe in recipes
+    }
+
+    with (
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            return_value=query_chain,
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            return_value=[_row(1, "대파")],
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            return_value=ingredient_rows,
+        ) as load_bulk,
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3)
+        service.recommend_recipes(
+            db,
+            user_id=1,
+            config=config,
+            exclude_recipe_ids=[1, 2, 3],
+        )
+
+    load_bulk.assert_called_once()
+    loaded_ids = load_bulk.call_args[0][1]
+    assert loaded_ids == [4, 5]
+
+
 def test_no_fallback_when_exclude_exhausted():
     service = RecommendationService()
     db = MagicMock()
@@ -377,5 +426,5 @@ def test_no_fallback_when_exclude_exhausted():
         )
 
     assert result["returned_count"] == 0
-    assert result["empty_reason"] == "exhausted"
+    assert result["empty_reason"] == "no_sql_match"
     assert result["fallback_used"] is False

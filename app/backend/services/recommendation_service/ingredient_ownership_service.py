@@ -170,12 +170,13 @@ def ownership_counts(
     }
 
 
-def passes_ownership_filter(
+def passes_preference_gate(
     counts: dict[str, int],
     ownership: OwnershipResult,
     recipe_ingredients: list[dict[str, Any]],
     config: RecipeRecommendConfig,
 ) -> bool:
+    """Preference gate: require_any_owned·min_display_match_rate (tier에서 완화 가능)."""
     owned_count = len(ownership.owned)
     maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
 
