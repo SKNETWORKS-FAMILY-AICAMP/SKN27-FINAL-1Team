@@ -21,12 +21,12 @@ __all__ = [
 class RecommendationService:
     MANUAL_SAVE_TYPE = "manual_save"
 
-    def save_result(
+    def save_recipe(
         self,
         db: Session,
         user_id: int,
         recipe_id: int,
-        recommendation_type: str,
+        recommendation_type: str = MANUAL_SAVE_TYPE,
     ) -> dict[str, Any]:
         """레시피를 recommendation_results에 저장한다. 중복 검사 없이 매번 새 행을 만든다."""
         recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
@@ -51,15 +51,6 @@ class RecommendationService:
             "recommendation_type": row.recommendation_type or recommendation_type,
             "created_at": row.created_at,
         }
-
-    def save_manual(
-        self,
-        db: Session,
-        user_id: int,
-        recipe_id: int,
-        recommendation_type: str = MANUAL_SAVE_TYPE,
-    ) -> dict[str, Any]:
-        return self.save_result(db, user_id, recipe_id, recommendation_type)
 
     def list_user_recipes(self, db: Session, user_id: int) -> list[dict[str, Any]]:
         rows = (
