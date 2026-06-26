@@ -146,6 +146,7 @@ export default function IngredientModal({
               type="text"
               name="name"
               autoComplete="off"
+              autoFocus
               placeholder="예: 양파, 두부, 우유"
               value={formData.name}
               onChange={(event) => {
