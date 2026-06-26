@@ -13,4 +13,4 @@ COPY etl/food_guide ./etl/food_guide
 ENV PYTHONPATH=/project
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "etl.recipe.load_to_postgres"]
+CMD ["python", "-m", "etl.load_to_neo4j.cron_loader"]
