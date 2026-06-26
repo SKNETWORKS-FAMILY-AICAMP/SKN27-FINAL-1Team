@@ -171,7 +171,6 @@ def ownership_counts(
 
 
 def passes_preference_gate(
-    counts: dict[str, int],
     ownership: OwnershipResult,
     recipe_ingredients: list[dict[str, Any]],
     config: RecipeRecommendConfig,

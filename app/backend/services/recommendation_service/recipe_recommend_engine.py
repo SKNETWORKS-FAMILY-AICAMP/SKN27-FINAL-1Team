@@ -136,7 +136,6 @@ class RecipeRecommendEngine:
                     "expiry_score": expiry_score,
                     "reason": reason,
                     "_ownership": ownership,
-                    "_counts": counts,
                     "_recipe_ingredients": recipe_ingredients,
                     "_sort_score": display_match_rate + expiry_score,
                     "_sort_expiry": expiry_score,

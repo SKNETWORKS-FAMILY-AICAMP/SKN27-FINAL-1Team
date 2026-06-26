@@ -29,7 +29,6 @@ def preference_pool(
         row
         for row in scored
         if passes_preference_gate(
-            row["_counts"],
             row["_ownership"],
             row["_recipe_ingredients"],
             tier_config,

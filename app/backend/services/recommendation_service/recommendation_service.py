@@ -9,10 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecommendationResult
 from app.backend.services.recommendation_service.recipe_recommend_engine import recipe_recommend_engine
-from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
 __all__ = [
-    "FridgeExpiryRow",
     "RecipeRecommendConfig",
     "RecommendationService",
     "recommendation_service",
