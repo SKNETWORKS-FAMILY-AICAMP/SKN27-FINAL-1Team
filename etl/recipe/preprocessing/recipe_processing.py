@@ -145,7 +145,7 @@ def main():
     # 파일 경로 지정 
     root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
     file_path       = root / "storage" / "raw" / "recipe" / "recipe.csv"
-    new_file_path   = root / "storage" / "processed" / "recipe" / "recipe_fix.csv"
+    new_file_path   = root / "storage" / "processed" / "recipe" / "recipe_process.csv"
     
     # 파일 로드 
     df = load_recipe_data(file_path)
