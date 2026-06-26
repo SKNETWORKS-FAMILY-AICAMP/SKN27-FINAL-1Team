@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Literal
 
@@ -241,6 +241,9 @@ class RecommendationService:
             .all()
         )
 
+        if not recipes:
+            return self._empty_recommend_result("no_sql_match")
+
         expiry_rows = self._fetch_fridge_items_with_expiry(db, user_id)
         fridge_snapshots = [
             FridgeItemSnapshot(ingredient_id=row.ingredient_id, fridge_name=row.fridge_name)
@@ -260,8 +263,6 @@ class RecommendationService:
 
             ownership = classify_ingredients(recipe_ingredients, fridge_snapshots)
             counts = self._ownership_counts(ownership, config)
-            if not self._passes_ownership_filter(counts, ownership, recipe_ingredients, config):
-                continue
 
             expiry_score, expiring_count = self._score_expiry(
                 ownership,
@@ -284,8 +285,14 @@ class RecommendationService:
                     "reason": reason,
                     "_sort_expiry": expiry_score,
                     "_sort_match": counts["display_match_rate"],
+                    "_ownership": ownership,
+                    "_counts": counts,
+                    "_recipe_ingredients": recipe_ingredients,
                 }
             )
+
+        if not ranked:
+            return self._empty_recommend_result("no_scorable_recipes")
 
         ranked.sort(
             key=lambda row: (
@@ -296,28 +303,15 @@ class RecommendationService:
         )
 
         effective_exclude = [] if refresh_pool else (exclude_recipe_ids or [])
-        items, has_more = self._rank_and_slice(ranked, effective_exclude, config.limit)
+        tiers = self._ownership_tiers(config)
+        items, has_more, applied_tier, fallback_used, empty_reason = self._fill_by_ownership_tiers(
+            ranked,
+            tiers,
+            effective_exclude,
+            config.limit,
+        )
 
-        response_items = []
-        for row in items:
-            base = recipe_to_list_item(row["recipe"])
-            response_items.append(
-                {
-                    **base,
-                    "match_rate": row["match_rate"],
-                    "display_match_rate": row["display_match_rate"],
-                    "owned_ingredient_count": row["owned_ingredient_count"],
-                    "missing_ingredient_count": row["missing_ingredient_count"],
-                    "expiry_score": row["expiry_score"],
-                    "reason": row["reason"],
-                }
-            )
-
-        return {
-            "items": response_items,
-            "returned_count": len(response_items),
-            "has_more": has_more,
-        }
+        return self._build_recommend_result(items, has_more, applied_tier, fallback_used, empty_reason)
 
     def _recommend_menu_custom(
         self,
@@ -343,6 +337,9 @@ class RecommendationService:
             .all()
         )
 
+        if not recipes:
+            return self._empty_recommend_result("no_sql_match")
+
         expiry_rows = self._fetch_fridge_items_with_expiry(db, user_id)
         fridge_snapshots = [
             FridgeItemSnapshot(ingredient_id=row.ingredient_id, fridge_name=row.fridge_name)
@@ -363,8 +360,6 @@ class RecommendationService:
 
             ownership = classify_ingredients(recipe_ingredients, fridge_snapshots)
             counts = self._ownership_counts(ownership, config)
-            if not self._passes_ownership_filter(counts, ownership, recipe_ingredients, config):
-                continue
 
             expiry_score, expiring_count = self._score_expiry(
                 ownership,
@@ -395,7 +390,13 @@ class RecommendationService:
 
             # Step4: 합산 정렬 키 — ponytail: ml_score*100 임시 스케일
             candidate_row["_total_score"] = weight_score + ml_score * 100
+            candidate_row["_ownership"] = ownership
+            candidate_row["_counts"] = counts
+            candidate_row["_recipe_ingredients"] = recipe_ingredients
             ranked.append(candidate_row)
+
+        if not ranked:
+            return self._empty_recommend_result("no_scorable_recipes")
 
         ranked.sort(
             key=lambda row: (
@@ -406,28 +407,15 @@ class RecommendationService:
         )
 
         effective_exclude = [] if refresh_pool else (exclude_recipe_ids or [])
-        items, has_more = self._rank_and_slice(ranked, effective_exclude, config.limit)
+        tiers = self._ownership_tiers(config)
+        items, has_more, applied_tier, fallback_used, empty_reason = self._fill_by_ownership_tiers(
+            ranked,
+            tiers,
+            effective_exclude,
+            config.limit,
+        )
 
-        response_items = []
-        for row in items:
-            base = recipe_to_list_item(row["recipe"])
-            response_items.append(
-                {
-                    **base,
-                    "match_rate": row["match_rate"],
-                    "display_match_rate": row["display_match_rate"],
-                    "owned_ingredient_count": row["owned_ingredient_count"],
-                    "missing_ingredient_count": row["missing_ingredient_count"],
-                    "expiry_score": row["expiry_score"],
-                    "reason": row["reason"],
-                }
-            )
-
-        return {
-            "items": response_items,
-            "returned_count": len(response_items),
-            "has_more": has_more,
-        }
+        return self._build_recommend_result(items, has_more, applied_tier, fallback_used, empty_reason)
 
     def _fetch_fridge_items_with_expiry(self, db: Session, user_id: int) -> list[FridgeExpiryRow]:
         rows = (
@@ -521,6 +509,137 @@ class RecommendationService:
                 return False
 
         return True
+
+    @staticmethod
+    def _ownership_filter_active(config: RecipeRecommendConfig) -> bool:
+        return config.require_any_owned or config.min_display_match_rate is not None
+
+    @staticmethod
+    def _ownership_tiers(config: RecipeRecommendConfig) -> list[tuple[str, RecipeRecommendConfig]]:
+        tiers: list[tuple[str, RecipeRecommendConfig]] = [("strict", config)]
+        relaxed = replace(config, min_display_match_rate=None)
+        if relaxed != config:
+            tiers.append(("relaxed", relaxed))
+        open_cfg = replace(config, require_any_owned=False, min_display_match_rate=None)
+        if open_cfg != tiers[-1][1]:
+            tiers.append(("open", open_cfg))
+        return tiers
+
+    def _tier_pool(
+        self,
+        scored: list[dict[str, Any]],
+        tier_config: RecipeRecommendConfig,
+    ) -> list[dict[str, Any]]:
+        return [
+            row
+            for row in scored
+            if self._passes_ownership_filter(
+                row["_counts"],
+                row["_ownership"],
+                row["_recipe_ingredients"],
+                tier_config,
+            )
+        ]
+
+    def _fill_by_ownership_tiers(
+        self,
+        scored: list[dict[str, Any]],
+        tiers: list[tuple[str, RecipeRecommendConfig]],
+        exclude_recipe_ids: list[int],
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], bool, str, bool, str]:
+        exclude = set(exclude_recipe_ids)
+        picked: list[dict[str, Any]] = []
+        picked_ids: set[int] = set()
+        applied_tier = "strict"
+        fallback_used = False
+        exhausted = False
+
+        for tier_name, tier_config in tiers:
+            pool = self._tier_pool(scored, tier_config)
+            available = [
+                row for row in pool if row["recipe_id"] not in exclude and row["recipe_id"] not in picked_ids
+            ]
+
+            if pool and not available:
+                exhausted = True
+                break
+
+            if len(picked) >= limit:
+                break
+
+            take = available[: limit - len(picked)]
+            if take:
+                if tier_name != "strict":
+                    fallback_used = True
+                applied_tier = tier_name
+                picked.extend(take)
+                picked_ids.update(row["recipe_id"] for row in take)
+
+        has_more = False
+        if not exhausted:
+            for _, tier_config in tiers:
+                pool = self._tier_pool(scored, tier_config)
+                remaining = [
+                    row
+                    for row in pool
+                    if row["recipe_id"] not in exclude and row["recipe_id"] not in picked_ids
+                ]
+                if remaining:
+                    has_more = True
+                    break
+
+        if picked:
+            empty_reason = "none"
+        elif exhausted:
+            empty_reason = "exhausted"
+        else:
+            empty_reason = "ownership_blocked"
+
+        return picked, has_more, applied_tier, fallback_used, empty_reason
+
+    @staticmethod
+    def _empty_recommend_result(empty_reason: str) -> dict[str, Any]:
+        return {
+            "items": [],
+            "returned_count": 0,
+            "has_more": False,
+            "applied_tier": "strict",
+            "fallback_used": False,
+            "empty_reason": empty_reason,
+        }
+
+    @staticmethod
+    def _build_recommend_result(
+        items: list[dict[str, Any]],
+        has_more: bool,
+        applied_tier: str,
+        fallback_used: bool,
+        empty_reason: str,
+    ) -> dict[str, Any]:
+        response_items = []
+        for row in items:
+            base = recipe_to_list_item(row["recipe"])
+            response_items.append(
+                {
+                    **base,
+                    "match_rate": row["match_rate"],
+                    "display_match_rate": row["display_match_rate"],
+                    "owned_ingredient_count": row["owned_ingredient_count"],
+                    "missing_ingredient_count": row["missing_ingredient_count"],
+                    "expiry_score": row["expiry_score"],
+                    "reason": row["reason"],
+                }
+            )
+
+        return {
+            "items": response_items,
+            "returned_count": len(response_items),
+            "has_more": has_more,
+            "applied_tier": applied_tier,
+            "fallback_used": fallback_used,
+            "empty_reason": empty_reason,
+        }
 
     @staticmethod
     def _d_day(row: FridgeExpiryRow, today: date, fallback_days: int) -> int:

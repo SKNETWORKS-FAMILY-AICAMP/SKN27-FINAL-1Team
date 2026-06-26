@@ -1,6 +1,7 @@
 import os
 import random
 import sys
+from contextlib import contextmanager
 from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -227,3 +228,179 @@ def test_rank_and_slice_has_more_false_when_exhausted():
 
     assert len(items) == 5
     assert has_more is False
+
+
+def test_ownership_tiers_dedupes():
+    high = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70, require_any_owned=True)
+    high_relaxed_only = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
+    fridge = RecipeRecommendConfig.fridge_consume_preset()
+    open_only = RecipeRecommendConfig.menu_custom_preset(5)
+
+    assert [name for name, _ in RecommendationService._ownership_tiers(high)] == [
+        "strict",
+        "relaxed",
+        "open",
+    ]
+    assert [name for name, _ in RecommendationService._ownership_tiers(high_relaxed_only)] == [
+        "strict",
+        "relaxed",
+    ]
+    assert [name for name, _ in RecommendationService._ownership_tiers(fridge)] == [
+        "strict",
+        "open",
+    ]
+    assert [name for name, _ in RecommendationService._ownership_tiers(open_only)] == ["strict"]
+
+
+@contextmanager
+def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_rows=None):
+    query_chain = MagicMock()
+    query_chain.order_by.return_value.limit.return_value.all.return_value = recipes
+
+    with (
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.build_recipe_query",
+            return_value=query_chain,
+        ),
+        patch.object(service, "_fetch_fridge_items_with_expiry", return_value=fridge_rows or []),
+        patch.object(service, "_load_recipe_ingredients_bulk", return_value=ingredient_rows),
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.score_fridge_suitability",
+            side_effect=lambda candidate, fridge_context, rng=None: candidate["recipe_id"] / 100,
+        ),
+    ):
+        yield query_chain
+
+
+def test_fallback_fills_to_limit_from_relaxed_or_open():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=index,
+            title=f"recipe-{index}",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+        for index in range(1, 11)
+    ]
+    ingredient_rows = {
+        1: [{"name": "대파", "amount": None, "ingredient_id": 1}],
+        2: [{"name": "대파", "amount": None, "ingredient_id": 1}],
+    }
+    for index in range(3, 11):
+        ingredient_rows[index] = [
+            {"name": "대파", "amount": None, "ingredient_id": 1},
+            {"name": "양파", "amount": None, "ingredient_id": 2},
+            {"name": "당근", "amount": None, "ingredient_id": 3},
+        ]
+
+    with _menu_custom_mock_pipeline(
+        service,
+        db,
+        recipes,
+        ingredient_rows,
+        fridge_rows=[_row(1, "대파")],
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 5
+    assert result["fallback_used"] is True
+    assert result["applied_tier"] == "relaxed"
+    assert result["empty_reason"] == "none"
+
+
+def test_open_fallback_when_owned_requirement_blocks_all():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=index,
+            title=f"recipe-{index}",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+        for index in range(1, 6)
+    ]
+    ingredient_rows = {
+        recipe.id: [{"name": "대파", "amount": None, "ingredient_id": 1}]
+        for recipe in recipes
+    }
+
+    with _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, fridge_rows=[]):
+        config = RecipeRecommendConfig.menu_custom_preset(3, require_any_owned=True)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 3
+    assert result["applied_tier"] == "open"
+    assert result["fallback_used"] is True
+    assert result["empty_reason"] == "none"
+
+
+def test_no_fallback_when_sql_empty():
+    service = RecommendationService()
+    db = MagicMock()
+    query_chain = MagicMock()
+    query_chain.order_by.return_value.limit.return_value.all.return_value = []
+
+    with (
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.build_recipe_query",
+            return_value=query_chain,
+        ),
+        patch.object(service, "_fetch_fridge_items_with_expiry", return_value=[]),
+        patch.object(service, "_load_recipe_ingredients_bulk", return_value={}),
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "no_sql_match"
+    assert result["fallback_used"] is False
+
+
+def test_no_fallback_when_exclude_exhausted():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=index,
+            title=f"recipe-{index}",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+        for index in range(1, 4)
+    ]
+    ingredient_rows = {
+        recipe.id: [{"name": "대파", "amount": None, "ingredient_id": 1}]
+        for recipe in recipes
+    }
+
+    with _menu_custom_mock_pipeline(
+        service,
+        db,
+        recipes,
+        ingredient_rows,
+        fridge_rows=[_row(1, "대파")],
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3, require_any_owned=True)
+        result = service.recommend_recipes(
+            db,
+            user_id=1,
+            config=config,
+            exclude_recipe_ids=[1, 2, 3],
+        )
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "exhausted"
+    assert result["fallback_used"] is False
