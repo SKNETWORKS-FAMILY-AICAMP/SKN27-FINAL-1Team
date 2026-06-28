@@ -27,10 +27,11 @@ BATCH_SIZE = 100
 
 DROP_LEGACY_CONSTRAINT_QUERIES = (
     "DROP CONSTRAINT food_category_key IF EXISTS",
+    "DROP CONSTRAINT food_guide_code IF EXISTS",
 )
 
 CONSTRAINT_QUERIES = (
-    "CREATE CONSTRAINT food_guide_code IF NOT EXISTS FOR (g:FoodGuide) REQUIRE g.code IS UNIQUE",
+    "CREATE CONSTRAINT food_guide_key IF NOT EXISTS FOR (g:FoodGuide) REQUIRE g.key IS UNIQUE",
     "CREATE CONSTRAINT food_category_key IF NOT EXISTS FOR (c:FoodCategory) REQUIRE c.key IS UNIQUE",
 )
 
@@ -43,14 +44,17 @@ MATCH (g:FoodGuide)
 DETACH DELETE g
 WITH 1 AS _
 MATCH (c:FoodCategory)
-WHERE NOT (c)--()
-DELETE c
+DETACH DELETE c
 """
 
 UPSERT_FOOD_GUIDE_QUERY = """
 UNWIND $rows AS row
-MERGE (g:FoodGuide {code: row.code})
-SET g.name = row.name,
+MERGE (g:FoodGuide:FoodCategory {key: row.guideKey})
+SET g.code = row.code,
+    g.level = "minor",
+    g.name = row.name,
+    g.path = row.minorPath,
+    g.displayName = row.minorDisplayName,
     g.majorCategory = row.majorCategory,
     g.middleCategory = row.middleCategory,
     g.minorCategory = row.minorCategory,
@@ -106,7 +110,6 @@ FOREACH (_ IN CASE WHEN row.majorKey IS NULL THEN [] ELSE [1] END |
       major.name = row.majorCategory,
       major.path = row.majorPath,
       major.displayName = row.majorCategory
-  MERGE (g)-[:IN_CATEGORY {level: "major"}]->(major)
 )
 FOREACH (_ IN CASE WHEN row.middleKey IS NULL THEN [] ELSE [1] END |
   MERGE (major:FoodCategory {key: row.majorKey})
@@ -120,7 +123,6 @@ FOREACH (_ IN CASE WHEN row.middleKey IS NULL THEN [] ELSE [1] END |
       middle.path = row.middlePath,
       middle.displayName = row.middleDisplayName
   MERGE (major)-[:HAS_SUBCATEGORY]->(middle)
-  MERGE (g)-[:IN_CATEGORY {level: "middle"}]->(middle)
 )
 FOREACH (_ IN CASE WHEN row.minorKey IS NULL THEN [] ELSE [1] END |
   MERGE (middle:FoodCategory {key: row.middleKey})
@@ -128,13 +130,7 @@ FOREACH (_ IN CASE WHEN row.minorKey IS NULL THEN [] ELSE [1] END |
       middle.name = row.middleCategory,
       middle.path = row.middlePath,
       middle.displayName = row.middleDisplayName
-  MERGE (minor:FoodCategory {key: row.minorKey})
-  SET minor.level = "minor",
-      minor.name = row.minorCategory,
-      minor.path = row.minorPath,
-      minor.displayName = row.minorDisplayName
-  MERGE (middle)-[:HAS_SUBCATEGORY]->(minor)
-  MERGE (g)-[:IN_CATEGORY {level: "minor"}]->(minor)
+  MERGE (middle)-[:HAS_SUBCATEGORY]->(g)
 )
 """
 
@@ -207,6 +203,7 @@ def build_food_guide_record(row: pd.Series, index: int) -> dict[str, Any]:
     )
     return {
         "code": code,
+        "guideKey": _category_key("minor", major_category, middle_category, minor_category),
         "majorCategory": major_category,
         "middleCategory": middle_category,
         "minorCategory": minor_category,
@@ -218,7 +215,7 @@ def build_food_guide_record(row: pd.Series, index: int) -> dict[str, Any]:
         "minorPath": minor_path,
         "middleDisplayName": " > ".join(middle_path) if middle_path else middle_category,
         "minorDisplayName": " > ".join(minor_path) if minor_path else minor_category,
-        "name": _text(_get(row, "영양식품명")) or _text(_get(row, "대표식품명")) or code,
+        "name": minor_category or _text(_get(row, "영양식품명")) or code,
         "representativeName": _text(_get(row, "대표식품명")),
         "rawName": _text(_get(row, "원재료명")),
         "aliases": _aliases(_get(row, "원재료명이명")),
@@ -283,6 +280,8 @@ def load_food_guide_to_neo4j(csv_path: str | Path, clear: bool = False) -> dict[
     settings = load_settings()
     df = pd.read_csv(csv_path)
     records = [build_food_guide_record(row, index) for index, row in df.iterrows()]
+    if any(record["guideKey"] is None for record in records):
+        raise ValueError("Food guide category path must include major, middle, and minor categories")
 
     logger.info("Food guide CSV loaded: %s (%d rows)", csv_path, len(records))
 
