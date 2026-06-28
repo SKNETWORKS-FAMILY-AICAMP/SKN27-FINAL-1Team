@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.backend.services.recommendation_service.expiry_scorer import d_day, score_expiry, urgency
-from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeMatchResult
+from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeItemSnapshot, FridgeMatchResult
+from app.backend.services.recommendation_service.hard_filter import UserHardFilterContext
 from app.backend.services.recommendation_service.recommend_evaluation import (
     build_final_score,
     tier_config_penalty,
@@ -436,6 +437,70 @@ def test_hard_filter_excludes_before_eval():
     load_bulk.assert_called_once()
     loaded_ids = load_bulk.call_args[0][1]
     assert loaded_ids == [4, 5]
+
+
+def test_hard_filter_excludes_recipe_with_banned_ingredient():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=1,
+            title="recipe-1",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+    ]
+    ingredient_rows = {1: [{"name": "땅콩", "amount": None, "ingredient_id": 99}]}
+
+    with (
+        _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows),
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.load_hard_filter_context",
+            return_value=UserHardFilterContext(
+                banned_items=(FridgeItemSnapshot(ingredient_id=None, fridge_name="땅콩"),),
+            ),
+        ),
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "no_scorable_recipes"
+
+
+def test_hard_filter_id_match_excludes():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=1,
+            title="recipe-1",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+    ]
+    ingredient_rows = {1: [{"name": "대파", "amount": None, "ingredient_id": 5}]}
+
+    with (
+        _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, fridge_rows=[_row(1, "양파")]),
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.load_hard_filter_context",
+            return_value=UserHardFilterContext(
+                banned_items=(FridgeItemSnapshot(ingredient_id=5, fridge_name="대파"),),
+            ),
+        ),
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "no_scorable_recipes"
 
 
 def test_no_fallback_when_exclude_exhausted():

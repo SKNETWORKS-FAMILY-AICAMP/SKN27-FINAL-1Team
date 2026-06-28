@@ -13,7 +13,7 @@ MatchType = Literal["recipe_in_fridge", "fridge_in_recipe"]
 
 @dataclass(frozen=True)
 class FridgeItemSnapshot:
-    ingredient_id: int
+    ingredient_id: int | None
     fridge_name: str
 
 
@@ -104,11 +104,32 @@ def find_maybe_match(
     return best
 
 
+def ingredient_matches_refs(
+    ingredient: dict[str, Any],
+    refs: list[FridgeItemSnapshot],
+) -> bool:
+    ingredient_id = ingredient.get("ingredient_id")
+    ref_ids = {ref.ingredient_id for ref in refs if ref.ingredient_id is not None}
+    if ingredient_id and ingredient_id in ref_ids:
+        return True
+    recipe_name = ingredient.get("name") or ""
+    return find_maybe_match(recipe_name, refs) is not None
+
+
+def recipe_contains_banned(
+    recipe_ingredients: list[dict[str, Any]],
+    banned_items: list[FridgeItemSnapshot],
+) -> bool:
+    if not banned_items:
+        return False
+    return any(ingredient_matches_refs(ingredient, banned_items) for ingredient in recipe_ingredients)
+
+
 def classify_fridge_match(
     recipe_ingredients: list[dict[str, Any]],
     fridge_items: list[FridgeItemSnapshot],
 ) -> FridgeMatchResult:
-    owned_ids = {item.ingredient_id for item in fridge_items}
+    owned_ids = {item.ingredient_id for item in fridge_items if item.ingredient_id is not None}
 
     owned: list[dict[str, Any]] = []
     maybe_owned: list[dict[str, Any]] = []
@@ -118,6 +139,10 @@ def classify_fridge_match(
         ingredient_id = ingredient.get("ingredient_id")
         if ingredient_id and ingredient_id in owned_ids:
             owned.append(ingredient)
+            continue
+
+        if not ingredient_matches_refs(ingredient, fridge_items):
+            missing.append(ingredient)
             continue
 
         recipe_name = ingredient.get("name") or ""

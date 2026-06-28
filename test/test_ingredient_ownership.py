@@ -8,6 +8,8 @@ from app.backend.services.recommendation_service.fridge_ingredient_match import 
     classify_fridge_match,
     compute_match_rates,
     find_maybe_match,
+    ingredient_matches_refs,
+    recipe_contains_banned,
 )
 
 
@@ -109,3 +111,32 @@ def test_classify_empty_recipe_list_rates_zero():
 
     assert result.match_rate == 0
     assert result.display_match_rate == 0
+
+
+def test_ingredient_matches_refs_by_id():
+    ingredient = _recipe("대파", ingredient_id=10)
+    refs = [_fridge(10, "대파")]
+
+    assert ingredient_matches_refs(ingredient, refs) is True
+
+
+def test_ingredient_matches_refs_by_substring_name():
+    ingredient = _recipe("흰대파", ingredient_id=20)
+    refs = [FridgeItemSnapshot(ingredient_id=None, fridge_name="대파")]
+
+    assert ingredient_matches_refs(ingredient, refs) is True
+
+
+def test_ingredient_matches_refs_unrelated():
+    ingredient = _recipe("참기름", ingredient_id=40)
+    refs = [FridgeItemSnapshot(ingredient_id=None, fridge_name="대파")]
+
+    assert ingredient_matches_refs(ingredient, refs) is False
+
+
+def test_recipe_contains_banned():
+    ingredients = [_recipe("땅콩", ingredient_id=99)]
+    banned = [FridgeItemSnapshot(ingredient_id=None, fridge_name="땅콩")]
+
+    assert recipe_contains_banned(ingredients, banned) is True
+    assert recipe_contains_banned(ingredients, []) is False
