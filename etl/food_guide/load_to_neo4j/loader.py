@@ -124,7 +124,7 @@ FOREACH (_ IN CASE WHEN row.middleKey IS NULL THEN [] ELSE [1] END |
       middle.displayName = row.middleDisplayName
   MERGE (major)-[:HAS_SUBCATEGORY]->(middle)
 )
-FOREACH (_ IN CASE WHEN row.minorKey IS NULL THEN [] ELSE [1] END |
+FOREACH (_ IN CASE WHEN row.guideKey IS NULL THEN [] ELSE [1] END |
   MERGE (middle:FoodCategory {key: row.middleKey})
   SET middle.level = "middle",
       middle.name = row.middleCategory,
@@ -209,7 +209,6 @@ def build_food_guide_record(row: pd.Series, index: int) -> dict[str, Any]:
         "minorCategory": minor_category,
         "majorKey": _category_key("major", major_category),
         "middleKey": _category_key("middle", major_category, middle_category),
-        "minorKey": _category_key("minor", major_category, middle_category, minor_category),
         "majorPath": major_path,
         "middlePath": middle_path,
         "minorPath": minor_path,
