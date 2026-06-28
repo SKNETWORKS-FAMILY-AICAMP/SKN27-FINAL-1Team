@@ -16,24 +16,27 @@
    docker compose down
    docker compose up -d --build
    ```
-   새 `cron_loader` 스크립트가 포함됩니다.
+   `food_guide_load` one-shot 적재 서비스가 포함됩니다.
 
 ## 자동 Neo4j 적재
-- `etl/load_to_neo4j/cron_loader.py` 가 60초마다 `food_guide_v1.csv` 의 수정 시간을 확인합니다.
-- 변경이 감지되면 `upload.py` 를 호출해 CSV 데이터를 Neo4j에 `MERGE` 합니다.
-- 로그에 `파일 변경 감지`와 `Neo4j upload completed` 가 출력됩니다.
+- Docker Compose `food_guide_load` 서비스가 `python -m etl.food_guide.load_to_neo4j` 로 1회 적재 후 종료합니다.
+- 적재 로직: `etl/food_guide/load_to_neo4j/loader.py` 의 `load_food_guide_to_neo4j`
+- `backend`는 `food_guide_load`가 성공적으로 끝난 뒤 기동합니다.
 
 ## 실행 및 검증
 ```bash
-# 컨테이너 로그 확인
-docker compose logs -f etl
+# 적재만 다시 실행
+docker compose run --rm food_guide_load
+
+# 적재 로그 확인
+docker compose logs food_guide_load
 
 # Neo4j에 데이터가 들어갔는지 확인
-docker compose exec neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" "MATCH (i:Ingredient) RETURN count(i);"
+docker compose exec neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" "MATCH (g:FoodGuide) RETURN count(g);"
 ```
 위 쿼리 결과가 0보다 크면 정상 적재된 것입니다.
 
 ## 기타 주의사항
-- CSV 스키마가 바뀔 경우 `upload.py` 의 매핑 로직을 수정해야 합니다.
+- CSV 스키마가 바뀔 경우 `etl/food_guide/load_to_neo4j/loader.py` 의 매핑 로직을 수정해야 합니다.
 - Docker 볼륨은 읽기 전용(`./storage:/project/storage:ro`)으로 마운트됩니다.
 - 개발 중에는 `requirements.txt` 를 수정하면 반드시 `pip install -r requirements.txt` 와 Docker 재빌드를 수행하세요.
