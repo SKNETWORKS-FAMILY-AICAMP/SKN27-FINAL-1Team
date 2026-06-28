@@ -13,7 +13,7 @@ MatchType = Literal["recipe_in_fridge", "fridge_in_recipe"]
 
 @dataclass(frozen=True)
 class FridgeItemSnapshot:
-    ingredient_id: int
+    ingredient_id: int | None
     fridge_name: str
 
 
@@ -32,7 +32,7 @@ class MatchRates:
 
 
 @dataclass(frozen=True)
-class OwnershipResult:
+class FridgeMatchResult:
     owned: list[dict[str, Any]]
     maybe_owned: list[dict[str, Any]]
     missing: list[dict[str, Any]]
@@ -104,11 +104,32 @@ def find_maybe_match(
     return best
 
 
-def classify_ingredients(
+def ingredient_matches_refs(
+    ingredient: dict[str, Any],
+    refs: list[FridgeItemSnapshot],
+) -> bool:
+    ingredient_id = ingredient.get("ingredient_id")
+    ref_ids = {ref.ingredient_id for ref in refs if ref.ingredient_id is not None}
+    if ingredient_id and ingredient_id in ref_ids:
+        return True
+    recipe_name = ingredient.get("name") or ""
+    return find_maybe_match(recipe_name, refs) is not None
+
+
+def recipe_contains_banned(
+    recipe_ingredients: list[dict[str, Any]],
+    banned_items: list[FridgeItemSnapshot],
+) -> bool:
+    if not banned_items:
+        return False
+    return any(ingredient_matches_refs(ingredient, banned_items) for ingredient in recipe_ingredients)
+
+
+def classify_fridge_match(
     recipe_ingredients: list[dict[str, Any]],
     fridge_items: list[FridgeItemSnapshot],
-) -> OwnershipResult:
-    owned_ids = {item.ingredient_id for item in fridge_items}
+) -> FridgeMatchResult:
+    owned_ids = {item.ingredient_id for item in fridge_items if item.ingredient_id is not None}
 
     owned: list[dict[str, Any]] = []
     maybe_owned: list[dict[str, Any]] = []
@@ -118,6 +139,10 @@ def classify_ingredients(
         ingredient_id = ingredient.get("ingredient_id")
         if ingredient_id and ingredient_id in owned_ids:
             owned.append(ingredient)
+            continue
+
+        if not ingredient_matches_refs(ingredient, fridge_items):
+            missing.append(ingredient)
             continue
 
         recipe_name = ingredient.get("name") or ""
@@ -141,7 +166,7 @@ def classify_ingredients(
         required_count=len(recipe_ingredients),
     )
 
-    return OwnershipResult(
+    return FridgeMatchResult(
         owned=owned,
         maybe_owned=maybe_owned,
         missing=missing,
@@ -150,15 +175,15 @@ def classify_ingredients(
     )
 
 
-def ownership_counts(
-    ownership: OwnershipResult,
+def fridge_match_counts(
+    fridge_match: FridgeMatchResult,
     config: RecipeRecommendConfig,
 ) -> dict[str, int]:
-    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
-    owned_count = len(ownership.owned)
-    missing_count = len(ownership.missing)
+    maybe_count = len(fridge_match.maybe_owned) if config.include_maybe_owned else 0
+    owned_count = len(fridge_match.owned)
+    missing_count = len(fridge_match.missing)
     if not config.include_maybe_owned:
-        missing_count += len(ownership.maybe_owned)
+        missing_count += len(fridge_match.maybe_owned)
 
     total_required = owned_count + maybe_count + missing_count
     rates = compute_match_rates(owned_count, maybe_count, total_required)
@@ -168,27 +193,3 @@ def ownership_counts(
         "missing_ingredient_count": missing_count,
         "display_match_rate": rates.display_match_rate,
     }
-
-
-def passes_ownership_filter(
-    counts: dict[str, int],
-    ownership: OwnershipResult,
-    recipe_ingredients: list[dict[str, Any]],
-    config: RecipeRecommendConfig,
-) -> bool:
-    owned_count = len(ownership.owned)
-    maybe_count = len(ownership.maybe_owned) if config.include_maybe_owned else 0
-
-    if config.require_any_owned and (owned_count + maybe_count) < 1:
-        return False
-
-    if config.min_display_match_rate is not None:
-        rates = compute_match_rates(
-            owned_count,
-            maybe_count,
-            len(recipe_ingredients),
-        )
-        if rates.display_match_rate < config.min_display_match_rate:
-            return False
-
-    return True
