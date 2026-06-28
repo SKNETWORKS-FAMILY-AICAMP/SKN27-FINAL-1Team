@@ -14,15 +14,14 @@ import {
   receiptSteps as steps,
 } from '../../mock/receiptOcrMock.js'
 
-const fallbackWeeklyPurchaseData = [
-  { week: '1주차', items: 8, amount: 32600 },
-  { week: '2주차', items: 12, amount: 48700 },
-  { week: '3주차', items: 9, amount: 35400 },
-  { week: '4주차', items: 15, amount: 61200 },
-  { week: '5주차', items: 11, amount: 42900 },
+const fallbackWeeklyAmounts = [
+  { items: 8, amount: 32600 },
+  { items: 12, amount: 48700 },
+  { items: 9, amount: 35400 },
+  { items: 15, amount: 61200 },
 ]
 
-const purchaseFlowWeekCount = 5
+const purchaseFlowWeekCount = 4
 
 const quantityUnitOptions = ['kg', '개']
 const storageOptions = ['냉동', '냉장', '실온']
@@ -107,21 +106,49 @@ function mapMockHistoryToReceipts(history) {
   }))
 }
 
-function createEmptyWeeklyData(weekCount = purchaseFlowWeekCount) {
-  return Array.from({ length: weekCount }, (_, index) => ({
-    week: `${index + 1}주차`,
-    items: 0,
-    amount: 0,
-  }))
+// 한 달을 1~7일=1주차, 8~14일=2주차 ... 식으로 나눈 "월 주차"를 반환합니다.
+function getWeekOfMonth(date) {
+  return Math.ceil(date.getDate() / 7)
+}
+
+function getWeekFirstDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), (getWeekOfMonth(date) - 1) * 7 + 1)
+}
+
+function getWeekBucketKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${getWeekOfMonth(date)}`
+}
+
+function getWeekLabel(date) {
+  return `${date.getMonth() + 1}월 ${getWeekOfMonth(date)}주차`
+}
+
+// 접속일(anchorDate)이 속한 주차부터 과거로 weekCount개의 월 주차 버킷을 만듭니다(오래된 주차가 앞).
+function buildRecentWeekBuckets(anchorDate, weekCount) {
+  const buckets = []
+  let cursor = getWeekFirstDay(anchorDate)
+
+  for (let i = 0; i < weekCount; i += 1) {
+    buckets.unshift({ key: getWeekBucketKey(cursor), label: getWeekLabel(cursor) })
+    const previousWeekDay = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - 1)
+    cursor = getWeekFirstDay(previousWeekDay)
+  }
+
+  return buckets
 }
 
 function buildPurchaseFlowData(receipts, options = {}) {
   const weekCount = options.weekCount || purchaseFlowWeekCount
   const fallbackToMock = options.fallbackToMock ?? false
   const sourceReceipts = Array.isArray(receipts) ? receipts : []
+  const buckets = buildRecentWeekBuckets(new Date(), weekCount)
 
   if (sourceReceipts.length === 0) {
-    const weeklyData = fallbackToMock ? fallbackWeeklyPurchaseData : createEmptyWeeklyData(weekCount)
+    const weeklyData = buckets.map((bucket, index) => ({
+      week: bucket.label,
+      items: fallbackToMock ? fallbackWeeklyAmounts[index]?.items ?? 0 : 0,
+      amount: fallbackToMock ? fallbackWeeklyAmounts[index]?.amount ?? 0 : 0,
+    }))
     return {
       weeklyData,
       frequentIngredients: fallbackToMock ? getFrequentIngredients(mapMockHistoryToReceipts(receiptHistory)) : [],
@@ -132,20 +159,17 @@ function buildPurchaseFlowData(receipts, options = {}) {
     ...receipt,
     parsedDate: parseReceiptDate(receipt.purchase_datetime || receipt.date),
   }))
-  const validDates = datedReceipts.map((receipt) => receipt.parsedDate).filter(Boolean)
-  const latestDate = validDates.length
-    ? new Date(Math.max(...validDates.map((date) => date.getTime())))
-    : new Date()
-  const dayInMs = 24 * 60 * 60 * 1000
-  const startTime = latestDate.getTime() - (weekCount - 1) * 7 * dayInMs
-
-  const weeklyData = createEmptyWeeklyData(weekCount)
+  const indexByBucketKey = new Map(buckets.map((bucket, index) => [bucket.key, index]))
+  const weeklyData = buckets.map((bucket) => ({ week: bucket.label, items: 0, amount: 0 }))
 
   datedReceipts.forEach((receipt) => {
-    const receiptDate = receipt.parsedDate || latestDate
-    const weekIndex = Math.floor((receiptDate.getTime() - startTime) / (7 * dayInMs))
+    if (!receipt.parsedDate) {
+      return
+    }
 
-    if (weekIndex < 0 || weekIndex >= weekCount) {
+    const weekIndex = indexByBucketKey.get(getWeekBucketKey(receipt.parsedDate))
+
+    if (weekIndex === undefined) {
       return
     }
 
@@ -271,7 +295,8 @@ function PurchaseFlowChart({ isLoggedIn }) {
     const x = 30 + index * ((320 - 60) / (weekCount - 1))
     const barHeight = data.amount > 0 ? Math.max((data.amount / maxAmount) * 56, 5) : 0
     const barY = baseline - barHeight
-    const dotY = data.items > 0 ? 84 - (data.items / maxItems) * 40 : 84
+    // 0개인 주는 바닥선(92)에 붙고, 값이 클수록 위로 올라갑니다.
+    const dotY = 92 - (data.items / maxItems) * 48
 
     return { ...data, x, barHeight, barY, dotY }
   })
@@ -285,7 +310,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
     >
       <div className="receipt-chart__head">
         <h2 id={chartId}>식재료 구매 흐름</h2>
-        <p>최근 구매일 기준으로 주차별 식재료 구매량과 금액을 보여줘요.</p>
+        <p>이번 주를 기준으로 최근 {weekCount}주간 주차별 구매 금액과 품목 수를 보여줘요.</p>
       </div>
 
       <div className="receipt-dashboard">
@@ -313,18 +338,35 @@ function PurchaseFlowChart({ isLoggedIn }) {
                     x={point.x - 13}
                     y={point.barY}
                   />
-                  <text className="receipt-week-chart__amount" x={point.x} y={baseline - 8}>
-                    {formatManwon(point.amount)}
-                  </text>
+                  {point.amount > 0 ? (
+                    <text className="receipt-week-chart__amount" x={point.x} y={baseline - 8}>
+                      {formatManwon(point.amount)}
+                    </text>
+                  ) : null}
                 </g>
               ))}
               <polyline className="receipt-week-chart__line" points={linePoints} />
               {points.map((point) => (
                 <g key={point.week}>
-                  <circle className="receipt-week-chart__dot" cx={point.x} cy={point.dotY} r="3.4" />
-                  <text className="receipt-week-chart__value" x={point.x} y={point.dotY - 8}>
-                    {point.items}개
-                  </text>
+                  <circle
+                    className={`receipt-week-chart__dot ${point.items === 0 ? 'is-empty' : ''}`}
+                    cx={point.x}
+                    cy={point.dotY}
+                    r="3.4"
+                  />
+                  {point.items > 0 ? (
+                    <text className="receipt-week-chart__value" x={point.x} y={point.dotY - 8}>
+                      {point.items}개
+                    </text>
+                  ) : (
+                    <text
+                      className="receipt-week-chart__value receipt-week-chart__value--empty"
+                      x={point.x}
+                      y={point.dotY - 8}
+                    >
+                      0개
+                    </text>
+                  )}
                   <text className="receipt-week-chart__label" x={point.x} y="118">
                     {point.week}
                   </text>
@@ -442,8 +484,10 @@ function toDateTimeLocalValue(value) {
   }
 
   const normalized = String(value).trim().replace(' ', 'T')
+  const match = normalized.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)
 
-  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized) ? normalized : ''
+  // 초는 화면에 표시하지 않고 분까지만 잘라서 보여줍니다(OCR이 읽은 초 정보는 원본에 유지).
+  return match ? match[0] : ''
 }
 
 function fromDateTimeLocalValue(value) {
@@ -484,7 +528,7 @@ function mapOcrItemsToRows(items = []) {
 
 function ReceiptOcr() {
   const navigate = useNavigate()
-  const { dialogNode, showAlert, showConfirm, showPrompt } = useAppDialog()
+  const { dialogNode, showAlert, showConfirm } = useAppDialog()
   const flowTimersRef = useRef([])
   const previewImageUrlRef = useRef(null)
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
@@ -497,6 +541,7 @@ function ReceiptOcr() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [analysisStep, setAnalysisStep] = useState(0)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
+  const [isAddRowOpen, setIsAddRowOpen] = useState(false)
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -695,36 +740,38 @@ function ReceiptOcr() {
     moveToStep(activeStep + 1)
   }
 
-  const addRow = async () => {
-    const name = await showPrompt('추가할 품목명을 입력해주세요.', {
-      title: '품목 추가',
-      placeholder: '예: 대파',
-    })
+  const addRow = () => {
+    setIsAddRowOpen(true)
+  }
 
-    if (!name?.trim()) {
+  const submitAddRow = (form) => {
+    const name = form.name.trim()
+
+    if (!name) {
       return
     }
 
-    const newRowId = `manual-${Date.now()}-${name.trim()}`
+    const newRowId = `manual-${Date.now()}-${name}`
 
     setDetectedRows((prev) => [
       ...prev,
       {
         id: newRowId,
-        raw: name.trim(),
-        name: name.trim(),
-        quantity: '1개',
-        quantityAmount: 1,
-        quantityUnit: '개',
-        price: '0',
+        raw: name,
+        name,
+        quantity: `${form.quantityAmount}${form.quantityUnit}`,
+        quantityAmount: form.quantityAmount,
+        quantityUnit: form.quantityUnit,
+        price: formatPriceInput(form.price),
         category: '기타',
-        storage: '냉장',
+        storage: form.storage || '냉장',
         review: true,
       },
     ])
     setEditingRows((prev) => ({ ...prev, [newRowId]: true }))
     setHasUploaded(true)
     setActiveStep(2)
+    setIsAddRowOpen(false)
   }
 
   const updateQuantityAmount = (rowId, nextAmount) => {
@@ -869,6 +916,16 @@ function ReceiptOcr() {
       return
     }
 
+    const confirmed = await showConfirm(`총 ${detectedRows.length}개 재료를 냉장고에 입고하시겠습니까?`, {
+      title: '냉장고 입고',
+      confirmText: '입고하기',
+      cancelText: '취소',
+    })
+
+    if (!confirmed) {
+      return
+    }
+
     const token = window.localStorage.getItem('bobbeori-token')
     if (token) {
       const calendarCostEnabled = window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false'
@@ -956,7 +1013,8 @@ function ReceiptOcr() {
                 .filter(Boolean)
                 .join(' ')}
               type="button"
-              onClick={() => moveToStep(index)}
+              tabIndex={-1}
+              aria-current={index === activeStep ? 'step' : undefined}
             >
               <span>{step}</span>
             </button>
@@ -1042,7 +1100,7 @@ function ReceiptOcr() {
                   다시 촬영
                 </button>
               </div>
-              <ReceiptImageViewer src={previewImageUrl} />
+              <ReceiptImageViewer src={previewImageUrl} isScanning={isProcessing} />
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
@@ -1076,7 +1134,6 @@ function ReceiptOcr() {
                     <input
                       className="receipt-inline-input receipt-inline-input--datetime"
                       type="datetime-local"
-                      step="1"
                       value={toDateTimeLocalValue(receiptMeta.purchaseDatetime)}
                       onChange={(event) =>
                         updateReceiptMetaField('purchaseDatetime', fromDateTimeLocalValue(event.target.value))
@@ -1223,9 +1280,13 @@ function ReceiptOcr() {
                 })}
                 {detectedRows.length === 0 ? (
                   isProcessing ? (
-                    <div className="receipt-empty-items" role="row">
+                    <div className="receipt-empty-items receipt-empty-items--loading" role="row">
+                      <span className="receipt-loading-spinner" aria-hidden="true" />
                       <strong>영수증을 분석하고 있어요.</strong>
                       <p>업로드한 영수증에서 품목과 금액을 읽는 중이에요. 잠시만 기다려주세요.</p>
+                      <div className="receipt-loading-bar" role="progressbar" aria-label="영수증 분석 진행 중">
+                        <span />
+                      </div>
                     </div>
                   ) : (
                     <div className="receipt-empty-items" role="row">
@@ -1236,42 +1297,162 @@ function ReceiptOcr() {
                 ) : null}
               </div>
 
-              <button className="receipt-add-row" type="button" onClick={addRow}>
-                + 행 추가
-              </button>
-              <div className="receipt-success">
-                <span>총상품<em>{detectedRows.length}개</em></span>
-                <span>총 금액<em>{totalAmount.toLocaleString()}원</em></span>
-                <span>확인 완료<em>{mappedCount}개</em></span>
-                <span>확인 필요<em>{reviewCount}개</em></span>
-              </div>
-              <button
-                className="receipt-stock-button"
-                type="button"
-                disabled={isStockDisabled}
-                onClick={stockIngredients}
-              >
-                <ImageSlot className="receipt-stock-button__icon" src={iconRefrigerator} />
-                <span className="receipt-stock-button__title">냉장고에 입고하기</span>
-                <small>
-                  {reviewCount > 0
-                    ? `확인 필요 항목 ${reviewCount}개를 먼저 완료해주세요.`
-                    : detectedRows.length === 0
-                      ? '등록할 품목을 먼저 추가해주세요.'
-                    : `총 ${detectedRows.length}개 재료가 등록돼요!`}
-                </small>
-                <span className="receipt-stock-button__arrow" aria-hidden="true">→</span>
-              </button>
+              {!isProcessing ? (
+                <>
+                  <button className="receipt-add-row" type="button" onClick={addRow}>
+                    + 행 추가
+                  </button>
+                  <div className="receipt-success">
+                    <span>총상품<em>{detectedRows.length}개</em></span>
+                    <span>총 금액<em>{totalAmount.toLocaleString()}원</em></span>
+                    <span>확인 완료<em>{mappedCount}개</em></span>
+                    <span>확인 필요<em>{reviewCount}개</em></span>
+                  </div>
+                  <button
+                    className="receipt-stock-button"
+                    type="button"
+                    disabled={isStockDisabled}
+                    onClick={stockIngredients}
+                  >
+                    <ImageSlot className="receipt-stock-button__icon" src={iconRefrigerator} />
+                    <span className="receipt-stock-button__title">냉장고에 입고하기</span>
+                    <small>
+                      {reviewCount > 0
+                        ? `확인 필요 항목 ${reviewCount}개를 먼저 완료해주세요.`
+                        : detectedRows.length === 0
+                          ? '등록할 품목을 먼저 추가해주세요.'
+                        : `총 ${detectedRows.length}개 재료가 등록돼요!`}
+                    </small>
+                    <span className="receipt-stock-button__arrow" aria-hidden="true">→</span>
+                  </button>
+                </>
+              ) : null}
             </section>
           </div>
         </>
       )}
+      {isAddRowOpen ? <AddRowModal onClose={() => setIsAddRowOpen(false)} onSubmit={submitAddRow} /> : null}
       {dialogNode}
     </section>
   )
 }
 
-function ReceiptImageViewer({ src }) {
+function AddRowModal({ onClose, onSubmit }) {
+  const [name, setName] = useState('')
+  const [quantityAmount, setQuantityAmount] = useState('1')
+  const [quantityUnit, setQuantityUnit] = useState('개')
+  const [price, setPrice] = useState('')
+  const [storage, setStorage] = useState('냉장')
+
+  const trimmedName = name.trim()
+  const canSubmit = trimmedName.length > 0
+
+  const handleSubmit = () => {
+    if (!canSubmit) {
+      return
+    }
+
+    const parsedAmount = Number.parseFloat(quantityAmount)
+
+    onSubmit({
+      name: trimmedName,
+      quantityAmount: Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : 1,
+      quantityUnit,
+      price,
+      storage,
+    })
+  }
+
+  return (
+    <div className="app-dialog-overlay" role="presentation" onMouseDown={onClose}>
+      <section
+        className="app-dialog-card receipt-add-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="receipt-add-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="app-dialog-card__header">
+          <span>품목 추가</span>
+          <button type="button" aria-label="닫기" onClick={onClose}>
+            x
+          </button>
+        </div>
+        <h2 id="receipt-add-title">행 추가</h2>
+        <p>추가할 품목 정보를 입력해주세요.</p>
+
+        <div className="receipt-add-form">
+          <label className="receipt-add-form__full">
+            <small>재료명</small>
+            <input
+              type="text"
+              value={name}
+              placeholder="예: 대파"
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  handleSubmit()
+                }
+              }}
+            />
+          </label>
+          <label>
+            <small>수량</small>
+            <input
+              type="number"
+              min="0"
+              step={quantityUnit === 'kg' ? '0.1' : '1'}
+              value={quantityAmount}
+              onChange={(event) => setQuantityAmount(event.target.value)}
+            />
+          </label>
+          <label>
+            <small>단위</small>
+            <select value={quantityUnit} onChange={(event) => setQuantityUnit(event.target.value)}>
+              {quantityUnitOptions.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <small>금액(원)</small>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9,]*"
+              value={price}
+              placeholder="0"
+              onChange={(event) => setPrice(formatPriceInput(event.target.value))}
+            />
+          </label>
+          <label>
+            <small>보관 방법</small>
+            <select value={storage} onChange={(event) => setStorage(event.target.value)}>
+              {storageOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="app-dialog-card__actions">
+          <button className="app-dialog-card__secondary" type="button" onClick={onClose}>
+            취소
+          </button>
+          <button className="app-dialog-card__primary" type="button" disabled={!canSubmit} onClick={handleSubmit}>
+            추가
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ReceiptImageViewer({ src, isScanning = false }) {
   const minZoom = 1
   const maxZoom = 4
   const zoomStep = 0.4
@@ -1355,12 +1536,19 @@ function ReceiptImageViewer({ src }) {
         onDoubleClick={resetView}
       >
         {src ? (
-          <img
-            alt="업로드한 영수증 이미지"
-            draggable="false"
-            src={src}
-            style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
-          />
+          <>
+            <img
+              alt="업로드한 영수증 이미지"
+              draggable="false"
+              src={src}
+              style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+            />
+            {isScanning && (
+              <div className="receipt-scan-overlay" aria-hidden="true">
+                <div className="receipt-scan-overlay__laser" />
+              </div>
+            )}
+          </>
         ) : (
           <div className="receipt-paper-image__empty">
             <p>업로드한 영수증 이미지를 불러올 수 없어요.</p>
@@ -1384,10 +1572,40 @@ function ReceiptImageViewer({ src }) {
   )
 }
 
+function detectCameraCapture() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false
+  }
+
+  const isCoarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches
+  const isMobileViewport = window.matchMedia?.('(max-width: 760px)')?.matches
+  const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+
+  return Boolean(isCoarsePointer || isMobileUa || isMobileViewport)
+}
+
 function UploadPanel({ onStartUpload }) {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [canUseCamera, setCanUseCamera] = useState(detectCameraCapture)
+
+  useEffect(() => {
+    const update = () => setCanUseCamera(detectCameraCapture())
+    const mediaQueries = [
+      window.matchMedia('(pointer: coarse)'),
+      window.matchMedia('(max-width: 760px)'),
+    ]
+
+    mediaQueries.forEach((mediaQuery) => mediaQuery.addEventListener?.('change', update))
+    window.addEventListener('resize', update)
+    update()
+
+    return () => {
+      mediaQueries.forEach((mediaQuery) => mediaQuery.removeEventListener?.('change', update))
+      window.removeEventListener('resize', update)
+    }
+  }, [])
 
   const handleFileChange = (event, source) => {
     const file = event.target.files?.[0]
@@ -1425,7 +1643,11 @@ function UploadPanel({ onStartUpload }) {
         onDrop={handleDrop}
       >
         <ImageSlot className="receipt-dropzone__icon" src={iconReceipt} />
-        <p>영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.</p>
+        <p>
+          {canUseCamera
+            ? '영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.'
+            : '영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드 버튼을 눌러주세요.'}
+        </p>
         <input
           ref={uploadInputRef}
           className="receipt-file-input"
@@ -1433,21 +1655,25 @@ function UploadPanel({ onStartUpload }) {
           accept="image/png,image/jpeg,image/webp"
           onChange={(event) => handleFileChange(event, '업로드 이미지')}
         />
-        <input
-          ref={cameraInputRef}
-          className="receipt-file-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(event) => handleFileChange(event, '카메라 촬영본')}
-        />
-        <div>
+        {canUseCamera ? (
+          <input
+            ref={cameraInputRef}
+            className="receipt-file-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => handleFileChange(event, '카메라 촬영본')}
+          />
+        ) : null}
+        <div className={canUseCamera ? undefined : 'is-single'}>
           <button className="receipt-primary-button" type="button" onClick={() => uploadInputRef.current?.click()}>
             이미지 업로드
           </button>
-          <button className="receipt-soft-button" type="button" onClick={() => cameraInputRef.current?.click()}>
-            카메라 촬영
-          </button>
+          {canUseCamera ? (
+            <button className="receipt-soft-button" type="button" onClick={() => cameraInputRef.current?.click()}>
+              카메라 촬영
+            </button>
+          ) : null}
         </div>
       </div>
       <p className="receipt-tip">영수증 전체가 보이도록 밝은 곳에서 정면으로 촬영해주세요.</p>
@@ -1481,10 +1707,12 @@ function mapHistoryEntry(entry) {
 }
 
 function RecentHistory() {
+  const { dialogNode, showAlert, showConfirm } = useAppDialog()
   const [history, setHistory] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [showAllHistory, setShowAllHistory] = useState(false)
   const [status, setStatus] = useState('loading')
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -1531,6 +1759,47 @@ function RecentHistory() {
 
   const visibleHistory = showAllHistory ? history : history.slice(0, 3)
   const selectedHistory = history.find((item) => item.id === selectedId) || null
+
+  const handleDelete = async (item) => {
+    const confirmed = await showConfirm(
+      `'${item.title}' 영수증 내역을 삭제할까요? 이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
+      { title: '영수증 내역 삭제', confirmText: '삭제', cancelText: '취소' },
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      return
+    }
+
+    setDeletingId(item.id)
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/receipts/${item.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.detail || '영수증 내역 삭제에 실패했어요.')
+      }
+
+      const remaining = history.filter((entry) => entry.id !== item.id)
+      setHistory(remaining)
+
+      if (selectedId === item.id) {
+        setSelectedId(remaining[0]?.id ?? null)
+      }
+    } catch (error) {
+      await showAlert(error.message || '영수증 내역 삭제 중 문제가 발생했어요.', { title: '삭제 실패' })
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <section className="receipt-panel receipt-history" aria-labelledby="receipt-history-title">
@@ -1587,10 +1856,21 @@ function RecentHistory() {
                 )}
               </ul>
               <p>{selectedHistory.note}</p>
+              <div className="receipt-history-detail__actions">
+                <button
+                  className="receipt-history-delete"
+                  type="button"
+                  disabled={deletingId === selectedHistory.id}
+                  onClick={() => handleDelete(selectedHistory)}
+                >
+                  {deletingId === selectedHistory.id ? '삭제 중...' : '내역 삭제'}
+                </button>
+              </div>
             </article>
           ) : null}
         </>
       )}
+      {dialogNode}
     </section>
   )
 }

@@ -1,16 +1,49 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.backend.db.models import Receipt, ReceiptItem
 
 
 KST = timezone(timedelta(hours=9))
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
 class ReceiptHistoryService:
-    """최근에 등록(확정)된 영수증 내역을 조회하는 서비스입니다."""
+    """최근에 등록(확정)된 영수증 내역을 조회/삭제하는 서비스입니다."""
+
+    def delete_receipt(self, *, db: Session, user_id: int, receipt_id: int) -> None:
+        receipt = (
+            db.query(Receipt)
+            .filter(Receipt.id == receipt_id, Receipt.user_id == user_id)
+            .first()
+        )
+        if not receipt:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="영수증을 찾을 수 없습니다.")
+
+        original_file_path = receipt.original_file_path
+
+        # 영수증과 영수증 품목만 삭제됩니다. 이미 냉장고에 입고된 식재료는
+        # fridge_items.receipt_item_id ON DELETE SET NULL 로 보존됩니다.
+        db.delete(receipt)
+        db.commit()
+
+        self._delete_file(original_file_path)
+
+    def _delete_file(self, relative_or_absolute_path: Optional[str]) -> None:
+        if not relative_or_absolute_path:
+            return
+
+        path = Path(relative_or_absolute_path)
+        target = path if path.is_absolute() else PROJECT_ROOT / path
+        try:
+            if target.is_file():
+                target.unlink()
+        except OSError:
+            pass
 
     def get_recent_receipts(self, *, db: Session, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         receipts = (
