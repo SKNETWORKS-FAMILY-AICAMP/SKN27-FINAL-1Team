@@ -8,11 +8,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecommendationResult
-from app.backend.services.recommendation_service.recipe_recommend_engine import recipe_recommend_engine
-from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommend_pipeline import recommend_pipeline
+from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
 __all__ = [
-    "FridgeExpiryRow",
     "RecipeRecommendConfig",
     "RecommendationService",
     "recommendation_service",
@@ -21,27 +20,17 @@ __all__ = [
 
 class RecommendationService:
     MANUAL_SAVE_TYPE = "manual_save"
-    FRIDGE_BASED_TYPE = "fridge_based"
 
-    FRIDGE_CONSUME_LIMIT = RecipeRecommendConfig.FRIDGE_CONSUME_LIMIT
-    RECOMMEND_LIMIT_MIN = RecipeRecommendConfig.LIMIT_MIN
-    RECOMMEND_LIMIT_MAX = RecipeRecommendConfig.LIMIT_MAX
-    DEFAULT_LIMIT = FRIDGE_CONSUME_LIMIT
-
-    def save_result(
+    def save_recipe(
         self,
         db: Session,
         user_id: int,
         recipe_id: int,
-        recommendation_type: str,
-        *,
-        strict: bool = True,
+        recommendation_type: str = MANUAL_SAVE_TYPE,
     ) -> dict[str, Any]:
         """레시피를 recommendation_results에 저장한다. 중복 검사 없이 매번 새 행을 만든다."""
         recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
         if recipe is None:
-            if not strict:
-                return {}
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="레시피를 찾을 수 없습니다.",
@@ -62,15 +51,6 @@ class RecommendationService:
             "recommendation_type": row.recommendation_type or recommendation_type,
             "created_at": row.created_at,
         }
-
-    def save_manual(
-        self,
-        db: Session,
-        user_id: int,
-        recipe_id: int,
-        recommendation_type: str = MANUAL_SAVE_TYPE,
-    ) -> dict[str, Any]:
-        return self.save_result(db, user_id, recipe_id, recommendation_type)
 
     def list_user_recipes(self, db: Session, user_id: int) -> list[dict[str, Any]]:
         rows = (
@@ -121,7 +101,7 @@ class RecommendationService:
         exclude_recipe_ids: list[int] | None = None,
         refresh_pool: bool = False,
     ) -> dict[str, Any]:
-        return recipe_recommend_engine.recommend(
+        return recommend_pipeline.recommend(
             db,
             user_id,
             config,

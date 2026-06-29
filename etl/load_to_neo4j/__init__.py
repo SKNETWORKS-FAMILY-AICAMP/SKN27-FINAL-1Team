@@ -1,1 +1,1 @@
-# Package marker for load_to_neo4j
+"""Shared Neo4j connection utilities for ETL loaders."""

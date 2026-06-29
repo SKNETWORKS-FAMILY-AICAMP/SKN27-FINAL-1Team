@@ -1,4 +1,4 @@
-"""레시피 검색·목록용 SQLAlchemy 쿼리 빌더 (서비스 간 내부 공유)."""
+"""후보 생성용 레시피 SQL 쿼리 (검색·추천 공통)."""
 
 from __future__ import annotations
 

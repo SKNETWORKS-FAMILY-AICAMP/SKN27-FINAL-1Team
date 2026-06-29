@@ -7,8 +7,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecipeIngredient
-from app.backend.services.recommendation_service._fridge_loader import fetch_fridge_snapshots
-from app.backend.services.recommendation_service.ingredient_ownership_service import classify_ingredients
+from app.backend.services.recommendation_service.fridge_ingredient_match import classify_fridge_match
+from app.backend.services.recommendation_service.fridge_loader import fetch_fridge_snapshots
 
 
 class RecipeDetailService:
@@ -65,10 +65,10 @@ class RecipeDetailService:
         db: Session,
     ):
         if user_id <= 0:
-            return classify_ingredients(ingredients, [])
+            return classify_fridge_match(ingredients, [])
 
         fridge_items = fetch_fridge_snapshots(db, user_id)
-        return classify_ingredients(ingredients, fridge_items)
+        return classify_fridge_match(ingredients, fridge_items)
 
     def _format_amount(self, quantity: Decimal | float | int | None, unit: str | None) -> str | None:
         if quantity is None and not unit:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from app.backend.services.recommendation_service.ingredient_ownership_service import OwnershipResult
+from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeMatchResult
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
 
 DEFAULT_EXPIRY_FALLBACK_DAYS = 7
@@ -26,7 +26,7 @@ def urgency(d_day_value: int, config: RecipeRecommendConfig) -> int:
 
 
 def score_expiry(
-    ownership: OwnershipResult,
+    fridge_match: FridgeMatchResult,
     fridge_by_id: dict[int, FridgeExpiryRow],
     fridge_by_name: dict[str, FridgeExpiryRow],
     config: RecipeRecommendConfig,
@@ -38,14 +38,14 @@ def score_expiry(
     matched_rows: list[FridgeExpiryRow] = []
     seen_ids: set[int] = set()
 
-    for ingredient in ownership.owned:
+    for ingredient in fridge_match.owned:
         ingredient_id = ingredient.get("ingredient_id")
         if ingredient_id and ingredient_id in fridge_by_id and ingredient_id not in seen_ids:
             matched_rows.append(fridge_by_id[ingredient_id])
             seen_ids.add(ingredient_id)
 
     if config.include_maybe_owned:
-        for ingredient in ownership.maybe_owned:
+        for ingredient in fridge_match.maybe_owned:
             fridge_name = (ingredient.get("fridge_ingredient_name") or "").strip()
             row = fridge_by_name.get(fridge_name)
             if row and row.ingredient_id not in seen_ids:
