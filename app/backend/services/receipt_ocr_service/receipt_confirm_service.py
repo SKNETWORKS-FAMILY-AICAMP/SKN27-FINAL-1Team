@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models import FridgeItem, Ingredient, IngredientAlias, Receipt, ReceiptItem
 from app.backend.schemas.receipts import ReceiptConfirmRequest
+from app.backend.services.ingredient_match_service import ingredient_name_matcher
 from app.backend.services.inventory_service.inventory_service import inventory_service
 
 
@@ -53,6 +54,7 @@ class ReceiptConfirmService:
 
             final_name = normalized_name or raw_name
             ingredient = self._get_or_create_ingredient(db, final_name, item.unit)
+            final_name = ingredient.name
             receipt_item = ReceiptItem(
                 receipt_id=receipt.id,
                 ingredient_id=ingredient.id,
@@ -131,6 +133,10 @@ class ReceiptConfirmService:
         return alias.ingredient if alias else None
 
     def _get_or_create_ingredient(self, db: Session, name: str, unit: Optional[str]) -> Ingredient:
+        ingredient = ingredient_name_matcher.find_best_ingredient(db, name)
+        if ingredient:
+            return ingredient
+
         ingredient = self._find_ingredient(db, name)
         if ingredient:
             return ingredient

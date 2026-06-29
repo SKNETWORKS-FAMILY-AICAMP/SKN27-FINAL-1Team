@@ -13,6 +13,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.backend.core.config import settings
 from app.backend.db.models import Receipt
+from app.backend.services.ingredient_match_service import ingredient_name_matcher
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -43,7 +44,7 @@ class ReceiptOcrService:
                 filename=file.filename or "receipt.jpg",
                 image_id=image_id,
             )
-            normalized = self._normalize_ocr_result(ocr_result, image_id=image_id)
+            normalized = self._normalize_ocr_result(ocr_result, image_id=image_id, db=db)
 
             receipt = Receipt(
                 user_id=user_id,
@@ -142,7 +143,7 @@ class ReceiptOcrService:
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
-    def _normalize_ocr_result(self, result: Dict[str, Any], *, image_id: str) -> Dict[str, Any]:
+    def _normalize_ocr_result(self, result: Dict[str, Any], *, image_id: str, db: Session) -> Dict[str, Any]:
         items = []
         for item in result.get("items") or []:
             raw_name = self._nullable_str(item.get("raw_name"))
@@ -150,10 +151,11 @@ class ReceiptOcrService:
                 continue
 
             unit = self._nullable_str(item.get("unit"))
+            matched_ingredient = ingredient_name_matcher.find_best_ingredient(db, raw_name)
             items.append(
                 {
                     "raw_name": raw_name,
-                    "normalized_name": None,
+                    "normalized_name": matched_ingredient.name if matched_ingredient else raw_name,
                     "quantity": self._nullable_number(item.get("quantity")),
                     "unit": unit if unit in ALLOWED_UNITS else "개",
                     "item_amount": self._nullable_int(item.get("item_amount")),
