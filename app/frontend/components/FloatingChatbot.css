@@ -497,3 +497,382 @@
 .floating-chatbot__prompts button {
   justify-self: start;
 }
+/* 챗봇 홈을 밥벌이 서비스 톤의 작은 대시보드처럼 보이게 다듬습니다. */
+.floating-chatbot__panel {
+  border-color: #ead4b4;
+  border-radius: 22px;
+  background: #fffbf3;
+  box-shadow: 0 24px 60px rgba(69, 42, 25, 0.2);
+}
+
+.floating-chatbot__header {
+  background: #fff8ed;
+  padding: 18px 20px 15px;
+}
+
+.floating-chatbot__home {
+  background: #fffbf3;
+  padding: 18px 18px 20px;
+}
+
+.floating-chatbot__summary {
+  border-color: #f0d5ad;
+  border-radius: 18px;
+  background: #fff7e8;
+  box-shadow: 0 12px 24px rgba(142, 91, 49, 0.08);
+  padding: 17px;
+}
+
+.floating-chatbot__summary span {
+  background: #ffe9ca;
+  color: #c87820;
+}
+
+.floating-chatbot__summary h2 {
+  font-size: 23px;
+  line-height: 1.2;
+}
+
+.floating-chatbot__summary li {
+  border: 1px solid #f3e2c8;
+  border-radius: 14px;
+  box-shadow: 0 6px 14px rgba(142, 91, 49, 0.05);
+  padding: 12px 12px 12px 14px;
+}
+
+.floating-chatbot__summary li div {
+  min-width: 0;
+}
+
+.floating-chatbot__summary li p {
+  margin: 4px 0 0;
+  color: #8a6043;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.floating-chatbot__summary button,
+.floating-chatbot__prompts button,
+.floating-chatbot__actions button {
+  border-color: #f0ad98;
+  background: #fff3eb;
+  color: #9b4c2e;
+}
+
+.floating-chatbot__prompts {
+  border: 1px solid #efdec4;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(69, 42, 25, 0.06);
+  padding: 15px;
+}
+
+.floating-chatbot__prompts button {
+  width: 100%;
+  text-align: left;
+}
+
+.floating-chatbot__message.is-bot {
+  border-color: #dbe8da;
+  box-shadow: 0 4px 12px rgba(49, 79, 55, 0.05);
+}
+
+.floating-chatbot__message.is-user {
+  background: #103f2a;
+}
+
+.floating-chatbot__tabs {
+  background: #fff8ed;
+}
+
+.floating-chatbot__tabs button {
+  color: #7b6a59;
+}
+
+.floating-chatbot__tabs button.is-active {
+  color: #ff6572;
+}
+/* AI 응답 말풍선 옆에 캐릭터를 붙이고, 홈 요약 카드에 작은 아이콘 디테일을 더합니다. */
+.floating-chatbot__message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.floating-chatbot__message-row.is-bot {
+  justify-content: flex-start;
+}
+
+.floating-chatbot__message-row.is-user {
+  justify-content: flex-end;
+}
+
+.floating-chatbot__message-row .floating-chatbot__message {
+  align-self: auto;
+}
+
+.floating-chatbot__message-row.is-bot .floating-chatbot__message {
+  max-width: calc(82% - 38px);
+}
+
+.floating-chatbot__message-row.is-user .floating-chatbot__message {
+  max-width: 82%;
+}
+
+.floating-chatbot__bot-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid #f0dfc5;
+  border-radius: 50%;
+  background: #fff4e3;
+  object-fit: cover;
+  object-position: 50% 25%;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  margin: 0;
+  border-radius: 12px;
+  background: #fff0d9;
+  color: #ff6572;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 0;
+}
+
+.floating-chatbot__summary li > div {
+  flex: 1 1 auto;
+}
+
+.floating-chatbot__prompt-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  margin-right: 8px;
+  border-radius: 9px;
+  background: #ffe9ee;
+  color: #ff6572;
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: middle;
+}
+/* 이미지 시안처럼 홈 요약을 두 줄 카드와 하단 아이콘 탭으로 정리합니다. */
+.floating-chatbot__summary {
+  border: 1px solid #ffd0ce;
+  border-radius: 10px;
+  background: #fffdf8;
+  box-shadow: 0 10px 28px rgba(155, 76, 46, 0.06);
+  padding: 16px 14px;
+}
+
+.floating-chatbot__summary-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-title-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border: 1px solid #ffc0c1;
+  border-radius: 8px;
+  background: #fff5f4;
+  color: #ff6572;
+  font-size: 14px;
+  padding: 0;
+}
+
+.floating-chatbot__summary h2 {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.floating-chatbot__summary ul {
+  gap: 0;
+  overflow: hidden;
+  margin-top: 0;
+  border: 1px solid #f1dfc8;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.floating-chatbot__summary li {
+  display: grid;
+  grid-template-columns: 34px 90px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 13px 12px;
+}
+
+.floating-chatbot__summary li + li {
+  border-top: 1px solid #f0e2cf;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 15px;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-icon.is-danger {
+  background: #fff4f4;
+  color: #ff6572;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-icon.is-menu {
+  background: #eefbdc;
+  color: #74a93b;
+}
+
+.floating-chatbot__summary strong {
+  color: #5d4633;
+  font-size: 13px;
+}
+
+.floating-chatbot__summary li p {
+  justify-self: end;
+  margin: 0;
+  color: #3a281b;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.floating-chatbot__summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-chips span {
+  display: inline-flex;
+  margin: 0;
+  border-radius: 999px;
+  background: #ffe9ee;
+  color: #ff6572;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 5px 10px;
+}
+
+.floating-chatbot__summary button {
+  width: 20px;
+  min-width: 20px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #8a6043;
+  font-size: 26px;
+  line-height: 1;
+  padding: 0;
+}
+
+.floating-chatbot__prompts {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.floating-chatbot__prompts h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+}
+
+.floating-chatbot__prompts button {
+  width: auto;
+  border-color: #ffc0c1;
+  background: #fffdf8;
+  color: #d94f59;
+  box-shadow: 0 5px 12px rgba(255, 101, 114, 0.08);
+}
+
+.floating-chatbot__prompt-icon {
+  background: #fff4f4;
+  color: #ff6572;
+}
+
+.floating-chatbot__tabs button {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px 8px 12px;
+  font-size: 12px;
+}
+
+.floating-chatbot__tabs button span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.floating-chatbot__tabs button.is-active span {
+  color: #ff6572;
+}
+/* 특수문자 대신 SVG 아이콘을 써서 브라우저 폰트 차이로 깨지지 않게 합니다. */
+.floating-chatbot__icon {
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.floating-chatbot__summary-title-icon .floating-chatbot__icon,
+.floating-chatbot__summary-icon .floating-chatbot__icon,
+.floating-chatbot__prompt-icon .floating-chatbot__icon,
+.floating-chatbot__tabs button span .floating-chatbot__icon {
+  display: block;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-title-icon {
+  color: #ff6572;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-icon.is-danger {
+  color: #ff6572;
+}
+
+.floating-chatbot__summary .floating-chatbot__summary-icon.is-menu {
+  color: #6fb53d;
+}
+
+.floating-chatbot__prompts h3 span {
+  display: inline-grid;
+  place-items: center;
+  color: #8a6043;
+  font-size: 18px;
+}
+
+.floating-chatbot__prompt-icon {
+  color: #ff6572;
+}
+
+.floating-chatbot__tabs button span {
+  display: grid;
+  place-items: center;
+  color: #3a281b;
+}
+
+.floating-chatbot__tabs button.is-active span {
+  color: #ff6572;
+}

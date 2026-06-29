@@ -44,7 +44,8 @@ class ChatService:
             elif intent == "recipe.search":
                 reply, actions, sources = self._reply_recipe_search(db, text)
             elif intent == "receipt.guide":
-                reply = "영수증은 파일 업로드가 필요해서 상단 메뉴의 영수증 OCR 화면에서 등록해주세요."
+                reply = "영수증은 파일 업로드가 필요해서 상단 메뉴나 아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요."
+                actions = [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}]
             else:
                 reply = "냉장고 재료 조회, 소비기한 임박 재료, 보관법, 레시피 추천을 물어볼 수 있어요."
         except Exception:
@@ -60,16 +61,19 @@ class ChatService:
 
         if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
             return "receipt.guide"
+            
+        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹")):
+            return "recipe.recommend"
+        if "레시피" in normalized or "요리" in normalized:
+            return "recipe.search"
+            
         if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "신선", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
             return "ingredient.guide"
         if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")):
             return "inventory.expiring"
         if any(word in normalized for word in ("뭐있", "뭐가있", "냉장고목록", "재료목록", "내재료")):
             return "inventory.list"
-        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹")):
-            return "recipe.recommend"
-        if "레시피" in normalized or "요리" in normalized:
-            return "recipe.search"
+            
         return "general"
 
     def _extract_keyword(self, text: str) -> str:
@@ -84,9 +88,9 @@ class ChatService:
 
     def _extract_recipe_ingredient(self, text: str) -> str:
         """'두부로 뭐 만들 수 있어?' 같은 문장에서 재료명을 추출합니다."""
-        match = re.search(r"([가-힣A-Za-z0-9]+)(?:으로|로).*(?:뭐|뭘|무엇|메뉴|레시피|요리|만들|추천)", text)
+        match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+?)(?:으로|로).*(?:뭐|뭘|무엇|메뉴|레시피|요리|만들|추천)", text)
         if not match:
-            match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+)\s*(?:빨리|먼저|써야|처리).*(?:뭐|뭘|무엇|메뉴|레시피|요리|추천|하지)", text)
+            match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+?)\s*(?:빨리|먼저|써야|처리).*(?:뭐|뭘|무엇|메뉴|레시피|요리|추천|하지)", text)
         if not match:
             return ""
 
@@ -111,6 +115,25 @@ class ChatService:
             actions.append({"label": title, "url": f"/recipes/{recipe_id}", "data": {"recipe_id": recipe_id, "title": title}})
         return actions
 
+    def _apply_josa(self, word: str, josa_type: str) -> str:
+        """단어의 마지막 글자 받침 유무에 따라 알맞은 조사를 붙여 반환합니다."""
+        if not word: return ""
+        last_char = word[-1]
+        if not ('가' <= last_char <= '힣'):
+            return word + ("가" if josa_type == "이가" else "는" if josa_type == "은는" else "를")
+        
+        has_jongseong = (ord(last_char) - 44032) % 28 > 0
+        
+        if josa_type == "이가":
+            return word + ("이" if has_jongseong else "가")
+        elif josa_type == "은는":
+            return word + ("은" if has_jongseong else "는")
+        elif josa_type == "을를":
+            return word + ("을" if has_jongseong else "를")
+        elif josa_type == "과와":
+            return word + ("과" if has_jongseong else "와")
+        return word
+
     def _reply_inventory_list(self, db: Session, user_id: int) -> str:
         """냉장고 보유 재료를 짧게 요약합니다."""
         items = inventory_service.get_ingredients(db=db, user_id=user_id)
@@ -119,7 +142,8 @@ class ChatService:
 
         names = [item["name"] for item in items[:8]]
         suffix = "" if len(items) <= 8 else f" 외 {len(items) - 8}개"
-        return f"현재 냉장고에는 {', '.join(names)}{suffix}가 있어요."
+        target_word = suffix if suffix else names[-1]
+        return f"현재 냉장고에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{self._apply_josa(target_word, '이가')} 있어요."
 
     def _extract_expiry_keyword(self, text: str) -> str:
         """특정 재료의 소비기한 질문이면 재료명을 추출합니다."""
@@ -150,7 +174,7 @@ class ChatService:
             return "D-3 이내로 임박한 재료는 없어요."
 
         summary = [f"{item['name']} {self._format_d_day(item['d_day'])}" for item in expiring[:5]]
-        return "소비기한이 가까운 재료는 " + ", ".join(summary) + "예요."
+        return "소비기한이 가까운 재료는\n" + ", ".join(summary) + "예요."
 
     def _format_d_day(self, d_day: int) -> str:
         """프론트와 같은 기준으로 D-day 문구를 표시합니다."""
@@ -314,11 +338,11 @@ class ChatService:
                 "data": {"ingredient": keyword},
             }
             if not items:
-                return f"{keyword}가 주재료인 레시피를 찾지 못했어요.", [list_action]
+                return f"{self._apply_josa(keyword, '이가')} 주재료인 레시피를 찾지 못했어요.", [list_action]
 
             titles = [item["title"] for item in items]
             actions = self._recipe_actions(items) + [list_action]
-            prefix = f"{keyword}가 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{keyword}가 주재료인 레시피는 "
+            prefix = f"{self._apply_josa(keyword, '이가')} 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{self._apply_josa(keyword, '이가')} 주재료인 레시피는 "
             return prefix + ", ".join(titles) + "예요.", actions
 
         try:
