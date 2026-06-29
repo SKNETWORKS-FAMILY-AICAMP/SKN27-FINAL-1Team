@@ -6,37 +6,55 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from neo4j import GraphDatabase
 from tqdm import tqdm
 
-from .config import load_settings
+from etl.load_to_neo4j.neo4j_connection import Neo4j_Connection, load_settings
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# 데이터 경로 (구 config.py)
+# =============================================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / "storage" / "processed" / "food_guide" / "food_guide_v1.csv"
+
+# =============================================================================
+# 설정값
+# =============================================================================
 
 BATCH_SIZE = 100
 
 DROP_LEGACY_CONSTRAINT_QUERIES = (
     "DROP CONSTRAINT food_category_key IF EXISTS",
+    "DROP CONSTRAINT food_guide_code IF EXISTS",
 )
 
 CONSTRAINT_QUERIES = (
-    "CREATE CONSTRAINT food_guide_code IF NOT EXISTS FOR (g:FoodGuide) REQUIRE g.code IS UNIQUE",
+    "CREATE CONSTRAINT food_guide_key IF NOT EXISTS FOR (g:FoodGuide) REQUIRE g.key IS UNIQUE",
     "CREATE CONSTRAINT food_category_key IF NOT EXISTS FOR (c:FoodCategory) REQUIRE c.key IS UNIQUE",
 )
+
+# =============================================================================
+# Cypher 쿼리
+# =============================================================================
 
 CLEAR_FOOD_GUIDE_QUERY = """
 MATCH (g:FoodGuide)
 DETACH DELETE g
 WITH 1 AS _
 MATCH (c:FoodCategory)
-WHERE NOT (c)--()
-DELETE c
+DETACH DELETE c
 """
 
 UPSERT_FOOD_GUIDE_QUERY = """
 UNWIND $rows AS row
-MERGE (g:FoodGuide {code: row.code})
-SET g.name = row.name,
+MERGE (g:FoodGuide:FoodCategory {key: row.guideKey})
+SET g.code = row.code,
+    g.level = "minor",
+    g.name = row.name,
+    g.path = row.minorPath,
+    g.displayName = row.minorDisplayName,
     g.majorCategory = row.majorCategory,
     g.middleCategory = row.middleCategory,
     g.minorCategory = row.minorCategory,
@@ -92,7 +110,6 @@ FOREACH (_ IN CASE WHEN row.majorKey IS NULL THEN [] ELSE [1] END |
       major.name = row.majorCategory,
       major.path = row.majorPath,
       major.displayName = row.majorCategory
-  MERGE (g)-[:IN_CATEGORY {level: "major"}]->(major)
 )
 FOREACH (_ IN CASE WHEN row.middleKey IS NULL THEN [] ELSE [1] END |
   MERGE (major:FoodCategory {key: row.majorKey})
@@ -106,23 +123,21 @@ FOREACH (_ IN CASE WHEN row.middleKey IS NULL THEN [] ELSE [1] END |
       middle.path = row.middlePath,
       middle.displayName = row.middleDisplayName
   MERGE (major)-[:HAS_SUBCATEGORY]->(middle)
-  MERGE (g)-[:IN_CATEGORY {level: "middle"}]->(middle)
 )
-FOREACH (_ IN CASE WHEN row.minorKey IS NULL THEN [] ELSE [1] END |
+FOREACH (_ IN CASE WHEN row.guideKey IS NULL THEN [] ELSE [1] END |
   MERGE (middle:FoodCategory {key: row.middleKey})
   SET middle.level = "middle",
       middle.name = row.middleCategory,
       middle.path = row.middlePath,
       middle.displayName = row.middleDisplayName
-  MERGE (minor:FoodCategory {key: row.minorKey})
-  SET minor.level = "minor",
-      minor.name = row.minorCategory,
-      minor.path = row.minorPath,
-      minor.displayName = row.minorDisplayName
-  MERGE (middle)-[:HAS_SUBCATEGORY]->(minor)
-  MERGE (g)-[:IN_CATEGORY {level: "minor"}]->(minor)
+  MERGE (middle)-[:HAS_SUBCATEGORY]->(g)
 )
 """
+
+
+# =============================================================================
+# CSV → Neo4j 레코드 변환
+# =============================================================================
 
 
 def _text(value: Any) -> str | None:
@@ -188,18 +203,18 @@ def build_food_guide_record(row: pd.Series, index: int) -> dict[str, Any]:
     )
     return {
         "code": code,
+        "guideKey": _category_key("minor", major_category, middle_category, minor_category),
         "majorCategory": major_category,
         "middleCategory": middle_category,
         "minorCategory": minor_category,
         "majorKey": _category_key("major", major_category),
         "middleKey": _category_key("middle", major_category, middle_category),
-        "minorKey": _category_key("minor", major_category, middle_category, minor_category),
         "majorPath": major_path,
         "middlePath": middle_path,
         "minorPath": minor_path,
         "middleDisplayName": " > ".join(middle_path) if middle_path else middle_category,
         "minorDisplayName": " > ".join(minor_path) if minor_path else minor_category,
-        "name": _text(_get(row, "영양식품명")) or _text(_get(row, "대표식품명")) or code,
+        "name": minor_category or _text(_get(row, "영양식품명")) or code,
         "representativeName": _text(_get(row, "대표식품명")),
         "rawName": _text(_get(row, "원재료명")),
         "aliases": _aliases(_get(row, "원재료명이명")),
@@ -247,6 +262,11 @@ def build_food_guide_record(row: pd.Series, index: int) -> dict[str, Any]:
     }
 
 
+# =============================================================================
+# 적재 오케스트레이션
+# =============================================================================
+
+
 def _chunks(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
     return [rows[index : index + size] for index in range(0, len(rows), size)]
 
@@ -259,35 +279,41 @@ def load_food_guide_to_neo4j(csv_path: str | Path, clear: bool = False) -> dict[
     settings = load_settings()
     df = pd.read_csv(csv_path)
     records = [build_food_guide_record(row, index) for index, row in df.iterrows()]
+    if any(record["guideKey"] is None for record in records):
+        raise ValueError("Food guide category path must include major, middle, and minor categories")
 
     logger.info("Food guide CSV loaded: %s (%d rows)", csv_path, len(records))
 
-    driver = GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password))
+    conn = Neo4j_Connection(
+        settings.uri,
+        settings.user,
+        settings.password,
+        database=settings.database,
+    )
     try:
-        with driver.session(database=settings.database) as session:
-            for query in DROP_LEGACY_CONSTRAINT_QUERIES:
-                session.run(query).consume()
+        for query in DROP_LEGACY_CONSTRAINT_QUERIES:
+            conn.execute_write(query)
 
-            for query in CONSTRAINT_QUERIES:
-                session.run(query).consume()
+        for query in CONSTRAINT_QUERIES:
+            conn.execute_write(query)
 
-            if clear:
-                session.run(CLEAR_FOOD_GUIDE_QUERY).consume()
-                logger.info("Existing FoodGuide data cleared")
+        if clear:
+            conn.execute_write(CLEAR_FOOD_GUIDE_QUERY)
+            logger.info("Existing FoodGuide data cleared")
 
-            for batch in tqdm(_chunks(records, BATCH_SIZE), desc="FoodGuide upsert"):
-                session.run(UPSERT_FOOD_GUIDE_QUERY, rows=batch).consume()
+        for batch in tqdm(_chunks(records, BATCH_SIZE), desc="FoodGuide upsert"):
+            conn.execute_write(UPSERT_FOOD_GUIDE_QUERY, {"rows": batch})
 
-            summary = session.run(
-                """
-                MATCH (g:FoodGuide)
-                OPTIONAL MATCH (c:FoodCategory)
-                RETURN count(DISTINCT g) AS foodGuides,
-                       count(DISTINCT c) AS categories
-                """
-            ).single()
+        summary = conn.execute_single(
+            """
+            MATCH (g:FoodGuide)
+            OPTIONAL MATCH (c:FoodCategory)
+            RETURN count(DISTINCT g) AS foodGuides,
+                   count(DISTINCT c) AS categories
+            """
+        )
     finally:
-        driver.close()
+        conn.close()
 
     result = {
         "food_guides": int(summary["foodGuides"]),

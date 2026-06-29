@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.backend.db.session import get_db
 from app.backend.api.deps import get_current_user_required
-from app.backend.schemas.inventory import IngredientCreate, IngredientResponse, InventorySummaryResponse, IngredientPredictionResponse
+from app.backend.schemas.inventory import IngredientCreate, IngredientResponse, InventorySummaryResponse, IngredientPredictionResponse, IngredientBulkDeleteRequest
 from app.backend.services.inventory_service.inventory_service import inventory_service
 
 router = APIRouter(prefix="/inventory", tags=["Inventory (나의 냉장고)"])
@@ -64,6 +64,18 @@ def add_ingredient_to_fridge(
     (최초 등록 시 냉장고가 없다면 자동으로 '나의 냉장고'가 생성됩니다.)
     """
     return inventory_service.add_ingredient(db=db, user_id=current_user_id, data=request_data)
+
+@router.delete("/bulk", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ingredients_bulk_from_fridge(
+    request_data: IngredientBulkDeleteRequest,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
+):
+    """
+    여러 식재료를 냉장고에서 한 번에 폐기(소진 처리) 합니다.
+    """
+    inventory_service.delete_ingredients_bulk(db=db, user_id=current_user_id, ingredient_ids=request_data.ingredient_ids)
+    return None
 
 @router.delete("/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ingredient_from_fridge(

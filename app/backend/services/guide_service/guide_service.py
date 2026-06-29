@@ -40,8 +40,8 @@ class GuideService:
         normalized_keyword = (keyword or "").strip().lower()
         params: dict[str, Any] = {}
         conditions = [
-            "coalesce(g.rawName, g.representativeName, g.name) IS NOT NULL",
-            'NOT coalesce(g.rawName, g.representativeName, g.name) STARTS WITH "food-guide-"',
+            "coalesce(g.name, g.rawName, g.representativeName) IS NOT NULL",
+            'NOT coalesce(g.name, g.rawName, g.representativeName) STARTS WITH "food-guide-"',
         ]
 
         if normalized_keyword:
@@ -100,8 +100,8 @@ class GuideService:
         list_query = f"""
         MATCH (g:FoodGuide)
         {where_clause}
-        RETURN g.code AS code,
-               coalesce(g.rawName, g.representativeName, g.name) AS name,
+        RETURN g.key AS code,
+               coalesce(g.name, g.rawName, g.representativeName) AS name,
                g.representativeName AS representative_name,
                g.rawName AS raw_name,
                g.majorCategory AS major_category,
@@ -161,15 +161,17 @@ class GuideService:
 
     def get_guide_detail(self, code: str) -> dict[str, Any] | None:
         query = """
-        MATCH (g:FoodGuide {code: $code})
-        RETURN g.code AS code,
-               coalesce(g.rawName, g.representativeName, g.name) AS name,
+        MATCH (g:FoodGuide {key: $code})
+        RETURN g.key AS code,
+               coalesce(g.name, g.rawName, g.representativeName) AS name,
                g.representativeName AS representative_name,
                g.rawName AS raw_name,
                g.majorCategory AS major_category,
                g.middleCategory AS middle_category,
                g.minorCategory AS minor_category,
                coalesce(g.seasonalMonths, []) AS seasonal_months,
+               g.seasonalSourceName AS seasonal_source_name,
+               g.seasonalSourceUrl AS seasonal_source_url,
                coalesce(g.aliases, []) AS aliases,
                g.existingDisplayName AS existing_display_name,
                g.storageTip AS storage_tips,

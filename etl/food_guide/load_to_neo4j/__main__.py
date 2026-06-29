@@ -3,8 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from .config import DEFAULT_FOOD_GUIDE_CSV
-from .loader import load_food_guide_to_neo4j
+from .loader import DEFAULT_FOOD_GUIDE_CSV, load_food_guide_to_neo4j
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

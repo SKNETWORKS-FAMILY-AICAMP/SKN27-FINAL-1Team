@@ -261,7 +261,7 @@ FridgeItem.ingredient_id  ↔  RecipeIngredient.ingredient_id  (owned)
 
 구현 위치:
 
-- `app/backend/services/recommendation_service/ingredient_ownership_service.py` — 순수 분류·점수 로직
+- `app/backend/services/recommendation_service/fridge_ingredient_match.py` — 순수 분류·점수 로직
 - `app/backend/services/recommendation_service/recipe_detail_service.py` — DB 조회·응답 조립
 
 **3분류 규칙**

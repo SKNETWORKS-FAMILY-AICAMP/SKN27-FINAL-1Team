@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+
+from fastapi import APIRouter, Depends, File, Path, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -57,6 +58,17 @@ def get_receipt_history(
     """Return the user's most recently registered receipts with their items."""
     receipts = receipt_history_service.get_recent_receipts(db=db, user_id=current_user_id, limit=limit)
     return {"receipts": receipts}
+
+
+@router.delete("/{receipt_id}", response_model=MessageResponse)
+def delete_receipt(
+    receipt_id: int = Path(..., ge=1),
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Delete a receipt and its items. Stocked fridge items are preserved."""
+    receipt_history_service.delete_receipt(db=db, user_id=current_user_id, receipt_id=receipt_id)
+    return {"message": "영수증 내역을 삭제했어요."}
 
 
 @router.post("/upload", response_model=ReceiptUploadResponse)
