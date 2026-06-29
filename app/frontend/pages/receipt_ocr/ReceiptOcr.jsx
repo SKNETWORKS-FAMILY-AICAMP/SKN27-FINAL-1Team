@@ -106,32 +106,39 @@ function mapMockHistoryToReceipts(history) {
   }))
 }
 
-// 한 달을 1~7일=1주차, 8~14일=2주차 ... 식으로 나눈 "월 주차"를 반환합니다.
-function getWeekOfMonth(date) {
-  return Math.ceil(date.getDate() / 7)
+// 달력 주(월~일)가 속한 날짜의 그 주 월요일을 반환합니다.
+function getWeekMonday(date) {
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const mondayOffset = (local.getDay() + 6) % 7 // 월=0 ... 일=6
+  local.setDate(local.getDate() - mondayOffset)
+  return local
 }
 
-function getWeekFirstDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), (getWeekOfMonth(date) - 1) * 7 + 1)
+// ISO 방식: 달력 주(월~일)를 그 주의 목요일이 속한 달/주차로 계산합니다.
+// 예) 6/29(월)이 속한 주는 목요일이 7/2라 "7월 1주차"가 됩니다.
+function getWeekInfo(date) {
+  const monday = getWeekMonday(date)
+  const thursday = new Date(monday)
+  thursday.setDate(monday.getDate() + 3)
+  const weekOfMonth = Math.ceil(thursday.getDate() / 7)
+
+  return {
+    key: `${thursday.getFullYear()}-${thursday.getMonth()}-${weekOfMonth}`,
+    label: `${thursday.getMonth() + 1}월 ${weekOfMonth}주차`,
+    monday,
+  }
 }
 
-function getWeekBucketKey(date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${getWeekOfMonth(date)}`
-}
-
-function getWeekLabel(date) {
-  return `${date.getMonth() + 1}월 ${getWeekOfMonth(date)}주차`
-}
-
-// 접속일(anchorDate)이 속한 주차부터 과거로 weekCount개의 월 주차 버킷을 만듭니다(오래된 주차가 앞).
+// 접속일(anchorDate)이 속한 주차부터 과거로 weekCount개의 주 버킷을 만듭니다(오래된 주차가 앞).
 function buildRecentWeekBuckets(anchorDate, weekCount) {
   const buckets = []
-  let cursor = getWeekFirstDay(anchorDate)
+  let cursorMonday = getWeekMonday(anchorDate)
 
   for (let i = 0; i < weekCount; i += 1) {
-    buckets.unshift({ key: getWeekBucketKey(cursor), label: getWeekLabel(cursor) })
-    const previousWeekDay = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - 1)
-    cursor = getWeekFirstDay(previousWeekDay)
+    const info = getWeekInfo(cursorMonday)
+    buckets.unshift({ key: info.key, label: info.label })
+    cursorMonday = new Date(cursorMonday)
+    cursorMonday.setDate(cursorMonday.getDate() - 7)
   }
 
   return buckets
@@ -167,7 +174,7 @@ function buildPurchaseFlowData(receipts, options = {}) {
       return
     }
 
-    const weekIndex = indexByBucketKey.get(getWeekBucketKey(receipt.parsedDate))
+    const weekIndex = indexByBucketKey.get(getWeekInfo(receipt.parsedDate).key)
 
     if (weekIndex === undefined) {
       return
