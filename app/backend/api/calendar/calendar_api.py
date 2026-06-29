@@ -12,7 +12,7 @@ from app.backend.api.deps import get_current_user_required
 from app.backend.core.config import settings
 from app.backend.db.models import CalendarEventLog, CalendarIntegration, FridgeItem, RecommendationResult
 from app.backend.db.session import get_db
-from app.backend.services.calendar_mcp_client import create_calendar_event_with_mcp
+from app.backend.services.calendar_mcp_client import create_calendar_event_with_mcp, delete_calendar_event_with_mcp
 
 
 router = APIRouter(prefix="/calendar", tags=["Calendar (캘린더 연동)"])
@@ -101,6 +101,18 @@ def _alert_time(target_date: date, hour: int, minute: int):
         {"dateTime": start.isoformat()},
         {"dateTime": end.isoformat()},
         {"useDefault": False, "overrides": [{"method": "popup", "minutes": 0}]},
+    )
+
+
+def _daily_event_keys(user_id: int, target_date: date) -> set[str]:
+    suffix = f"{user_id}-{target_date.isoformat()}"
+    return {f"ingredient-expiry-{suffix}", f"today-menu-{suffix}", f"recipe-delete-{suffix}"}
+
+
+def _event_key_belongs_to_user(event_key: str, user_id: int) -> bool:
+    return any(
+        event_key.startswith(f"{prefix}-{user_id}-")
+        for prefix in ("ingredient-expiry", "today-menu", "recipe-delete", "receipt-cost")
     )
 
 
@@ -227,6 +239,69 @@ async def _create_event_once(
         html_link=item.get("htmlLink"),
     )
     return {"event_id": item.get("id"), "html_link": item.get("htmlLink"), "duplicate": False}
+
+
+async def _delete_event_once(
+    client: httpx.AsyncClient,
+    calendar_id: str,
+    access_token: str,
+    event_key: str,
+    db: Session | None = None,
+    user_id: int | None = None,
+    source: str = "manual",
+):
+    """event_key 기준으로 우리가 만든 캘린더 이벤트를 삭제한다."""
+    mcp_result = await delete_calendar_event_with_mcp(user_id, calendar_id, access_token, event_key)
+    if mcp_result:
+        if mcp_result.get("deleted") or source == "manual":
+            _log_calendar_event(db, user_id, event_key, {}, "deleted" if mcp_result.get("deleted") else "missing", source)
+        return mcp_result
+
+    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    existing_res = await client.get(
+        url,
+        headers=headers,
+        params={"privateExtendedProperty": f"bobbeoriKey={event_key}", "singleEvents": "true", "maxResults": 1},
+    )
+    if existing_res.status_code >= 400:
+        _log_calendar_event(db, user_id, event_key, {}, "failed", source, error_message=existing_res.text[:500])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event lookup failed.")
+
+    item = next(iter(existing_res.json().get("items", [])), None)
+    if not item:
+        if source == "manual":
+            _log_calendar_event(db, user_id, event_key, {}, "missing", source)
+        return {"event_key": event_key, "deleted": False, "missing": True}
+
+    event_res = await client.delete(f"{url}/{item.get('id')}", headers=headers)
+    if event_res.status_code >= 400:
+        _log_calendar_event(db, user_id, event_key, {}, "failed", source, error_message=event_res.text[:500])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Calendar event deletion failed.")
+
+    _log_calendar_event(db, user_id, event_key, {}, "deleted", source, google_event_id=item.get("id"))
+    return {"event_key": event_key, "event_id": item.get("id"), "deleted": True, "missing": False}
+
+
+async def _sync_daily_events(
+    client: httpx.AsyncClient,
+    db: Session,
+    user_id: int,
+    calendar_id: str,
+    access_token: str,
+    target_date: date,
+    source: str,
+):
+    events = dict(_build_daily_events(db, user_id, target_date))
+    synced = [
+        await _create_event_once(client, calendar_id, access_token, event_key, event, db, user_id, source)
+        for event_key, event in events.items()
+    ]
+    deleted = [
+        await _delete_event_once(client, calendar_id, access_token, event_key, db, user_id, source)
+        for event_key in _daily_event_keys(user_id, target_date) - set(events)
+    ]
+    return synced, deleted
 
 
 def _build_daily_events(db: Session, user_id: int, target_date: date):
@@ -386,6 +461,30 @@ async def list_google_calendar_events(
     return {"events": events}
 
 
+@router.delete("/google/events/{event_key}")
+async def delete_google_calendar_event(
+    event_key: str,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    if not _event_key_belongs_to_user(event_key, current_user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete another user's calendar event.")
+
+    integration = _get_google_integration(db, current_user_id)
+    access_token = await _get_access_token(integration, db)
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        return await _delete_event_once(
+            client,
+            integration.calendar_id,
+            access_token,
+            event_key,
+            db,
+            current_user_id,
+            "manual",
+        )
+
+
 @router.post("/google/connect")
 async def connect_google_calendar(
     request_data: GoogleCalendarConnectRequest,
@@ -456,26 +555,22 @@ async def connect_google_calendar(
     db.commit()
 
     created = []
+    deleted = []
     try:
-        events = _build_daily_events(db, current_user_id, date.today())
         async with httpx.AsyncClient(timeout=10.0) as client:
-            created = [
-                await _create_event_once(
-                    client,
-                    integration.calendar_id,
-                    access_token,
-                    event_key,
-                    event,
-                    db,
-                    current_user_id,
-                    "connect",
-                )
-                for event_key, event in events
-            ]
+            created, deleted = await _sync_daily_events(
+                client,
+                db,
+                current_user_id,
+                integration.calendar_id,
+                access_token,
+                date.today(),
+                "connect",
+            )
     except Exception as exc:
         print(f"[CalendarConnect] user_id={current_user_id} initial sync failed: {exc}")
 
-    return {"connected": True, "calendar_id": integration.calendar_id, "events": created}
+    return {"connected": True, "calendar_id": integration.calendar_id, "events": created, "deleted": deleted}
 
 
 @router.delete("/google/disconnect")
@@ -507,21 +602,16 @@ async def create_google_calendar_test_event(
     integration = _get_google_integration(db, current_user_id)
     access_token = await _get_access_token(integration, db)
     today = date.today()
-    events = _build_daily_events(db, current_user_id, today)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        created = [
-            await _create_event_once(
-                client,
-                integration.calendar_id,
-                access_token,
-                event_key,
-                event,
-                db,
-                current_user_id,
-                "manual",
-            )
-            for event_key, event in events
-        ]
+        created, deleted = await _sync_daily_events(
+            client,
+            db,
+            current_user_id,
+            integration.calendar_id,
+            access_token,
+            today,
+            "manual",
+        )
 
-    return {"events": created}
+    return {"events": created, "deleted": deleted}
