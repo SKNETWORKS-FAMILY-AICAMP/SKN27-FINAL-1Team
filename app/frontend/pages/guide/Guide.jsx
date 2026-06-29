@@ -6,7 +6,7 @@ import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageGuide from '../../assets/extracted/images/image_guide.png'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const GUIDE_PAGE_SIZE = 24
+const GUIDE_PAGE_SIZE = 12
 const GUIDE_RECIPE_LIMIT = 12
 const GUIDE_RECIPE_VISIBLE_COUNT = 3
 
@@ -82,7 +82,6 @@ function buildGuideTips(guide) {
       chip: source || '가이드 정보',
       source: source || '출처 정보 없음',
       sourceUrl,
-      hasContent: Boolean(guide?.[definition.key]),
     }
   })
 }
@@ -124,11 +123,9 @@ function Guide() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedMajorCategory, setSelectedMajorCategory] = useState('')
   const [selectedMiddleCategory, setSelectedMiddleCategory] = useState('')
-  const [selectedMinorCategory, setSelectedMinorCategory] = useState('')
   const [categoryOptions, setCategoryOptions] = useState({
     major_categories: [],
     middle_categories: [],
-    minor_categories: [],
   })
   const [page, setPage] = useState(1)
   const [guideItems, setGuideItems] = useState([])
@@ -156,7 +153,6 @@ function Guide() {
         if (searchTerm.trim()) params.set('keyword', searchTerm.trim())
         if (selectedMajorCategory) params.set('major_category', selectedMajorCategory)
         if (selectedMiddleCategory) params.set('middle_category', selectedMiddleCategory)
-        if (selectedMinorCategory) params.set('minor_category', selectedMinorCategory)
         const response = await fetch(`${apiUrl}/api/v1/guide?${params}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
@@ -182,20 +178,15 @@ function Guide() {
       controller.abort()
       window.clearTimeout(timer)
     }
-  }, [page, searchTerm, selectedMajorCategory, selectedMiddleCategory, selectedMinorCategory])
+  }, [page, searchTerm, selectedMajorCategory, selectedMiddleCategory])
 
   useEffect(() => {
     setPage(1)
-  }, [searchTerm, selectedMajorCategory, selectedMiddleCategory, selectedMinorCategory])
+  }, [searchTerm, selectedMajorCategory, selectedMiddleCategory])
 
   useEffect(() => {
     setSelectedMiddleCategory('')
-    setSelectedMinorCategory('')
   }, [selectedMajorCategory])
-
-  useEffect(() => {
-    setSelectedMinorCategory('')
-  }, [selectedMiddleCategory])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -211,14 +202,13 @@ function Guide() {
         })
         if (!response.ok) return
         const data = await response.json()
-        setCategoryOptions({
-          major_categories: data.major_categories || [],
+        setCategoryOptions((current) => ({
+          major_categories: selectedMajorCategory ? current.major_categories : data.major_categories || [],
           middle_categories: data.middle_categories || [],
-          minor_categories: data.minor_categories || [],
-        })
+        }))
       } catch (error) {
         if (error.name !== 'AbortError') {
-          setCategoryOptions({ major_categories: [], middle_categories: [], minor_categories: [] })
+          setCategoryOptions({ major_categories: [], middle_categories: [] })
         }
       }
     }
@@ -330,14 +320,6 @@ function Guide() {
     setPage(normalizedPage)
   }
 
-  const clearFilters = () => {
-    setSearchTerm('')
-    setSelectedMajorCategory('')
-    setSelectedMiddleCategory('')
-    setSelectedMinorCategory('')
-    setPage(1)
-  }
-
   const slideRecipes = (step) => {
     const maxStartIndex = Math.max(0, recommendedRecipes.length - GUIDE_RECIPE_VISIBLE_COUNT)
     setRecipeStartIndex((current) => Math.min(Math.max(current + step, 0), maxStartIndex))
@@ -351,15 +333,41 @@ function Guide() {
           <p>재료별 보관, 손질, 세척, 신선도 팁을 한눈에 확인해요!</p>
         </div>
 
-        <label className="guide-search guide-hero__search" aria-label="식재료명 검색">
-          <span aria-hidden="true" />
-          <input
-            placeholder="식재료명을 검색해보세요"
-            type="search"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-        </label>
+        <div className="guide-search-wrap">
+          <label className="guide-search guide-hero__search" aria-label="식재료명 검색">
+            <span aria-hidden="true" />
+            <input
+              placeholder="식재료명을 검색해보세요"
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+
+          {searchTerm.trim() ? (
+            <div className="guide-search-suggestions" aria-live="polite">
+              {isListLoading ? (
+                <p>검색 중...</p>
+              ) : fridgeIngredients.length ? (
+                fridgeIngredients.map((ingredient) => (
+                  <button
+                    key={ingredient.code}
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('')
+                      selectIngredient(ingredient)
+                    }}
+                  >
+                    <strong>{ingredient.name}</strong>
+                    <span>{formatCategory(ingredient) || '분류 정보 없음'}</span>
+                  </button>
+                ))
+              ) : (
+                <p>일치하는 식재료가 없습니다.</p>
+              )}
+            </div>
+          ) : null}
+        </div>
 
         <div className="guide-hero__art" aria-hidden="true">
           <img src={imageGuide} alt="" />
@@ -399,55 +407,58 @@ function Guide() {
 
       {!isDetailPage ? (
         <section className="guide-panel guide-all" aria-labelledby="guide-all-title">
-          <div className="guide-filter-bar" aria-label="식재료 분류 필터">
-            <label>
-              <span>대분류</span>
-              <select
-                value={selectedMajorCategory}
-                onChange={(event) => setSelectedMajorCategory(event.target.value)}
-              >
-                <option value="">전체</option>
+          <div className="guide-category-tabs" aria-label="식재료 분류 선택">
+            <div>
+              <strong>대분류</strong>
+              <div className="guide-category-tab-list" role="group" aria-label="대분류">
+                <button
+                  className={!selectedMajorCategory ? 'is-active' : ''}
+                  type="button"
+                  aria-pressed={!selectedMajorCategory}
+                  onClick={() => setSelectedMajorCategory('')}
+                >
+                  전체
+                </button>
                 {categoryOptions.major_categories.map((category) => (
-                  <option key={category} value={category}>
+                  <button
+                    className={selectedMajorCategory === category ? 'is-active' : ''}
+                    key={category}
+                    type="button"
+                    aria-pressed={selectedMajorCategory === category}
+                    onClick={() => setSelectedMajorCategory(category)}
+                  >
                     {category}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
 
-            <label>
-              <span>중분류</span>
-              <select
-                value={selectedMiddleCategory}
-                onChange={(event) => setSelectedMiddleCategory(event.target.value)}
-              >
-                <option value="">전체</option>
-                {categoryOptions.middle_categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span>소분류</span>
-              <select
-                value={selectedMinorCategory}
-                onChange={(event) => setSelectedMinorCategory(event.target.value)}
-              >
-                <option value="">전체</option>
-                {categoryOptions.minor_categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button type="button" onClick={clearFilters}>
-              초기화
-            </button>
+            {selectedMajorCategory ? (
+              <div>
+                <strong>중분류</strong>
+                <div className="guide-category-tab-list" role="group" aria-label="중분류">
+                  <button
+                    className={!selectedMiddleCategory ? 'is-active' : ''}
+                    type="button"
+                    aria-pressed={!selectedMiddleCategory}
+                    onClick={() => setSelectedMiddleCategory('')}
+                  >
+                    전체
+                  </button>
+                  {categoryOptions.middle_categories.map((category) => (
+                    <button
+                      className={selectedMiddleCategory === category ? 'is-active' : ''}
+                      key={category}
+                      type="button"
+                      aria-pressed={selectedMiddleCategory === category}
+                      onClick={() => setSelectedMiddleCategory(category)}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="guide-all__header">
@@ -558,7 +569,6 @@ function Guide() {
                             <li key={point}>{point}</li>
                           ))}
                         </ul>
-                        <strong>{tip.hasContent ? '정보 있음' : '정보 없음'}</strong>
                       </section>
                     ))}
                   </div>
@@ -628,7 +638,19 @@ function Guide() {
                     ) : null}
                     <div className="guide-recipe-list" aria-label={`${selectedGuide.name} 추천 레시피`}>
                       {visibleRecommendedRecipes.map((recipe) => (
-                        <article className="guide-recipe-card" key={recipe.recipe_id}>
+                        <article
+                          className="guide-recipe-card"
+                          key={recipe.recipe_id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => navigate(`/recipes/${recipe.recipe_id}`)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              navigate(`/recipes/${recipe.recipe_id}`)
+                            }
+                          }}
+                        >
                           <ImageSlot
                             alt=""
                             className="guide-recipe-card__image"
