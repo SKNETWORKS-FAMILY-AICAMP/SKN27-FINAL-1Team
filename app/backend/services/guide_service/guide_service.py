@@ -90,6 +90,21 @@ class GuideService:
             minor_category=minor_category,
         )
         params.update({"skip": skip, "limit": safe_page_size})
+        # 검색어와 정확히 맞는 식재료를 먼저 보여주고, 그다음 시작 일치/부분 일치 순으로 정렬합니다.
+        order_by = "name"
+        if params.get("keyword"):
+            order_by = """
+                CASE
+                    WHEN toLower(coalesce(g.rawName, g.representativeName, g.name)) = $keyword THEN 0
+                    WHEN toLower(coalesce(g.representativeName, "")) = $keyword THEN 0
+                    WHEN any(alias IN coalesce(g.aliases, []) WHERE toLower(alias) = $keyword) THEN 0
+                    WHEN toLower(coalesce(g.rawName, g.representativeName, g.name)) STARTS WITH $keyword THEN 1
+                    WHEN toLower(coalesce(g.representativeName, "")) STARTS WITH $keyword THEN 1
+                    WHEN any(alias IN coalesce(g.aliases, []) WHERE toLower(alias) STARTS WITH $keyword) THEN 1
+                    ELSE 2
+                END,
+                name
+            """
 
         count_query = f"""
         MATCH (g:FoodGuide)
@@ -108,7 +123,7 @@ class GuideService:
                g.middleCategory AS middle_category,
                g.minorCategory AS minor_category,
                coalesce(g.seasonalMonths, []) AS seasonal_months
-        ORDER BY name
+        ORDER BY {order_by}
         SKIP $skip
         LIMIT $limit
         """

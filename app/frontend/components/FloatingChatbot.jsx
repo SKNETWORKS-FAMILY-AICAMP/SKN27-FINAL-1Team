@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import mascot from '../assets/mascot.png'
 import './FloatingChatbot.css'
 
@@ -20,6 +20,12 @@ function FloatingChatbot() {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState(initialMessages)
   const [settings, setSettings] = useState(initialSettings)
+  const messagesEndRef = useRef(null)
+
+  // 새 메시지가 추가되면 사용자가 바로 마지막 답변을 볼 수 있게 아래로 이동합니다.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages, isOpen, activeTab])
 
   const sendMessage = async (event) => {
     event.preventDefault()
@@ -100,6 +106,7 @@ function FloatingChatbot() {
                     {item.text}
                   </p>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
 
               <form className="floating-chatbot__form" onSubmit={sendMessage}>

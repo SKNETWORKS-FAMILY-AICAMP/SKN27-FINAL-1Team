@@ -46,11 +46,12 @@ class ChatService:
             return "receipt.guide"
         if any(word in normalized for word in ("보관법", "보관방법", "손질", "신선", "가이드")):
             return "ingredient.guide"
+        # 유통기한 질문에 "뭐 있어"가 섞여도 목록보다 임박 조회를 우선합니다.
+        if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "다되어", "다돼", "끝나", "d-day", "디데이")):
+            return "inventory.expiring"
         if any(word in normalized for word in ("뭐있", "뭐가있", "냉장고목록", "재료목록", "내재료")):
             return "inventory.list"
-        if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "d-day", "디데이")):
-            return "inventory.expiring"
-        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "냉장고파먹")):
+        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "만들수", "만들수있는", "만들수있", "만들 수", "메뉴", "냉장고파먹")):
             return "recipe.recommend"
         if "레시피" in normalized or "요리" in normalized:
             return "recipe.search"
@@ -82,8 +83,16 @@ class ChatService:
         if not expiring:
             return "D-3 이내로 임박한 재료는 없어요."
 
-        summary = [f"{item['name']} D{item['d_day']:+d}" for item in expiring[:5]]
+        summary = [f"{item['name']} {self._format_d_day(item['d_day'])}" for item in expiring[:5]]
         return "소비기한이 가까운 재료는 " + ", ".join(summary) + "예요."
+
+    def _format_d_day(self, d_day: int) -> str:
+        """프론트와 같은 기준으로 D-day 문구를 표시합니다."""
+        if d_day > 0:
+            return f"D-{d_day}"
+        if d_day == 0:
+            return "D-Day"
+        return f"D+{abs(d_day)} 지남"
 
     def _reply_guide(self, text: str) -> str:
         """식재료 가이드 검색 결과를 이용해 보관 정보를 안내합니다."""
@@ -120,12 +129,14 @@ class ChatService:
             user_id,
             RecipeRecommendConfig.fridge_consume_preset(),
         )
-        items: list[dict[str, Any]] = result.get("items", [])
+        items: list[dict[str, Any]] = [
+            item for item in result.get("items", []) if item.get("missing_ingredient_count", 0) == 0
+        ]
         if not items:
-            return "현재 냉장고 재료로 추천할 레시피를 찾지 못했어요."
+            return "현재 냉장고 재료만으로 완성 가능한 레시피를 찾지 못했어요. 부족 재료를 허용하면 더 넓게 추천할 수 있어요."
 
         titles = [item["title"] for item in items[:3]]
-        return "냉장고 재료로는 " + ", ".join(titles) + "를 추천해요."
+        return "현재 냉장고 재료만으로는 " + ", ".join(titles) + "를 만들 수 있어요."
 
 
 chat_service = ChatService()
