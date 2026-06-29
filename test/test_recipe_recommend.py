@@ -1,5 +1,4 @@
 import os
-import random
 import sys
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -9,11 +8,13 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.backend.services.recommendation_service.expiry_scorer import d_day, score_expiry, urgency
-from app.backend.services.recommendation_service.fridge_suitability_scorer import (
-    FridgeContext,
-    score_fridge_suitability,
+from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeItemSnapshot, FridgeMatchResult
+from app.backend.services.recommendation_service.hard_filter import UserHardFilterContext
+from app.backend.services.recommendation_service.recommend_evaluation import (
+    build_final_score,
+    tier_config_penalty,
 )
-from app.backend.services.recommendation_service.ownership_tier_service import ownership_tiers, rank_and_slice
+from app.backend.services.recommendation_service.recommend_tier_slice import tier_fallback_configs
 from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow, RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommendation_service import RecommendationService
 
@@ -86,14 +87,47 @@ def test_menu_custom_pool_multiplier_clamped():
     assert config.pool_size == 5 * RecipeRecommendConfig.POOL_MULTIPLIER_MAX
 
 
-def test_score_fridge_suitability_deterministic_with_rng():
-    rng = random.Random(42)
-    score_a = score_fridge_suitability({}, FridgeContext(user_id=1, fridge_snapshots=[]), rng=rng)
-    score_b = score_fridge_suitability({}, FridgeContext(user_id=1, fridge_snapshots=[]), rng=rng)
+def test_tier_config_penalty_require_any_owned():
+    config = RecipeRecommendConfig.menu_custom_preset(5, require_any_owned=True)
+    empty = FridgeMatchResult(owned=[], maybe_owned=[], missing=[{"name": "대파"}], match_rate=0, display_match_rate=0)
+    owned = FridgeMatchResult(
+        owned=[{"name": "대파"}],
+        maybe_owned=[],
+        missing=[],
+        match_rate=100,
+        display_match_rate=100,
+    )
 
-    assert 0 <= score_a < 1
-    assert 0 <= score_b < 1
-    assert score_a != score_b
+    assert tier_config_penalty(empty, [{"name": "대파"}], config) == 1
+    assert tier_config_penalty(owned, [{"name": "대파"}], config) == 0
+
+
+def test_tier_config_penalty_min_display_match_rate():
+    config = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
+    low_match = FridgeMatchResult(
+        owned=[{"name": "대파"}],
+        maybe_owned=[],
+        missing=[{"name": "양파"}, {"name": "당근"}],
+        match_rate=33,
+        display_match_rate=33,
+    )
+    high_match = FridgeMatchResult(
+        owned=[{"name": "대파"}, {"name": "양파"}, {"name": "당근"}],
+        maybe_owned=[],
+        missing=[],
+        match_rate=100,
+        display_match_rate=100,
+    )
+
+    assert tier_config_penalty(low_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 1
+    assert tier_config_penalty(high_match, [{"name": "대파"}, {"name": "양파"}, {"name": "당근"}], config) == 0
+
+
+def test_build_final_score_fridge_expiry_order():
+    low_expiry_high_match = build_final_score("fridge_consume", fridge_score=90, expiry_score=1, preference_score=0, missing_penalty=0)
+    high_expiry_low_match = build_final_score("fridge_consume", fridge_score=50, expiry_score=10, preference_score=0, missing_penalty=0)
+
+    assert high_expiry_low_match > low_expiry_high_match
 
 
 def test_menu_custom_pipeline_slices_to_limit():
@@ -113,20 +147,16 @@ def test_menu_custom_pipeline_slices_to_limit():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ) as build_query,
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=[],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
-        ),
-        patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.score_fridge_suitability",
-            side_effect=lambda candidate, fridge_context, rng=None: candidate["recipe_id"] / 100,
         ),
     ):
         config = RecipeRecommendConfig.menu_custom_preset(5, pool_multiplier=2)
@@ -216,45 +246,26 @@ def test_score_expiry_prioritizes_sooner_items():
     assert expiring_later == 0
 
 
-def test_rank_and_slice_returns_nine_and_has_more():
-    candidates = [{"recipe_id": index} for index in range(1, 16)]
-
-    items, has_more = rank_and_slice(candidates, [1, 2], 9)
-
-    assert len(items) == 9
-    assert items[0]["recipe_id"] == 3
-    assert has_more is True
-
-
-def test_rank_and_slice_has_more_false_when_exhausted():
-    candidates = [{"recipe_id": index} for index in range(1, 6)]
-
-    items, has_more = rank_and_slice(candidates, [], 9)
-
-    assert len(items) == 5
-    assert has_more is False
-
-
-def test_ownership_tiers_dedupes():
+def test_tier_fallback_configs_dedupes():
     high = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70, require_any_owned=True)
     high_relaxed_only = RecipeRecommendConfig.menu_custom_preset(5, min_display_match_rate=70)
     fridge = RecipeRecommendConfig.fridge_consume_preset()
     open_only = RecipeRecommendConfig.menu_custom_preset(5)
 
-    assert [name for name, _ in ownership_tiers(high)] == [
+    assert [name for name, _ in tier_fallback_configs(high)] == [
         "strict",
         "relaxed",
         "open",
     ]
-    assert [name for name, _ in ownership_tiers(high_relaxed_only)] == [
+    assert [name for name, _ in tier_fallback_configs(high_relaxed_only)] == [
         "strict",
         "relaxed",
     ]
-    assert [name for name, _ in ownership_tiers(fridge)] == [
+    assert [name for name, _ in tier_fallback_configs(fridge)] == [
         "strict",
         "open",
     ]
-    assert [name for name, _ in ownership_tiers(open_only)] == ["strict"]
+    assert [name for name, _ in tier_fallback_configs(open_only)] == ["strict"]
 
 
 @contextmanager
@@ -264,20 +275,16 @@ def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=fridge_rows or [],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
-        ),
-        patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.score_fridge_suitability",
-            side_effect=lambda candidate, fridge_context, rng=None: candidate["recipe_id"] / 100,
         ),
     ):
         yield query_chain
@@ -363,15 +370,15 @@ def test_no_fallback_when_sql_empty():
 
     with (
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.build_recipe_query",
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
             return_value=query_chain,
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.fetch_fridge_items_with_expiry",
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
             return_value=[],
         ),
         patch(
-            "app.backend.services.recommendation_service.recipe_recommend_engine.load_recipe_ingredients_bulk",
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
             return_value={},
         ),
     ):
@@ -381,6 +388,119 @@ def test_no_fallback_when_sql_empty():
     assert result["returned_count"] == 0
     assert result["empty_reason"] == "no_sql_match"
     assert result["fallback_used"] is False
+
+
+def test_hard_filter_excludes_before_eval():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=index,
+            title=f"recipe-{index}",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+        for index in range(1, 6)
+    ]
+    query_chain = MagicMock()
+    query_chain.order_by.return_value.limit.return_value.all.return_value = recipes
+    ingredient_rows = {
+        recipe.id: [{"name": "대파", "amount": None, "ingredient_id": 1}]
+        for recipe in recipes
+    }
+
+    with (
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.build_recipe_query",
+            return_value=query_chain,
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.fetch_fridge_items_with_expiry",
+            return_value=[_row(1, "대파")],
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.load_recipe_ingredients_bulk",
+            return_value=ingredient_rows,
+        ) as load_bulk,
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3)
+        service.recommend_recipes(
+            db,
+            user_id=1,
+            config=config,
+            exclude_recipe_ids=[1, 2, 3],
+        )
+
+    load_bulk.assert_called_once()
+    loaded_ids = load_bulk.call_args[0][1]
+    assert loaded_ids == [4, 5]
+
+
+def test_hard_filter_excludes_recipe_with_banned_ingredient():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=1,
+            title="recipe-1",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+    ]
+    ingredient_rows = {1: [{"name": "땅콩", "amount": None, "ingredient_id": 99}]}
+
+    with (
+        _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows),
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.load_hard_filter_context",
+            return_value=UserHardFilterContext(
+                banned_items=(FridgeItemSnapshot(ingredient_id=None, fridge_name="땅콩"),),
+            ),
+        ),
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "no_scorable_recipes"
+
+
+def test_hard_filter_id_match_excludes():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [
+        SimpleNamespace(
+            id=1,
+            title="recipe-1",
+            category="국/탕",
+            difficulty="초급",
+            cooking_time=20,
+            serving_size=2,
+            image_url=None,
+        )
+    ]
+    ingredient_rows = {1: [{"name": "대파", "amount": None, "ingredient_id": 5}]}
+
+    with (
+        _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, fridge_rows=[_row(1, "양파")]),
+        patch(
+            "app.backend.services.recommendation_service.recommend_pipeline.load_hard_filter_context",
+            return_value=UserHardFilterContext(
+                banned_items=(FridgeItemSnapshot(ingredient_id=5, fridge_name="대파"),),
+            ),
+        ),
+    ):
+        config = RecipeRecommendConfig.menu_custom_preset(3)
+        result = service.recommend_recipes(db, user_id=1, config=config)
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "no_scorable_recipes"
 
 
 def test_no_fallback_when_exclude_exhausted():
@@ -419,5 +539,5 @@ def test_no_fallback_when_exclude_exhausted():
         )
 
     assert result["returned_count"] == 0
-    assert result["empty_reason"] == "exhausted"
+    assert result["empty_reason"] == "no_sql_match"
     assert result["fallback_used"] is False
