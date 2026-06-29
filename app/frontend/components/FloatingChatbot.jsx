@@ -21,17 +21,37 @@ function FloatingChatbot() {
   const [messages, setMessages] = useState(initialMessages)
   const [settings, setSettings] = useState(initialSettings)
 
-  const sendMessage = (event) => {
+  const sendMessage = async (event) => {
     event.preventDefault()
     const text = message.trim()
     if (!text) return
 
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', text },
-      { role: 'bot', text: '아직 챗봇 연결 전이에요. 곧 실제 기능과 연결할게요.' },
-    ])
+    setMessages((prev) => [...prev, { role: 'user', text }])
     setMessage('')
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const token = localStorage.getItem('bobbeori-token')
+      // 입력 메시지를 백엔드 챗봇 라우터로 전달합니다.
+      const response = await fetch(`${apiUrl}/api/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: text }),
+      })
+
+      if (!response.ok) throw new Error('chat request failed')
+
+      const data = await response.json()
+      setMessages((prev) => [...prev, { role: 'bot', text: data.reply }])
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'bot', text: '챗봇 연결 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.' },
+      ])
+    }
   }
 
   const toggleSetting = (key) => {
