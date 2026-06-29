@@ -118,6 +118,12 @@ class ExpirationAIService:
             sauce_days = CATEGORY_LIFESPAN_RULES["조미료"]["days"]
             return storage, sauce_days.get(storage, sauce_days[DEFAULT_STORAGE])
 
+        # 건조 파스타면은 보관 위치 미입력 시 실온 보관을 기본으로 사용합니다.
+        if "파스타" in name or "스파게티" in name:
+            storage = storage_method if storage_method in VALID_STORAGE_METHODS else "실온"
+            pasta_days = {"냉장": 180, "냉동": 365, "실온": 365}
+            return storage, pasta_days.get(storage, pasta_days["실온"])
+
         for rule in INGREDIENT_LIFESPAN_OVERRIDES:
             if any(keyword.replace(" ", "").lower() in name for keyword in rule["keywords"]):
                 return storage, rule["days"].get(storage, rule["days"][DEFAULT_STORAGE])

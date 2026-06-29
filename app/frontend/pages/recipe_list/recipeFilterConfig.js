@@ -72,6 +72,7 @@ export class RecipeFilterConfig {
 
   static urlKeys = {
     query: 'query',
+    ingredient: 'ingredient',
     category: 'category',
     difficulty: 'difficulty',
     cookingTime: 'cooking_time',
@@ -80,12 +81,13 @@ export class RecipeFilterConfig {
 
   /**
    * @param {string} search - location.search (e.g. '?query=김치')
-   * @returns {{ query: string, category: string, timeFilter: string, levelFilter: string, browseAll: boolean }}
+   * @returns {{ query: string, ingredient: string, category: string, timeFilter: string, levelFilter: string, browseAll: boolean }}
    */
   static parseSearchParams(search) {
     const params = new URLSearchParams(search)
     return {
       query: (params.get(this.urlKeys.query) ?? '').trim(),
+      ingredient: (params.get(this.urlKeys.ingredient) ?? '').trim(),
       category: params.get(this.urlKeys.category) ?? this.FILTER_ALL,
       timeFilter: params.get(this.urlKeys.cookingTime) ?? this.FILTER_ALL,
       levelFilter: params.get(this.urlKeys.difficulty) ?? this.FILTER_ALL,
@@ -94,14 +96,18 @@ export class RecipeFilterConfig {
   }
 
   /**
-   * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
+   * @param {{ query?: string, ingredient?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
    * @returns {URLSearchParams}
    */
   static buildSearchParams(criteria) {
     const params = new URLSearchParams()
     const query = (criteria.query ?? '').trim()
+    const ingredient = (criteria.ingredient ?? '').trim()
     if (query) {
       params.set(this.urlKeys.query, query)
+    }
+    if (ingredient) {
+      params.set(this.urlKeys.ingredient, ingredient)
     }
     if (criteria.category && criteria.category !== this.FILTER_ALL) {
       params.set(this.urlKeys.category, criteria.category)
@@ -119,7 +125,7 @@ export class RecipeFilterConfig {
   }
 
   /**
-   * @param {{ query?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
+   * @param {{ query?: string, ingredient?: string, category?: string, timeFilter?: string, levelFilter?: string, browseAll?: boolean }} criteria
    * @param {number} page
    * @param {number} pageSize
    * @returns {Record<string, string>}
@@ -130,8 +136,12 @@ export class RecipeFilterConfig {
       page_size: String(pageSize),
     }
     const query = (criteria.query ?? '').trim()
+    const ingredient = (criteria.ingredient ?? '').trim()
     if (query) {
       params.query = query
+    }
+    if (ingredient) {
+      params.ingredient = ingredient
     }
     if (criteria.category && criteria.category !== this.FILTER_ALL) {
       params.category = criteria.category
