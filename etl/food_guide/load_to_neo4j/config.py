@@ -9,7 +9,10 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(PROJECT_ROOT / ".env")
 
-DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / "storage" / "processed" / "food_guide" / "food_guide_v1.csv"
+DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / os.getenv(
+    "FOOD_GUIDE_CSV_PATH",
+    "storage/processed/food_guide/food_guide_v2.csv",
+)
 
 
 @dataclass(frozen=True)
