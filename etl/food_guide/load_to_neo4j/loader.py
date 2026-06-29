@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / "storage" / "processed" / "food_guide" / "food_guide_v1.csv"
+DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / "storage" / "processed" / "food_guide" / "food_guide_v2.csv"
 
 # =============================================================================
 # 설정값
