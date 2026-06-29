@@ -3,10 +3,22 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class ChatMessage(BaseModel):
+    role: str
+    text: str
+
+class ChatSettings(BaseModel):
+    shortAnswer: bool = True
+    fridgeFirst: bool = True
+    expiringFirst: bool = True
+    excludeDislikes: bool = True
+
 class ChatRequest(BaseModel):
     """챗봇 메시지 요청 스키마입니다."""
 
     message: str = Field(..., min_length=1, description="사용자 메시지")
+    history: list[ChatMessage] = Field(default_factory=list, description="이전 대화 내역")
+    settings: ChatSettings = Field(default_factory=ChatSettings, description="사용자 설정 값")
 
 
 class ChatAction(BaseModel):

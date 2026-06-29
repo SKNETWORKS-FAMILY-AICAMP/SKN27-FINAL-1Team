@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
-from app.backend.core.config import settings
+from app.backend.core.config import settings as app_settings
 from app.backend.services.guide_service.guide_service import guide_service
 from app.backend.services.inventory_service.inventory_service import inventory_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
@@ -25,10 +25,10 @@ except ImportError:
 class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
 
-    def handle_message(self, db: Session, user_id: int, message: str) -> dict[str, Any]:
+    def handle_message(self, db: Session, user_id: int, message: str, history: list[Any] = None, user_settings: Any = None) -> dict[str, Any]:
         """메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
-        intent = self._route_intent(text)
+        intent = self._route_intent_with_llm(text, history)
         actions: list[dict[str, Any]] = []
         sources: list[dict[str, str]] = []
 
@@ -40,7 +40,7 @@ class ChatService:
             elif intent == "ingredient.guide":
                 reply, sources = self._reply_guide(text)
             elif intent == "recipe.recommend":
-                reply, actions = self._reply_recipe_recommend(db, user_id, text)
+                reply, actions = self._reply_recipe_recommend(db, user_id, text, history, user_settings)
             elif intent == "recipe.search":
                 reply, actions, sources = self._reply_recipe_search(db, text)
             elif intent == "receipt.guide":
@@ -48,12 +48,78 @@ class ChatService:
                 actions = [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}]
             else:
                 reply = "냉장고 재료 조회, 소비기한 임박 재료, 보관법, 레시피 추천을 물어볼 수 있어요."
+            
+            # 간단히 답변 설정이 켜져 있다면, LLM으로 요약
+            if getattr(user_settings, 'shortAnswer', False) and len(reply) > 50:
+                if OpenAI is not None and app_settings.OPENAI_API_KEY:
+                    client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
+                    try:
+                        res = client_ai.chat.completions.create(
+                            model=app_settings.OPENAI_MODEL,
+                            messages=[
+                                {"role": "system", "content": "다음 챗봇 응답을 핵심만 남겨서 1~2문장의 아주 짧은 대화체로 요약해. 존댓말을 사용해."},
+                                {"role": "user", "content": reply}
+                            ],
+                            temperature=0.3
+                        )
+                        reply = res.choices[0].message.content.strip()
+                    except Exception:
+                        pass
         except Exception:
             reply = "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
             actions = []
             sources = []
 
         return {"intent": intent, "reply": reply, "actions": actions, "sources": sources}
+
+    def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
+        """LangChain LLM을 활용하여 대화 문맥(history)과 현재 메시지로 의도를 파악합니다."""
+        if not app_settings.OPENAI_API_KEY or OpenAI is None:
+            return self._route_intent(text)
+
+        try:
+            from langchain_openai import ChatOpenAI
+            from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+            
+            llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
+            
+            system_prompt = """
+당신은 챗봇의 의도 분류기(Intent Classifier)입니다.
+사용자의 메시지와 이전 대화 맥락을 보고 다음 중 가장 적합한 의도(Intent) 1개만 정확하게 출력하세요. 다른 설명은 절대 붙이지 마세요.
+
+[분류 가능 의도 목록]
+- receipt.guide: 영수증, OCR, 구매내역 등록 관련
+- recipe.recommend: "치킨 추천해줘", "두부로 뭐해먹지", "그거 말고 다른거", "이 재료들로 할 수 있는 요리" 등 요리/레시피 추천
+- recipe.search: "김치볶음밥 레시피", "파스타 요리법" 등 특정 요리 검색
+- ingredient.guide: "치킨 보관법", "남은 재료 어떡해", "두부 손질" 등 식재료 관리/보관
+- inventory.expiring: "상하는 거 뭐 있어", "소비기한 임박", "d-day" 등 임박 재료 확인
+- inventory.list: "냉장고에 뭐 있지?", "내 재료 목록" 등 보유 식재료 단순 확인
+- general: 위 어느 것에도 해당하지 않는 단순 인사나 일상 대화
+
+[매우 중요한 주의사항]
+사용자가 "그거 말고", "다른 거", "딴거", "사이드 메뉴는?", "더 알려줘" 와 같이 지시대명사나 후속 질문을 던질 경우, 반드시 직전 대화의 챗봇 응답이 어떤 의도였는지 파악하세요. 직전에 레시피를 추천했다면 반드시 'recipe.recommend'를 출력해야 합니다. 'general'로 분류하지 마세요!
+            """
+            
+            messages = [SystemMessage(content=system_prompt)]
+            
+            if history:
+                for msg in history[-4:]: # 최근 4개 메시지만 참조
+                    if msg.role == 'user':
+                        messages.append(HumanMessage(content=msg.text))
+                    elif msg.role == 'bot':
+                        messages.append(AIMessage(content=msg.text))
+                        
+            messages.append(HumanMessage(content=text))
+            
+            response = llm.invoke(messages)
+            intent = response.content.strip()
+            valid_intents = ["receipt.guide", "recipe.recommend", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "general"]
+            
+            if intent in valid_intents:
+                return intent
+            return self._route_intent(text)
+        except Exception:
+            return self._route_intent(text)
 
     def _route_intent(self, text: str) -> str:
         """키워드 기반으로 1차 챗봇 intent를 분류합니다."""
@@ -62,7 +128,7 @@ class ChatService:
         if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
             return "receipt.guide"
             
-        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹")):
+        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "다른거", "딴거")):
             return "recipe.recommend"
         if "레시피" in normalized or "요리" in normalized:
             return "recipe.search"
@@ -215,10 +281,10 @@ class ChatService:
 
     def _reply_external_guide(self, keyword: str) -> tuple[str, list[dict[str, str]]]:
         """내부 가이드가 없을 때 Tavily 검색 결과를 짧게 요약합니다."""
-        if not settings.TAVILY_API_KEY or TavilyClient is None:
+        if not app_settings.TAVILY_API_KEY or TavilyClient is None:
             return f"{keyword} 정보는 아직 우리 가이드에 없어요. 웹 검색 답변은 Tavily 설정 후 사용할 수 있어요.", []
 
-        client = TavilyClient(api_key=settings.TAVILY_API_KEY)
+        client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
         try:
             result = client.search(query=f"{keyword} 보관법", search_depth="basic", max_results=5)
         except Exception:
@@ -233,10 +299,10 @@ class ChatService:
         if not content:
             return f"{keyword} 정보를 웹에서 찾지 못했어요.", sources
 
-        if settings.OPENAI_API_KEY and OpenAI is not None:
-            client_ai = OpenAI(api_key=settings.OPENAI_API_KEY)
+        if app_settings.OPENAI_API_KEY and OpenAI is not None:
+            client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
             response = client_ai.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=app_settings.OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": "검색 결과 안에서만 한국어로 3문장 이하로 식재료 보관법을 요약해."},
                     {"role": "user", "content": content},
@@ -275,10 +341,10 @@ class ChatService:
         return ", ".join(titles) + " 레시피를 아래에서 확인해보세요.", self._recipe_actions(items), []
     def _reply_external_recipe(self, keyword: str) -> tuple[str, list[dict[str, str]]]:
         """내부 레시피가 없을 때 Tavily 검색 결과로 짧게 안내합니다."""
-        if not settings.TAVILY_API_KEY or TavilyClient is None:
+        if not app_settings.TAVILY_API_KEY or TavilyClient is None:
             return f"{keyword} 관련 레시피는 아직 우리 DB에 없어요. 웹 검색 답변은 Tavily 설정 후 사용할 수 있어요.", []
 
-        client = TavilyClient(api_key=settings.TAVILY_API_KEY)
+        client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
         try:
             result = client.search(query=f"{keyword} 레시피", search_depth="basic", max_results=3)
         except Exception:
@@ -293,10 +359,10 @@ class ChatService:
         if not content:
             return f"{keyword} 레시피를 웹에서도 찾지 못했어요.", sources
 
-        if settings.OPENAI_API_KEY and OpenAI is not None:
-            client_ai = OpenAI(api_key=settings.OPENAI_API_KEY)
+        if app_settings.OPENAI_API_KEY and OpenAI is not None:
+            client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
             response = client_ai.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=app_settings.OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": "검색 결과 안에서만 한국어로 3문장 이하의 간단한 레시피 안내를 작성해."},
                     {"role": "user", "content": content},
@@ -309,10 +375,27 @@ class ChatService:
 
         return f"우리 DB에는 아직 없어서 웹 검색 기준으로 안내할게요.\n{summary}", sources
 
-    def _reply_recipe_recommend(self, db: Session, user_id: int, text: str) -> tuple[str, list[dict[str, Any]]]:
+    def _reply_recipe_recommend(self, db: Session, user_id: int, text: str, history: list[Any] = None, settings_obj: Any = None) -> tuple[str, list[dict[str, Any]]]:
         """냉장고 재료 기반 또는 특정 재료 기반 레시피 추천 결과를 안내합니다."""
         keyword = self._extract_recipe_ingredient(text)
+        
+        # 만약 "그거 말고 다른거"처럼 키워드가 없다면 history에서 이전 키워드 유추
+        if not keyword and history:
+            try:
+                from langchain_openai import ChatOpenAI
+                from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+                llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
+                messages = [SystemMessage(content="사용자 대화 맥락을 보고, 사용자가 현재 요리를 추천받고 싶어하는 '핵심 식재료 이름(예: 치킨, 소고기, 양파)' 1개만 단답형으로 출력해. 사용자가 '그거 말고 딴거'처럼 지시대명사를 쓰면 이전 맥락의 주재료를 찾아서 반환해. 절대 부연설명 없이 단어 1개만 출력해. 도저히 찾을 수 없으면 'None' 반환.")]
+                for msg in history[-4:]:
+                    messages.append(HumanMessage(content=msg.text) if msg.role == 'user' else AIMessage(content=msg.text))
+                messages.append(HumanMessage(content=text))
+                res = llm.invoke(messages).content.strip()
+                if res != "None" and res not in ("다른거", "딴거", "그거", "저거", "이거", "다른 거", "딴 거"):
+                    keyword = res
+            except Exception:
+                pass
         if keyword:
+            past_bot_texts = " ".join([msg.text for msg in history if msg.role == "bot"]) if history else ""
             try:
                 result = recipe_search_service.search_recipes(
                     db=db,
@@ -321,13 +404,19 @@ class ChatService:
                     cooking_time_label="30분이내",
                     main_ingredient_only=True,
                     page=1,
-                    page_size=3,
+                    page_size=10,
                 )
-                items: list[dict[str, Any]] = result["items"]
-                is_easy_result = bool(items)
-                if not items:
-                    result = recipe_search_service.search_recipes(db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=3)
-                    items = result["items"]
+                raw_items: list[dict[str, Any]] = result["items"]
+                is_easy_result = bool(raw_items)
+                if not raw_items:
+                    result = recipe_search_service.search_recipes(db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=10)
+                    raw_items = result["items"]
+                
+                # 이미 추천한 레시피는 제외
+                new_items = [item for item in raw_items if item["title"] not in past_bot_texts]
+                if not new_items:
+                    new_items = raw_items
+                items = new_items[:3]
             except Exception:
                 reply, _sources = self._reply_external_recipe(keyword)
                 return reply, []
@@ -346,11 +435,14 @@ class ChatService:
             return prefix + ", ".join(titles) + "예요.", actions
 
         try:
-            result = recommendation_service.recommend_recipes(
-                db,
-                user_id,
-                RecipeRecommendConfig.fridge_consume_preset(),
-            )
+            config = RecipeRecommendConfig.fridge_consume_preset()
+            if settings_obj:
+                if not getattr(settings_obj, 'expiringFirst', True):
+                    config.mode = "fridge_all"
+                if not getattr(settings_obj, 'excludeDislikes', True):
+                    config.exclude_dislikes = False
+
+            result = recommendation_service.recommend_recipes(db, user_id, config)
         except Exception:
             return "냉장고 기반 추천을 불러오지 못했어요. 재료명을 넣어서 다시 물어봐주세요.", []
 

@@ -16,4 +16,10 @@ def send_chat_message(
     db: Session = Depends(get_db),
 ):
     """사용자 메시지를 의도별 서비스로 라우팅해 챗봇 응답을 반환합니다."""
-    return chat_service.handle_message(db=db, user_id=current_user_id, message=request_data.message)
+    return chat_service.handle_message(
+        db=db, 
+        user_id=current_user_id, 
+        message=request_data.message,
+        history=request_data.history,
+        user_settings=request_data.settings
+    )

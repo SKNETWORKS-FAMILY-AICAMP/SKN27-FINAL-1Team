@@ -7,7 +7,6 @@ const initialSettings = {
   shortAnswer: true,
   fridgeFirst: true,
   expiringFirst: true,
-  lowMissing: true,
   excludeDislikes: true,
 }
 
@@ -250,7 +249,11 @@ function FloatingChatbot() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({
+          message: trimmed,
+          history: messages.filter(m => !m.isTyping).map(m => ({ role: m.role, text: m.text })),
+          settings: settings
+        }),
       })
 
       if (response.status === 401) throw new Error('unauthorized')
@@ -488,10 +491,6 @@ function FloatingChatbot() {
               <button type="button" onClick={() => toggleSetting('expiringFirst')}>
                 <span>소비 임박 재료 우선</span>
                 <i className={settings.expiringFirst ? 'is-on' : ''} />
-              </button>
-              <button type="button" onClick={() => toggleSetting('lowMissing')}>
-                <span>부족 재료 적게</span>
-                <i className={settings.lowMissing ? 'is-on' : ''} />
               </button>
               <button type="button" onClick={() => toggleSetting('excludeDislikes')}>
                 <span>비선호 재료 제외</span>
