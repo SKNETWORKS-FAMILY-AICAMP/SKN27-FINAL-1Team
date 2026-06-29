@@ -15,27 +15,31 @@ const initialMessages = [
   { role: 'bot', text: '안녕하세요. 레시피, 보관법, 장보기를 도와드릴게요.' },
 ]
 
+const quickQuestions = ['냉장고 요약해줘', '임박 재료 알려줘', '오늘 뭐 먹을까?']
+
 function FloatingChatbot() {
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('chat')
+  const [activeTab, setActiveTab] = useState('home')
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState(initialMessages)
+  const [isSending, setIsSending] = useState(false)
   const [settings, setSettings] = useState(initialSettings)
   const messagesEndRef = useRef(null)
 
-  // 새 메시지가 추가되면 사용자가 바로 마지막 답변을 볼 수 있게 아래로 이동합니다.
+  // 새 메시지나 로딩 말풍선이 추가되면 마지막 응답으로 이동합니다.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
-  }, [messages, isOpen, activeTab])
+  }, [messages, isSending, isOpen, activeTab])
 
-  const sendMessage = async (event) => {
-    event.preventDefault()
-    const text = message.trim()
-    if (!text) return
+  const requestChat = async (text) => {
+    const trimmed = text.trim()
+    if (!trimmed || isSending) return
 
-    setMessages((prev) => [...prev, { role: 'user', text }])
+    setActiveTab('chat')
+    setMessages((prev) => [...prev, { role: 'user', text: trimmed }])
     setMessage('')
+    setIsSending(true)
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -47,19 +51,36 @@ function FloatingChatbot() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: trimmed }),
       })
 
+      if (response.status === 401) throw new Error('unauthorized')
       if (!response.ok) throw new Error('chat request failed')
 
       const data = await response.json()
-      setMessages((prev) => [...prev, { role: 'bot', text: data.reply, actions: data.actions || [] }])
+      setMessages((prev) => [
+        ...prev,
+        { role: 'bot', text: data.reply, actions: data.actions || [], sources: data.sources || [] },
+      ])
     } catch (error) {
       setMessages((prev) => [
         ...prev,
-        { role: 'bot', text: '챗봇 연결 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.' },
+        {
+          role: 'bot',
+          text:
+            error.message === 'unauthorized'
+              ? '로그인 토큰이 만료되었어요. 보안을 위해 일정 시간이 지나면 다시 로그인이 필요해요.'
+              : '챗봇 연결 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.',
+        },
       ])
+    } finally {
+      setIsSending(false)
     }
+  }
+
+  const sendMessage = (event) => {
+    event.preventDefault()
+    requestChat(message)
   }
 
   const toggleSetting = (key) => {
@@ -93,10 +114,36 @@ function FloatingChatbot() {
           </header>
 
           {activeTab === 'home' && (
-            <div className="floating-chatbot__empty">
-              <img src={mascot} alt="" />
-              <strong>밥벌이에게 물어보세요</strong>
-              <p>레시피, 보관법, 장보기까지 한 곳에서 도와드릴게요.</p>
+            <div className="floating-chatbot__home">
+              <section className="floating-chatbot__summary" aria-labelledby="chatbot-summary-title">
+                <div>
+                  <span>오늘</span>
+                  <h2 id="chatbot-summary-title">냉장고 요약</h2>
+                </div>
+                <ul>
+                  <li>
+                    <strong>소비 임박</strong>
+                    <button type="button" onClick={() => requestChat('임박 재료 알려줘')}>
+                      확인하기
+                    </button>
+                  </li>
+                  <li>
+                    <strong>추천 메뉴</strong>
+                    <button type="button" onClick={() => requestChat('오늘 뭐 먹을까?')}>
+                      추천받기
+                    </button>
+                  </li>
+                </ul>
+              </section>
+
+              <section className="floating-chatbot__prompts" aria-label="추천 질문">
+                <h3>추천 질문</h3>
+                {quickQuestions.map((question) => (
+                  <button type="button" key={question} onClick={() => requestChat(question)}>
+                    {question}
+                  </button>
+                ))}
+              </section>
             </div>
           )}
 
@@ -108,15 +155,30 @@ function FloatingChatbot() {
                     <p>{item.text}</p>
                     {item.actions?.length ? (
                       <div className="floating-chatbot__actions">
-                        {item.actions.map((action) => (
-                          <button type="button" key={action.url} onClick={() => navigate(action.url)}>
+                        {item.actions.map((action, actionIndex) => (
+                          <button type="button" key={`${action.label}-${actionIndex}`} onClick={() => navigate(action.url)}>
                             {action.label}
                           </button>
                         ))}
                       </div>
                     ) : null}
+                    {item.sources?.length ? (
+                      <div className="floating-chatbot__sources">
+                        출처
+                        {item.sources.map((source) => (
+                          <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                            {source.title}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
+                {isSending ? (
+                  <div className="floating-chatbot__message is-bot">
+                    <p>...</p>
+                  </div>
+                ) : null}
                 <div ref={messagesEndRef} />
               </div>
 

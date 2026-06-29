@@ -104,7 +104,7 @@ function RecipeList() {
     [location.search],
   );
 
-  const [draftSearchTerm, setDraftSearchTerm] = useState(criteria.query);
+  const [draftSearchTerm, setDraftSearchTerm] = useState(criteria.query || criteria.ingredient);
 
   const [recipes, setRecipes] = useState([]);
 
@@ -138,12 +138,12 @@ function RecipeList() {
   };
 
   useEffect(() => {
-    setDraftSearchTerm(criteria.query);
+    setDraftSearchTerm(criteria.query || criteria.ingredient);
 
     setPage(1);
 
     lastSearchRef.current = location.search;
-  }, [location.search, criteria.query]);
+  }, [location.search, criteria.query, criteria.ingredient]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -236,6 +236,7 @@ function RecipeList() {
     navigateToCriteria({
       ...criteria,
       query,
+      ingredient: "",
       browseAll: false,
     });
   };
