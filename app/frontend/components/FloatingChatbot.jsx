@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import mascot from '../assets/mascot.png'
 import './FloatingChatbot.css'
 
@@ -15,6 +16,7 @@ const initialMessages = [
 ]
 
 function FloatingChatbot() {
+  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('chat')
   const [message, setMessage] = useState('')
@@ -51,7 +53,7 @@ function FloatingChatbot() {
       if (!response.ok) throw new Error('chat request failed')
 
       const data = await response.json()
-      setMessages((prev) => [...prev, { role: 'bot', text: data.reply }])
+      setMessages((prev) => [...prev, { role: 'bot', text: data.reply, actions: data.actions || [] }])
     } catch (error) {
       setMessages((prev) => [
         ...prev,
@@ -102,9 +104,18 @@ function FloatingChatbot() {
             <>
               <div className="floating-chatbot__messages">
                 {messages.map((item, index) => (
-                  <p className={`floating-chatbot__message is-${item.role}`} key={`${item.role}-${index}`}>
-                    {item.text}
-                  </p>
+                  <div className={`floating-chatbot__message is-${item.role}`} key={`${item.role}-${index}`}>
+                    <p>{item.text}</p>
+                    {item.actions?.length ? (
+                      <div className="floating-chatbot__actions">
+                        {item.actions.map((action) => (
+                          <button type="button" key={action.url} onClick={() => navigate(action.url)}>
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
                 <div ref={messagesEndRef} />
               </div>

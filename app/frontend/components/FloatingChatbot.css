@@ -153,6 +153,30 @@
   color: #ffffff;
 }
 
+
+.floating-chatbot__message p {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.floating-chatbot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.floating-chatbot__actions button {
+  border: 1px solid #f0b9a8;
+  border-radius: 999px;
+  background: #fff7ef;
+  color: #7a3f25;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 9px;
+}
 .floating-chatbot__form {
   flex: 0 0 auto;
   display: flex;

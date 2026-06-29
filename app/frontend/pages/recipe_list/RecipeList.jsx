@@ -86,6 +86,7 @@ function formatCookingTime(minutes) {
 function hasActiveFilters(criteria) {
   return (
     Boolean(criteria.query) ||
+    Boolean(criteria.ingredient) ||
     criteria.category !== RecipeFilterConfig.FILTER_ALL ||
     criteria.timeFilter !== RecipeFilterConfig.FILTER_ALL ||
     criteria.levelFilter !== RecipeFilterConfig.FILTER_ALL

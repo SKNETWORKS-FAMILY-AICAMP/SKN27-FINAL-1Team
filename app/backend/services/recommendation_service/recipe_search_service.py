@@ -24,6 +24,7 @@ class RecipeSearchService:
         difficulty: str | None = None,
         max_cooking_time_min: int | None = None,
         cooking_time_label: str | None = None,
+        main_ingredient_only: bool = False,
         page: int = 1,
         page_size: int | None = None,
     ) -> dict[str, Any]:
@@ -41,6 +42,7 @@ class RecipeSearchService:
             difficulty=difficulty,
             max_cooking_time_min=max_cooking_time_min,
             cooking_time_label=cooking_time_label,
+            main_ingredient_only=main_ingredient_only,
         )
 
         total = query_recipes.count()

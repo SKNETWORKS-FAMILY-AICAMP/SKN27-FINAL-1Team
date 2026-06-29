@@ -1,5 +1,6 @@
 import re
 from typing import Any
+from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
@@ -13,30 +14,32 @@ from app.backend.services.recommendation_service.recommendation_service import r
 class ChatService:
     """사용자 자연어 메시지를 간단한 intent로 분류하고 기존 서비스를 호출합니다."""
 
-    def handle_message(self, db: Session, user_id: int, message: str) -> dict[str, str]:
+    def handle_message(self, db: Session, user_id: int, message: str) -> dict[str, Any]:
         """메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
         intent = self._route_intent(text)
+        actions: list[dict[str, Any]] = []
 
         try:
             if intent == "inventory.list":
                 reply = self._reply_inventory_list(db, user_id)
             elif intent == "inventory.expiring":
-                reply = self._reply_expiring_items(db, user_id)
+                reply = self._reply_expiring_items(db, user_id, text)
             elif intent == "ingredient.guide":
                 reply = self._reply_guide(text)
             elif intent == "recipe.recommend":
-                reply = self._reply_recipe_recommend(db, user_id)
+                reply, actions = self._reply_recipe_recommend(db, user_id, text)
             elif intent == "recipe.search":
-                reply = self._reply_recipe_search(db, text)
+                reply, actions = self._reply_recipe_search(db, text)
             elif intent == "receipt.guide":
                 reply = "영수증은 파일 업로드가 필요해서 상단 메뉴의 영수증 OCR 화면에서 등록해주세요."
             else:
                 reply = "냉장고 재료 조회, 소비기한 임박 재료, 보관법, 레시피 추천을 물어볼 수 있어요."
         except Exception:
             reply = "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
+            actions = []
 
-        return {"intent": intent, "reply": reply}
+        return {"intent": intent, "reply": reply, "actions": actions}
 
     def _route_intent(self, text: str) -> str:
         """키워드 기반으로 1차 챗봇 intent를 분류합니다."""
@@ -44,14 +47,14 @@ class ChatService:
 
         if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
             return "receipt.guide"
-        if any(word in normalized for word in ("보관법", "보관방법", "손질", "신선", "가이드")):
+        if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "신선", "가이드")):
             return "ingredient.guide"
         # 유통기한 질문에 "뭐 있어"가 섞여도 목록보다 임박 조회를 우선합니다.
-        if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "다되어", "다돼", "끝나", "d-day", "디데이")):
+        if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")):
             return "inventory.expiring"
         if any(word in normalized for word in ("뭐있", "뭐가있", "냉장고목록", "재료목록", "내재료")):
             return "inventory.list"
-        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "만들수", "만들수있는", "만들수있", "만들 수", "메뉴", "냉장고파먹")):
+        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹")):
             return "recipe.recommend"
         if "레시피" in normalized or "요리" in normalized:
             return "recipe.search"
@@ -59,9 +62,39 @@ class ChatService:
 
     def _extract_keyword(self, text: str) -> str:
         """조사와 기능 키워드를 덜어내고 검색에 쓸 핵심 단어를 추립니다."""
-        cleaned = re.sub(r"(보관법|보관방법|손질법|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|은|는|이|가|을|를|로|으로|에|의|좀|해먹을|만들)", " ", text)
+        cleaned = re.sub(r"(보관법|보관방법|보관해|보관|어떻게|손질법|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|은|는|이|가|을|를|으로|로|에|의|좀|해먹을|만들)", " ", text)
         words = [word.strip() for word in cleaned.split() if word.strip()]
         return words[0] if words else text.strip()
+
+    def _extract_recipe_ingredient(self, text: str) -> str:
+        """'두부로 뭐 만들 수 있어?' 같은 문장에서 재료명을 추출합니다."""
+        match = re.search(r"([가-힣A-Za-z0-9]+)(?:으로|로).*(?:뭐|무엇|메뉴|레시피|요리|만들|추천)", text)
+        if not match:
+            match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+)\s*(?:빨리|먼저|써야|처리).*(?:뭐|무엇|메뉴|레시피|요리|추천|하지)", text)
+        if not match:
+            return ""
+
+        keyword = match.group(1).strip()
+        if keyword in ("걸", "있는", "이걸", "이것", "그걸", "그것", "재료", "냉장고"):
+            return ""
+        return self._normalize_recipe_keyword(keyword)
+
+    def _normalize_recipe_keyword(self, keyword: str) -> str:
+        """짧은 구어체 재료명을 레시피 검색에 더 잘 맞는 대표명으로 바꿉니다."""
+        aliases = {"파": "대파"}
+        return aliases.get(keyword, keyword)
+
+    def _recipe_actions(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """레시피 응답을 상세 페이지 이동 버튼으로 변환합니다."""
+        return [
+            {
+                "label": item["title"],
+                "url": f"/recipes/{item['recipe_id']}",
+                "data": {"recipe_id": item["recipe_id"]},
+            }
+            for item in items[:3]
+            if item.get("recipe_id") and item.get("title")
+        ]
 
     def _reply_inventory_list(self, db: Session, user_id: int) -> str:
         """냉장고 보유 재료를 짧게 요약합니다."""
@@ -73,9 +106,27 @@ class ChatService:
         suffix = "" if len(items) <= 8 else f" 외 {len(items) - 8}개"
         return f"현재 냉장고에는 {', '.join(names)}{suffix}가 있어요."
 
-    def _reply_expiring_items(self, db: Session, user_id: int) -> str:
-        """소비기한이 가까운 재료를 D-day 기준으로 안내합니다."""
+    def _extract_expiry_keyword(self, text: str) -> str:
+        """특정 재료의 소비기한 질문이면 재료명을 추출합니다."""
+        match = re.search(r"([가-힣A-Za-z0-9]+)\s*(?:유통기한|소비기한|기한)", text)
+        if not match:
+            return ""
+        keyword = match.group(1).strip()
+        if keyword in ("재료", "냉장고", "오늘"):
+            return ""
+        return keyword
+
+    def _reply_expiring_items(self, db: Session, user_id: int, text: str = "") -> str:
+        """소비기한이 가까운 재료 또는 특정 재료의 D-day를 안내합니다."""
         items = inventory_service.get_ingredients(db=db, user_id=user_id)
+        keyword = self._extract_expiry_keyword(text)
+        if keyword:
+            matched = [item for item in items if keyword in item.get("name", "")]
+            if not matched:
+                return f"냉장고에 등록된 {keyword} 재료를 찾지 못했어요."
+            summary = [f"{item['name']} {self._format_d_day(item['d_day'])}" for item in matched if item.get("d_day") is not None]
+            return f"{keyword} 소비기한은 " + ", ".join(summary) + "예요."
+
         expiring = sorted(
             [item for item in items if item.get("d_day") is not None and item["d_day"] <= 3],
             key=lambda item: item["d_day"],
@@ -106,37 +157,68 @@ class ChatService:
         tip = detail.get("storage_tips") or detail.get("horticultural_storage_tips")
         if not tip:
             return f"{item['name']} 가이드는 찾았지만 보관법 정보가 비어 있어요."
-        return f"{item['name']} 보관법: {tip}"
+        return f"{item['name']} 보관법이에요.\n{self._format_guide_tip(tip)}"
 
-    def _reply_recipe_search(self, db: Session, text: str) -> str:
+    def _format_guide_tip(self, tip: str) -> str:
+        """긴 보관법 문장을 챗봇에서 읽기 쉬운 줄 단위로 나눕니다."""
+        sentences = [sentence.strip() for sentence in re.split(r"(?<=\.)\s+", tip) if sentence.strip()]
+        return "\n".join(sentences[:3])
+
+    def _reply_recipe_search(self, db: Session, text: str) -> tuple[str, list[dict[str, Any]]]:
         """레시피명 또는 재료명 검색 결과를 안내합니다."""
-        keyword = self._extract_keyword(text)
+        keyword = self._extract_recipe_ingredient(text) or self._extract_keyword(text)
         result = recipe_search_service.search_recipes(db=db, query=keyword, page=1, page_size=3)
         items: list[dict[str, Any]] = result["items"]
         if not items:
             result = recipe_search_service.search_recipes(db=db, ingredient=keyword, page=1, page_size=3)
             items = result["items"]
         if not items:
-            return f"{keyword} 관련 레시피를 찾지 못했어요."
+            return f"{keyword} 관련 레시피를 찾지 못했어요.", []
 
         titles = [item["title"] for item in items]
-        return "찾은 레시피는 " + ", ".join(titles) + "예요."
+        return "찾은 레시피는 " + ", ".join(titles) + "예요.", self._recipe_actions(items)
 
-    def _reply_recipe_recommend(self, db: Session, user_id: int) -> str:
-        """냉장고 재료 기반 레시피 추천 결과를 안내합니다."""
+    def _reply_recipe_recommend(self, db: Session, user_id: int, text: str) -> tuple[str, list[dict[str, Any]]]:
+        """냉장고 재료 기반 또는 특정 재료 기반 레시피 추천 결과를 안내합니다."""
+        keyword = self._extract_recipe_ingredient(text)
+        if keyword:
+            result = recipe_search_service.search_recipes(
+                db=db,
+                ingredient=keyword,
+                difficulty="초급",
+                cooking_time_label="30분이내",
+                page=1,
+                page_size=3,
+            )
+            items: list[dict[str, Any]] = result["items"]
+            is_easy_result = bool(items)
+            if not items:
+                result = recipe_search_service.search_recipes(db=db, ingredient=keyword, page=1, page_size=3)
+                items = result["items"]
+
+            list_action = {
+                "label": f"{keyword} 레시피 더 보기",
+                "url": f"/recipes?ingredient={quote(keyword)}",
+                "data": {"ingredient": keyword},
+            }
+            if not items:
+                return f"{keyword}로 만들 수 있는 레시피를 찾지 못했어요.", [list_action]
+
+            titles = [item["title"] for item in items]
+            actions = self._recipe_actions(items) + [list_action]
+            prefix = f"{keyword}로 30분 안에 해볼 만한 초급 레시피는 " if is_easy_result else f"{keyword} 관련 레시피는 "
+            return prefix + ", ".join(titles) + "예요.", actions
         result = recommendation_service.recommend_recipes(
             db,
             user_id,
             RecipeRecommendConfig.fridge_consume_preset(),
         )
-        items: list[dict[str, Any]] = [
-            item for item in result.get("items", []) if item.get("missing_ingredient_count", 0) == 0
-        ]
+        items = [item for item in result.get("items", []) if item.get("missing_ingredient_count", 0) == 0]
         if not items:
-            return "현재 냉장고 재료만으로 완성 가능한 레시피를 찾지 못했어요. 부족 재료를 허용하면 더 넓게 추천할 수 있어요."
+            return "현재 냉장고 재료만으로 완성 가능한 레시피를 찾지 못했어요. 부족 재료를 허용하면 더 넓게 추천할 수 있어요.", []
 
         titles = [item["title"] for item in items[:3]]
-        return "현재 냉장고 재료만으로는 " + ", ".join(titles) + "를 만들 수 있어요."
+        return "현재 냉장고 재료만으로는 " + ", ".join(titles) + "를 만들 수 있어요.", self._recipe_actions(items)
 
 
 chat_service = ChatService()
