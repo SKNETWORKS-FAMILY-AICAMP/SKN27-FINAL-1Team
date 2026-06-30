@@ -10,7 +10,6 @@ import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
   receiptHistory,
   receiptRows as rows,
-  receiptRules,
   receiptSteps as steps,
 } from '../../mock/receiptOcrMock.js'
 
@@ -546,6 +545,8 @@ function ReceiptOcr() {
   const [analysisStep, setAnalysisStep] = useState(0)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
   const [isAddRowOpen, setIsAddRowOpen] = useState(false)
+  const [rowSelectionMode, setRowSelectionMode] = useState(false)
+  const [selectedRowIds, setSelectedRowIds] = useState([])
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -776,6 +777,40 @@ function ReceiptOcr() {
     setHasUploaded(true)
     setActiveStep(2)
     setIsAddRowOpen(false)
+  }
+
+  const enterRowSelection = () => {
+    setRowSelectionMode(true)
+    setSelectedRowIds([])
+  }
+
+  const exitRowSelection = () => {
+    setRowSelectionMode(false)
+    setSelectedRowIds([])
+  }
+
+  const toggleRowSelect = (rowId) => {
+    setSelectedRowIds((prev) => (prev.includes(rowId) ? prev.filter((value) => value !== rowId) : [...prev, rowId]))
+  }
+
+  const deleteSelectedRows = () => {
+    if (selectedRowIds.length === 0) {
+      return
+    }
+
+    setDetectedRows((prev) => prev.filter((row) => !selectedRowIds.includes(row.id)))
+    setEditingRows((prev) => {
+      const next = { ...prev }
+      selectedRowIds.forEach((rowId) => delete next[rowId])
+      return next
+    })
+    exitRowSelection()
+  }
+
+  const deleteAllRows = () => {
+    setDetectedRows([])
+    setEditingRows({})
+    exitRowSelection()
   }
 
   const updateQuantityAmount = (rowId, nextAmount) => {
@@ -1108,7 +1143,6 @@ function ReceiptOcr() {
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
-              <ReceiptRules variant="inline" />
               <div className="receipt-panel__title">
                 <h2 id="mapping-title">표준 재료명 매칭</h2>
                 <div className="receipt-panel__actions">
@@ -1144,18 +1178,6 @@ function ReceiptOcr() {
                       }
                     />
                   </label>
-                  <label className="receipt-ocr-meta__field">
-                    <small>총액(원)</small>
-                    <input
-                      className="receipt-inline-input receipt-inline-input--price"
-                      inputMode="numeric"
-                      pattern="[0-9,]*"
-                      type="text"
-                      value={formatPriceInput(receiptMeta.totalAmount)}
-                      placeholder="미확인"
-                      onChange={(event) => updateReceiptMetaField('totalAmount', event.target.value)}
-                    />
-                  </label>
                 </div>
               ) : null}
 
@@ -1170,7 +1192,21 @@ function ReceiptOcr() {
                   const isEditing = Boolean(editingRows[row.id])
 
                   return (
-                  <div className={`receipt-mapping-row ${isEditing ? 'is-editing' : ''}`} role="row" key={row.id}>
+                  <div
+                    className={[
+                      'receipt-mapping-row',
+                      isEditing ? 'is-editing' : '',
+                      rowSelectionMode ? 'is-selecting' : '',
+                      rowSelectionMode && selectedRowIds.includes(row.id) ? 'is-row-selected' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    role={rowSelectionMode ? 'button' : 'row'}
+                    aria-pressed={rowSelectionMode ? selectedRowIds.includes(row.id) : undefined}
+                    aria-label={rowSelectionMode ? `${row.name} 선택` : undefined}
+                    key={row.id}
+                    onClick={rowSelectionMode ? () => toggleRowSelect(row.id) : undefined}
+                  >
                     <span className="receipt-mapping-name-cell" role="cell">
                       <b>
                         <small>원재료명: {row.raw}</small>
@@ -1288,9 +1324,6 @@ function ReceiptOcr() {
                       <span className="receipt-loading-spinner" aria-hidden="true" />
                       <strong>영수증을 분석하고 있어요.</strong>
                       <p>업로드한 영수증에서 품목과 금액을 읽는 중이에요. 잠시만 기다려주세요.</p>
-                      <div className="receipt-loading-bar" role="progressbar" aria-label="영수증 분석 진행 중">
-                        <span />
-                      </div>
                     </div>
                   ) : (
                     <div className="receipt-empty-items" role="row">
@@ -1303,9 +1336,45 @@ function ReceiptOcr() {
 
               {!isProcessing ? (
                 <>
-                  <button className="receipt-add-row" type="button" onClick={addRow}>
-                    + 행 추가
-                  </button>
+                  <div className="receipt-row-tools">
+                    {rowSelectionMode ? (
+                      <>
+                        <button
+                          className="receipt-add-row receipt-row-tools__delete"
+                          type="button"
+                          disabled={detectedRows.length === 0}
+                          onClick={deleteAllRows}
+                        >
+                          전체 삭제
+                        </button>
+                        <button
+                          className="receipt-add-row receipt-row-tools__delete"
+                          type="button"
+                          disabled={selectedRowIds.length === 0}
+                          onClick={deleteSelectedRows}
+                        >
+                          선택 삭제{selectedRowIds.length > 0 ? ` (${selectedRowIds.length})` : ''}
+                        </button>
+                        <button className="receipt-add-row" type="button" onClick={exitRowSelection}>
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="receipt-add-row" type="button" onClick={addRow}>
+                          + 행 추가
+                        </button>
+                        <button
+                          className="receipt-add-row"
+                          type="button"
+                          disabled={detectedRows.length === 0}
+                          onClick={enterRowSelection}
+                        >
+                          행 삭제
+                        </button>
+                      </>
+                    )}
+                  </div>
                   <div className="receipt-success">
                     <span>총상품<em>{detectedRows.length}개</em></span>
                     <span>총 금액<em>{totalAmount.toLocaleString()}원</em></span>
@@ -1949,7 +2018,7 @@ function RecentHistory() {
             ) : (
               <>
                 <button type="button" onClick={enterSelectionMode}>
-                  선택
+                  선택 삭제
                 </button>
                 {history.length > 3 ? (
                   <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
@@ -2031,29 +2100,6 @@ function RecentHistory() {
         </>
       )}
       {dialogNode}
-    </section>
-  )
-}
-
-function ReceiptRules({ variant = '' }) {
-  return (
-    <section
-      className={['receipt-rules', variant ? `receipt-rules--${variant}` : 'receipt-panel'].join(' ')}
-      aria-labelledby="receipt-rules-title"
-    >
-      <h2 id="receipt-rules-title">입고 규칙</h2>
-      <div className="receipt-rule-list">
-        {receiptRules.map((rule) => (
-          <article key={rule.title}>
-            <span aria-hidden="true" />
-            <div>
-              <strong>{rule.title}</strong>
-              <p>{rule.description}</p>
-            </div>
-            <em>{rule.enabled ? 'ON' : '후보'}</em>
-          </article>
-        ))}
-      </div>
     </section>
   )
 }
