@@ -1057,6 +1057,17 @@
   transition: all 0.2s ease;
   font-family: inherit;
 }
+/* select 기본 화살표 위치가 가장자리에 붙지 않도록 여백이 있는 커스텀 화살표를 사용합니다. */
+.fridge-form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px;
+  background-color: #fffdf8;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235f3f2a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px 16px;
+}
 
 .fridge-form-group input:focus,
 .fridge-form-group select:focus {
