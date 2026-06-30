@@ -281,6 +281,45 @@ class IngredientGuide(Base):
     ingredient = relationship("Ingredient", back_populates="guide")
 
 
+class FoodGuideSuggestion(Base):
+    """사용자가 제보한 식재료 가이드 후보를 검토 전까지 보관합니다."""
+
+    __tablename__ = "food_guide_suggestions"
+    __table_args__ = (
+        CheckConstraint(
+            "guide_type IN ('storage', 'prep', 'washing', 'freshness')",
+            name="ck_food_guide_suggestions_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected')",
+            name="ck_food_guide_suggestions_status",
+        ),
+        Index(
+            "idx_food_guide_suggestions_review",
+            "status",
+            "ingredient_code",
+            "guide_type",
+        ),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(
+        BigIntPrimaryKey,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    ingredient_code = Column(String(100), nullable=False)
+    ingredient_name = Column(String(255), nullable=False)
+    guide_type = Column(String(30), nullable=False)
+    content = Column(Text, nullable=False)
+    source_name = Column(String(255), nullable=True)
+    source_url = Column(String(1000), nullable=True)
+    status = Column(String(30), nullable=False, server_default="pending")
+    review_note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class Recipe(Base):
     """추천과 상세 조회에 사용하는 레시피 정보를 표현하는 ORM 모델입니다."""
 

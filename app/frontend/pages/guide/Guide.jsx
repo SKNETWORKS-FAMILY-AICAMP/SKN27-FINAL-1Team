@@ -9,35 +9,54 @@ const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const GUIDE_PAGE_SIZE = 12
 const GUIDE_RECIPE_LIMIT = 12
 const GUIDE_RECIPE_VISIBLE_COUNT = 3
+const EMPTY_SUGGESTION_FORM = { content: '', sourceName: '', sourceUrl: '' }
 
 function normalizeIngredientImageName(name = '') {
   return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
 }
 
-const ingredientImages = Object.entries(
-  import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
+const ingredientImageModules = {
+  ...import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
     eager: true,
     import: 'default',
   }),
-)
+}
+
+const ingredientImages = Object.entries(ingredientImageModules)
   .map(([path, src]) => {
     const fileName = path.split('/').pop() || ''
     const name = fileName.replace(/\.[^.]+$/, '')
     return { name, key: normalizeIngredientImageName(name), src }
   })
 
-function getIngredientIcon(name = '') {
-  const key = normalizeIngredientImageName(name)
-  if (!key) return null
-  const image = ingredientImages.find((item) => item.key === key)
-  return image?.src || null
+const GUIDE_ICON_NAME_ALIASES = {
+  가염버터: '버터',
+  건다시마: '다시마',
+  돼지삼겹살: '삼겹살',
+  무염버터: '버터',
+  미역: '건미역',
+}
+
+function getIngredientIcon(...names) {
+  const candidates = names
+    .flatMap((name) => String(name || '').split(/[,/|;·]/))
+    .map((name) => name.trim())
+    .filter(Boolean)
+
+  for (const candidate of candidates) {
+    const iconName = GUIDE_ICON_NAME_ALIASES[candidate] || candidate
+    const key = normalizeIngredientImageName(iconName)
+    const image = ingredientImages.find((item) => item.key === key)
+    if (image) return image.src
+  }
+  return null
 }
 
 const TIP_DEFINITIONS = [
-  { title: '보관방법', key: 'storage_tips', sourceName: 'storage_source_name', sourceUrl: 'storage_source_url' },
-  { title: '손질방법', key: 'prep_tips', sourceName: 'prep_source_name', sourceUrl: 'prep_source_url' },
-  { title: '세척방법', key: 'washing_tips', sourceName: 'washing_source_name', sourceUrl: 'washing_source_url' },
-  { title: '신선도 확인법', key: 'freshness_tips', sourceName: 'freshness_source_name', sourceUrl: 'freshness_source_url' },
+  { title: '보관방법', key: 'storage_tips', guideType: 'storage', sourceName: 'storage_source_name', sourceUrl: 'storage_source_url' },
+  { title: '손질방법', key: 'prep_tips', guideType: 'prep', sourceName: 'prep_source_name', sourceUrl: 'prep_source_url' },
+  { title: '세척방법', key: 'washing_tips', guideType: 'washing', sourceName: 'washing_source_name', sourceUrl: 'washing_source_url' },
+  { title: '신선도 확인법', key: 'freshness_tips', guideType: 'freshness', sourceName: 'freshness_source_name', sourceUrl: 'freshness_source_url' },
 ]
 
 function getAuthHeaders() {
@@ -77,7 +96,8 @@ function normalizeSourceUrl(url) {
 
 function buildGuideTips(guide) {
   return TIP_DEFINITIONS.map((definition) => {
-    const points = splitTipText(guide?.[definition.key])
+    const guideText = guide?.[definition.key]
+    const points = splitTipText(guideText)
     const source = definition.sourceName ? guide?.[definition.sourceName] : null
     const sourceUrl = definition.sourceUrl ? normalizeSourceUrl(guide?.[definition.sourceUrl]) : null
     return {
@@ -86,6 +106,7 @@ function buildGuideTips(guide) {
       chip: source || '가이드 정보',
       source: source || '출처 정보 없음',
       sourceUrl,
+      isMissing: !guideText,
     }
   })
 }
@@ -105,7 +126,12 @@ function formatCookingTime(minutes) {
 }
 
 function getGuideIcon(ingredient) {
-  return getIngredientIcon(ingredient?.raw_name || ingredient?.name || ingredient?.representative_name)
+  return getIngredientIcon(
+    ingredient?.raw_name,
+    ingredient?.name,
+    ingredient?.representative_name,
+    ...(ingredient?.aliases || []),
+  )
 }
 
 function ImageSlot({ src, alt = '', label = '', className = '' }) {
@@ -147,6 +173,10 @@ function Guide() {
   const [fridgeErrorMessage, setFridgeErrorMessage] = useState('')
   const [recipeErrorMessage, setRecipeErrorMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [isSuggestionFormOpen, setIsSuggestionFormOpen] = useState(false)
+  const [suggestionForm, setSuggestionForm] = useState(EMPTY_SUGGESTION_FORM)
+  const [suggestionMessage, setSuggestionMessage] = useState('')
+  const [isSuggestionSubmitting, setIsSuggestionSubmitting] = useState(false)
 
   useEffect(() => {
     const syncLoginState = () => setIsLoggedIn(hasLoginToken())
@@ -373,6 +403,13 @@ function Guide() {
     }
   }, [guideTips, selectedTipTitle])
 
+  useEffect(() => {
+    setIsSuggestionFormOpen(false)
+    setSuggestionForm(EMPTY_SUGGESTION_FORM)
+    setSuggestionMessage('')
+    setIsSuggestionSubmitting(false)
+  }, [selectedCode, selectedTipTitle])
+
   const selectIngredient = (ingredient) => {
     navigate(`/guide/${encodeURIComponent(ingredient.code)}`)
   }
@@ -423,6 +460,55 @@ function Guide() {
   const slideRecipes = (step) => {
     const maxStartIndex = Math.max(0, recommendedRecipes.length - GUIDE_RECIPE_VISIBLE_COUNT)
     setRecipeStartIndex((current) => Math.min(Math.max(current + step, 0), maxStartIndex))
+  }
+
+  const openSuggestionForm = () => {
+    setSuggestionMessage('')
+    if (!isLoggedIn) {
+      setSuggestionMessage('가이드를 제보하려면 로그인이 필요합니다.')
+      return
+    }
+    setIsSuggestionFormOpen(true)
+  }
+
+  const submitSuggestion = async (event) => {
+    event.preventDefault()
+    if (!selectedGuide || !selectedTip?.isMissing || isSuggestionSubmitting) return
+    if (!isLoggedIn) {
+      setSuggestionMessage('가이드를 제보하려면 로그인이 필요합니다.')
+      return
+    }
+
+    setIsSuggestionSubmitting(true)
+    setSuggestionMessage('')
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/guide/suggestions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          ingredient_code: selectedGuide.code,
+          guide_type: selectedTip.guideType,
+          content: suggestionForm.content,
+          source_name: suggestionForm.sourceName || null,
+          source_url: suggestionForm.sourceUrl || null,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || '가이드 제보를 저장하지 못했습니다.')
+      }
+
+      setSuggestionForm(EMPTY_SUGGESTION_FORM)
+      setIsSuggestionFormOpen(false)
+      setSuggestionMessage('제보가 접수되었습니다. 검토 후 가이드에 반영됩니다.')
+    } catch (error) {
+      setSuggestionMessage(error.message)
+    } finally {
+      setIsSuggestionSubmitting(false)
+    }
   }
 
   return (
@@ -707,6 +793,77 @@ function Guide() {
                       <span>{selectedTip.source}</span>
                     )}
                   </div>
+
+                  {selectedTip.isMissing ? (
+                    <section className="guide-suggestion" aria-labelledby="guide-suggestion-title">
+                      <div className="guide-suggestion__intro">
+                        <h3 id="guide-suggestion-title">나만의 가이드 제보</h3>
+                        <p>직접 알고 있는 방법과 참고 출처를 남겨주세요. 개발자가 확인한 뒤 반영합니다.</p>
+                      </div>
+
+                      {isSuggestionFormOpen ? (
+                        <form className="guide-suggestion__form" onSubmit={submitSuggestion}>
+                          <label>
+                            <span>가이드 내용</span>
+                            <textarea
+                              maxLength={2000}
+                              minLength={10}
+                              placeholder={`${selectedGuide.name} ${selectedTip.title}을 10자 이상 입력해주세요.`}
+                              required
+                              value={suggestionForm.content}
+                              onChange={(event) =>
+                                setSuggestionForm((current) => ({ ...current, content: event.target.value }))
+                              }
+                            />
+                          </label>
+                          <div className="guide-suggestion__source-fields">
+                            <label>
+                              <span>출처명 (선택)</span>
+                              <input
+                                maxLength={255}
+                                placeholder="예: 농촌진흥청"
+                                value={suggestionForm.sourceName}
+                                onChange={(event) =>
+                                  setSuggestionForm((current) => ({ ...current, sourceName: event.target.value }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>출처 URL (선택)</span>
+                              <input
+                                placeholder="https://example.com"
+                                type="url"
+                                value={suggestionForm.sourceUrl}
+                                onChange={(event) =>
+                                  setSuggestionForm((current) => ({ ...current, sourceUrl: event.target.value }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="guide-suggestion__actions">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsSuggestionFormOpen(false)
+                                setSuggestionMessage('')
+                              }}
+                            >
+                              취소
+                            </button>
+                            <button disabled={isSuggestionSubmitting} type="submit">
+                              {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button className="guide-suggestion__open" type="button" onClick={openSuggestionForm}>
+                          {isLoggedIn ? '가이드 제보하기' : '로그인 후 제보하기'}
+                        </button>
+                      )}
+
+                      {suggestionMessage ? <p className="guide-suggestion__message" role="status">{suggestionMessage}</p> : null}
+                    </section>
+                  ) : null}
 
                   <section className="guide-tip-nutrition" aria-labelledby="guide-nutrition-title">
                     <div className="guide-tip-nutrition__header">
