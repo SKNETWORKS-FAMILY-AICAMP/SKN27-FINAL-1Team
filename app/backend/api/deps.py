@@ -25,6 +25,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         )
     return int(user_id_str)
 
+def get_current_user_optional(credentials: HTTPAuthorizationCredentials = Depends(security)) -> int:
+    """
+    챗봇처럼 비회원도 일부 기능을 쓸 수 있는 API에서 사용합니다.
+    토큰이 없거나 만료되면 예외 대신 게스트 ID(0)를 반환합니다.
+    """
+    if not credentials:
+        return 0
+
+    user_id_str = verify_access_token(credentials.credentials)
+    return int(user_id_str) if user_id_str else 0
 def get_current_user_required(user_id: int = Depends(get_current_user)) -> int:
     """
     회원 전용 API 호출 시 토큰이 유효한지 강제로 검증하는 함수입니다.
