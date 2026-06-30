@@ -53,7 +53,12 @@ class ReceiptConfirmService:
             if not raw_name and not normalized_name:
                 continue
 
-            final_name = normalized_name or raw_name
+            final_name = (
+                ingredient_name_matcher.find_best_name(raw_name)
+                or ingredient_name_matcher.find_best_name(normalized_name)
+                or normalized_name
+                or raw_name
+            )
             ingredient = self._get_or_create_ingredient(db, final_name, item.unit)
             final_name = ingredient.name
             receipt_item = ReceiptItem(
@@ -134,10 +139,6 @@ class ReceiptConfirmService:
         return alias.ingredient if alias else None
 
     def _get_or_create_ingredient(self, db: Session, name: str, unit: Optional[str]) -> Ingredient:
-        ingredient = ingredient_name_matcher.find_best_ingredient(db, name)
-        if ingredient:
-            return ingredient
-
         ingredient = self._find_ingredient(db, name)
         if ingredient:
             return ingredient
