@@ -301,6 +301,8 @@
 
 .guide-detail {
   padding: 22px;
+  display: flex;
+  flex-direction: column;
 }
 
 .guide-detail__header {
@@ -357,6 +359,10 @@
   content: "✓";
 }
 
+a.guide-owned-badge::after {
+  content: "↗";
+}
+
 .guide-primary-button {
   box-sizing: border-box;
   min-height: 42px;
@@ -388,22 +394,13 @@
   background: #fff9f1;
 }
 
-.guide-category-tabs > div {
-  display: grid;
-  gap: 7px;
-}
-
-.guide-category-tabs strong {
-  color: #6f4b36;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .guide-category-tab-list {
+  padding-top: 6px;
   display: flex;
   align-items: flex-end;
   gap: 4px;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 2px solid var(--figma-coral);
   scrollbar-width: thin;
 }
@@ -636,9 +633,10 @@
 }
 
 .guide-tip-grid {
-  margin-top: 22px;
+  margin-top: auto;
+  padding-top: 22px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -702,8 +700,10 @@
 .guide-tip-card h3 {
   margin: 0;
   color: var(--figma-text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .guide-tip-card ul {
@@ -768,7 +768,7 @@
 
 .guide-tip-source {
   margin: 18px 0 0;
-  padding-top: 14px;
+  padding: 14px 0;
   border-top: 1px solid #f1d9b3;
 }
 
@@ -792,6 +792,11 @@
   color: #246323;
   box-shadow: 0 0 0 3px rgba(91, 164, 65, 0.18);
   outline: 0;
+}
+
+.guide-tip-source a::after {
+  margin-left: 7px;
+  content: "↗";
 }
 
 .guide-tip-nutrition {
@@ -1238,8 +1243,8 @@
   }
 
   .guide-tip-grid {
-    margin-top: 14px;
-    grid-template-columns: 1fr;
+    padding-top: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 

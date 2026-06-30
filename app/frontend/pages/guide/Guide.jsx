@@ -204,7 +204,7 @@ function Guide() {
         const data = await response.json()
         setCategoryOptions((current) => ({
           major_categories: selectedMajorCategory ? current.major_categories : data.major_categories || [],
-          middle_categories: data.middle_categories || [],
+          middle_categories: selectedMiddleCategory ? current.middle_categories : data.middle_categories || [],
         }))
       } catch (error) {
         if (error.name !== 'AbortError') {
@@ -409,7 +409,6 @@ function Guide() {
         <section className="guide-panel guide-all" aria-labelledby="guide-all-title">
           <div className="guide-category-tabs" aria-label="식재료 분류 선택">
             <div>
-              <strong>대분류</strong>
               <div className="guide-category-tab-list" role="group" aria-label="대분류">
                 <button
                   className={!selectedMajorCategory ? 'is-active' : ''}
@@ -435,7 +434,6 @@ function Guide() {
 
             {selectedMajorCategory ? (
               <div>
-                <strong>중분류</strong>
                 <div className="guide-category-tab-list" role="group" aria-label="중분류">
                   <button
                     className={!selectedMiddleCategory ? 'is-active' : ''}
