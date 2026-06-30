@@ -26,61 +26,60 @@ class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
 
     def handle_message(self, db: Session, user_id: int, message: str, history: list[Any] = None, user_settings: Any = None) -> dict[str, Any]:
-        """메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
+        """LangGraph를 활용하여 메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
-        intent = self._route_intent_with_llm(text, history)
-        actions: list[dict[str, Any]] = []
-        sources: list[dict[str, str]] = []
-
+        
+        # 로그인 상태 체크 (기존 로직 유지)
         if self._is_login_status_question(text):
             reply = "현재 로그인된 상태예요." if user_id else "현재 비로그인 상태예요. 보관법이나 일반 레시피 검색은 이용할 수 있어요."
             return {"intent": "auth.status", "reply": reply, "actions": [], "sources": []}
-
-        if self._requires_login(intent, text) and user_id == 0:
-            return {
-                "intent": intent,
-                "reply": "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요.",
-                "actions": [],
-                "sources": [],
-            }
-
-        try:
-            if intent == "inventory.list":
-                reply = self._reply_inventory_list(db, user_id)
-            elif intent == "inventory.expiring":
-                reply = self._reply_expiring_items(db, user_id, text)
-            elif intent == "ingredient.guide":
-                reply, sources = self._reply_guide(text)
-            elif intent == "recipe.recommend":
-                reply, actions = self._reply_recipe_recommend(db, user_id, text, history, user_settings)
-            elif intent == "recipe.search":
-                reply, actions, sources = self._reply_recipe_search(db, text)
-            elif intent == "receipt.guide":
-                reply = "영수증은 파일 업로드가 필요해서 상단 메뉴나 아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요."
-                actions = [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}]
-            else:
-                reply = "냉장고 재료 조회, 소비기한 임박 재료, 보관법, 레시피 추천을 물어볼 수 있어요."
             
-            # 간단히 답변 설정이 켜져 있다면, LLM으로 요약
-            if getattr(user_settings, 'shortAnswer', False) and len(reply) > 50:
-                if OpenAI is not None and app_settings.OPENAI_API_KEY:
-                    client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
-                    try:
-                        res = client_ai.chat.completions.create(
-                            model=app_settings.OPENAI_MODEL,
-                            messages=[
-                                {"role": "system", "content": "다음 챗봇 응답을 핵심만 남겨서 1~2문장의 아주 짧은 대화체로 요약해. 존댓말을 사용해."},
-                                {"role": "user", "content": reply}
-                            ],
-                            temperature=0.3
-                        )
-                        reply = res.choices[0].message.content.strip()
-                    except Exception:
-                        pass
-        except Exception:
+        # 초기 상태(GraphState) 구성
+        from app.backend.services.chat_graph import chat_graph
+        initial_state = {
+            "user_id": user_id,
+            "text": text,
+            "history": history or [],
+            "settings_obj": user_settings,
+            "db": db,
+            "service": self,
+            "intent": None,
+            "keyword": None,
+            "messages": [],
+            "response_text": None,
+            "actions": [],
+            "sources": []
+        }
+        
+        # 그래프 실행
+        try:
+            final_state = chat_graph.invoke(initial_state)
+            intent = final_state.get("intent", "general")
+            reply = final_state.get("response_text", "")
+            actions = final_state.get("actions") or []
+            sources = final_state.get("sources") or []
+        except Exception as e:
+            intent = "error"
             reply = "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
             actions = []
             sources = []
+            
+        # LLM 단답형 요약 (사용자 설정)
+        if user_settings and getattr(user_settings, 'shortAnswer', False) and len(reply) > 50:
+            if OpenAI is not None and app_settings.OPENAI_API_KEY:
+                client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
+                try:
+                    res = client_ai.chat.completions.create(
+                        model=app_settings.OPENAI_MODEL,
+                        messages=[
+                            {"role": "system", "content": "다음 챗봇 응답을 핵심만 남겨서 1~2문장의 아주 짧은 대화체로 요약해. 존댓말을 사용해."},
+                            {"role": "user", "content": reply}
+                        ],
+                        temperature=0.3
+                    )
+                    reply = res.choices[0].message.content.strip()
+                except Exception:
+                    pass
 
         return {"intent": intent, "reply": reply, "actions": actions, "sources": sources}
 
@@ -88,6 +87,7 @@ class ChatService:
         """사용자가 현재 로그인 상태를 묻는 문장인지 확인합니다."""
         normalized = text.replace(" ", "").lower()
         return "로그인" in normalized and any(word in normalized for word in ("되어", "됐", "되있", "상태", "했", "했어"))
+
     def _requires_login(self, intent: str, text: str) -> bool:
         """개인 냉장고 데이터가 필요한 챗봇 의도인지 확인합니다."""
         normalized = text.replace(" ", "").lower()
@@ -99,8 +99,17 @@ class ChatService:
         if intent == "recipe.recommend" and not self._extract_recipe_ingredient(text):
             return True
         return False
+
+    def _is_cooking_time_question(self, text: str) -> bool:
+        """조리 시간이나 온도를 묻는 질문인지 확인합니다."""
+        normalized = text.replace(" ", "").lower()
+        return any(word in normalized for word in ("에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간"))
+
     def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
         """LangChain LLM을 활용하여 대화 문맥(history)과 현재 메시지로 의도를 파악합니다."""
+        if self._is_cooking_time_question(text):
+            return "recipe.search"
+
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
             return self._route_intent(text)
 
@@ -155,9 +164,12 @@ class ChatService:
         if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
             return "receipt.guide"
             
+        if self._is_cooking_time_question(text):
+            return "recipe.search"
+            
         if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")):
             return "recipe.recommend"
-        if any(word in normalized for word in ("레시피", "요리", "에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간")):
+        if any(word in normalized for word in ("레시피", "요리법", "요리")):
             return "recipe.search"
             
         if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "신선", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
@@ -172,11 +184,11 @@ class ChatService:
     def _extract_keyword(self, text: str) -> str:
         """조사와 기능 키워드를 덜어내고 검색에 쓸 핵심 단어를 추립니다."""
         cleaned = re.sub(
-            r"(먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|어떻게|손질법|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|은|는|이|가|을|를|으로|로|에|의|좀|해먹을|만들)",
+            r"(먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|어떻게|손질법|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|좀|해먹을|만들)",
             " ",
             text,
         )
-        words = [word.strip() for word in cleaned.split() if word.strip()]
+        words = [word.strip() for word in cleaned.split() if word.strip() and word.strip() not in ("내", "제", "나", "어떤", "무슨", "이", "그", "저", "이런", "그런", "저런", "수", "있어", "있어?", "있나요", "있나요?")]
         return words[0] if words else text.strip()
 
     def _extract_recipe_ingredient(self, text: str) -> str:
@@ -190,7 +202,7 @@ class ChatService:
             return ""
 
         keyword = match.group(1).strip()
-        if keyword in ("걸", "있는", "이걸", "이것", "그걸", "그것", "재료", "식재료", "보유재료", "냉장고"):
+        if keyword in ("걸", "있는", "이걸", "이것", "그걸", "그것", "재료", "식재료", "보유재료", "냉장고", "내", "제", "나", "내식재료", "제식재료", "남은거"):
             return ""
         return self._normalize_recipe_keyword(keyword)
 
@@ -306,7 +318,7 @@ class ChatService:
             return True
         if len(normalized_keyword) <= 1:
             return False
-        misleading_suffixes = ("소스", "가루", "분말", "즙", "청", "오일", "잼")
+        misleading_suffixes = ("소스", "가루", "분말", "즙", "청", "오일", "잼", "스톡")
         if normalized_name.startswith(normalized_keyword) and normalized_name.endswith(misleading_suffixes):
             return False
         if normalized_name.startswith(normalized_keyword) and any(suffix in normalized_name for suffix in misleading_suffixes):
@@ -351,11 +363,15 @@ class ChatService:
         return f"{item['name']} 보관법이에요.\n{formatted_tip}", []
 
     def _is_relevant_search_result(self, keyword: str, item: dict[str, Any]) -> bool:
-        """검색 결과가 질문 핵심어를 실제로 포함하는지 확인합니다."""
+        """검색 결과 제목/본문이 질문 핵심어와 맞는지 확인합니다."""
         tokens = self._keyword_tokens(keyword)
-        haystack = f"{item.get('title', '')} {item.get('content', '')} {item.get('url', '')}".lower()
+        if not tokens:
+            return False
+
+        haystack = f"{item.get('title', '')} {item.get('content', '')}".lower()
         words = self._keyword_tokens(haystack)
-        return bool(tokens) and any(self._is_guide_result_match(token, word) for token in tokens for word in words)
+        primary = tokens[0]
+        return any(self._is_guide_result_match(primary, word) for word in words)
 
     def _reply_external_guide(self, keyword: str) -> tuple[str, list[dict[str, str]]]:
         """내부 가이드가 없을 때 Tavily 검색 결과를 짧게 요약합니다."""
@@ -383,8 +399,8 @@ class ChatService:
                 response = client_ai.chat.completions.create(
                     model=app_settings.OPENAI_MODEL,
                     messages=[
-                        {"role": "system", "content": "검색 결과 안에서만 한국어로 3문장 이하로 식재료 보관법을 요약해."},
-                        {"role": "user", "content": content},
+                        {"role": "system", "content": "검색 결과 안에서만 한국어로 식재료 보관법을 요약해. 바로 따라할 수 있는 짧은 문장 3개 이내로 쓰고, 각 문장은 줄바꿈으로 구분해. 추측은 하지 마."},
+                        {"role": "user", "content": f"질문 키워드: {keyword}\n검색 결과:\n{content}"},
                     ],
                     temperature=0.2,
                 )
@@ -394,16 +410,24 @@ class ChatService:
         else:
             summary = content.split(".")[0].strip() + "."
 
-        return f"우리 가이드에는 아직 없어서 웹 검색 기준으로 안내할게요.\n\n{summary}", sources
+        return summary, sources
 
     def _format_guide_tip(self, tip: str) -> str:
-        """긴 보관법 문장을 챗봇에서 읽기 쉬운 줄 단위로 나눕니다."""
-        sentences = [sentence.strip() for sentence in re.split(r"(?<=\.)\s+", tip) if sentence.strip()]
-        return "\n".join(sentences[:3])
+        """긴 보관법 문장을 챗봇에서 읽기 쉬운 번호 문장으로 나눕니다."""
+        sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?。])\s+", tip) if sentence.strip()]
+        if len(sentences) <= 1:
+            sentences = [sentence.strip() for sentence in re.split(r"[;；]\s*", tip) if sentence.strip()]
+        if len(sentences) <= 1:
+            return sentences[0] if sentences else tip.strip()
+        return "\n".join(f"{index + 1}. {sentence}" for index, sentence in enumerate(sentences[:3]))
 
     def _reply_recipe_search(self, db: Session, text: str) -> tuple[str, list[dict[str, Any]], list[dict[str, str]]]:
         """레시피명 또는 재료명 검색 결과를 안내합니다."""
         keyword = self._extract_recipe_ingredient(text) or self._extract_keyword(text)
+        if self._is_cooking_time_question(text):
+            reply, sources = self._reply_external_recipe(keyword, text)
+            return reply, [], sources
+
         try:
             # 재료명 질문은 주재료 검색을 먼저 적용해 엉뚱한 제목검색 결과를 줄입니다.
             result = recipe_search_service.search_recipes(db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=10)
@@ -421,17 +445,17 @@ class ChatService:
 
         items = self._rank_recipe_items(keyword, items)
         titles = [item["title"] for item in items[:3]]
-        reply = f"{keyword} 관련 레시피를 아래에서 확인해보세요.\n" + "\n".join(f"- {title}" for title in titles)
+        reply = f"{keyword} 관련 레시피예요.\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles))
         return reply, self._recipe_actions(items), []
 
-    def _reply_external_recipe(self, keyword: str) -> tuple[str, list[dict[str, str]]]:
+    def _reply_external_recipe(self, keyword: str, query_text: str | None = None) -> tuple[str, list[dict[str, str]]]:
         """내부 레시피가 없을 때 Tavily 검색 결과로 짧게 안내합니다."""
         if not app_settings.TAVILY_API_KEY or TavilyClient is None:
             return f"{keyword} 관련 레시피는 아직 우리 DB에 없어요. 웹 검색 답변은 Tavily 설정 후 사용할 수 있어요.", []
 
         client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
         try:
-            result = client.search(query=f"{keyword} 레시피", search_depth="basic", max_results=3)
+            result = client.search(query=query_text or f"{keyword} 레시피", search_depth="basic", max_results=3)
         except Exception:
             return f"{keyword} 레시피는 웹 검색을 시도했지만 지금은 연결이 불안정해요. 잠시 후 다시 시도해주세요.", []
         results = [item for item in result.get("results", []) if self._is_relevant_search_result(keyword, item)][:3]
@@ -450,8 +474,8 @@ class ChatService:
                 response = client_ai.chat.completions.create(
                     model=app_settings.OPENAI_MODEL,
                     messages=[
-                        {"role": "system", "content": "검색 결과 안에서만 한국어로 3문장 이하의 간단한 레시피 안내를 작성해."},
-                        {"role": "user", "content": content},
+                        {"role": "system", "content": "검색 결과 안에서만 한국어로 답해. 조리 시간이나 온도 질문이면 시간과 온도를 먼저 말하고, 레시피 질문이면 핵심 조리 흐름을 3문장 이내로 안내해. 추측은 하지 마."},
+                        {"role": "user", "content": f"질문: {query_text or keyword}\n검색 결과:\n{content}"},
                     ],
                     temperature=0.2,
                 )
@@ -461,7 +485,7 @@ class ChatService:
         else:
             summary = content.split(".")[0].strip() + "."
 
-        return f"우리 DB에는 아직 없어서 웹 검색 기준으로 안내할게요.\n\n{summary}", sources
+        return summary, sources
 
     def _reply_recipe_recommend(self, db: Session, user_id: int, text: str, history: list[Any] = None, settings_obj: Any = None) -> tuple[str, list[dict[str, Any]]]:
         """냉장고 재료 기반 또는 특정 재료 기반 레시피 추천 결과를 안내합니다."""
@@ -478,7 +502,7 @@ class ChatService:
                     messages.append(HumanMessage(content=msg.text) if msg.role == 'user' else AIMessage(content=msg.text))
                 messages.append(HumanMessage(content=text))
                 res = llm.invoke(messages).content.strip()
-                if res != "None" and res not in ("다른거", "딴거", "그거", "저거", "이거", "다른 거", "딴 거"):
+                if res != "None" and res not in ("다른거", "딴거", "그거", "저거", "이거", "다른 거", "딴 거", "내", "나", "제"):
                     keyword = res
             except Exception:
                 pass
@@ -515,12 +539,13 @@ class ChatService:
                 "data": {"ingredient": keyword},
             }
             if not items:
-                return f"{self._apply_josa(keyword, '이가')} 주재료인 레시피를 찾지 못했어요.", [list_action]
+                reply, _sources = self._reply_external_recipe(keyword)
+                return reply, [list_action]
 
             titles = [item["title"] for item in items]
             actions = self._recipe_actions(items) + [list_action]
             prefix = f"{self._apply_josa(keyword, '이가')} 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{self._apply_josa(keyword, '이가')} 주재료인 레시피는 "
-            return prefix + "\n" + "\n".join(f"- {title}" for title in titles), actions
+            return prefix + "\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), actions
 
         try:
             config = RecipeRecommendConfig.fridge_consume_preset()
@@ -539,7 +564,7 @@ class ChatService:
             return "현재 냉장고 재료만으로 완성 가능한 레시피를 찾지 못했어요. 부족 재료를 허용하면 더 넓게 추천할 수 있어요.", []
 
         titles = [item["title"] for item in items[:3]]
-        return "현재 냉장고 재료만으로 만들 수 있는 레시피예요.\n" + "\n".join(f"- {title}" for title in titles), self._recipe_actions(items)
+        return "현재 냉장고 재료만으로 만들 수 있는 레시피예요.\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), self._recipe_actions(items)
 
 
 chat_service = ChatService()

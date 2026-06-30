@@ -30,6 +30,7 @@ def test_route_intent_examples() -> None:
         "바베큐 레시피 알려줘": "recipe.search",
         "김치볶음밥 레시피": "recipe.search",
         "감자튀김 에어프라이기 시간": "recipe.search",
+        "남은 치킨 에어프라이기 시간 추천": "recipe.search",
     }
 
     for message, expected in cases.items():
@@ -69,6 +70,7 @@ def test_guest_chat_login_boundary() -> None:
 def test_guide_result_match() -> None:
     """가이드 검색이 비슷한 이름의 다른 재료를 답하지 않는지 확인합니다."""
     assert not chat_service._is_guide_result_match("피자", "피자소스")
+    assert not chat_service._is_guide_result_match("치킨", "치킨스톡")
     assert not chat_service._is_guide_result_match("김", "김치")
     assert chat_service._is_guide_result_match("파", "대파")
     assert chat_service._is_guide_result_match("마늘", "깐마늘")
@@ -79,16 +81,49 @@ def test_search_result_relevance() -> None:
     good = {"title": "남은 치킨 보관법", "content": "치킨은 밀폐 후 냉장 보관", "url": "https://example.com"}
     bad = {"title": "마늘 양파 보관법", "content": "마늘과 양파는 상온 보관", "url": "https://example.com"}
     pizza_sauce = {"title": "피자소스 보관법", "content": "피자소스는 개봉 후 냉장 보관", "url": "https://example.com"}
+    url_only = {"title": "마늘 보관법", "content": "마늘은 서늘하게 보관", "url": "https://example.com/chicken"}
 
     assert chat_service._is_relevant_search_result("먹다남은 치킨", good)
     assert not chat_service._is_relevant_search_result("먹다남은 치킨", bad)
     assert not chat_service._is_relevant_search_result("피자", pizza_sauce)
     assert not chat_service._is_relevant_search_result("보관법", good)
+    assert not chat_service._is_relevant_search_result("치킨", url_only)
 
 
+def test_format_guide_tip() -> None:
+    """긴 보관법 문장을 번호 목록으로 줄여 보여주는지 확인합니다."""
+    formatted = chat_service._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
+    assert formatted == "1. 첫 문장입니다.\n2. 둘째 문장입니다.\n3. 셋째 문장입니다."
+    assert chat_service._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
+
+
+def test_cooking_time_question_uses_external_recipe() -> None:
+    """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
+    original_external = chat_service._reply_external_recipe
+    called = {"external": False, "query": ""}
+
+    def fake_external(keyword: str, query_text: str | None = None):
+        called["external"] = True
+        called["query"] = query_text or ""
+        return f"{keyword} 웹 검색", []
+
+    chat_service._reply_external_recipe = fake_external
+    try:
+        reply, actions, sources = chat_service._reply_recipe_search(None, "감자튀김 에어프라이기 시간")
+        assert called["external"]
+        assert called["query"] == "감자튀김 에어프라이기 시간"
+        assert reply == "감자튀김 웹 검색"
+        assert actions == []
+        assert sources == []
+    finally:
+        chat_service._reply_external_recipe = original_external
 if __name__ == "__main__":
     test_route_intent_examples()
     test_extract_recipe_ingredient()
+    test_login_status_question()
+    test_guest_chat_login_boundary()
     test_guide_result_match()
     test_search_result_relevance()
+    test_format_guide_tip()
+    test_cooking_time_question_uses_external_recipe()
     print("chat service tests ok")

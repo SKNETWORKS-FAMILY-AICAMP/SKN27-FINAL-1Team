@@ -229,7 +229,7 @@ class InventoryService:
             "id": item.id,
             "fridge_id": item.id,
             "name": item.display_name or ingredient.name,
-            "category": ingredient.category,
+            "category": ingredient.category or DEFAULT_CATEGORY,
             "quantity": float(item.quantity) if item.quantity is not None else 1.0,
             "unit": item.unit or ingredient.default_unit or "개",
             "storage_method": item.storage_location or DEFAULT_STORAGE,
@@ -369,6 +369,10 @@ class InventoryService:
         )
         if not fridge_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
+
+        # 이름이 변경되었는데 프론트엔드에서 보낸 날짜가 기존 날짜와 동일하다면 (수동 변경이 아니라면) 새 재료 기준으로 자동 재계산하도록 유도합니다.
+        if fridge_item.display_name != data.name.strip() and self._parse_date(data.expiration_date) == fridge_item.expiry_date:
+            data.expiration_date = None
 
         # 수정된 재료명 기준으로 식재료 마스터를 다시 매핑합니다.
         ingredient = self._get_or_create_ingredient(db, data)
