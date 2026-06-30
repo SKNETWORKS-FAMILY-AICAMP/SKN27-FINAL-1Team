@@ -304,7 +304,7 @@ function RecipeList() {
 
             <input
               type="search"
-              placeholder="레시피명, 재료명을 검색해보세요"
+              placeholder="레시피 이름을 검색해보세요"
               value={draftSearchTerm}
               onChange={(event) => setDraftSearchTerm(event.target.value)}
             />
