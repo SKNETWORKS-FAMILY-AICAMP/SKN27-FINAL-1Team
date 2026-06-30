@@ -618,18 +618,28 @@ a.guide-owned-badge::after {
   background: #fff4e3;
 }
 
-.guide-list-back {
-  min-height: 38px;
-  margin-top: 16px;
-  padding: 0 16px;
+.guide-detail-back {
+  width: 38px;
+  height: 38px;
+  margin-bottom: 8px;
+  display: grid;
+  place-items: center;
+  align-self: flex-start;
   border: 1.4px solid #c79a74;
-  border-radius: 999px;
+  border-radius: 50%;
   background: #fffdf8;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 900;
+}
+
+.guide-detail-back:hover,
+.guide-detail-back:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.12);
+  outline: 0;
 }
 
 .guide-tip-grid {
@@ -831,6 +841,23 @@ a.guide-owned-badge::after {
   font-size: 14px;
   font-weight: 900;
   line-height: 1.5;
+}
+
+.guide-fridge-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.guide-fridge-empty strong {
+  color: var(--figma-text);
+  white-space: nowrap;
+}
+
+.guide-fridge-empty span {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .guide-error {
@@ -1204,11 +1231,6 @@ a.guide-owned-badge::after {
 
   .guide-all-item p {
     font-size: 11px;
-  }
-
-  .guide-list-back {
-    width: 100%;
-    margin-top: 12px;
   }
 
   .guide-detail__header {
