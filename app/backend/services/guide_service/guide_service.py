@@ -5,8 +5,19 @@ from typing import Any, Iterator
 
 from neo4j import GraphDatabase
 from neo4j.exceptions import Neo4jError
+from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings
+from app.backend.db.models import FoodGuideSuggestion
+from app.backend.schemas.guide import FoodGuideSuggestionCreate
+
+
+GUIDE_FIELD_BY_TYPE = {
+    "storage": "storage_tips",
+    "prep": "prep_tips",
+    "washing": "washing_tips",
+    "freshness": "freshness_tips",
+}
 
 
 class GuideService:
@@ -220,6 +231,53 @@ class GuideService:
             raise RuntimeError(f"Neo4j guide detail failed: {exc}") from exc
 
         return dict(record) if record else None
+
+    def create_suggestion(
+        self,
+        db: Session,
+        user_id: int,
+        data: FoodGuideSuggestionCreate,
+    ) -> FoodGuideSuggestion:
+        guide = self.get_guide_detail(data.ingredient_code)
+        if guide is None:
+            raise LookupError("식재료 가이드를 찾을 수 없습니다.")
+
+        guide_field = GUIDE_FIELD_BY_TYPE[data.guide_type]
+        if guide.get(guide_field):
+            raise ValueError("이미 등록된 가이드 정보에는 제보할 수 없습니다.")
+
+        duplicate = (
+            db.query(FoodGuideSuggestion)
+            .filter(
+                FoodGuideSuggestion.user_id == user_id,
+                FoodGuideSuggestion.ingredient_code == data.ingredient_code,
+                FoodGuideSuggestion.guide_type == data.guide_type,
+                FoodGuideSuggestion.content == data.content,
+                FoodGuideSuggestion.status == "pending",
+            )
+            .first()
+        )
+        if duplicate is not None:
+            raise FileExistsError("이미 접수된 동일한 제보가 있습니다.")
+
+        suggestion = FoodGuideSuggestion(
+            user_id=user_id,
+            ingredient_code=data.ingredient_code,
+            ingredient_name=guide["name"],
+            guide_type=data.guide_type,
+            content=data.content,
+            source_name=data.source_name,
+            source_url=str(data.source_url) if data.source_url else None,
+            status="pending",
+        )
+        try:
+            db.add(suggestion)
+            db.commit()
+            db.refresh(suggestion)
+        except Exception:
+            db.rollback()
+            raise
+        return suggestion
 
 
 guide_service = GuideService()

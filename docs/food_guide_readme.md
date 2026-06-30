@@ -1,11 +1,14 @@
 # 식재료 가이드 README
 
-> 업데이트: 2026-06-29
+> 업데이트: 2026-06-30
 
 ## 개요
 
 식재료 가이드 CSV를 Neo4j에 적재하고 웹·백엔드에서 활용하기 위한 프로젝트입니다.
 현재 공유 기준 파일은 `storage/processed/food_guide/food_guide_v2.csv`입니다.
+
+JY-3.1의 범위는 Graph DB 무결성 검증과 추천 연동 경계 확정입니다. 식재료 가이드는
+Neo4j, 추천 레시피는 PostgreSQL/API가 담당하며 세부 완료 기준은 `docs/guide_neo4j.md`에 정리합니다.
 
 ## 기준 CSV 설정
 
@@ -38,39 +41,144 @@ FOOD_GUIDE_CSV_PATH=storage/processed/food_guide/food_guide_v2.csv
 
 ```bash
 docker compose up -d neo4j
-docker compose run --rm food_guide_load \
-  python -m etl.food_guide.load_to_neo4j --clear
+docker compose run --rm --no-deps food_guide_load \
+  python -m etl.food_guide.load_to_neo4j \
+  --split-dir /project/storage/processed/food_guide --clear
 ```
 
-`--clear`는 기존 `FoodGuide`, `FoodCategory` 노드와 해당 관계를 삭제한 뒤 `FOOD_GUIDE_CSV_PATH`의 CSV를 다시 적재합니다. 레시피 등 다른 종류의 Neo4j 노드는 삭제하지 않습니다.
+`--split-dir`는 노드 CSV 8개를 먼저 적재하고 관계 CSV 8개를 ID로 연결합니다. 파일 누락, ID 중복, 잘못된 참조를 적재 전에 검사합니다. `--clear`는 식재료 가이드가 관리하는 그래프만 삭제하며 레시피 등 다른 데이터는 삭제하지 않습니다.
 
 현재 `food_guide_load` 서비스는 `cron_loader --once`로 실행됩니다. 서비스 실행 시 한 번만 적재하고 종료하므로 CSV를 수정한 뒤에는 위 재적재 명령을 다시 실행해야 합니다.
 
 ## 실행 및 검증
 
+Neo4j 적재 전 CSV를 자동 검수합니다.
+
+```bash
+python -m etl.food_guide.validate_food_guide \
+  storage/processed/food_guide/food_guide_v2.csv
+```
+
+필수값·출처·URL·분류 경로 중복·식품코드 중복·제철 월 범위를 검사합니다.
+오류가 있으면 종료 코드 1을 반환하며, `--strict`를 지정하면 경고도 실패로 처리합니다.
+
+Neo4j 적재 후 노드 개수, 필수 관계 누락, 고아 노드를 검증합니다.
+
+```bash
+docker compose run --rm --no-deps food_guide_load \
+  python -m etl.food_guide.validate_neo4j
+```
+
+누락 관계나 고아 노드가 하나라도 있으면 종료 코드 1을 반환합니다.
+
+## 사용자 가이드 제보 검토
+
+가이드 상세 화면에서 정보가 없는 항목을 회원이 제보하면 PostgreSQL의
+`food_guide_suggestions`에 `pending` 상태로 저장됩니다. 제보 수가 많아도 자동으로
+Neo4j에 반영하지 않으며, 개발자가 다음 쿼리로 서로 다른 사용자 제보를 확인합니다.
+
+기존 PostgreSQL 볼륨을 사용하는 환경에서는 최초 1회 테이블을 생성합니다.
+
+```bash
+docker compose exec backend python -c \
+  "from app.backend.db.models import FoodGuideSuggestion; from app.backend.db.session import engine; FoodGuideSuggestion.__table__.create(bind=engine, checkfirst=True)"
+```
+
+```sql
+SELECT
+    ingredient_code,
+    ingredient_name,
+    guide_type,
+    LOWER(REGEXP_REPLACE(TRIM(content), '\s+', ' ', 'g')) AS normalized_content,
+    COUNT(*) AS suggestion_count,
+    COUNT(DISTINCT user_id) AS unique_user_count,
+    MIN(created_at) AS first_suggested_at,
+    MAX(created_at) AS last_suggested_at
+FROM food_guide_suggestions
+WHERE status = 'pending'
+GROUP BY ingredient_code, ingredient_name, guide_type, normalized_content
+HAVING COUNT(DISTINCT user_id) >= 3
+ORDER BY unique_user_count DESC, last_suggested_at DESC;
+```
+
+내용과 출처를 확인한 뒤 승인·반려 상태를 기록합니다.
+
+```sql
+UPDATE food_guide_suggestions
+SET status = 'approved',
+    review_note = '출처 및 내용 확인 완료',
+    reviewed_at = NOW()
+WHERE id = :suggestion_id;
+```
+
+승인된 내용은 분할 CSV에 반영한 뒤 기존 Neo4j 재적재·검증 절차를 실행합니다.
+
 ```bash
 # 적재 로그 확인
 docker compose logs food_guide_load
 
-# FoodGuide 개수 확인
+# Ingredient 개수 확인
 docker compose exec neo4j sh -lc \
   'cypher-shell -u neo4j -p "${NEO4J_AUTH#neo4j/}" \
-  "MATCH (g:FoodGuide) RETURN count(g) AS foodGuides;"'
+  "MATCH (g:Ingredient) RETURN count(g) AS ingredients;"'
 
 # 분류 단계별 개수 확인
 docker compose exec neo4j sh -lc \
   'cypher-shell -u neo4j -p "${NEO4J_AUTH#neo4j/}" \
-  "MATCH (c:FoodCategory) RETURN c.level AS level, count(c) AS count ORDER BY level;"'
+  "MATCH (n) WHERE n:MajorCategory OR n:MiddleCategory \
+   RETURN labels(n)[0] AS label, count(n) AS count ORDER BY label;"'
 ```
 
-`food_guide_v2.csv`는 391행이지만 `수산물 > 생선 > 가자미` 경로가 2행이므로 경로를 키로 사용하는 Neo4j에는 다음과 같이 적재됩니다.
+현재 분할 CSV는 Neo4j에 다음과 같이 적재됩니다.
 
 ```text
-FoodGuide: 390
-major: 12
-middle: 48
-minor: 390
+MajorCategory: 4
+MiddleCategory: 26
+Ingredient: 389
+Guide: 892
+Source: 187
+Alias: 913
+SeasonMonth: 12
+Nutrition: 388
 ```
+
+## 품질·준법 검수 요약
+
+### 자동 검수
+
+- 검사 항목: 필수값, 출처, URL, 분류 경로·식품코드 중복, 제철 월 범위
+- 현재 결과: 오류 0건, 경고 21건(코드 누락 1건, 중복 행 20건)
+- URL 526건을 정상 형식으로 교정했고, 출처 근거가 없는 닭가슴살·닭날개 제철 월 값은 제거했다.
+- Neo4j 결과: 노드 개수·필수 관계·고아 노드 검사 문제 0건
+
+### 수동 표본 검수
+
+- 4개 대분류에서 고정 시드로 12건을 추출했다.
+- 결과: 적합 5건, 조건부 3건, 보완 필요 4건
+- 우선 보완: 브로콜리 보관 문구, 굴 출처 URL, 소고기 손질 문구, 우유 신선도 기준
+- 추가 확인: 월계수잎 형태 구분, 은행 섭취 안전, 미꾸라지 개별 기준
+
+### 법적·윤리적 기준
+
+- 공공데이터는 공식 제공본과 이용조건·공공누리 유형을 확인하고 출처를 표시한다.
+- 민간 사이트 문장은 이용허락 없이 장문 복제하지 않고 필요한 사실만 독자적으로 요약한다.
+- 개인정보·댓글·작성자 계정 정보는 수집하지 않으며 목적에 필요한 최소 데이터만 유지한다.
+- LLM 문장은 초안임을 표시하고, 육류·수산물·유제품 등 안전 민감 항목은 사람이 검수한다.
+- 광고·인증 문구를 신선도나 안전 기준으로 오인하게 표시하지 않는다.
+
+참고: [공공데이터법](https://www.law.go.kr/LSW/lsInfoP.do?lsId=011895),
+[공공데이터포털 이용정책](https://www.data.go.kr/ugs/selectPortalPolicyView.do),
+[공공누리 이용조건](https://www.kogl.or.kr/etc/allMenu.do),
+[개인정보 보호법 제16조](https://www.law.go.kr/LSW/lsLawLinkInfo.do?chrClsCd=010202&lsJoLnkSeq=900079387)
+
+### 배포 전 확인
+
+- [x] CSV 자동 검수 오류 0건
+- [ ] 보완 필요 표본의 문장·출처 수정
+- [ ] 민간 자료 이용조건과 개인정보 포함 여부 확인
+- [ ] LLM 초안 담당자 검수
+- [x] Neo4j 누락 관계·고아 노드 0건
+- [x] JY-3.1 Graph DB 검증 및 추천 연동 경계 확정
 
 ## 기타 주의사항
 
@@ -82,7 +190,7 @@ minor: 390
 ## 데이터 보완 과정
 
 `food_guide_v1.csv`를 기준으로 식재료 가이드 데이터를 보완했다.
-대상은 전체 391개 식재료이며, 주요 보완 필드는 `보관`, `손질`, `세척`, `신선도체크`이다.
+현재 기준 파일의 대상은 전체 389개 식재료이며, 주요 보완 필드는 `보관`, `손질`, `세척`, `신선도체크`이다.
 
 ### 1. 원본 데이터 분석
 
@@ -331,13 +439,15 @@ URL 형식 오류 여부
 최종 결과는 다음과 같다.
 
 ```text
-전체 식재료 수: 391개
+전체 식재료 수: 389개
 보관 빈 값: 0개
 손질 빈 값: 0개
 세척 빈 값: 0개
 신선도체크 빈 값: 0개
-출처명 누락: 0개
+가이드 출처명 누락: 0개
+제철 출처명 누락: 0개
 URL 형식 오류: 0개
+식품코드 경고: 21개 (누락 1개, 중복 행 20개)
 ```
 
 최종 파일 `food_guide_v2.csv`는 식재료 가이드 웹페이지, Neo4j 적재, 챗봇/RAG 응답용 지식 데이터로 사용할 수 있는 형태로 정리했다.

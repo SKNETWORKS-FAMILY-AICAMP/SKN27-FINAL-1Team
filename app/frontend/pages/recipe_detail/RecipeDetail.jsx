@@ -8,6 +8,7 @@ import { useAppDialog } from '../../components/AppDialog.jsx'
 import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -230,6 +231,35 @@ function RecipeDetail() {
   const isLastStep = steps.length > 0 && currentStep >= steps.length - 1
   const servingLabel = recipe?.serving_count != null ? `${recipe.serving_count}인분 기준` : '1인분 기준'
 
+  const buildShoppingContext = () => ({
+    type: 'recipe',
+    recipeId: recipe.recipe_id,
+    recipeTitle: recipe.title,
+    recipePath: `/recipes/${recipe.recipe_id}`,
+    sourceUrl: recipe.source_url,
+    servingLabel,
+    createdAt: new Date().toISOString(),
+    ownedIngredients: displayOwnedIngredients.map((item) => ({
+      name: item.name,
+      amount: item.amount,
+      fridge_ingredient_name: item.fridge_ingredient_name,
+    })),
+    missingIngredients: missingIngredients.map((item) => ({
+      ingredient_id: item.ingredient_id,
+      name: item.name,
+      amount: item.amount,
+    })),
+  })
+
+  const saveShoppingContext = () => {
+    window.localStorage.setItem(SHOPPING_CONTEXT_KEY, JSON.stringify(buildShoppingContext()))
+  }
+
+  const goShopping = () => {
+    saveShoppingContext()
+    navigate(`/shopping-list?recipeId=${recipe.recipe_id}`)
+  }
+
   const moveCookingStep = (direction) => {
     setCurrentStep((prev) => Math.max(0, Math.min(prev + direction, steps.length - 1)))
   }
@@ -383,15 +413,24 @@ function RecipeDetail() {
               </li>
             ))}
           </ul>
-          <button className="recipe-detail-primary" type="button" onClick={() => navigate('/shopping-list')}>
+          <button
+            className="recipe-detail-primary"
+            type="button"
+            disabled={missingIngredients.length === 0}
+            onClick={goShopping}
+          >
             부족 재료 장보기
           </button>
           <button
             className="recipe-detail-secondary"
             type="button"
-            onClick={() => showAlert('장바구니에 부족 재료를 담았어요.', {
-              title: '장바구니 담기',
-            })}
+            disabled={missingIngredients.length === 0}
+            onClick={() => {
+              saveShoppingContext()
+              showAlert('부족 재료를 장보기 목록에 담았어요. 장보기 화면에서 구매 링크를 확인할 수 있어요.', {
+                title: '장보기 목록 저장',
+              })
+            }}
           >
             장바구니 담기
           </button>
