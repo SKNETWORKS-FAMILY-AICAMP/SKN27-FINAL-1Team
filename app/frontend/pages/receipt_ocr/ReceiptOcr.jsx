@@ -10,7 +10,6 @@ import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
   receiptHistory,
   receiptRows as rows,
-  receiptRules,
   receiptSteps as steps,
 } from '../../mock/receiptOcrMock.js'
 
@@ -106,32 +105,39 @@ function mapMockHistoryToReceipts(history) {
   }))
 }
 
-// 한 달을 1~7일=1주차, 8~14일=2주차 ... 식으로 나눈 "월 주차"를 반환합니다.
-function getWeekOfMonth(date) {
-  return Math.ceil(date.getDate() / 7)
+// 달력 주(월~일)가 속한 날짜의 그 주 월요일을 반환합니다.
+function getWeekMonday(date) {
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const mondayOffset = (local.getDay() + 6) % 7 // 월=0 ... 일=6
+  local.setDate(local.getDate() - mondayOffset)
+  return local
 }
 
-function getWeekFirstDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), (getWeekOfMonth(date) - 1) * 7 + 1)
+// ISO 방식: 달력 주(월~일)를 그 주의 목요일이 속한 달/주차로 계산합니다.
+// 예) 6/29(월)이 속한 주는 목요일이 7/2라 "7월 1주차"가 됩니다.
+function getWeekInfo(date) {
+  const monday = getWeekMonday(date)
+  const thursday = new Date(monday)
+  thursday.setDate(monday.getDate() + 3)
+  const weekOfMonth = Math.ceil(thursday.getDate() / 7)
+
+  return {
+    key: `${thursday.getFullYear()}-${thursday.getMonth()}-${weekOfMonth}`,
+    label: `${thursday.getMonth() + 1}월 ${weekOfMonth}주차`,
+    monday,
+  }
 }
 
-function getWeekBucketKey(date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${getWeekOfMonth(date)}`
-}
-
-function getWeekLabel(date) {
-  return `${date.getMonth() + 1}월 ${getWeekOfMonth(date)}주차`
-}
-
-// 접속일(anchorDate)이 속한 주차부터 과거로 weekCount개의 월 주차 버킷을 만듭니다(오래된 주차가 앞).
+// 접속일(anchorDate)이 속한 주차부터 과거로 weekCount개의 주 버킷을 만듭니다(오래된 주차가 앞).
 function buildRecentWeekBuckets(anchorDate, weekCount) {
   const buckets = []
-  let cursor = getWeekFirstDay(anchorDate)
+  let cursorMonday = getWeekMonday(anchorDate)
 
   for (let i = 0; i < weekCount; i += 1) {
-    buckets.unshift({ key: getWeekBucketKey(cursor), label: getWeekLabel(cursor) })
-    const previousWeekDay = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - 1)
-    cursor = getWeekFirstDay(previousWeekDay)
+    const info = getWeekInfo(cursorMonday)
+    buckets.unshift({ key: info.key, label: info.label })
+    cursorMonday = new Date(cursorMonday)
+    cursorMonday.setDate(cursorMonday.getDate() - 7)
   }
 
   return buckets
@@ -167,7 +173,7 @@ function buildPurchaseFlowData(receipts, options = {}) {
       return
     }
 
-    const weekIndex = indexByBucketKey.get(getWeekBucketKey(receipt.parsedDate))
+    const weekIndex = indexByBucketKey.get(getWeekInfo(receipt.parsedDate).key)
 
     if (weekIndex === undefined) {
       return
@@ -435,10 +441,7 @@ function getAuthState() {
     return false
   }
 
-  return Boolean(
-    window.localStorage.getItem('bobbeori-token') ||
-      window.localStorage.getItem('bobbeori-auth-mode') === 'guest',
-  )
+  return Boolean(window.localStorage.getItem('bobbeori-token'))
 }
 
 function getInitialEditingRows(nextRows) {
@@ -542,6 +545,8 @@ function ReceiptOcr() {
   const [analysisStep, setAnalysisStep] = useState(0)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
   const [isAddRowOpen, setIsAddRowOpen] = useState(false)
+  const [rowSelectionMode, setRowSelectionMode] = useState(false)
+  const [selectedRowIds, setSelectedRowIds] = useState([])
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -772,6 +777,40 @@ function ReceiptOcr() {
     setHasUploaded(true)
     setActiveStep(2)
     setIsAddRowOpen(false)
+  }
+
+  const enterRowSelection = () => {
+    setRowSelectionMode(true)
+    setSelectedRowIds([])
+  }
+
+  const exitRowSelection = () => {
+    setRowSelectionMode(false)
+    setSelectedRowIds([])
+  }
+
+  const toggleRowSelect = (rowId) => {
+    setSelectedRowIds((prev) => (prev.includes(rowId) ? prev.filter((value) => value !== rowId) : [...prev, rowId]))
+  }
+
+  const deleteSelectedRows = () => {
+    if (selectedRowIds.length === 0) {
+      return
+    }
+
+    setDetectedRows((prev) => prev.filter((row) => !selectedRowIds.includes(row.id)))
+    setEditingRows((prev) => {
+      const next = { ...prev }
+      selectedRowIds.forEach((rowId) => delete next[rowId])
+      return next
+    })
+    exitRowSelection()
+  }
+
+  const deleteAllRows = () => {
+    setDetectedRows([])
+    setEditingRows({})
+    exitRowSelection()
   }
 
   const updateQuantityAmount = (rowId, nextAmount) => {
@@ -1025,7 +1064,7 @@ function ReceiptOcr() {
 
       {!isLoggedIn ? (
         <div className="receipt-branch receipt-guest-grid">
-          <UploadPanel onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
           <section className="receipt-panel receipt-login-notice" aria-labelledby="receipt-login-title">
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
@@ -1041,7 +1080,7 @@ function ReceiptOcr() {
         </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
-          <UploadPanel onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
           </aside>
@@ -1104,7 +1143,6 @@ function ReceiptOcr() {
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
-              <ReceiptRules variant="inline" />
               <div className="receipt-panel__title">
                 <h2 id="mapping-title">표준 재료명 매칭</h2>
                 <div className="receipt-panel__actions">
@@ -1140,18 +1178,6 @@ function ReceiptOcr() {
                       }
                     />
                   </label>
-                  <label className="receipt-ocr-meta__field">
-                    <small>총액(원)</small>
-                    <input
-                      className="receipt-inline-input receipt-inline-input--price"
-                      inputMode="numeric"
-                      pattern="[0-9,]*"
-                      type="text"
-                      value={formatPriceInput(receiptMeta.totalAmount)}
-                      placeholder="미확인"
-                      onChange={(event) => updateReceiptMetaField('totalAmount', event.target.value)}
-                    />
-                  </label>
                 </div>
               ) : null}
 
@@ -1166,7 +1192,21 @@ function ReceiptOcr() {
                   const isEditing = Boolean(editingRows[row.id])
 
                   return (
-                  <div className={`receipt-mapping-row ${isEditing ? 'is-editing' : ''}`} role="row" key={row.id}>
+                  <div
+                    className={[
+                      'receipt-mapping-row',
+                      isEditing ? 'is-editing' : '',
+                      rowSelectionMode ? 'is-selecting' : '',
+                      rowSelectionMode && selectedRowIds.includes(row.id) ? 'is-row-selected' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    role={rowSelectionMode ? 'button' : 'row'}
+                    aria-pressed={rowSelectionMode ? selectedRowIds.includes(row.id) : undefined}
+                    aria-label={rowSelectionMode ? `${row.name} 선택` : undefined}
+                    key={row.id}
+                    onClick={rowSelectionMode ? () => toggleRowSelect(row.id) : undefined}
+                  >
                     <span className="receipt-mapping-name-cell" role="cell">
                       <b>
                         <small>원재료명: {row.raw}</small>
@@ -1284,9 +1324,6 @@ function ReceiptOcr() {
                       <span className="receipt-loading-spinner" aria-hidden="true" />
                       <strong>영수증을 분석하고 있어요.</strong>
                       <p>업로드한 영수증에서 품목과 금액을 읽는 중이에요. 잠시만 기다려주세요.</p>
-                      <div className="receipt-loading-bar" role="progressbar" aria-label="영수증 분석 진행 중">
-                        <span />
-                      </div>
                     </div>
                   ) : (
                     <div className="receipt-empty-items" role="row">
@@ -1299,9 +1336,45 @@ function ReceiptOcr() {
 
               {!isProcessing ? (
                 <>
-                  <button className="receipt-add-row" type="button" onClick={addRow}>
-                    + 행 추가
-                  </button>
+                  <div className="receipt-row-tools">
+                    {rowSelectionMode ? (
+                      <>
+                        <button
+                          className="receipt-add-row receipt-row-tools__delete"
+                          type="button"
+                          disabled={detectedRows.length === 0}
+                          onClick={deleteAllRows}
+                        >
+                          전체 삭제
+                        </button>
+                        <button
+                          className="receipt-add-row receipt-row-tools__delete"
+                          type="button"
+                          disabled={selectedRowIds.length === 0}
+                          onClick={deleteSelectedRows}
+                        >
+                          선택 삭제{selectedRowIds.length > 0 ? ` (${selectedRowIds.length})` : ''}
+                        </button>
+                        <button className="receipt-add-row" type="button" onClick={exitRowSelection}>
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="receipt-add-row" type="button" onClick={addRow}>
+                          + 행 추가
+                        </button>
+                        <button
+                          className="receipt-add-row"
+                          type="button"
+                          disabled={detectedRows.length === 0}
+                          onClick={enterRowSelection}
+                        >
+                          행 삭제
+                        </button>
+                      </>
+                    )}
+                  </div>
                   <div className="receipt-success">
                     <span>총상품<em>{detectedRows.length}개</em></span>
                     <span>총 금액<em>{totalAmount.toLocaleString()}원</em></span>
@@ -1584,7 +1657,7 @@ function detectCameraCapture() {
   return Boolean(isCoarsePointer || isMobileUa || isMobileViewport)
 }
 
-function UploadPanel({ onStartUpload }) {
+function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1611,6 +1684,11 @@ function UploadPanel({ onStartUpload }) {
     const file = event.target.files?.[0]
     event.target.value = ''
 
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
     if (file) {
       onStartUpload(file, source)
     }
@@ -1620,17 +1698,46 @@ function UploadPanel({ onStartUpload }) {
     event.preventDefault()
     setIsDragging(false)
 
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
     const file = event.dataTransfer.files?.[0]
     if (file) {
       onStartUpload(file, '업로드 이미지')
     }
   }
 
+  const openUploadPicker = () => {
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
+    uploadInputRef.current?.click()
+  }
+
+  const openCameraPicker = () => {
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
+    cameraInputRef.current?.click()
+  }
+
   return (
     <section className="receipt-panel receipt-upload" aria-labelledby="upload-title">
       <h2 id="upload-title">영수증 업로드</h2>
       <div
-        className={`receipt-dropzone ${isDragging ? 'is-dragging' : ''}`}
+        className={[
+          'receipt-dropzone',
+          isDragging ? 'is-dragging' : '',
+          !canUpload ? 'is-login-required' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onDragEnter={(event) => {
           event.preventDefault()
           setIsDragging(true)
@@ -1666,11 +1773,11 @@ function UploadPanel({ onStartUpload }) {
           />
         ) : null}
         <div className={canUseCamera ? undefined : 'is-single'}>
-          <button className="receipt-primary-button" type="button" onClick={() => uploadInputRef.current?.click()}>
+          <button className="receipt-primary-button" type="button" onClick={openUploadPicker}>
             이미지 업로드
           </button>
           {canUseCamera ? (
-            <button className="receipt-soft-button" type="button" onClick={() => cameraInputRef.current?.click()}>
+            <button className="receipt-soft-button" type="button" onClick={openCameraPicker}>
               카메라 촬영
             </button>
           ) : null}
@@ -1713,6 +1820,9 @@ function RecentHistory() {
   const [showAllHistory, setShowAllHistory] = useState(false)
   const [status, setStatus] = useState('loading')
   const [deletingId, setDeletingId] = useState(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -1757,7 +1867,7 @@ function RecentHistory() {
     }
   }, [])
 
-  const visibleHistory = showAllHistory ? history : history.slice(0, 3)
+  const visibleHistory = showAllHistory || selectionMode ? history : history.slice(0, 3)
   const selectedHistory = history.find((item) => item.id === selectedId) || null
 
   const handleDelete = async (item) => {
@@ -1801,14 +1911,123 @@ function RecentHistory() {
     }
   }
 
+  const enterSelectionMode = () => {
+    setSelectionMode(true)
+    setSelectedIds([])
+  }
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedIds([])
+  }
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => (prev.length === history.length ? [] : history.map((entry) => entry.id)))
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) {
+      return
+    }
+
+    const confirmed = await showConfirm(
+      `선택한 영수증 ${selectedIds.length}건을 삭제할까요? 이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
+      { title: '선택 삭제', confirmText: '삭제', cancelText: '취소' },
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      return
+    }
+
+    const targetIds = selectedIds
+    setIsBulkDeleting(true)
+
+    try {
+      const results = await Promise.allSettled(
+        targetIds.map((id) =>
+          fetch(`${apiUrl}/api/v1/receipts/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ),
+      )
+
+      const deletedIds = targetIds.filter(
+        (id, index) => results[index].status === 'fulfilled' && results[index].value.ok,
+      )
+      const failedIds = targetIds.filter((id) => !deletedIds.includes(id))
+
+      if (deletedIds.length > 0) {
+        const remaining = history.filter((entry) => !deletedIds.includes(entry.id))
+        setHistory(remaining)
+
+        if (deletedIds.includes(selectedId)) {
+          setSelectedId(remaining[0]?.id ?? null)
+        }
+      }
+
+      if (failedIds.length > 0) {
+        setSelectedIds(failedIds)
+        await showAlert(`${deletedIds.length}건 삭제 완료, ${failedIds.length}건은 삭제하지 못했어요.`, {
+          title: '일부 삭제 실패',
+        })
+      } else {
+        exitSelectionMode()
+      }
+    } catch (error) {
+      await showAlert(error.message || '선택 삭제 중 문제가 발생했어요.', { title: '삭제 실패' })
+    } finally {
+      setIsBulkDeleting(false)
+    }
+  }
+
   return (
     <section className="receipt-panel receipt-history" aria-labelledby="receipt-history-title">
       <div className="receipt-panel__title">
         <h2 id="receipt-history-title">최근 영수증 내역</h2>
-        {history.length > 3 ? (
-          <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
-            {showAllHistory ? '접기' : '내역보기'}
-          </button>
+        {status === 'ready' && history.length > 0 ? (
+          <div className="receipt-history__actions">
+            {selectionMode ? (
+              <>
+                <button type="button" onClick={toggleSelectAll}>
+                  {selectedIds.length === history.length ? '전체 해제' : '전체 선택'}
+                </button>
+                <button
+                  type="button"
+                  className="receipt-history__select-delete"
+                  disabled={selectedIds.length === 0 || isBulkDeleting}
+                  onClick={handleDeleteSelected}
+                >
+                  {isBulkDeleting
+                    ? '삭제 중...'
+                    : `선택 삭제${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+                </button>
+                <button type="button" onClick={exitSelectionMode}>
+                  취소
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={enterSelectionMode}>
+                  선택 삭제
+                </button>
+                {history.length > 3 ? (
+                  <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
+                    {showAllHistory ? '접기' : '내역보기'}
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
         ) : null}
       </div>
       {status === 'loading' ? (
@@ -1821,25 +2040,35 @@ function RecentHistory() {
         </p>
       ) : (
         <>
-          <div className="receipt-history-list">
-            {visibleHistory.map((item) => (
-              <button
-                className={selectedId === item.id ? 'is-active' : ''}
-                key={item.id}
-                type="button"
-                onClick={() => setSelectedId(item.id)}
-              >
-                <span aria-hidden="true" />
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.meta}</p>
-                </div>
-                <b>{item.amount}</b>
-                <em>{item.status}</em>
-              </button>
-            ))}
+          <div className={`receipt-history-list ${selectionMode ? 'is-selecting' : ''}`}>
+            {visibleHistory.map((item) => {
+              const isChecked = selectedIds.includes(item.id)
+
+              return (
+                <button
+                  className={[
+                    selectionMode ? 'is-selectable' : '',
+                    selectionMode ? (isChecked ? 'is-checked' : '') : selectedId === item.id ? 'is-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  key={item.id}
+                  type="button"
+                  aria-pressed={selectionMode ? isChecked : undefined}
+                  onClick={() => (selectionMode ? toggleSelect(item.id) : setSelectedId(item.id))}
+                >
+                  <span className="receipt-history-list__marker" aria-hidden="true" />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.meta}</p>
+                  </div>
+                  <b>{item.amount}</b>
+                  <em>{item.status}</em>
+                </button>
+              )
+            })}
           </div>
-          {selectedHistory ? (
+          {!selectionMode && selectedHistory ? (
             <article className="receipt-history-detail" aria-label={`${selectedHistory.title} 상세 내역`}>
               <div>
                 <span>{selectedHistory.date}</span>
@@ -1871,29 +2100,6 @@ function RecentHistory() {
         </>
       )}
       {dialogNode}
-    </section>
-  )
-}
-
-function ReceiptRules({ variant = '' }) {
-  return (
-    <section
-      className={['receipt-rules', variant ? `receipt-rules--${variant}` : 'receipt-panel'].join(' ')}
-      aria-labelledby="receipt-rules-title"
-    >
-      <h2 id="receipt-rules-title">입고 규칙</h2>
-      <div className="receipt-rule-list">
-        {receiptRules.map((rule) => (
-          <article key={rule.title}>
-            <span aria-hidden="true" />
-            <div>
-              <strong>{rule.title}</strong>
-              <p>{rule.description}</p>
-            </div>
-            <em>{rule.enabled ? 'ON' : '후보'}</em>
-          </article>
-        ))}
-      </div>
     </section>
   )
 }

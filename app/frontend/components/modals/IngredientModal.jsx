@@ -36,6 +36,12 @@ export default function IngredientModal({
   const [predictError, setPredictError] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
+  const [hasEditedName, setHasEditedName] = useState(false)
+
+  // 수정 모달은 처음 열릴 때 자동완성을 숨기고, 사용자가 이름을 바꾼 뒤 다시 보여줍니다.
+  useEffect(() => {
+    if (isOpen) setHasEditedName(false)
+  }, [editingId, isOpen])
 
   // 식재료명 입력이 끝났을 때 보관 위치를 한 번만 예측합니다.
   const handlePredictIngredient = async () => {
@@ -77,7 +83,7 @@ export default function IngredientModal({
   useEffect(() => {
     const keyword = formData.name.trim()
     const key = normalizeIngredientImageName(keyword)
-    if (!isOpen || !key) {
+    if (!isOpen || (editingId && !hasEditedName) || !key) {
       setSuggestions([])
       return
     }
@@ -93,7 +99,7 @@ export default function IngredientModal({
         )
         .slice(0, 6),
     )
-  }, [formData.name, isOpen])
+  }, [editingId, formData.name, hasEditedName, isOpen])
 
   // 자동완성 항목을 선택하면 재료명 입력값에 바로 반영합니다.
   const handleSelectSuggestion = (suggestion) => {
@@ -150,16 +156,17 @@ export default function IngredientModal({
               placeholder="예: 양파, 두부, 우유"
               value={formData.name}
               onChange={(event) => {
+                if (editingId) setHasEditedName(true)
                 setIsSuggestionOpen(true)
                 handleFormChange(event)
               }}
-              onFocus={() => setIsSuggestionOpen(true)}
+              onFocus={() => (!editingId || hasEditedName) && setIsSuggestionOpen(true)}
               onBlur={() => {
                 setIsSuggestionOpen(false)
                 handlePredictIngredient()
               }}
             />
-            {isSuggestionOpen && suggestions.length > 0 ? (
+            {(!editingId || hasEditedName) && isSuggestionOpen && suggestions.length > 0 ? (
               <div className="fridge-suggestion-list">
                 {suggestions.map((suggestion) => (
                   <button
@@ -208,8 +215,8 @@ export default function IngredientModal({
               <input
                 type="number"
                 name="quantity"
-                min="0.1"
-                step="0.1"
+                min="0.5"
+                step="0.5"
                 value={formData.quantity}
                 onChange={handleFormChange}
               />

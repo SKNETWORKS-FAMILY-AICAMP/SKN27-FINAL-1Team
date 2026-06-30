@@ -301,6 +301,8 @@
 
 .guide-detail {
   padding: 22px;
+  display: flex;
+  flex-direction: column;
 }
 
 .guide-detail__header {
@@ -357,6 +359,10 @@
   content: "✓";
 }
 
+a.guide-owned-badge::after {
+  content: "↗";
+}
+
 .guide-primary-button {
   box-sizing: border-box;
   min-height: 42px;
@@ -388,22 +394,13 @@
   background: #fff9f1;
 }
 
-.guide-category-tabs > div {
-  display: grid;
-  gap: 7px;
-}
-
-.guide-category-tabs strong {
-  color: #6f4b36;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .guide-category-tab-list {
+  padding-top: 6px;
   display: flex;
   align-items: flex-end;
   gap: 4px;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 2px solid var(--figma-coral);
   scrollbar-width: thin;
 }
@@ -621,24 +618,35 @@
   background: #fff4e3;
 }
 
-.guide-list-back {
-  min-height: 38px;
-  margin-top: 16px;
-  padding: 0 16px;
+.guide-detail-back {
+  width: 38px;
+  height: 38px;
+  margin-bottom: 8px;
+  display: grid;
+  place-items: center;
+  align-self: flex-start;
   border: 1.4px solid #c79a74;
-  border-radius: 999px;
+  border-radius: 50%;
   background: #fffdf8;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 900;
 }
 
+.guide-detail-back:hover,
+.guide-detail-back:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.12);
+  outline: 0;
+}
+
 .guide-tip-grid {
-  margin-top: 22px;
+  margin-top: auto;
+  padding-top: 22px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -702,8 +710,10 @@
 .guide-tip-card h3 {
   margin: 0;
   color: var(--figma-text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .guide-tip-card ul {
@@ -768,7 +778,9 @@
 
 .guide-tip-source {
   margin: 18px 0 0;
-  padding-top: 14px;
+  padding: 14px 0;
+  display: flex;
+  justify-content: flex-end;
   border-top: 1px solid #f1d9b3;
 }
 
@@ -792,6 +804,11 @@
   color: #246323;
   box-shadow: 0 0 0 3px rgba(91, 164, 65, 0.18);
   outline: 0;
+}
+
+.guide-tip-source a::after {
+  margin-left: 7px;
+  content: "↗";
 }
 
 .guide-tip-nutrition {
@@ -826,6 +843,23 @@
   font-size: 14px;
   font-weight: 900;
   line-height: 1.5;
+}
+
+.guide-fridge-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.guide-fridge-empty strong {
+  color: var(--figma-text);
+  white-space: nowrap;
+}
+
+.guide-fridge-empty span {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .guide-error {
@@ -1201,11 +1235,6 @@
     font-size: 11px;
   }
 
-  .guide-list-back {
-    width: 100%;
-    margin-top: 12px;
-  }
-
   .guide-detail__header {
     grid-template-columns: 98px minmax(0, 1fr);
     gap: 14px;
@@ -1238,8 +1267,8 @@
   }
 
   .guide-tip-grid {
-    margin-top: 14px;
-    grid-template-columns: 1fr;
+    padding-top: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 

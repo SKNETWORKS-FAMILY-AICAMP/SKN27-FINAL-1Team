@@ -43,7 +43,7 @@ function Breadcrumbs() {
     ? [
         { label: '홈', to: '/' },
         { label: '보관 가이드', to: '/guide' },
-        { label: decodeURIComponent(pathname.split('/').pop() || '') },
+        { label: '식재료가이드' },
       ]
     : pathname.startsWith('/recipes/') && pathname !== '/recipes'
       ? [
