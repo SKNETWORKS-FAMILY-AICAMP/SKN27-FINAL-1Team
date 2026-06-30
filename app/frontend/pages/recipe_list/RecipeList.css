@@ -132,86 +132,9 @@
   filter: drop-shadow(0 16px 22px rgba(69, 42, 25, 0.08));
 }
 
-.recipe-list-quick {
-  margin-top: 24px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.recipe-list-quick-card {
-  min-height: 78px;
-  padding: 16px 22px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border: 1.4px solid #f0d7b1;
-  border-radius: 14px;
-  background: rgba(255, 253, 248, 0.82);
-  color: var(--figma-text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-
-.recipe-list-quick-card__icon {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-}
-
-.recipe-list-quick-card__icon:not(.is-filled)::before {
-  color: var(--figma-coral);
-  font-size: 22px;
-  font-weight: 900;
-}
-
-.recipe-list-quick-card__icon.is-hot::before {
-  content: "인기";
-  font-size: 12px;
-}
-
-.recipe-list-quick-card__icon.is-easy::before {
-  content: "간단";
-  font-size: 12px;
-}
-
-.recipe-list-quick-card__icon.is-beginner::before {
-  content: "입문";
-  font-size: 12px;
-}
-
-.recipe-list-quick-card__icon.is-save::before {
-  content: "저장";
-  font-size: 12px;
-}
-
-.recipe-list-quick-card strong,
-.recipe-list-quick-card small {
-  display: block;
-}
-
-.recipe-list-quick-card strong {
-  color: var(--figma-text);
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.recipe-list-quick-card small {
-  margin-top: 5px;
-  color: #6f4b36;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.recipe-list-quick.is-pending .recipe-list-quick-card,
 .recipe-list-filter.is-pending select:disabled {
   opacity: 0.72;
   cursor: not-allowed;
-}
-
-.recipe-list-quick.is-pending .recipe-list-quick-card:disabled {
-  pointer-events: none;
 }
 
 .recipe-list-pending-label {
@@ -558,10 +481,6 @@
     grid-template-columns: minmax(0, 1fr) minmax(270px, 0.8fr);
   }
 
-  .recipe-list-quick {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .recipe-list-filter__controls {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -621,40 +540,6 @@
   }
 
   .recipe-list-hero__image {
-    display: none;
-  }
-
-  .recipe-list-quick {
-    margin-top: 14px;
-    grid-template-columns: repeat(4, 118px);
-    gap: 8px;
-    margin-right: -14px;
-    padding-right: 14px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .recipe-list-quick::-webkit-scrollbar {
-    display: none;
-  }
-
-  .recipe-list-quick-card {
-    min-height: 58px;
-    padding: 10px;
-    gap: 8px;
-  }
-
-  .recipe-list-quick-card__icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-  }
-
-  .recipe-list-quick-card strong {
-    font-size: 12px;
-  }
-
-  .recipe-list-quick-card small {
     display: none;
   }
 
