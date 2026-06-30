@@ -51,9 +51,14 @@ class IngredientNameMatcher:
             return ""
 
         text = str(value).strip().lower()
-        text = re.sub(r"\([^)]*\)|\[[^\]]*\]|（[^）]*）", "", text)
-        text = re.sub(r"\d+(?:\.\d+)?\s*(?:kg|g|ml|l|개입|개|입|봉|팩|병|캔)", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"[^0-9a-z가-힣]+", "", text)
+        text = re.sub(r"\([^)]*\)|\[[^\]]*\]|\uff08[^\uff09]*\uff09|<[^>]*>", "", text)
+        text = re.sub(
+            r"\d+(?:\.\d+)?\s*(?:kg|g|ml|l|\uac1c\uc785|\uac1c|\uc785|\ubd09|\ud329|\ubcd1|\uce94)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(r"[^0-9a-z\uac00-\ud7a3]+", "", text)
         return text
 
 

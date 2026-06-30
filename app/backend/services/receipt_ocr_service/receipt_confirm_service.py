@@ -13,7 +13,8 @@ from app.backend.services.inventory_service.inventory_service import inventory_s
 
 
 KST = timezone(timedelta(hours=9))
-ALLOWED_UNITS = {"개", "kg"}
+DEFAULT_UNIT = "\uac1c"
+ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
 
 
 class ReceiptConfirmService:
@@ -27,7 +28,7 @@ class ReceiptConfirmService:
             .first()
         )
         if not receipt:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="영수증을 찾을 수 없습니다.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found.")
 
         receipt.store_name = request_data.store_name
         receipt.purchased_at = self._parse_purchase_datetime(request_data.purchase_datetime)
@@ -61,7 +62,7 @@ class ReceiptConfirmService:
                 raw_name=raw_name or normalized_name,
                 normalized_name=final_name,
                 quantity=self._to_decimal(item.quantity),
-                unit=item.unit if item.unit in ALLOWED_UNITS else "개",
+                unit=item.unit if item.unit in ALLOWED_UNITS else DEFAULT_UNIT,
                 item_amount=item.item_amount,
                 storage_method=item.storage_method,
                 item_memo=item.item_memo,
@@ -105,7 +106,7 @@ class ReceiptConfirmService:
                 receipt_item_id=receipt_item.id,
                 display_name=receipt_item.normalized_name or receipt_item.raw_name,
                 quantity=receipt_item.quantity,
-                unit=receipt_item.unit or ingredient.default_unit or "개",
+                unit=receipt_item.unit or ingredient.default_unit or DEFAULT_UNIT,
                 storage_location=storage_location,
                 purchased_date=purchase_date,
                 expiry_date=expiry_date,
@@ -147,7 +148,7 @@ class ReceiptConfirmService:
                 ingredient = Ingredient(
                     name=name.strip(),
                     normalized_name=normalized,
-                    default_unit=unit if unit in ALLOWED_UNITS else "개",
+                    default_unit=unit if unit in ALLOWED_UNITS else DEFAULT_UNIT,
                 )
                 db.add(ingredient)
                 db.flush()

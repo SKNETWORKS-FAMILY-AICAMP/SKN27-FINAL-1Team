@@ -442,10 +442,7 @@ function getAuthState() {
     return false
   }
 
-  return Boolean(
-    window.localStorage.getItem('bobbeori-token') ||
-      window.localStorage.getItem('bobbeori-auth-mode') === 'guest',
-  )
+  return Boolean(window.localStorage.getItem('bobbeori-token'))
 }
 
 function getInitialEditingRows(nextRows) {
@@ -1032,7 +1029,7 @@ function ReceiptOcr() {
 
       {!isLoggedIn ? (
         <div className="receipt-branch receipt-guest-grid">
-          <UploadPanel onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
           <section className="receipt-panel receipt-login-notice" aria-labelledby="receipt-login-title">
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
@@ -1048,7 +1045,7 @@ function ReceiptOcr() {
         </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
-          <UploadPanel onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
           </aside>
@@ -1591,7 +1588,7 @@ function detectCameraCapture() {
   return Boolean(isCoarsePointer || isMobileUa || isMobileViewport)
 }
 
-function UploadPanel({ onStartUpload }) {
+function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1618,6 +1615,11 @@ function UploadPanel({ onStartUpload }) {
     const file = event.target.files?.[0]
     event.target.value = ''
 
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
     if (file) {
       onStartUpload(file, source)
     }
@@ -1627,17 +1629,46 @@ function UploadPanel({ onStartUpload }) {
     event.preventDefault()
     setIsDragging(false)
 
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
     const file = event.dataTransfer.files?.[0]
     if (file) {
       onStartUpload(file, '업로드 이미지')
     }
   }
 
+  const openUploadPicker = () => {
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
+    uploadInputRef.current?.click()
+  }
+
+  const openCameraPicker = () => {
+    if (!canUpload) {
+      onRequireLogin?.()
+      return
+    }
+
+    cameraInputRef.current?.click()
+  }
+
   return (
     <section className="receipt-panel receipt-upload" aria-labelledby="upload-title">
       <h2 id="upload-title">영수증 업로드</h2>
       <div
-        className={`receipt-dropzone ${isDragging ? 'is-dragging' : ''}`}
+        className={[
+          'receipt-dropzone',
+          isDragging ? 'is-dragging' : '',
+          !canUpload ? 'is-login-required' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onDragEnter={(event) => {
           event.preventDefault()
           setIsDragging(true)
@@ -1673,11 +1704,11 @@ function UploadPanel({ onStartUpload }) {
           />
         ) : null}
         <div className={canUseCamera ? undefined : 'is-single'}>
-          <button className="receipt-primary-button" type="button" onClick={() => uploadInputRef.current?.click()}>
+          <button className="receipt-primary-button" type="button" onClick={openUploadPicker}>
             이미지 업로드
           </button>
           {canUseCamera ? (
-            <button className="receipt-soft-button" type="button" onClick={() => cameraInputRef.current?.click()}>
+            <button className="receipt-soft-button" type="button" onClick={openCameraPicker}>
               카메라 촬영
             </button>
           ) : null}
@@ -1720,6 +1751,9 @@ function RecentHistory() {
   const [showAllHistory, setShowAllHistory] = useState(false)
   const [status, setStatus] = useState('loading')
   const [deletingId, setDeletingId] = useState(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -1764,7 +1798,7 @@ function RecentHistory() {
     }
   }, [])
 
-  const visibleHistory = showAllHistory ? history : history.slice(0, 3)
+  const visibleHistory = showAllHistory || selectionMode ? history : history.slice(0, 3)
   const selectedHistory = history.find((item) => item.id === selectedId) || null
 
   const handleDelete = async (item) => {
@@ -1808,14 +1842,123 @@ function RecentHistory() {
     }
   }
 
+  const enterSelectionMode = () => {
+    setSelectionMode(true)
+    setSelectedIds([])
+  }
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedIds([])
+  }
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => (prev.length === history.length ? [] : history.map((entry) => entry.id)))
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) {
+      return
+    }
+
+    const confirmed = await showConfirm(
+      `선택한 영수증 ${selectedIds.length}건을 삭제할까요? 이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
+      { title: '선택 삭제', confirmText: '삭제', cancelText: '취소' },
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      return
+    }
+
+    const targetIds = selectedIds
+    setIsBulkDeleting(true)
+
+    try {
+      const results = await Promise.allSettled(
+        targetIds.map((id) =>
+          fetch(`${apiUrl}/api/v1/receipts/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ),
+      )
+
+      const deletedIds = targetIds.filter(
+        (id, index) => results[index].status === 'fulfilled' && results[index].value.ok,
+      )
+      const failedIds = targetIds.filter((id) => !deletedIds.includes(id))
+
+      if (deletedIds.length > 0) {
+        const remaining = history.filter((entry) => !deletedIds.includes(entry.id))
+        setHistory(remaining)
+
+        if (deletedIds.includes(selectedId)) {
+          setSelectedId(remaining[0]?.id ?? null)
+        }
+      }
+
+      if (failedIds.length > 0) {
+        setSelectedIds(failedIds)
+        await showAlert(`${deletedIds.length}건 삭제 완료, ${failedIds.length}건은 삭제하지 못했어요.`, {
+          title: '일부 삭제 실패',
+        })
+      } else {
+        exitSelectionMode()
+      }
+    } catch (error) {
+      await showAlert(error.message || '선택 삭제 중 문제가 발생했어요.', { title: '삭제 실패' })
+    } finally {
+      setIsBulkDeleting(false)
+    }
+  }
+
   return (
     <section className="receipt-panel receipt-history" aria-labelledby="receipt-history-title">
       <div className="receipt-panel__title">
         <h2 id="receipt-history-title">최근 영수증 내역</h2>
-        {history.length > 3 ? (
-          <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
-            {showAllHistory ? '접기' : '내역보기'}
-          </button>
+        {status === 'ready' && history.length > 0 ? (
+          <div className="receipt-history__actions">
+            {selectionMode ? (
+              <>
+                <button type="button" onClick={toggleSelectAll}>
+                  {selectedIds.length === history.length ? '전체 해제' : '전체 선택'}
+                </button>
+                <button
+                  type="button"
+                  className="receipt-history__select-delete"
+                  disabled={selectedIds.length === 0 || isBulkDeleting}
+                  onClick={handleDeleteSelected}
+                >
+                  {isBulkDeleting
+                    ? '삭제 중...'
+                    : `선택 삭제${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+                </button>
+                <button type="button" onClick={exitSelectionMode}>
+                  취소
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={enterSelectionMode}>
+                  선택
+                </button>
+                {history.length > 3 ? (
+                  <button type="button" onClick={() => setShowAllHistory((prev) => !prev)}>
+                    {showAllHistory ? '접기' : '내역보기'}
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
         ) : null}
       </div>
       {status === 'loading' ? (
@@ -1828,25 +1971,35 @@ function RecentHistory() {
         </p>
       ) : (
         <>
-          <div className="receipt-history-list">
-            {visibleHistory.map((item) => (
-              <button
-                className={selectedId === item.id ? 'is-active' : ''}
-                key={item.id}
-                type="button"
-                onClick={() => setSelectedId(item.id)}
-              >
-                <span aria-hidden="true" />
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.meta}</p>
-                </div>
-                <b>{item.amount}</b>
-                <em>{item.status}</em>
-              </button>
-            ))}
+          <div className={`receipt-history-list ${selectionMode ? 'is-selecting' : ''}`}>
+            {visibleHistory.map((item) => {
+              const isChecked = selectedIds.includes(item.id)
+
+              return (
+                <button
+                  className={[
+                    selectionMode ? 'is-selectable' : '',
+                    selectionMode ? (isChecked ? 'is-checked' : '') : selectedId === item.id ? 'is-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  key={item.id}
+                  type="button"
+                  aria-pressed={selectionMode ? isChecked : undefined}
+                  onClick={() => (selectionMode ? toggleSelect(item.id) : setSelectedId(item.id))}
+                >
+                  <span className="receipt-history-list__marker" aria-hidden="true" />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.meta}</p>
+                  </div>
+                  <b>{item.amount}</b>
+                  <em>{item.status}</em>
+                </button>
+              )
+            })}
           </div>
-          {selectedHistory ? (
+          {!selectionMode && selectedHistory ? (
             <article className="receipt-history-detail" aria-label={`${selectedHistory.title} 상세 내역`}>
               <div>
                 <span>{selectedHistory.date}</span>

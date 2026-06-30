@@ -346,6 +346,15 @@
   background: #fff5ee;
 }
 
+.receipt-dropzone.is-login-required {
+  border-color: #ead8bd;
+  background: #fffdf8;
+}
+
+.receipt-dropzone.is-login-required .receipt-dropzone__icon {
+  opacity: 0.72;
+}
+
 .receipt-file-input {
   position: absolute;
   width: 1px;
@@ -876,6 +885,55 @@
 .receipt-history-delete:disabled {
   cursor: default;
   opacity: 0.55;
+}
+
+.receipt-history__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.receipt-history__actions .receipt-history__select-delete {
+  border-color: #f3c4c4;
+  background: #fff3f3;
+  color: #d6584f;
+}
+
+.receipt-history__actions .receipt-history__select-delete:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* 선택 모드: 색 점 대신 체크박스 표시 */
+.receipt-history-list button.is-selectable > .receipt-history-list__marker {
+  position: relative;
+  border: 2px solid #e0c6a8;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.receipt-history-list button.is-checked > .receipt-history-list__marker {
+  border-color: var(--figma-coral, #ff6975);
+  background: var(--figma-coral, #ff6975);
+}
+
+.receipt-history-list button.is-checked > .receipt-history-list__marker::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 6px;
+  width: 6px;
+  height: 12px;
+  border: solid #fff;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
+}
+
+.receipt-history-list button.is-checked {
+  outline: 2px solid #ffb8bd;
+  background: #fff8f6;
 }
 
 .receipt-chart {
