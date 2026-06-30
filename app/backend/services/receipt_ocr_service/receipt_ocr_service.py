@@ -13,12 +13,14 @@ from starlette.concurrency import run_in_threadpool
 
 from app.backend.core.config import settings
 from app.backend.db.models import Receipt
+from app.backend.services.ingredient_match_service import ingredient_name_matcher
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 KST = timezone(timedelta(hours=9))
+DEFAULT_UNIT = "\uac1c"
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-ALLOWED_UNITS = {"개", "kg"}
+ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
 
 
 class ReceiptOcrService:
@@ -43,7 +45,7 @@ class ReceiptOcrService:
                 filename=file.filename or "receipt.jpg",
                 image_id=image_id,
             )
-            normalized = self._normalize_ocr_result(ocr_result, image_id=image_id)
+            normalized = self._normalize_ocr_result(ocr_result, image_id=image_id, db=db)
 
             receipt = Receipt(
                 user_id=user_id,
@@ -76,20 +78,20 @@ class ReceiptOcrService:
 
     def _validate_upload(self, file: UploadFile, image_bytes: bytes) -> None:
         if not image_bytes:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="업로드된 파일이 비어 있습니다.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
 
         max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if len(image_bytes) > max_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"파일 크기는 {settings.MAX_UPLOAD_SIZE_MB}MB 이하만 허용됩니다.",
+                detail=f"File size must be {settings.MAX_UPLOAD_SIZE_MB}MB or less.",
             )
 
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="지원하지 않는 이미지 형식입니다. jpg, jpeg, png, webp만 업로드할 수 있습니다.",
+                detail="Unsupported image format. Upload jpg, jpeg, png, or webp.",
             )
 
     def _save_original_image(self, *, user_id: int, original_file_name: str, image_bytes: bytes) -> str:
@@ -108,9 +110,9 @@ class ReceiptOcrService:
 
     def _call_openai_vision(self, *, image_bytes: bytes, filename: str, image_id: str) -> Dict[str, Any]:
         if settings.OCR_ENGINE != "openai_vision":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="지원하지 않는 OCR_ENGINE 설정입니다.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported OCR_ENGINE.")
         if not self.client:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="OPENAI_API_KEY가 설정되지 않았습니다.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="OPENAI_API_KEY is not set.")
 
         mime_type = self._guess_mime_type(filename)
         data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
@@ -131,18 +133,18 @@ class ReceiptOcrService:
                 ],
             )
         except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OCR 모델 호출에 실패했습니다: {exc}") from exc
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OCR model call failed: {exc}") from exc
 
         content = response.choices[0].message.content if response.choices else None
         if not content:
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="OCR 모델 응답이 비어 있습니다.")
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="OCR model response is empty.")
 
         try:
             return self._parse_json_object(content)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
-    def _normalize_ocr_result(self, result: Dict[str, Any], *, image_id: str) -> Dict[str, Any]:
+    def _normalize_ocr_result(self, result: Dict[str, Any], *, image_id: str, db: Session) -> Dict[str, Any]:
         items = []
         for item in result.get("items") or []:
             raw_name = self._nullable_str(item.get("raw_name"))
@@ -150,12 +152,13 @@ class ReceiptOcrService:
                 continue
 
             unit = self._nullable_str(item.get("unit"))
+            matched_ingredient = ingredient_name_matcher.find_best_ingredient(db, raw_name)
             items.append(
                 {
                     "raw_name": raw_name,
-                    "normalized_name": None,
+                    "normalized_name": matched_ingredient.name if matched_ingredient else raw_name,
                     "quantity": self._nullable_number(item.get("quantity")),
-                    "unit": unit if unit in ALLOWED_UNITS else "개",
+                    "unit": unit if unit in ALLOWED_UNITS else DEFAULT_UNIT,
                     "item_amount": self._nullable_int(item.get("item_amount")),
                 }
             )
@@ -173,21 +176,21 @@ class ReceiptOcrService:
 
     def _build_prompt(self, image_id: str) -> str:
         return f"""
-너는 한국어 영수증 OCR 및 구조화 데이터 추출 도우미다.
+You are an OCR and structured data extraction assistant for Korean receipts.
 
-입력 이미지에서 아래 정보를 추출해라.
-- 상호명
-- 구매일시
-- 품목명
-- 품목별 수량
-- 품목별 단위: "개" 또는 "kg"
-- 품목별 라인 금액
-- 총 상품 개수
-- 최종 결제 총액
+Extract only the following information from the receipt image:
+- store_name
+- purchase_datetime
+- purchased item names
+- quantity per item
+- unit per item: use only "\uac1c" or "kg"
+- item_amount per item
+- total_item_count
+- total_amount
 
-반드시 JSON 객체만 반환해라. 설명, Markdown, 코드블록, 주석은 출력하지 마라.
+Return only one valid JSON object. Do not include Markdown, code fences, comments, or explanations.
 
-출력 스키마:
+Output schema:
 {{
   "image_id": "{image_id}",
   "store_name": "string|null",
@@ -196,7 +199,7 @@ class ReceiptOcrService:
     {{
       "raw_name": "string",
       "quantity": "number|null",
-      "unit": "개|kg|null",
+      "unit": "\uac1c|kg|null",
       "item_amount": "number|null"
     }}
   ],
@@ -206,18 +209,18 @@ class ReceiptOcrService:
   "confidence_note": "string|null"
 }}
 
-규칙:
-1. image_id는 "{image_id}"를 그대로 사용한다.
-2. 실제 구매 품목 또는 메뉴만 items에 넣는다.
-3. 합계, 부가세, 결제수단, 카드번호, 승인번호, 안내문구는 품목에서 제외한다.
-4. 할인 라인과 0원 옵션 라인은 품목에서 제외한다.
-5. 품목 리스트가 없는 카드전표/전자영수증은 items를 빈 배열로 반환한다.
-6. quantity는 숫자로 반환하고, 정수와 소수를 모두 허용한다. 모르면 null로 둔다.
-7. unit은 "개", "kg", null 중 하나만 사용한다. g 단위 판매 품목은 kg로 변환할 수 있으면 변환한다.
-8. ml, L 같은 용량 정보는 unit에 넣지 말고 raw_name에 유지한다.
-9. item_amount는 단가가 아니라 해당 품목 라인의 금액이다.
-10. total_amount는 참고값이다. 불확실하면 null로 둔다.
-11. 불확실한 품목명, 잘림, 흐림, 추정값은 confidence_note에 짧게 적는다.
+Rules:
+1. Use "{image_id}" as image_id exactly.
+2. Put only real purchased products or menu items in items.
+3. Exclude subtotals, taxes, payment methods, card numbers, approval numbers, and notices from items.
+4. Exclude discount lines and zero-price option lines from items.
+5. If the receipt is a card approval screen or e-receipt without visible item rows, return an empty items array.
+6. Return quantity as a number. Use null if unknown.
+7. Use only "\uac1c", "kg", or null for unit. Use "\uac1c" for normal packaged/menu items.
+8. Keep volume text such as ml or L inside raw_name, not unit.
+9. item_amount is the line amount for that item, not the unit price unless only unit price is visible.
+10. total_amount is a reference value. Use null if uncertain.
+11. Write uncertainty about hard-to-read text, inferred values, or omitted lines in confidence_note.
 """.strip()
 
     def _parse_json_object(self, content: str) -> Dict[str, Any]:
@@ -227,13 +230,13 @@ class ReceiptOcrService:
         start = candidate.find("{")
         end = candidate.rfind("}")
         if start < 0 or end < start:
-            raise ValueError("OCR 모델 응답에서 JSON 객체를 찾지 못했습니다.")
+            raise ValueError("OCR model response did not contain a JSON object.")
         try:
             parsed = json.loads(candidate[start : end + 1])
         except json.JSONDecodeError as exc:
-            raise ValueError(f"OCR 모델 응답 JSON 파싱에 실패했습니다: {exc}") from exc
+            raise ValueError(f"OCR model response JSON parsing failed: {exc}") from exc
         if not isinstance(parsed, dict):
-            raise ValueError("OCR 모델 응답이 JSON 객체가 아닙니다.")
+            raise ValueError("OCR model response must be a JSON object.")
         return parsed
 
     def _parse_purchase_datetime(self, value: Optional[str]) -> Optional[datetime]:
@@ -270,7 +273,7 @@ class ReceiptOcrService:
             pass
 
     def _safe_filename(self, value: str) -> str:
-        safe = re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", value).strip("._")
+        safe = re.sub(r"[^0-9A-Za-z\uac00-\ud7a3_-]+", "_", value).strip("._")
         return safe[:80] or "receipt"
 
     def _guess_mime_type(self, filename: str) -> str:
