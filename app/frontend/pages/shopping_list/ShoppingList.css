@@ -112,6 +112,10 @@
   gap: 14px;
 }
 
+.shopping-summary--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .shopping-summary-card {
   min-height: 116px;
   padding: 18px 16px;
@@ -218,6 +222,10 @@
   display: grid;
   grid-template-columns: minmax(430px, 0.86fr) minmax(500px, 1fr);
   gap: 16px;
+}
+
+.shopping-main-grid--recipe {
+  grid-template-columns: minmax(520px, 1.1fr) minmax(360px, 0.9fr);
 }
 
 .shopping-panel {
@@ -664,6 +672,7 @@
 
 .shopping-soft-action {
   color: #6d4128;
+  text-decoration: none;
 }
 
 .shopping-primary-action {
@@ -684,6 +693,142 @@
   background: rgba(255, 255, 255, 0.16);
 }
 
+.shopping-start-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.shopping-start-card {
+  min-height: 260px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.82);
+  box-sizing: border-box;
+}
+
+.shopping-start-card.is-featured {
+  border-color: var(--figma-coral-stroke);
+  background: #fff7f2;
+}
+
+.shopping-start-card > span {
+  color: var(--figma-coral);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.shopping-start-card h2 {
+  margin: 12px 0 0;
+  color: var(--figma-text);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.shopping-start-card p {
+  margin: 10px 0 22px;
+  color: #6f4b36;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.shopping-start-card .shopping-primary-action,
+.shopping-start-card .shopping-soft-action {
+  width: 100%;
+  margin-top: auto;
+}
+
+.shopping-link-list {
+  display: grid;
+  gap: 10px;
+}
+
+.shopping-link-item {
+  min-height: 74px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(280px, 1.2fr);
+  align-items: center;
+  gap: 14px;
+  border: 1px solid #f1d9b3;
+  border-radius: 12px;
+  background: #fffdf8;
+  box-sizing: border-box;
+}
+
+.shopping-link-item strong {
+  display: block;
+  color: var(--figma-text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.shopping-link-item p {
+  margin: 4px 0 0;
+  color: #7b5437;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.shopping-market-links {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shopping-market-links a {
+  min-height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.4px solid #e7c894;
+  border-radius: 999px;
+  background: #fffaf2;
+  color: #7b5437;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.shopping-owned-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shopping-owned-list span {
+  min-height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #bfe7bf;
+  border-radius: 999px;
+  background: #f3fff3;
+  color: #2f7a38;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.shopping-empty-note {
+  padding: 14px;
+  border: 1px solid #f1d9b3;
+  border-radius: 12px;
+  background: #fffaf2;
+}
+
+.shopping-actions--recipe {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 @media (max-width: 1120px) {
   .shopping-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -698,7 +843,16 @@
     grid-template-columns: 1fr;
   }
 
+  .shopping-start-grid,
+  .shopping-main-grid--recipe {
+    grid-template-columns: 1fr;
+  }
+
   .shopping-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shopping-actions--recipe {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -799,6 +953,27 @@
     display: block;
   }
 
+  .shopping-start-grid {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .shopping-start-card {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .shopping-start-card h2 {
+    font-size: 18px;
+  }
+
+  .shopping-start-card p {
+    margin-bottom: 14px;
+    font-size: 12px;
+  }
+
   .shopping-personal-panel {
     min-height: 0;
     margin-top: 12px;
@@ -834,6 +1009,10 @@
   }
 
   .shopping-price-panel {
+    margin-top: 12px;
+  }
+
+  .shopping-owned-panel {
     margin-top: 12px;
   }
 
@@ -916,6 +1095,16 @@
     justify-self: start;
     min-height: 24px;
     white-space: normal;
+  }
+
+  .shopping-link-item {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .shopping-market-links {
+    justify-content: flex-start;
   }
 
   .shopping-tip {
@@ -1005,6 +1194,10 @@
     margin-top: 12px;
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .shopping-actions--recipe {
+    grid-template-columns: 1fr;
   }
 
   .shopping-soft-action,

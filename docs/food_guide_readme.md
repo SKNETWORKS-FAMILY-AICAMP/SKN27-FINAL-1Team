@@ -71,6 +71,48 @@ docker compose run --rm --no-deps food_guide_load \
 
 누락 관계나 고아 노드가 하나라도 있으면 종료 코드 1을 반환합니다.
 
+## 사용자 가이드 제보 검토
+
+가이드 상세 화면에서 정보가 없는 항목을 회원이 제보하면 PostgreSQL의
+`food_guide_suggestions`에 `pending` 상태로 저장됩니다. 제보 수가 많아도 자동으로
+Neo4j에 반영하지 않으며, 개발자가 다음 쿼리로 서로 다른 사용자 제보를 확인합니다.
+
+기존 PostgreSQL 볼륨을 사용하는 환경에서는 최초 1회 테이블을 생성합니다.
+
+```bash
+docker compose exec backend python -c \
+  "from app.backend.db.models import FoodGuideSuggestion; from app.backend.db.session import engine; FoodGuideSuggestion.__table__.create(bind=engine, checkfirst=True)"
+```
+
+```sql
+SELECT
+    ingredient_code,
+    ingredient_name,
+    guide_type,
+    LOWER(REGEXP_REPLACE(TRIM(content), '\s+', ' ', 'g')) AS normalized_content,
+    COUNT(*) AS suggestion_count,
+    COUNT(DISTINCT user_id) AS unique_user_count,
+    MIN(created_at) AS first_suggested_at,
+    MAX(created_at) AS last_suggested_at
+FROM food_guide_suggestions
+WHERE status = 'pending'
+GROUP BY ingredient_code, ingredient_name, guide_type, normalized_content
+HAVING COUNT(DISTINCT user_id) >= 3
+ORDER BY unique_user_count DESC, last_suggested_at DESC;
+```
+
+내용과 출처를 확인한 뒤 승인·반려 상태를 기록합니다.
+
+```sql
+UPDATE food_guide_suggestions
+SET status = 'approved',
+    review_note = '출처 및 내용 확인 완료',
+    reviewed_at = NOW()
+WHERE id = :suggestion_id;
+```
+
+승인된 내용은 분할 CSV에 반영한 뒤 기존 Neo4j 재적재·검증 절차를 실행합니다.
+
 ```bash
 # 적재 로그 확인
 docker compose logs food_guide_load

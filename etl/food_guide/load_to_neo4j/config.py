@@ -9,10 +9,8 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(PROJECT_ROOT / ".env")
 
-DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / os.getenv(
-    "FOOD_GUIDE_CSV_PATH",
-    "storage/processed/food_guide/food_guide_v2.csv",
-)
+_FOOD_GUIDE_CSV_PATH = os.getenv("FOOD_GUIDE_CSV_PATH")
+DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / _FOOD_GUIDE_CSV_PATH if _FOOD_GUIDE_CSV_PATH else None
 
 
 @dataclass(frozen=True)

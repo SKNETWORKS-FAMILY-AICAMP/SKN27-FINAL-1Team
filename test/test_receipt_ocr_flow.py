@@ -82,26 +82,36 @@ def seed_ingredient(db_session, name: str, *, normalized_name: str | None = None
     return ingredient
 
 
-def test_ingredient_matcher_strips_parentheses_and_returns_standard_name(db_session):
-    banana = seed_ingredient(db_session, BANANA)
+def test_ingredient_matcher_strips_parentheses_and_returns_neo4j_standard_name(monkeypatch):
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
 
-    matched = ingredient_name_matcher.find_best_ingredient(db_session, BANANA_IMPORTED)
+    matched = ingredient_name_matcher.find_best_name(BANANA_IMPORTED)
 
-    assert matched is not None
-    assert matched.id == banana.id
-    assert matched.name == BANANA
+    assert matched == BANANA
 
 
-def test_ingredient_matcher_returns_none_when_no_standard_name_matches(db_session):
-    seed_ingredient(db_session, BANANA)
+def test_ingredient_matcher_returns_none_when_no_neo4j_standard_name_matches(monkeypatch):
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
 
-    matched = ingredient_name_matcher.find_best_ingredient(db_session, UNKNOWN_PRODUCT)
+    matched = ingredient_name_matcher.find_best_name(UNKNOWN_PRODUCT)
 
     assert matched is None
 
 
-def test_ocr_normalize_result_uses_standard_name_or_raw_name_fallback(db_session):
-    seed_ingredient(db_session, BANANA)
+def test_ocr_normalize_result_uses_neo4j_standard_name_or_raw_name_fallback(db_session, monkeypatch):
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
     service = ReceiptOcrService()
 
     normalized = service._normalize_ocr_result(
@@ -121,9 +131,14 @@ def test_ocr_normalize_result_uses_standard_name_or_raw_name_fallback(db_session
     assert normalized["items"][1]["normalized_name"] == UNKNOWN_PRODUCT
 
 
-def test_confirm_receipt_saves_standard_name_to_receipt_and_fridge_items(db_session):
+def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(db_session, monkeypatch):
     user, receipt = seed_user_and_receipt(db_session)
     banana = seed_ingredient(db_session, BANANA)
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
     request_data = ReceiptConfirmRequest(
         receipt_id=receipt.id,
         store_name=STORE_NAME,
@@ -165,8 +180,13 @@ def test_confirm_receipt_saves_standard_name_to_receipt_and_fridge_items(db_sess
     assert fridge_item.ingredient_id == banana.id
 
 
-def test_confirm_receipt_keeps_raw_name_when_no_standard_name_matches(db_session):
+def test_confirm_receipt_keeps_raw_name_when_no_neo4j_standard_name_matches(db_session, monkeypatch):
     user, receipt = seed_user_and_receipt(db_session)
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
     request_data = ReceiptConfirmRequest(
         receipt_id=receipt.id,
         store_name=STORE_NAME,

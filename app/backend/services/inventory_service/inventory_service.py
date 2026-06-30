@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 from fastapi import HTTPException, status
@@ -229,7 +230,7 @@ class InventoryService:
             "id": item.id,
             "fridge_id": item.id,
             "name": item.display_name or ingredient.name,
-            "category": ingredient.category,
+            "category": ingredient.category or DEFAULT_CATEGORY,
             "quantity": float(item.quantity) if item.quantity is not None else 1.0,
             "unit": item.unit or ingredient.default_unit or "개",
             "storage_method": item.storage_location or DEFAULT_STORAGE,
@@ -370,6 +371,10 @@ class InventoryService:
         if not fridge_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 식재료를 찾을 수 없습니다.")
 
+        # 이름이 변경되었는데 프론트엔드에서 보낸 날짜가 기존 날짜와 동일하다면 (수동 변경이 아니라면) 새 재료 기준으로 자동 재계산하도록 유도합니다.
+        if fridge_item.display_name != data.name.strip() and self._parse_date(data.expiration_date) == fridge_item.expiry_date:
+            data.expiration_date = None
+
         # 수정된 재료명 기준으로 식재료 마스터를 다시 매핑합니다.
         ingredient = self._get_or_create_ingredient(db, data)
         storage_location, expiration_date = self._resolve_item_dates_and_storage(db, ingredient, data)
@@ -427,6 +432,63 @@ class InventoryService:
             db.commit()
 
         return summary
+        
+    def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
+        """챗봇(MCP)에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
+        data = IngredientCreate(
+            name=ingredient_name.strip(),
+            category=None,
+            quantity=quantity or 1.0,
+            unit="\uac1c",
+            storage_method=storage_method,
+        )
+        item = self.add_ingredient(db, user_id, data)
+        display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
+        return f"'{item['name']}'\uc744(\ub97c) {display_quantity}{item['unit']} {item['storage_method']}\uc5d0 \ucd94\uac00\ud588\uc5b4\uc694."
+
+    def consume_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
+        """챗봇(MCP)에서 식재료 이름과 소비 수량을 받아 재고를 차감하거나 삭제합니다."""
+        # 사용자의 활성 식재료 목록 조회
+        items = (
+            db.query(FridgeItem, Ingredient)
+            .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
+            .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
+            .all()
+        )
+        
+        # 이름 매칭 (정확도 우선)
+        target_item = None
+        for fridge_item, ingredient in items:
+            if ingredient.name == ingredient_name:
+                target_item = fridge_item
+                break
+        
+        if not target_item:
+            # 부분 매칭 시도
+            for fridge_item, ingredient in items:
+                if ingredient_name in ingredient.name or ingredient.name in ingredient_name:
+                    target_item = fridge_item
+                    break
+                    
+        if not target_item:
+            return f"냉장고에서 '{ingredient_name}'을(를) 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
+            
+        # 수량 차감
+        current_qty = target_item.quantity or Decimal("1")
+        consume_qty = Decimal(str(quantity or 1))
+        new_qty = current_qty - consume_qty
+        
+        if new_qty <= 0:
+            target_item.status = "used"
+            db.commit()
+            return f"'{ingredient_name}'을(를) 전부 소비하여 냉장고에서 삭제(소비 완료) 처리했습니다!"
+        else:
+            target_item.quantity = new_qty
+            db.commit()
+            display_quantity = int(consume_qty) if consume_qty == consume_qty.to_integral() else consume_qty
+            display_remaining = int(new_qty) if new_qty == new_qty.to_integral() else new_qty
+            return f"'{ingredient_name}'을(를) {display_quantity}개 소비했습니다. (남은 수량: {display_remaining})"
+
 
 
 inventory_service = InventoryService()
