@@ -163,3 +163,59 @@
   from { transform: translateY(40px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* 알레르기 직접 입력을 스페이스 구분 태그 입력처럼 보여줍니다. */
+.tag-input {
+  width: 100%;
+  min-height: 54px;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--figma-line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: text;
+}
+
+.tag-input:focus-within {
+  border-color: var(--figma-coral);
+}
+
+.tag-input__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 10px 0 13px;
+  border-radius: 999px;
+  background: #eaf5ff;
+  color: #3f91d8;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.tag-input__chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
+.tag-input input {
+  min-width: 120px;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 15px;
+}

@@ -31,6 +31,9 @@ class AuthService:
             str: 클라이언트에게 전달할 JWT Access Token
         """
         try:
+            # 소셜 제공자가 닉네임을 주지 않아도 users.nickname NOT NULL 제약을 만족하도록 기본값을 만듭니다.
+            safe_nickname = nickname or (email.split("@")[0] if email else f"{provider}_user")
+
             # 1. 기존 가입된 사용자인지 데이터베이스에서 조회 (provider와 provider_id 기준)
             user = db.query(User).filter(
                 User.provider == provider, 
@@ -44,8 +47,8 @@ class AuthService:
                     # 기존 계정이 있다면, 방금 접속한 소셜 플랫폼 정보로 업데이트
                     user.provider = provider
                     user.provider_id = provider_id
-                    if nickname:
-                        user.nickname = nickname
+                    if safe_nickname:
+                        user.nickname = safe_nickname
                     db.commit()
                     db.refresh(user)
 
@@ -56,7 +59,7 @@ class AuthService:
                     provider=provider,
                     provider_id=provider_id,
                     email=email,
-                    nickname=nickname
+                    nickname=safe_nickname
                 )
                 db.add(user)
                 # user.id 값을 임시로 얻어와서 하위 테이블 생성을 위해 DB에 flush 실행
