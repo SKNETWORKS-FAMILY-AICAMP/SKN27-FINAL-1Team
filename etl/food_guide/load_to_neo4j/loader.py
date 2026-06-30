@@ -173,8 +173,8 @@ SPLIT_COMPATIBILITY_QUERIES = (
 
 UPSERT_FOOD_GUIDE_QUERY = """
 UNWIND $rows AS row
-MERGE (g:FoodGuide {key: row.guideKey})
-SET g:FoodCategory:Ingredient,
+MERGE (g:FoodCategory {key: row.guideKey})
+SET g:FoodGuide:Ingredient,
     g.code = row.code,
     g.level = "minor",
     g.name = row.name,
