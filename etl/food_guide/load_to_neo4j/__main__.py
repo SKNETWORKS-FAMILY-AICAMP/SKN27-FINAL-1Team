@@ -17,8 +17,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Load processed food guide CSV data into Neo4j.")
     parser.add_argument(
         "--csv",
-        default=str(DEFAULT_FOOD_GUIDE_CSV),
-        help="Path to processed food guide CSV.",
+        help="Path to processed food guide CSV. Required unless FOOD_GUIDE_CSV_PATH is set.",
     )
     parser.add_argument(
         "--clear",
@@ -38,7 +37,10 @@ def main() -> None:
         result = load_split_food_guide_to_neo4j(args.split_dir, clear=args.clear)
         logger.info("Loaded split food guide graph: %s", result)
     else:
-        result = load_food_guide_to_neo4j(args.csv, clear=args.clear)
+        csv_path = args.csv or DEFAULT_FOOD_GUIDE_CSV
+        if not csv_path:
+            raise SystemExit("Pass --csv or set FOOD_GUIDE_CSV_PATH. No default CSV is loaded.")
+        result = load_food_guide_to_neo4j(csv_path, clear=args.clear)
         logger.info("Loaded FoodGuide=%d FoodCategory=%d", result["food_guides"], result["categories"])
 
 
