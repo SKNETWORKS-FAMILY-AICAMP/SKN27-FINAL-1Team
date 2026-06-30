@@ -7,6 +7,8 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+if __package__ is None:
+    sys.path.insert(0, str(ROOT))
 RAW_DIR = ROOT / "storage" / "raw" / "crawling_recipes"
 OUT_DIR = ROOT / "storage" / "processed" / "crawling_recipes"
 

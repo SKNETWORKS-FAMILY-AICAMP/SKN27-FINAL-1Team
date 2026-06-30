@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import pathlib
 import re
+import sys
 from collections.abc import Callable
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+if __package__ is None:
+    sys.path.insert(0, str(ROOT))
 
 import pandas as pd
 from tqdm import tqdm
 
 from etl.recipe.preprocessing.recipe_processing import load_recipe_data, save_recipe_data
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 REVIEW_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_review.csv"
 CRAWL_DIR = ROOT / "storage" / "processed" / "crawling_recipes"
 
