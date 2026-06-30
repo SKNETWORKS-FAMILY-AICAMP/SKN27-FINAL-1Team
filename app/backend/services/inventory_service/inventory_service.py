@@ -431,6 +431,47 @@ class InventoryService:
             db.commit()
 
         return summary
+        
+    def consume_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
+        """챗봇(MCP)에서 식재료 이름과 소비 수량을 받아 재고를 차감하거나 삭제합니다."""
+        # 사용자의 활성 식재료 목록 조회
+        items = (
+            db.query(FridgeItem, Ingredient)
+            .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
+            .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
+            .all()
+        )
+        
+        # 이름 매칭 (정확도 우선)
+        target_item = None
+        for fridge_item, ingredient in items:
+            if ingredient.name == ingredient_name:
+                target_item = fridge_item
+                break
+        
+        if not target_item:
+            # 부분 매칭 시도
+            for fridge_item, ingredient in items:
+                if ingredient_name in ingredient.name or ingredient.name in ingredient_name:
+                    target_item = fridge_item
+                    break
+                    
+        if not target_item:
+            return f"냉장고에서 '{ingredient_name}'을(를) 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
+            
+        # 수량 차감
+        current_qty = target_item.quantity or 1.0
+        new_qty = current_qty - quantity
+        
+        if new_qty <= 0:
+            target_item.status = "used"
+            db.commit()
+            return f"'{ingredient_name}'을(를) 전부 소비하여 냉장고에서 삭제(소비 완료) 처리했습니다!"
+        else:
+            target_item.quantity = new_qty
+            db.commit()
+            return f"'{ingredient_name}'을(를) {quantity}개 소비했습니다. (남은 수량: {new_qty})"
+
 
 
 inventory_service = InventoryService()

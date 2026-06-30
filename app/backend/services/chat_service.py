@@ -34,6 +34,18 @@ class ChatService:
             reply = "현재 로그인된 상태예요." if user_id else "현재 비로그인 상태예요. 보관법이나 일반 레시피 검색은 이용할 수 있어요."
             return {"intent": "auth.status", "reply": reply, "actions": [], "sources": []}
             
+        from langchain_core.messages import HumanMessage, AIMessage
+        
+        # 멀티턴 대응: 이전 대화 기록을 LangChain Messages 형식으로 변환
+        langchain_messages = []
+        if history:
+            for msg in history[-4:]: # 최근 4개 메시지
+                if msg.role == 'user':
+                    langchain_messages.append(HumanMessage(content=msg.text))
+                elif msg.role == 'bot':
+                    langchain_messages.append(AIMessage(content=msg.text))
+        langchain_messages.append(HumanMessage(content=text))
+        
         # 초기 상태(GraphState) 구성
         from app.backend.services.chat_graph import chat_graph
         initial_state = {
@@ -45,7 +57,7 @@ class ChatService:
             "service": self,
             "intent": None,
             "keyword": None,
-            "messages": [],
+            "messages": langchain_messages,
             "response_text": None,
             "actions": [],
             "sources": []
@@ -172,7 +184,7 @@ class ChatService:
         if any(word in normalized for word in ("레시피", "요리법", "요리")):
             return "recipe.search"
             
-        if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "신선", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
+        if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "세척", "씻", "신선", "확인", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
             return "ingredient.guide"
         if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")):
             return "inventory.expiring"
@@ -184,7 +196,7 @@ class ChatService:
     def _extract_keyword(self, text: str) -> str:
         """조사와 기능 키워드를 덜어내고 검색에 쓸 핵심 단어를 추립니다."""
         cleaned = re.sub(
-            r"(먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|어떻게|손질법|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|좀|해먹을|만들)",
+            r"(먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|세척법|세척방법|세척|씻|손질법|손질방법|손질|신선도|확인법|확인|어떻게|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|좀|해먹을|만들)",
             " ",
             text,
         )
@@ -327,7 +339,7 @@ class ChatService:
 
     def _keyword_tokens(self, keyword: str) -> list[str]:
         """검색 검증에 쓸 핵심 단어만 추립니다."""
-        stopwords = {"먹다남은", "남은", "먹다", "보관", "보관법", "알려줘", "식재료", "레시피", "어떡하지", "어떡해"}
+        stopwords = {"먹다남은", "남은", "먹다", "보관", "보관법", "보관방법", "세척", "세척법", "세척방법", "손질", "손질법", "손질방법", "신선도", "확인법", "알려줘", "식재료", "레시피", "어떡하지", "어떡해"}
         return [
             token
             for token in re.findall(r"[가-힣A-Za-z0-9]+", keyword.lower())
@@ -335,8 +347,19 @@ class ChatService:
         ]
 
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
-        """식재료 가이드 검색 결과를 이용해 보관 정보를 안내합니다."""
+        """식재료 가이드 검색 결과를 이용해 보관/손질/세척/신선도 정보를 안내합니다."""
         keyword = self._extract_keyword(text)
+        
+        # 질문 종류 파악
+        category = "storage"
+        normalized = text.replace(" ", "").lower()
+        if "손질" in normalized:
+            category = "prep"
+        elif "세척" in normalized or "씻" in normalized:
+            category = "washing"
+        elif "신선" in normalized or "상하는" in normalized or "상한" in normalized:
+            category = "freshness"
+            
         try:
             guides = guide_service.search_guides(keyword=keyword, page=1, page_size=1)
             if not guides["items"]:
@@ -345,22 +368,36 @@ class ChatService:
             item = guides["items"][0]
             if not self._is_guide_result_match(keyword, item["name"]):
                 return self._reply_external_guide(keyword)
+                
             detail = guide_service.get_guide_detail(item["code"]) or {}
-            tip = detail.get("storage_tips") or detail.get("horticultural_storage_tips")
+            
+            if category == "prep":
+                tip = detail.get("prep_tips")
+                label = "손질방법"
+            elif category == "washing":
+                tip = detail.get("washing_tips")
+                label = "세척방법"
+            elif category == "freshness":
+                tip = detail.get("freshness_tips")
+                label = "신선도 확인법"
+            else:
+                tip = detail.get("storage_tips") or detail.get("horticultural_storage_tips")
+                label = "보관법"
+                
         except Exception:
-            return self._reply_external_guide(keyword)
+            return self._reply_external_guide(keyword, "보관법")
 
         if not tip:
-            return f"{item['name']} 가이드는 찾았지만 보관법 정보가 비어 있어요.", []
+            return f"알고 계신 {item['name']} 가이드는 찾았지만, 아쉽게도 {label}에 대한 구체적인 정보가 비어 있어요. 😅", []
 
         formatted_tip = self._format_guide_tip(tip)
         if len(formatted_tip) < 45:
-            extra_reply, extra_sources = self._reply_external_guide(keyword)
+            extra_reply, extra_sources = self._reply_external_guide(keyword, label)
             extra_tip = extra_reply.split("\n\n", 1)[-1] if "\n\n" in extra_reply else ""
             if extra_tip and "찾지 못했어요" not in extra_reply and "연결이 불안정" not in extra_reply:
-                return f"{item['name']} 보관법이에요.\n{formatted_tip}\n\n추가로 참고하면 좋아요.\n{extra_tip}", extra_sources
+                return f"{item['name']} {label}이에요.\n{formatted_tip}\n\n추가로 참고하면 좋아요.\n{extra_tip}", extra_sources
 
-        return f"{item['name']} 보관법이에요.\n{formatted_tip}", []
+        return f"{item['name']} {label}이에요.\n{formatted_tip}", []
 
     def _is_relevant_search_result(self, keyword: str, item: dict[str, Any]) -> bool:
         """검색 결과 제목/본문이 질문 핵심어와 맞는지 확인합니다."""
@@ -373,14 +410,14 @@ class ChatService:
         primary = tokens[0]
         return any(self._is_guide_result_match(primary, word) for word in words)
 
-    def _reply_external_guide(self, keyword: str) -> tuple[str, list[dict[str, str]]]:
+    def _reply_external_guide(self, keyword: str, category_label: str = "보관법") -> tuple[str, list[dict[str, str]]]:
         """내부 가이드가 없을 때 Tavily 검색 결과를 짧게 요약합니다."""
         if not app_settings.TAVILY_API_KEY or TavilyClient is None:
             return f"{keyword} 정보는 아직 우리 가이드에 없어요. 웹 검색 답변은 Tavily 설정 후 사용할 수 있어요.", []
 
         client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
         try:
-            result = client.search(query=f"{keyword} 보관법", search_depth="basic", max_results=5)
+            result = client.search(query=f"{keyword} {category_label}", search_depth="basic", max_results=5)
         except Exception:
             return f"{keyword} 정보는 웹 검색을 시도했지만 지금은 연결이 불안정해요. 잠시 후 다시 시도해주세요.", []
         results = [item for item in result.get("results", []) if self._is_relevant_search_result(keyword, item)][:3]
@@ -399,7 +436,7 @@ class ChatService:
                 response = client_ai.chat.completions.create(
                     model=app_settings.OPENAI_MODEL,
                     messages=[
-                        {"role": "system", "content": "검색 결과 안에서만 한국어로 식재료 보관법을 요약해. 바로 따라할 수 있는 짧은 문장 3개 이내로 쓰고, 각 문장은 줄바꿈으로 구분해. 추측은 하지 마."},
+                        {"role": "system", "content": f"검색 결과 안에서만 한국어로 식재료 {category_label}을(를) 요약해. 바로 따라할 수 있는 짧은 문장 3개 이내로 쓰고, 각 문장은 줄바꿈으로 구분해. 추측은 하지 마."},
                         {"role": "user", "content": f"질문 키워드: {keyword}\n검색 결과:\n{content}"},
                     ],
                     temperature=0.2,
