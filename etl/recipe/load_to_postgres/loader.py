@@ -48,8 +48,97 @@ def _clip(value: str | None, max_len: int) -> str | None:
     return text[:max_len]
 
 
+_SIZE_STEM = r"(?:중간사이즈|중간크기|중사이즈|중간|중자|작은|큰)"
+_CJK_SIZE = r"[小大中]"
+_AMOUNT_HINT = r"(?:적당량|적당히|넉넉하게|넉넉히|원하는만큼|약간|톡톡|넉넉|솔솔|조금)"
+_MODIFIER_SUFFIX_PATTERNS = (
+    rf"\s+{_SIZE_STEM}\s*(?:거|것|캔|크기|사이즈)?$",
+    rf"^{_SIZE_STEM}\s*(?:거|것|캔|크기|사이즈)?\s+",
+    r"\s+중\s*사이즈$",  # ponytail: 고구마 중 사이즈
+    r"\s+중$",  # ponytail: 고구마 중 등 단독 '중'
+    rf"\s+{_CJK_SIZE}$",
+    rf"(?<=\S){_CJK_SIZE}$",  # ponytail: 붙어 쓴 한자 크기(小·大·中)
+    rf"\s+{_AMOUNT_HINT}$",
+    rf"^{_AMOUNT_HINT}\s+",
+    rf"(?<=\S){_AMOUNT_HINT}$",  # ponytail: 후추약간 등 붙어 쓴 분량 표현
+)
+_PREP_SUFFIX_PATTERNS = (
+    r"\s+다진\s*(?:것|거)$",
+    r"(?<=\S)다진(?:것|거)$",
+)
+_AMOUNT_ONLY = frozenset(
+    "약간 톡톡 조금 적당량 적당히 넉넉 넉넉히 넉넉하게 솔솔 원하는만큼".split()
+)
+# ponytail: 크롤 표기 흔들림 → 표시·dedup 통일 (필요 시 항목 추가)
+_CANONICAL_REWRITES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^갈아만든\s*배(?:음료)?$"), "갈아만든배"),
+    (re.compile(r"^건\s*크랜베리$"), "건크랜베리"),
+    (re.compile(r"^고구마\s*줄기$"), "고구마줄기"),
+    (re.compile(r"^고형\s*고체\s*카레$"), "고형 카레"),
+    (re.compile(r"^고형\s*카레(?:\s*큐브)?$"), "고형 카레"),
+    (re.compile(r"^고체\s*카레$"), "고형 카레"),
+    (re.compile(r"^골뱅이(?:\s*통조림|캔)$"), "골뱅이"),
+    (re.compile(r"^그라나파다노(?:\s*치즈)?$"), "그라나파다노치즈"),
+)
+
+
+def clean_ingredient_name(name: str) -> str | None:
+    """크롤 artifact(?), 이름 내 분량(숫자·크기 수식어) 제거 후 표시용 재료명."""
+    text = str(name).strip()
+    if not text:
+        return None
+    text = re.sub(r"^[\s?]+", "", text)
+    text = re.sub(r"[\s?]+$", "", text)
+    if not text or text == "?":
+        return None
+    text = re.split(r"\d", text, maxsplit=1)[0].strip()
+    if not text:
+        return None
+    changed = True
+    while changed:
+        changed = False
+        for pattern in _MODIFIER_SUFFIX_PATTERNS:
+            new = re.sub(pattern, "", text).strip()
+            if new != text:
+                text = new
+                changed = True
+    changed = True
+    while changed:
+        changed = False
+        for pattern in _PREP_SUFFIX_PATTERNS:
+            new = re.sub(pattern, "", text).strip()
+            if new != text:
+                text = new
+                changed = True
+    text = re.sub(r"크린베리", "크랜베리", text)
+    text = re.sub(r"고은", "고운", text)
+    text = re.sub(r"그라노파다노", "그라나파다노", text)
+    text = re.sub(r"줄거리", "줄기", text)
+    for pattern, canonical in _CANONICAL_REWRITES:
+        if pattern.fullmatch(text):
+            text = canonical
+            break
+    text = re.sub(r"전분\s*가루", "전분", text).strip()
+    if text in _AMOUNT_ONLY:
+        return None
+    if not text or re.fullmatch(r"[\?\s]+", text):
+        return None
+    return text
+
+
 def normalize_ingredient_name(name: str) -> str:
     return re.sub(r"\s+", "", name.strip().lower())
+
+
+def resolve_ingredient_name(raw_name: str) -> tuple[str, str] | None:
+    """(표시명, normalized_name) 또는 파싱 불가 시 None."""
+    cleaned = clean_ingredient_name(raw_name)
+    if not cleaned:
+        return None
+    normalized = normalize_ingredient_name(cleaned)
+    if not normalized:
+        return None
+    return cleaned, normalized
 
 
 def parse_quantity(value: Any) -> float | None:
@@ -296,8 +385,11 @@ def collect_unique_ingredients(df: pd.DataFrame) -> dict[str, str]:
             if not ingredient:
                 continue
             raw_name = str(ingredient[0])
-            display_name = _clip(raw_name.strip(), _VARCHAR_LIMITS["name"])
-            normalized_name = _clip(normalize_ingredient_name(raw_name), _VARCHAR_LIMITS["normalized_name"])
+            resolved = resolve_ingredient_name(raw_name)
+            if not resolved:
+                continue
+            display_name = _clip(resolved[0], _VARCHAR_LIMITS["name"])
+            normalized_name = _clip(resolved[1], _VARCHAR_LIMITS["normalized_name"])
             if not display_name or not normalized_name:
                 continue
             unique.setdefault(normalized_name, display_name)
@@ -353,7 +445,10 @@ def build_recipe_ingredient_rows(
         quantity = parse_quantity(ingredient[1]) if len(ingredient) > 1 else None
         unit = _clip(ingredient[2], _VARCHAR_LIMITS["unit"]) if len(ingredient) > 2 else None
 
-        normalized_name = _clip(normalize_ingredient_name(raw_name), _VARCHAR_LIMITS["normalized_name"])
+        resolved = resolve_ingredient_name(raw_name)
+        if not resolved:
+            continue
+        normalized_name = _clip(resolved[1], _VARCHAR_LIMITS["normalized_name"])
         if not normalized_name:
             continue
         ingredient_id = ingredient_cache.get(normalized_name)
