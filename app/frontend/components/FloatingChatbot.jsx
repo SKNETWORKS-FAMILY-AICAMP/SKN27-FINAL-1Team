@@ -4,7 +4,7 @@ import mascot from '../assets/mascot.png'
 import './FloatingChatbot.css'
 
 const initialSettings = {
-  shortAnswer: true,
+  shortAnswer: false,
   fridgeFirst: true,
   expiringFirst: true,
   excludeDislikes: true,
@@ -17,6 +17,14 @@ const initialMessages = [
 // 봇 메시지를 한 글자씩 타이핑하듯 보여주는 애니메이션 컴포넌트입니다.
 function TypewriterMessage({ text, onTyping, onComplete }) {
   const [displayedText, setDisplayedText] = useState('')
+  const onTypingRef = useRef(onTyping)
+  const onCompleteRef = useRef(onComplete)
+
+  // 부모가 다시 렌더링되어도 진행 중인 타이핑 interval은 다시 시작하지 않고 최신 콜백만 참조합니다.
+  useEffect(() => {
+    onTypingRef.current = onTyping
+    onCompleteRef.current = onComplete
+  }, [onTyping, onComplete])
 
   useEffect(() => {
     setDisplayedText('')
@@ -26,16 +34,16 @@ function TypewriterMessage({ text, onTyping, onComplete }) {
       index += 1
       if (index >= text.length) {
         clearInterval(interval)
-        onComplete?.()
+        onCompleteRef.current?.()
       }
     }, 30)
 
     return () => clearInterval(interval)
-  }, [text, onComplete])
+  }, [text])
 
   useEffect(() => {
-    onTyping?.()
-  }, [displayedText, onTyping])
+    onTypingRef.current?.()
+  }, [displayedText])
 
   return <p style={{ whiteSpace: 'pre-wrap' }}>{displayedText}</p>
 }
@@ -64,13 +72,15 @@ function FloatingChatbot() {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       const token = localStorage.getItem('bobbeori-token')
+      const headers = { 'Content-Type': 'application/json' }
+      // 비회원 챗봇 요청은 Authorization 헤더 없이 보내 게스트로 처리합니다.
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers.Authorization = `Bearer ${token}`
+      }
       // 입력 메시지를 백엔드 챗봇 라우터로 전달합니다.
       const response = await fetch(`${apiUrl}/api/v1/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           message: trimmed,
           history: messages.filter((item) => !item.isTyping).map((item) => ({ role: item.role, text: item.text })),
@@ -182,7 +192,11 @@ function FloatingChatbot() {
               <div className="floating-chatbot__message-row is-bot">
                 <img className="floating-chatbot__bot-avatar" src={mascot} alt="" />
                 <div className="floating-chatbot__message is-bot">
-                  <p>...</p>
+                  <div className="floating-chatbot__typing" aria-label="챗봇 응답 작성 중">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
                 </div>
               </div>
             ) : null}

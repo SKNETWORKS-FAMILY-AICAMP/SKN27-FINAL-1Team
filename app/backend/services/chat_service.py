@@ -32,6 +32,18 @@ class ChatService:
         actions: list[dict[str, Any]] = []
         sources: list[dict[str, str]] = []
 
+        if self._is_login_status_question(text):
+            reply = "현재 로그인된 상태예요." if user_id else "현재 비로그인 상태예요. 보관법이나 일반 레시피 검색은 이용할 수 있어요."
+            return {"intent": "auth.status", "reply": reply, "actions": [], "sources": []}
+
+        if self._requires_login(intent, text) and user_id == 0:
+            return {
+                "intent": intent,
+                "reply": "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요.",
+                "actions": [],
+                "sources": [],
+            }
+
         try:
             if intent == "inventory.list":
                 reply = self._reply_inventory_list(db, user_id)
@@ -72,6 +84,21 @@ class ChatService:
 
         return {"intent": intent, "reply": reply, "actions": actions, "sources": sources}
 
+    def _is_login_status_question(self, text: str) -> bool:
+        """사용자가 현재 로그인 상태를 묻는 문장인지 확인합니다."""
+        normalized = text.replace(" ", "").lower()
+        return "로그인" in normalized and any(word in normalized for word in ("되어", "됐", "되있", "상태", "했", "했어"))
+    def _requires_login(self, intent: str, text: str) -> bool:
+        """개인 냉장고 데이터가 필요한 챗봇 의도인지 확인합니다."""
+        normalized = text.replace(" ", "").lower()
+        personal_recipe_words = ("내식재료", "내재료", "보유식재료", "보유재료", "냉장고재료", "있는걸로", "이걸로")
+        if intent in ("inventory.list", "inventory.expiring"):
+            return True
+        if intent == "recipe.recommend" and any(word in normalized for word in personal_recipe_words):
+            return True
+        if intent == "recipe.recommend" and not self._extract_recipe_ingredient(text):
+            return True
+        return False
     def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
         """LangChain LLM을 활용하여 대화 문맥(history)과 현재 메시지로 의도를 파악합니다."""
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
@@ -130,7 +157,7 @@ class ChatService:
             
         if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")):
             return "recipe.recommend"
-        if "레시피" in normalized or "요리" in normalized:
+        if any(word in normalized for word in ("레시피", "요리", "에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간")):
             return "recipe.search"
             
         if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "신선", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
@@ -163,7 +190,7 @@ class ChatService:
             return ""
 
         keyword = match.group(1).strip()
-        if keyword in ("걸", "있는", "이걸", "이것", "그걸", "그것", "재료", "냉장고"):
+        if keyword in ("걸", "있는", "이걸", "이것", "그걸", "그것", "재료", "식재료", "보유재료", "냉장고"):
             return ""
         return self._normalize_recipe_keyword(keyword)
 
@@ -313,7 +340,15 @@ class ChatService:
 
         if not tip:
             return f"{item['name']} 가이드는 찾았지만 보관법 정보가 비어 있어요.", []
-        return f"{item['name']} 보관법이에요.\n{self._format_guide_tip(tip)}", []
+
+        formatted_tip = self._format_guide_tip(tip)
+        if len(formatted_tip) < 45:
+            extra_reply, extra_sources = self._reply_external_guide(keyword)
+            extra_tip = extra_reply.split("\n\n", 1)[-1] if "\n\n" in extra_reply else ""
+            if extra_tip and "찾지 못했어요" not in extra_reply and "연결이 불안정" not in extra_reply:
+                return f"{item['name']} 보관법이에요.\n{formatted_tip}\n\n추가로 참고하면 좋아요.\n{extra_tip}", extra_sources
+
+        return f"{item['name']} 보관법이에요.\n{formatted_tip}", []
 
     def _is_relevant_search_result(self, keyword: str, item: dict[str, Any]) -> bool:
         """검색 결과가 질문 핵심어를 실제로 포함하는지 확인합니다."""
