@@ -213,6 +213,12 @@ function Fridge() {
   }, [])
 
   useEffect(() => {
+    // 챗봇에서 재료 등록/소비가 끝나면 냉장고 목록을 즉시 다시 불러옵니다.
+    window.addEventListener('bobbeori:inventory-updated', fetchFridgeData)
+    return () => window.removeEventListener('bobbeori:inventory-updated', fetchFridgeData)
+  }, [])
+
+  useEffect(() => {
     if (!getToken()) setSummary(buildSummary(ingredients))
   }, [ingredients])
 

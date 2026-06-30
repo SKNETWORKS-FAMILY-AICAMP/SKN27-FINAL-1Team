@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 from fastapi import HTTPException, status
@@ -432,6 +433,19 @@ class InventoryService:
 
         return summary
         
+    def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
+        """챗봇(MCP)에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
+        data = IngredientCreate(
+            name=ingredient_name.strip(),
+            category=None,
+            quantity=quantity or 1.0,
+            unit="\uac1c",
+            storage_method=storage_method,
+        )
+        item = self.add_ingredient(db, user_id, data)
+        display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
+        return f"'{item['name']}'\uc744(\ub97c) {display_quantity}{item['unit']} {item['storage_method']}\uc5d0 \ucd94\uac00\ud588\uc5b4\uc694."
+
     def consume_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
         """챗봇(MCP)에서 식재료 이름과 소비 수량을 받아 재고를 차감하거나 삭제합니다."""
         # 사용자의 활성 식재료 목록 조회
@@ -460,8 +474,9 @@ class InventoryService:
             return f"냉장고에서 '{ingredient_name}'을(를) 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
             
         # 수량 차감
-        current_qty = target_item.quantity or 1.0
-        new_qty = current_qty - quantity
+        current_qty = target_item.quantity or Decimal("1")
+        consume_qty = Decimal(str(quantity or 1))
+        new_qty = current_qty - consume_qty
         
         if new_qty <= 0:
             target_item.status = "used"
@@ -470,7 +485,9 @@ class InventoryService:
         else:
             target_item.quantity = new_qty
             db.commit()
-            return f"'{ingredient_name}'을(를) {quantity}개 소비했습니다. (남은 수량: {new_qty})"
+            display_quantity = int(consume_qty) if consume_qty == consume_qty.to_integral() else consume_qty
+            display_remaining = int(new_qty) if new_qty == new_qty.to_integral() else new_qty
+            return f"'{ingredient_name}'을(를) {display_quantity}개 소비했습니다. (남은 수량: {display_remaining})"
 
 
 

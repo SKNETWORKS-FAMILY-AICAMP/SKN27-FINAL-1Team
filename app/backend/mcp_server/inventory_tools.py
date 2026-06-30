@@ -17,7 +17,7 @@ def consume_ingredient_tool(ingredient_name: str, quantity: float) -> str:
 class AddIngredientInput(BaseModel):
     ingredient_name: str = Field(description="새로 추가할 식재료의 이름")
     quantity: float = Field(description="추가할 수량")
-    storage_method: str = Field(description="보관 방법 (냉장, 냉동, 실온 중 택 1)")
+    storage_method: str = Field(default="\ub0c9\uc7a5", description="보관 방법 (냉장, 냉동, 실온 중 택 1)")
 
 @tool("add_ingredient", args_schema=AddIngredientInput)
 def add_ingredient_tool(ingredient_name: str, quantity: float, storage_method: str) -> str:

@@ -71,6 +71,7 @@ class ChatService:
             actions = final_state.get("actions") or []
             sources = final_state.get("sources") or []
         except Exception as e:
+            print(f"[ChatService] graph failed: {type(e).__name__}: {e}")
             intent = "error"
             reply = "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
             actions = []

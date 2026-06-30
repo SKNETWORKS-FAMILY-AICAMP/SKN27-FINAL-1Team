@@ -14,6 +14,22 @@ const initialMessages = [
   { role: 'bot', text: '안녕하세요. 레시피, 보관법, 장보기를 도와드릴게요.' },
 ]
 
+// 응답 안의 '재료명' 표기를 작은 강조 배지로 바꿔 보여줍니다.
+function MessageText({ text }) {
+  return (
+    <p>
+      {String(text).split(/'([^']+)'/g).map((part, index) =>
+        index % 2 ? (
+          <span className="floating-chatbot__ingredient" key={`${part}-${index}`}>
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </p>
+  )
+}
 // 봇 메시지를 한 글자씩 타이핑하듯 보여주는 애니메이션 컴포넌트입니다.
 function TypewriterMessage({ text, onTyping, onComplete }) {
   const [displayedText, setDisplayedText] = useState('')
@@ -45,7 +61,7 @@ function TypewriterMessage({ text, onTyping, onComplete }) {
     onTypingRef.current?.()
   }, [displayedText])
 
-  return <p style={{ whiteSpace: 'pre-wrap' }}>{displayedText}</p>
+  return <MessageText text={displayedText} />
 }
 
 function FloatingChatbot() {
@@ -61,11 +77,13 @@ function FloatingChatbot() {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
   }, [messages, isSending, isOpen])
 
-  const requestChat = async (text) => {
+  // 확인 버튼은 내부 명령을 보내되 사용자에게는 버튼 라벨만 보여줍니다.
+  const requestChat = async (text, displayText = text) => {
     const trimmed = text.trim()
+    const visibleText = displayText.trim()
     if (!trimmed || isSending) return
 
-    setMessages((prev) => [...prev, { role: 'user', text: trimmed }])
+    setMessages((prev) => [...prev, { role: 'user', text: visibleText }])
     setMessage('')
     setIsSending(true)
 
@@ -92,6 +110,10 @@ function FloatingChatbot() {
       if (!response.ok) throw new Error('chat request failed')
 
       const data = await response.json()
+      // 냉장고 쓰기 작업이 끝난 응답이면 현재 화면의 목록을 새로고침합니다.
+      if ((data.actions || []).some((action) => action.data?.refreshInventory)) {
+        window.dispatchEvent(new CustomEvent('bobbeori:inventory-updated'))
+      }
       setMessages((prev) => [
         ...prev,
         { role: 'bot', text: data.reply, actions: data.actions || [], sources: data.sources || [], isTyping: true },
@@ -157,18 +179,29 @@ function FloatingChatbot() {
                         }}
                       />
                     ) : (
-                      <p style={{ whiteSpace: 'pre-wrap' }}>{item.text}</p>
+                      <MessageText text={item.text} />
                     )
                   ) : (
                     <p>{item.text}</p>
                   )}
-                  {item.actions?.length ? (
+                  {item.actions?.some((action) => !action.data?.refreshInventory) ? (
                     <div className="floating-chatbot__actions">
-                      {item.actions.map((action, actionIndex) => (
+                      {item.actions.filter((action) => !action.data?.refreshInventory).map((action, actionIndex) => (
                         <button
                           type="button"
                           key={`${action.label}-${actionIndex}`}
-                          onClick={() => action.url && navigate(action.url)}
+                          onClick={() => {
+                            // 챗봇 액션은 메시지 전송, 냉장고 갱신, 페이지 이동 중 하나로 처리합니다.
+                            if (action.data?.message) {
+                              requestChat(action.data.message, action.label)
+                              return
+                            }
+                            if (action.data?.refreshInventory) {
+                              window.dispatchEvent(new CustomEvent('bobbeori:inventory-updated'))
+                              return
+                            }
+                            if (action.url) navigate(action.url)
+                          }}
                         >
                           {action.label}
                         </button>
