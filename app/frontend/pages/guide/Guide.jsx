@@ -45,6 +45,10 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+function hasLoginToken() {
+  return Boolean(window.localStorage.getItem('bobbeori-token'))
+}
+
 function splitTipText(text) {
   if (!text) return ['등록된 정보가 없습니다.']
   return String(text)
@@ -137,8 +141,65 @@ function Guide() {
   const [isListLoading, setIsListLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isRecipeLoading, setIsRecipeLoading] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(hasLoginToken)
+  const [fridgeIngredients, setFridgeIngredients] = useState([])
+  const [isFridgeLoading, setIsFridgeLoading] = useState(false)
+  const [fridgeErrorMessage, setFridgeErrorMessage] = useState('')
   const [recipeErrorMessage, setRecipeErrorMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    const syncLoginState = () => setIsLoggedIn(hasLoginToken())
+
+    window.addEventListener('storage', syncLoginState)
+    window.addEventListener('bobbeori-auth-change', syncLoginState)
+    return () => {
+      window.removeEventListener('storage', syncLoginState)
+      window.removeEventListener('bobbeori-auth-change', syncLoginState)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setFridgeIngredients([])
+      setFridgeErrorMessage('')
+      setIsFridgeLoading(false)
+      return undefined
+    }
+
+    const controller = new AbortController()
+    async function loadFridgeIngredients() {
+      setIsFridgeLoading(true)
+      setFridgeErrorMessage('')
+      try {
+        const response = await fetch(`${apiUrl}/api/v1/inventory`, {
+          headers: getAuthHeaders(),
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('냉장고 재료를 불러오지 못했습니다.')
+
+        const data = await response.json()
+        const uniqueNames = new Set()
+        const ingredients = (Array.isArray(data) ? data : []).filter((ingredient) => {
+          const normalizedName = String(ingredient?.name || '').replace(/\s/g, '').toLowerCase()
+          if (!normalizedName || uniqueNames.has(normalizedName)) return false
+          uniqueNames.add(normalizedName)
+          return true
+        })
+        setFridgeIngredients(ingredients.slice(0, 6))
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setFridgeIngredients([])
+          setFridgeErrorMessage(error.message)
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsFridgeLoading(false)
+      }
+    }
+
+    loadFridgeIngredients()
+    return () => controller.abort()
+  }, [isLoggedIn])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -204,7 +265,7 @@ function Guide() {
         const data = await response.json()
         setCategoryOptions((current) => ({
           major_categories: selectedMajorCategory ? current.major_categories : data.major_categories || [],
-          middle_categories: data.middle_categories || [],
+          middle_categories: selectedMiddleCategory ? current.middle_categories : data.middle_categories || [],
         }))
       } catch (error) {
         if (error.name !== 'AbortError') {
@@ -293,7 +354,8 @@ function Guide() {
     return () => controller.abort()
   }, [selectedGuide])
 
-  const fridgeIngredients = guideItems.slice(0, 6)
+  const searchSuggestions = guideItems.slice(0, 6)
+  const featuredIngredients = isLoggedIn ? fridgeIngredients : searchSuggestions
   const totalPages = Math.max(1, Math.ceil(totalCount / GUIDE_PAGE_SIZE))
   const guideTips = useMemo(() => buildGuideTips(selectedGuide), [selectedGuide])
   const selectedTip = guideTips.find((tip) => tip.title === selectedTipTitle) ?? guideTips[0]
@@ -313,6 +375,44 @@ function Guide() {
 
   const selectIngredient = (ingredient) => {
     navigate(`/guide/${encodeURIComponent(ingredient.code)}`)
+  }
+
+  const selectFridgeIngredient = async (ingredient) => {
+    const normalizedName = String(ingredient?.name || '').replace(/\s/g, '').toLowerCase()
+    const loadedMatch = guideItems.find(
+      (guide) => String(guide?.name || '').replace(/\s/g, '').toLowerCase() === normalizedName,
+    )
+    if (loadedMatch) {
+      selectIngredient(loadedMatch)
+      return
+    }
+
+    try {
+      const params = new URLSearchParams({
+        keyword: ingredient.name,
+        page: '1',
+        page_size: String(GUIDE_PAGE_SIZE),
+      })
+      const response = await fetch(`${apiUrl}/api/v1/guide?${params}`, { headers: getAuthHeaders() })
+      if (response.ok) {
+        const data = await response.json()
+        const exactMatch = (data.items || []).find(
+          (guide) => String(guide?.name || '').replace(/\s/g, '').toLowerCase() === normalizedName,
+        )
+        const guide = exactMatch || data.items?.[0]
+        if (guide) {
+          selectIngredient(guide)
+          return
+        }
+      }
+    } catch {
+      // 검색 화면에서 사용자가 가장 가까운 가이드를 선택할 수 있도록 이어갑니다.
+    }
+
+    setSelectedMajorCategory('')
+    setSelectedMiddleCategory('')
+    setSearchTerm(ingredient.name)
+    navigate('/guide')
   }
 
   const goToPage = (nextPage) => {
@@ -348,8 +448,8 @@ function Guide() {
             <div className="guide-search-suggestions" aria-live="polite">
               {isListLoading ? (
                 <p>검색 중...</p>
-              ) : fridgeIngredients.length ? (
-                fridgeIngredients.map((ingredient) => (
+              ) : searchSuggestions.length ? (
+                searchSuggestions.map((ingredient) => (
                   <button
                     key={ingredient.code}
                     type="button"
@@ -378,17 +478,20 @@ function Guide() {
 
       <section className="guide-panel guide-ingredients" aria-labelledby="guide-ingredients-title">
         <div className="guide-section-title" id="guide-ingredients-title">
-          추천 식재료
+          {isLoggedIn ? '내 냉장고 재료' : '추천 식재료'}
         </div>
-        <div className="guide-ingredient-list" aria-label="추천 식재료 목록">
-          {fridgeIngredients.map((ingredient) => (
+        <div
+          className="guide-ingredient-list"
+          aria-label={isLoggedIn ? '내 냉장고 재료 목록' : '추천 식재료 목록'}
+        >
+          {featuredIngredients.map((ingredient) => (
             <button
               className={`guide-ingredient ${
                 isDetailPage && selectedGuide?.code === ingredient.code ? 'is-active' : ''
               }`}
-              key={ingredient.code}
+              key={isLoggedIn ? `fridge-${ingredient.id}` : ingredient.code}
               type="button"
-              onClick={() => selectIngredient(ingredient)}
+              onClick={() => (isLoggedIn ? selectFridgeIngredient(ingredient) : selectIngredient(ingredient))}
             >
               <ImageSlot
                 alt=""
@@ -399,8 +502,18 @@ function Guide() {
               <span>{ingredient.name}</span>
             </button>
           ))}
-          {!isListLoading && fridgeIngredients.length === 0 ? (
-            <p className="guide-empty">검색 결과가 없습니다.</p>
+          {isLoggedIn && isFridgeLoading ? <p className="guide-empty">냉장고 재료를 불러오는 중입니다.</p> : null}
+          {isLoggedIn && !isFridgeLoading && fridgeErrorMessage ? (
+            <p className="guide-empty">{fridgeErrorMessage}</p>
+          ) : null}
+          {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
+            <div className="guide-empty guide-fridge-empty">
+              <strong>냉장고에 등록된 식재료가 없습니다.</strong>
+              <span>냉장고 재료를 등록해주세요.</span>
+            </div>
+          ) : null}
+          {!isLoggedIn && !isListLoading && searchSuggestions.length === 0 ? (
+            <p className="guide-empty">추천할 식재료가 없습니다.</p>
           ) : null}
         </div>
       </section>
@@ -409,7 +522,6 @@ function Guide() {
         <section className="guide-panel guide-all" aria-labelledby="guide-all-title">
           <div className="guide-category-tabs" aria-label="식재료 분류 선택">
             <div>
-              <strong>대분류</strong>
               <div className="guide-category-tab-list" role="group" aria-label="대분류">
                 <button
                   className={!selectedMajorCategory ? 'is-active' : ''}
@@ -435,7 +547,6 @@ function Guide() {
 
             {selectedMajorCategory ? (
               <div>
-                <strong>중분류</strong>
                 <div className="guide-category-tab-list" role="group" aria-label="중분류">
                   <button
                     className={!selectedMiddleCategory ? 'is-active' : ''}
@@ -509,16 +620,21 @@ function Guide() {
         </section>
       ) : (
         <>
-          <button className="guide-list-back" type="button" onClick={() => navigate('/guide')}>
-            전체 목록
-          </button>
-
           {isDetailLoading ? (
             <section className="guide-panel guide-detail guide-loading">가이드를 불러오는 중입니다.</section>
           ) : selectedGuide ? (
             <>
               <div className="guide-content-grid">
                 <article className="guide-panel guide-detail">
+                  <button
+                    className="guide-detail-back"
+                    type="button"
+                    aria-label="전체 식재료 목록으로 돌아가기"
+                    title="전체 목록"
+                    onClick={() => navigate('/guide')}
+                  >
+                    ←
+                  </button>
                   <div className="guide-detail__header">
                     <ImageSlot
                       alt=""
