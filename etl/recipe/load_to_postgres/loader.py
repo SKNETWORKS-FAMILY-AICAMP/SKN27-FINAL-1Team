@@ -133,6 +133,8 @@ _CANONICAL_REWRITES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^파\s*$"), "대파"),
     (re.compile(r"^대파\s*or\s*쪽파$"), "대파"),
 )
+# ponytail: 이름 필드에 붙은 분량만 제거. 영문+숫자+한글 브랜드명(A1스테이크소스)은 유지.
+_EMBEDDED_QUANTITY = re.compile(r"(?:\s+\d|(?<=[가-힣])\d)")
 
 
 def clean_ingredient_name(name: str) -> str | None:
@@ -144,7 +146,7 @@ def clean_ingredient_name(name: str) -> str | None:
     text = re.sub(r"[\s?]+$", "", text)
     if not text or text == "?":
         return None
-    text = re.split(r"\d", text, maxsplit=1)[0].strip()
+    text = _EMBEDDED_QUANTITY.split(text, maxsplit=1)[0].strip()
     if not text:
         return None
     changed = True

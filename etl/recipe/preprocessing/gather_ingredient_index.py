@@ -143,28 +143,36 @@ def _self_check() -> None:
     assert clean_ingredient_name("핫케익 가루") == "핫케이크가루"
     assert clean_ingredient_name("계핏가루") == "계피가루"
     assert clean_ingredient_name("들깻가루") == "들깨가루"
+    assert clean_ingredient_name("a1스테이크소스") == "a1스테이크소스"
+    assert clean_ingredient_name("계란 1개") == "계란"
+    assert clean_ingredient_name("쌀 1컵") == "쌀"
+    assert clean_ingredient_name("참치 1캔") == "참치"
 
     sample = pd.DataFrame(
         {
-            "RCP_SNO": [1, 2, 3],
+            "RCP_SNO": [1, 2, 3, 7024950],
             "CKG_MTRL_CN": [
                 "[['양파', '1', '개'], ['간장', '2', 't']]",
                 "[[' 양파', '1/2', '개'], ['설탕', '1', 't']]",
                 "[[' ?', '', ''], ['?식빵', '2', '장'], ['통깨 2숟갈', '2', '숟갈']]",
+                "[['a1스테이크소스', '3', 't'], [' 버터', '20', 'g']]",
             ],
         }
     )
     index = collect_ingredient_index(sample)
-    assert len(index) == 5
+    assert len(index) == 7
     assert "?" not in index
+    assert "a" not in index
     assert index["식빵"]["name"] == "식빵"
     assert index["통깨"]["name"] == "통깨"
     assert len(index["양파"]["recipe_ids"]) == 2
     assert index["양파"]["recipe_ids"] == {1, 2}
+    assert index["a1스테이크소스"]["name"] == "a1스테이크소스"
+    assert index["a1스테이크소스"]["recipe_ids"] == {7024950}
 
     result = build_index_dataframe(index)
-    assert list(result["ingredient_id"]) == [1, 2, 3, 4, 5]
-    assert result["recipe_count"].sum() == 6
+    assert list(result["ingredient_id"]) == [1, 2, 3, 4, 5, 6, 7]
+    assert result["recipe_count"].sum() == 8
     onion_row = result.loc[result["normalized_name"] == "양파"].iloc[0]
     assert json.loads(onion_row["recipe_ids"]) == [1, 2]
 
