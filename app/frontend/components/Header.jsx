@@ -165,7 +165,7 @@ function Header() {
             <span className="site-header__sr-only">재료명 또는 레시피 검색</span>
             <input
               type="search"
-              placeholder="재료명, 레시피 검색"
+              placeholder="레시피 검색"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
