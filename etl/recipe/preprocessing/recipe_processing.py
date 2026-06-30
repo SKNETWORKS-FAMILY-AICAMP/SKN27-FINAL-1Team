@@ -1,5 +1,10 @@
 import pathlib
 import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+if __package__ is None:
+    sys.path.insert(0, str(ROOT))
 
 import pandas as pd
 
@@ -143,9 +148,8 @@ def fill_nan_values(df: pd.DataFrame) -> pd.DataFrame:
 def main():
     ######################################################
     # 파일 경로 지정 
-    root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
-    file_path       = root / "storage" / "raw" / "recipe" / "recipe.csv"
-    new_file_path   = root / "storage" / "processed" / "recipe" / "recipe_process.csv"
+    file_path       = ROOT / "storage" / "raw" / "recipe" / "recipe.csv"
+    new_file_path   = ROOT / "storage" / "processed" / "recipe" / "recipe_process.csv"
     
     # 파일 로드 
     df = load_recipe_data(file_path)

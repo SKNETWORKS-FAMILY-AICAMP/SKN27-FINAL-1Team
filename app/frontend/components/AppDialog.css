@@ -41,6 +41,11 @@
 .app-dialog-card__header button {
   width: 34px;
   height: 34px;
+  padding: 0 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   border: 1px solid #efd8b8;
   border-radius: 50%;
   background: #fffaf2;

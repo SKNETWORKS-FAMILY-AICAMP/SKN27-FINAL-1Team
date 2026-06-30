@@ -18,7 +18,11 @@ python-multipart
 httpx
 python-dotenv>=1.0.0
 mcp>=1.27.0,<2.0.0
+pytest>=8.0.0
 
 # AI
 openai>=1.0.0
 tavily-python
+langchain
+langchain-openai
+langgraph

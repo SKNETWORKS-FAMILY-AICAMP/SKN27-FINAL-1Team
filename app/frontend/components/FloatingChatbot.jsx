@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import mascot from '../assets/mascot.png'
 import './FloatingChatbot.css'
 
@@ -6,7 +7,6 @@ const initialSettings = {
   shortAnswer: true,
   fridgeFirst: true,
   expiringFirst: true,
-  lowMissing: true,
   excludeDislikes: true,
 }
 
@@ -14,34 +14,98 @@ const initialMessages = [
   { role: 'bot', text: '안녕하세요. 레시피, 보관법, 장보기를 도와드릴게요.' },
 ]
 
+// 봇 메시지를 한 글자씩 타이핑하듯 보여주는 애니메이션 컴포넌트입니다.
+function TypewriterMessage({ text, onTyping, onComplete }) {
+  const [displayedText, setDisplayedText] = useState('')
+
+  useEffect(() => {
+    setDisplayedText('')
+    let index = 0
+    const interval = setInterval(() => {
+      setDisplayedText(text.slice(0, index + 1))
+      index += 1
+      if (index >= text.length) {
+        clearInterval(interval)
+        onComplete?.()
+      }
+    }, 30)
+
+    return () => clearInterval(interval)
+  }, [text, onComplete])
+
+  useEffect(() => {
+    onTyping?.()
+  }, [displayedText, onTyping])
+
+  return <p style={{ whiteSpace: 'pre-wrap' }}>{displayedText}</p>
+}
+
 function FloatingChatbot() {
+  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('chat')
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState(initialMessages)
-  const [settings, setSettings] = useState(initialSettings)
+  const [isSending, setIsSending] = useState(false)
+  const messagesEndRef = useRef(null)
+
+  // 새 메시지나 로딩 말풍선이 추가되면 마지막 응답으로 이동합니다.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages, isSending, isOpen])
+
+  const requestChat = async (text) => {
+    const trimmed = text.trim()
+    if (!trimmed || isSending) return
+
+    setMessages((prev) => [...prev, { role: 'user', text: trimmed }])
+    setMessage('')
+    setIsSending(true)
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const token = localStorage.getItem('bobbeori-token')
+      // 입력 메시지를 백엔드 챗봇 라우터로 전달합니다.
+      const response = await fetch(`${apiUrl}/api/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: trimmed,
+          history: messages.filter((item) => !item.isTyping).map((item) => ({ role: item.role, text: item.text })),
+          settings: initialSettings,
+        }),
+      })
+
+      if (response.status === 401) throw new Error('unauthorized')
+      if (!response.ok) throw new Error('chat request failed')
+
+      const data = await response.json()
+      setMessages((prev) => [
+        ...prev,
+        { role: 'bot', text: data.reply, actions: data.actions || [], sources: data.sources || [], isTyping: true },
+      ])
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'bot',
+          isTyping: true,
+          text:
+            error.message === 'unauthorized'
+              ? '로그인 토큰이 만료되었어요. 다시 로그인한 뒤 이용해주세요.'
+              : '챗봇 연결 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.',
+        },
+      ])
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   const sendMessage = (event) => {
     event.preventDefault()
-    const text = message.trim()
-    if (!text) return
-
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', text },
-      { role: 'bot', text: '아직 챗봇 연결 전이에요. 곧 실제 기능과 연결할게요.' },
-    ])
-    setMessage('')
-  }
-
-  const toggleSetting = (key) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
-
-  const resetMessages = () => {
-    if (window.confirm('대화를 정말 초기화할까요?')) {
-      setMessages(initialMessages)
-    }
+    requestChat(message)
   }
 
   return (
@@ -64,91 +128,81 @@ function FloatingChatbot() {
             </button>
           </header>
 
-          {activeTab === 'home' && (
-            <div className="floating-chatbot__empty">
-              <img src={mascot} alt="" />
-              <strong>밥벌이에게 물어보세요</strong>
-              <p>레시피, 보관법, 장보기까지 한 곳에서 도와드릴게요.</p>
-            </div>
-          )}
-
-          {activeTab === 'chat' && (
-            <>
-              <div className="floating-chatbot__messages">
-                {messages.map((item, index) => (
-                  <p className={`floating-chatbot__message is-${item.role}`} key={`${item.role}-${index}`}>
-                    {item.text}
-                  </p>
-                ))}
+          <div className="floating-chatbot__messages">
+            {messages.map((item, index) => (
+              <div className={`floating-chatbot__message-row is-${item.role}`} key={`${item.role}-${index}`}>
+                {item.role === 'bot' ? <img className="floating-chatbot__bot-avatar" src={mascot} alt="" /> : null}
+                <div className={`floating-chatbot__message is-${item.role}`}>
+                  {item.role === 'bot' ? (
+                    item.isTyping ? (
+                      <TypewriterMessage
+                        text={item.text}
+                        onTyping={() => messagesEndRef.current?.scrollIntoView({ block: 'end' })}
+                        onComplete={() => {
+                          setMessages((prev) => {
+                            const next = [...prev]
+                            next[index] = { ...next[index], isTyping: false }
+                            return next
+                          })
+                        }}
+                      />
+                    ) : (
+                      <p style={{ whiteSpace: 'pre-wrap' }}>{item.text}</p>
+                    )
+                  ) : (
+                    <p>{item.text}</p>
+                  )}
+                  {item.actions?.length ? (
+                    <div className="floating-chatbot__actions">
+                      {item.actions.map((action, actionIndex) => (
+                        <button
+                          type="button"
+                          key={`${action.label}-${actionIndex}`}
+                          onClick={() => action.url && navigate(action.url)}
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {item.sources?.length ? (
+                    <div className="floating-chatbot__sources">
+                      출처
+                      {item.sources.map((source) => (
+                        <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                          {source.title}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-
-              <form className="floating-chatbot__form" onSubmit={sendMessage}>
-                <input
-                  type="text"
-                  value={message}
-                  placeholder="메시지를 입력하세요..."
-                  onChange={(event) => setMessage(event.target.value)}
-                />
-                <button type="submit" aria-label="메시지 전송">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 12.5 19.5 5 16 20l-4.2-6.1L4 12.5Z" />
-                    <path d="m11.8 13.9 3.9-4.2" />
-                  </svg>
-                </button>
-              </form>
-            </>
-          )}
-
-          {activeTab === 'settings' && (
-            <div className="floating-chatbot__settings">
-              <div className="floating-chatbot__settings-profile">
-                <img src={mascot} alt="" />
-                <strong>밥벌이</strong>
-                <p>냉장고 도우미 챗봇</p>
+            ))}
+            {isSending ? (
+              <div className="floating-chatbot__message-row is-bot">
+                <img className="floating-chatbot__bot-avatar" src={mascot} alt="" />
+                <div className="floating-chatbot__message is-bot">
+                  <p>...</p>
+                </div>
               </div>
+            ) : null}
+            <div ref={messagesEndRef} />
+          </div>
 
-              <button type="button" onClick={() => toggleSetting('shortAnswer')}>
-                <span>간단히 답변</span>
-                <i className={settings.shortAnswer ? 'is-on' : ''} />
-              </button>
-              <button type="button" onClick={() => toggleSetting('fridgeFirst')}>
-                <span>냉장고 재료 우선</span>
-                <i className={settings.fridgeFirst ? 'is-on' : ''} />
-              </button>
-              <button type="button" onClick={() => toggleSetting('expiringFirst')}>
-                <span>소비 임박 재료 우선</span>
-                <i className={settings.expiringFirst ? 'is-on' : ''} />
-              </button>
-              <button type="button" onClick={() => toggleSetting('lowMissing')}>
-                <span>부족 재료 적게</span>
-                <i className={settings.lowMissing ? 'is-on' : ''} />
-              </button>
-              <button type="button" onClick={() => toggleSetting('excludeDislikes')}>
-                <span>비선호 재료 제외</span>
-                <i className={settings.excludeDislikes ? 'is-on' : ''} />
-              </button>
-
-              <button className="floating-chatbot__reset" type="button" onClick={resetMessages}>
-                대화 초기화
-              </button>
-            </div>
-          )}
-
-          <nav className="floating-chatbot__tabs" aria-label="챗봇 메뉴">
-            <button className={activeTab === 'home' ? 'is-active' : ''} type="button" onClick={() => setActiveTab('home')}>
-              홈
+          <form className="floating-chatbot__form" onSubmit={sendMessage}>
+            <input
+              type="text"
+              value={message}
+              placeholder="메시지를 입력하세요..."
+              onChange={(event) => setMessage(event.target.value)}
+            />
+            <button type="submit" aria-label="메시지 전송">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 12.5 19.5 5 16 20l-4.2-6.1L4 12.5Z" />
+                <path d="m11.8 13.9 3.9-4.2" />
+              </svg>
             </button>
-            <button className={activeTab === 'chat' ? 'is-active' : ''} type="button" onClick={() => setActiveTab('chat')}>
-              대화
-            </button>
-            <button
-              className={activeTab === 'settings' ? 'is-active' : ''}
-              type="button"
-              onClick={() => setActiveTab('settings')}
-            >
-              설정
-            </button>
-          </nav>
+          </form>
         </section>
       )}
 

@@ -1,9 +1,14 @@
 import pathlib
+import sys
 import pandas as pd
 import random
 import time
 import json
 from tqdm import tqdm
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+if __package__ is None:
+    sys.path.insert(0, str(ROOT))
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -193,9 +198,8 @@ def crawling_recipe(df_cooking_step: pd.DataFrame) -> pd.DataFrame:
 def main():
     ######################################################
     # 파일 경로 지정 
-    root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
-    recipe_file_path            = root / "storage" / "processed" / "recipe" / "recipe_fix.csv"
-    cooking_step_file_path      = root / "storage" / "raw" / "recipe" / "cooking_steps.csv"
+    recipe_file_path            = ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
+    cooking_step_file_path      = ROOT / "storage" / "raw" / "recipe" / "cooking_steps.csv"
     
     # 파일 로드 
     df_recipe = load_csv_data(recipe_file_path)

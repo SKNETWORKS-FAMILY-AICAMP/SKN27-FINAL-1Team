@@ -20,6 +20,7 @@ def build_recipe_query(
     difficulty: str | None = None,
     max_cooking_time_min: int | None = None,
     cooking_time_label: str | None = None,
+    main_ingredient_only: bool = False,
 ) -> Query:
     query_recipes = db.query(Recipe)
 
@@ -43,6 +44,8 @@ def build_recipe_query(
             .distinct()
         )
 
+        if main_ingredient_only:
+            query_recipes = query_recipes.filter(RecipeIngredient.is_main_ingredient.is_(True))
     normalized_category = (category or "").strip()
     if normalized_category and normalized_category != "전체":
         query_recipes = query_recipes.filter(Recipe.category == normalized_category)
