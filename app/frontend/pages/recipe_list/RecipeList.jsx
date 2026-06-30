@@ -8,8 +8,6 @@ import imageRecommendation from "../../assets/extracted/images/image_recommendat
 
 import imageSearch from "../../assets/extracted/images/image_search.png";
 
-import { recipeQuickMenus } from "../../mock/recipeListMock.js";
-
 import { RecipeFilterConfig } from "./recipeFilterConfig.js";
 
 const PAGE_SIZE = 20;
@@ -33,12 +31,11 @@ const difficultyOptions = RecipeFilterConfig.toSelectOptions(
 
 /** 개별 기능 연결 시 true로 전환 */
 const FEATURE_FLAGS = {
-  quickMenu: false,
   categoryFilter: true,
   timeFilter: true,
   levelFilter: true,
   sortFilter: false,
-  savedRecipes: false,
+  savedRecipes: true,
 };
 
 function ImageSlot({ src, alt = "", className = "" }) {
@@ -122,8 +119,6 @@ function RecipeList() {
 
   const [sortBy, setSortBy] = useState(RecipeFilterConfig.sortOptions[0].value);
 
-  const [showSavedOnly, setShowSavedOnly] = useState(false);
-
   const [savedIds, setSavedIds] = useState([]);
 
   const lastSearchRef = useRef(location.search);
@@ -205,7 +200,7 @@ function RecipeList() {
   }, [location.search, page, criteria, fetchPage]);
 
   const hasActiveFilter =
-    hasActiveFilters(criteria) || criteria.browseAll || showSavedOnly;
+    hasActiveFilters(criteria) || criteria.browseAll;
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -251,48 +246,6 @@ function RecipeList() {
     });
   };
 
-  const handleQuickMenu = (title) => {
-    if (!FEATURE_FLAGS.quickMenu) {
-      return;
-    }
-
-    setShowSavedOnly(false);
-    setSortBy(RecipeFilterConfig.sortOptions[0].value);
-
-    if (title === "인기 레시피") {
-      setSortBy("인기순");
-      navigate("/recipes");
-      return;
-    }
-
-    if (title === "간단 레시피") {
-      navigateToCriteria({
-        query: "",
-        category: RecipeFilterConfig.FILTER_ALL,
-        timeFilter: "15분이내",
-        levelFilter: "초급",
-        browseAll: false,
-      });
-      return;
-    }
-
-    if (title === "요리 입문") {
-      navigateToCriteria({
-        query: "",
-        category: RecipeFilterConfig.FILTER_ALL,
-        timeFilter: RecipeFilterConfig.FILTER_ALL,
-        levelFilter: "초급",
-        browseAll: false,
-      });
-      return;
-    }
-
-    if (title === "저장한 레시피") {
-      setShowSavedOnly(true);
-      navigate("/recipes");
-    }
-  };
-
   const toggleSaved = (recipeId) => {
     if (!FEATURE_FLAGS.savedRecipes) {
       return;
@@ -306,8 +259,6 @@ function RecipeList() {
   };
 
   const resetFilters = () => {
-    setShowSavedOnly(false);
-
     setSortBy(RecipeFilterConfig.sortOptions[0].value);
 
     navigate("/recipes");
@@ -315,15 +266,13 @@ function RecipeList() {
 
   const showNoResults = !isLoading && !error && recipes.length === 0;
 
-  const resultsTitle = showSavedOnly
-    ? "저장한 레시피"
-    : criteria.query
-      ? "검색 결과"
-      : criteria.browseAll
-        ? "전체 레시피"
-        : hasActiveFilters(criteria)
-          ? "필터 결과"
-          : "전체 레시피";
+  const resultsTitle = criteria.query
+    ? "검색 결과"
+    : criteria.browseAll
+      ? "전체 레시피"
+      : hasActiveFilters(criteria)
+        ? "필터 결과"
+        : "전체 레시피";
 
   const resultsCount = total;
 
@@ -365,36 +314,6 @@ function RecipeList() {
         </div>
 
         <ImageSlot className="recipe-list-hero__image" src={imageSearch} />
-      </div>
-
-      <div
-        className={`recipe-list-quick${FEATURE_FLAGS.quickMenu ? "" : " is-pending"}`}
-        aria-label="레시피 바로가기"
-        aria-disabled={!FEATURE_FLAGS.quickMenu}
-      >
-        {recipeQuickMenus.map((menu) => (
-          <button
-            className="recipe-list-quick-card"
-            type="button"
-            key={menu.title}
-            disabled={!FEATURE_FLAGS.quickMenu}
-            title={
-              FEATURE_FLAGS.quickMenu ? menu.title : "준비 중인 기능입니다"
-            }
-            onClick={() => handleQuickMenu(menu.title)}
-          >
-            <ImageSlot
-              className={`recipe-list-quick-card__icon is-${menu.mark || "image"}`}
-              src={menu.image}
-            />
-
-            <span>
-              <strong>{menu.title}</strong>
-
-              <small>{menu.description}</small>
-            </span>
-          </button>
-        ))}
       </div>
 
       <section
