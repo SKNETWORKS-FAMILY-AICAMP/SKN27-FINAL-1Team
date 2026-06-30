@@ -811,6 +811,125 @@ a.guide-owned-badge::after {
   content: "↗";
 }
 
+.guide-suggestion {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #f0cfc3;
+  border-radius: 14px;
+  background: #fff8f5;
+}
+
+.guide-suggestion__intro h3 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.guide-suggestion__intro p,
+.guide-suggestion__message {
+  margin: 6px 0 0;
+  color: #765746;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.guide-suggestion__open,
+.guide-suggestion__actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #eab5a9;
+  border-radius: 10px;
+  background: #fff;
+  color: #9b493e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.guide-suggestion__open {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.guide-suggestion__open:hover,
+.guide-suggestion__open:focus-visible,
+.guide-suggestion__actions button:hover,
+.guide-suggestion__actions button:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.12);
+  outline: 0;
+}
+
+.guide-suggestion__form {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.guide-suggestion__form label {
+  display: grid;
+  gap: 6px;
+  color: #68493a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guide-suggestion__form input,
+.guide-suggestion__form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e8cfc4;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.guide-suggestion__form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.guide-suggestion__form input:focus,
+.guide-suggestion__form textarea:focus {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.1);
+  outline: 0;
+}
+
+.guide-suggestion__source-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guide-suggestion__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.guide-suggestion__actions button:last-child {
+  border-color: var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.guide-suggestion__actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.guide-suggestion__message {
+  color: #a1473f;
+}
+
 .guide-tip-nutrition {
   margin-top: auto;
   padding-top: 18px;
@@ -1300,6 +1419,10 @@ a.guide-owned-badge::after {
 
   .guide-tip-detail li {
     font-size: 13px;
+  }
+
+  .guide-suggestion__source-fields {
+    grid-template-columns: 1fr;
   }
 
   .guide-recipes {

@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
-from app.backend.api.deps import get_current_user
+from app.backend.api.deps import get_current_user, get_current_user_required
+from app.backend.db.session import get_db
 from app.backend.schemas.guide import (
+    FoodGuideSuggestionCreate,
+    FoodGuideSuggestionResponse,
     GuideCategoryOptions,
     GuideDetailResponse,
     GuideListResponse,
@@ -47,6 +51,29 @@ def get_guide_categories(
         major_category=major_category,
         middle_category=middle_category,
     )
+
+
+@router.post(
+    "/suggestions",
+    response_model=FoodGuideSuggestionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_food_guide_suggestion(
+    request_data: FoodGuideSuggestionCreate,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """정보가 없는 식재료 가이드 항목의 사용자 제보를 저장합니다."""
+    try:
+        return guide_service.create_suggestion(
+            db=db,
+            user_id=current_user_id,
+            data=request_data,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (ValueError, FileExistsError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get("/detail/{code}", response_model=GuideDetailResponse)
