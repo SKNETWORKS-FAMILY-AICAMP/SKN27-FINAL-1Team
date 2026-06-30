@@ -6,12 +6,14 @@ import pathlib
 import re
 import sys
 
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+if __package__ is None:
+    sys.path.insert(0, str(ROOT))
+
 import pandas as pd
 from tqdm import tqdm
 
 from etl.recipe.preprocessing.recipe_processing import save_recipe_data
-
-ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 CRAWL_DIR = ROOT / "storage" / "processed" / "crawling_recipes"
 REVIEW_CSV = ROOT / "storage" / "processed" / "recipe" / "review.csv"
 COMMENT_CSV = ROOT / "storage" / "processed" / "recipe" / "comment.csv"
@@ -120,6 +122,8 @@ def _clean_content(body: str, *, stop_markers: tuple[str, ...]) -> str:
 def parse_reviews(block: str) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for author, rest, body in _parse_h4_blocks(block):
+        if not author:
+            continue
         if author == CHEF_REPLY:
             continue
         if "icon_star2_on" not in rest:
@@ -140,6 +144,8 @@ def parse_reviews(block: str) -> list[dict[str, object]]:
 def parse_comments(block: str) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for author, rest, body in _parse_h4_blocks(block):
+        if not author:
+            continue
         if "icon_star2_on" in rest:
             continue
         content = _clean_content(body, stop_markers=_STOP_COMMENT)
@@ -181,6 +187,22 @@ def _assign_ids(rows: list[dict[str, object]]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df.insert(0, "id", range(1, len(df) + 1))
     return df
+
+
+def _assign_group_ids(review_df: pd.DataFrame, comment_df: pd.DataFrame) -> None:
+    names = pd.concat(
+        [
+            review_df.get("author_name", pd.Series(dtype=str)),
+            comment_df.get("author_name", pd.Series(dtype=str)),
+        ],
+        ignore_index=True,
+    ).dropna().astype(str).str.strip()
+    names = names[names != ""].unique()
+    # ponytail: sorted names → stable group_id across re-runs
+    mapping = {name: i + 1 for i, name in enumerate(sorted(names))}
+    for df in (review_df, comment_df):
+        if not df.empty:
+            df["group_id"] = df["author_name"].map(mapping).astype(int)
 
 
 def _self_check() -> None:
@@ -236,6 +258,18 @@ def _self_check() -> None:
     assert "javascript:" not in str(reviews_6926[0]["content"])
     assert not str(reviews_6926[0]["content"]).rstrip().endswith(")")
 
+    empty_author_block = (
+        "요리 후기 1\n"
+        "#### **** icon_star2_on icon_star2_on icon_star2_on icon_star2_on icon_star2_on\n"
+        "내용만 있고 작성자 없음\n"
+    )
+    assert parse_reviews(empty_author_block) == []
+
+    review_df = pd.DataFrame([{"id": 1, "recipe_id": 1, "author_name": "alice", "star_count": 5, "content": "x"}])
+    comment_df = pd.DataFrame([{"id": 1, "recipe_id": 2, "author_name": "alice", "content": "y"}])
+    _assign_group_ids(review_df, comment_df)
+    assert review_df["group_id"].iloc[0] == comment_df["group_id"].iloc[0] > 0
+
 
 def main() -> None:
     paths = sorted(CRAWL_DIR.glob("*.md"))
@@ -254,16 +288,19 @@ def main() -> None:
 
     review_df = _assign_ids(all_reviews)
     comment_df = _assign_ids(all_comments)
+    _assign_group_ids(review_df, comment_df)
 
     if review_df.empty:
-        review_df = pd.DataFrame(columns=["id", "recipe_id", "star_count", "author_name", "content"])
+        review_df = pd.DataFrame(
+            columns=["id", "recipe_id", "group_id", "star_count", "author_name", "content"]
+        )
     else:
-        review_df = review_df[["id", "recipe_id", "star_count", "author_name", "content"]]
+        review_df = review_df[["id", "recipe_id", "group_id", "star_count", "author_name", "content"]]
 
     if comment_df.empty:
-        comment_df = pd.DataFrame(columns=["id", "recipe_id", "author_name", "content"])
+        comment_df = pd.DataFrame(columns=["id", "recipe_id", "group_id", "author_name", "content"])
     else:
-        comment_df = comment_df[["id", "recipe_id", "author_name", "content"]]
+        comment_df = comment_df[["id", "recipe_id", "group_id", "author_name", "content"]]
 
     save_recipe_data(review_df, REVIEW_CSV)
     save_recipe_data(comment_df, COMMENT_CSV)
