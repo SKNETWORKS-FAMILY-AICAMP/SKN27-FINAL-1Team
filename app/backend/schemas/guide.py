@@ -1,4 +1,7 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 
 class GuideListItem(BaseModel):
@@ -62,3 +65,33 @@ class GuideDetailResponse(GuideListItem):
     freshness_source_name: str | None = Field(default=None, description="신선도 출처명")
     freshness_source_url: str | None = Field(default=None, description="신선도 출처 URL")
     nutrition_source_name: str | None = Field(default=None, description="영양 출처명")
+
+
+class FoodGuideSuggestionCreate(BaseModel):
+    ingredient_code: str = Field(min_length=1, max_length=100)
+    guide_type: Literal["storage", "prep", "washing", "freshness"]
+    content: str = Field(min_length=10, max_length=2000)
+    source_name: str | None = Field(default=None, max_length=255)
+    source_url: HttpUrl | None = None
+
+    @field_validator("ingredient_code", "content", "source_name", mode="before")
+    @classmethod
+    def strip_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
+class FoodGuideSuggestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ingredient_code: str
+    ingredient_name: str
+    guide_type: str
+    content: str
+    source_name: str | None = None
+    source_url: str | None = None
+    status: str
+    created_at: datetime
