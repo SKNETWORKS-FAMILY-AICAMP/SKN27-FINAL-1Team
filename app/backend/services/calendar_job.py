@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from app.backend.api.calendar.calendar_api import _build_daily_events, _create_event_once, _get_access_token
+from app.backend.api.calendar.calendar_api import _get_access_token, _sync_daily_events
 from app.backend.db.models import CalendarIntegration
 from app.backend.db.session import SessionLocal
 
@@ -22,18 +22,15 @@ async def sync_daily_calendar_events():
             for integration in integrations:
                 try:
                     access_token = await _get_access_token(integration, db)
-                    events = _build_daily_events(db, integration.user_id, today)
-                    for event_key, event in events:
-                        await _create_event_once(
-                            client,
-                            integration.calendar_id,
-                            access_token,
-                            event_key,
-                            event,
-                            db,
-                            integration.user_id,
-                            "daily",
-                        )
+                    await _sync_daily_events(
+                        client,
+                        db,
+                        integration.user_id,
+                        integration.calendar_id,
+                        access_token,
+                        today,
+                        "daily",
+                    )
                 except Exception as exc:
                     print(f"[CalendarJob] user_id={integration.user_id} failed: {exc}")
     finally:

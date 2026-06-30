@@ -40,12 +40,18 @@
   line-height: 1.55;
 }
 
-.guide-search {
-  box-sizing: border-box;
+.guide-search-wrap {
   grid-area: search;
   width: min(100%, 560px);
-  height: 46px;
   margin-top: -30px;
+  position: relative;
+  z-index: 2;
+}
+
+.guide-search {
+  box-sizing: border-box;
+  width: 100%;
+  height: 46px;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -93,6 +99,57 @@
 .guide-search input::placeholder {
   color: #9c8a7a;
   font-weight: 600;
+}
+
+.guide-search-suggestions {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  padding: 8px;
+  display: none;
+  gap: 4px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 14px;
+  background: #fffdf8;
+  box-shadow: 0 12px 28px rgba(69, 42, 25, 0.12);
+}
+
+.guide-search-wrap:focus-within .guide-search-suggestions {
+  display: grid;
+}
+
+.guide-search-suggestions button {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--figma-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.guide-search-suggestions button:hover,
+.guide-search-suggestions button:focus-visible {
+  background: #fff4e3;
+  outline: 0;
+}
+
+.guide-search-suggestions button span,
+.guide-search-suggestions p {
+  margin: 0;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.guide-search-suggestions p {
+  padding: 10px 12px;
 }
 
 .guide-hero__art {
@@ -322,38 +379,94 @@
   padding: 22px;
 }
 
-.guide-filter-bar {
-  margin-bottom: 18px;
+.guide-category-tabs {
+  margin: -22px -22px 20px;
+  padding: 18px 22px 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  align-items: end;
-  gap: 12px;
+  gap: 14px;
+  border-bottom: 1px solid #f1d9b3;
+  background: #fff9f1;
 }
 
-.guide-filter-bar label {
-  min-width: 0;
+.guide-category-tabs > div {
   display: grid;
-  gap: 6px;
+  gap: 7px;
+}
+
+.guide-category-tabs strong {
   color: #6f4b36;
   font-size: 12px;
   font-weight: 900;
 }
 
-.guide-filter-bar select {
-  box-sizing: border-box;
-  width: 100%;
-  height: 40px;
-  padding: 0 12px;
-  border: 1.4px solid #efd8b8;
-  border-radius: 12px;
-  background: #fffdf8;
-  color: var(--figma-text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
+.guide-category-tab-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 2px solid var(--figma-coral);
+  scrollbar-width: thin;
 }
 
-.guide-filter-bar button,
+.guide-category-tab-list button {
+  min-height: 40px;
+  margin-bottom: -2px;
+  padding: 0 17px;
+  flex: 0 0 auto;
+  border: 1.4px solid #efd8b8;
+  border-bottom: 2px solid var(--figma-coral);
+  border-radius: 10px 10px 0 0;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.guide-category-tab-list button:hover,
+.guide-category-tab-list button:focus-visible {
+  border-color: var(--figma-coral);
+  background: #fff0ec;
+  outline: 2px solid var(--figma-coral);
+  outline-offset: 2px;
+}
+
+.guide-category-tab-list button.is-active {
+  min-height: 44px;
+  border-color: var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
+  box-shadow: 0 -5px 12px rgba(255, 107, 116, 0.14);
+}
+
+.guide-category-tabs > div + div .guide-category-tab-list {
+  border-bottom-color: #71a957;
+}
+
+.guide-category-tabs > div + div .guide-category-tab-list button {
+  border-bottom-color: #71a957;
+}
+
+.guide-category-tabs > div + div .guide-category-tab-list button:hover,
+.guide-category-tabs > div + div .guide-category-tab-list button:focus-visible {
+  border-color: #71a957;
+  background: #eef8e8;
+  outline-color: #71a957;
+}
+
+.guide-category-tabs > div + div .guide-category-tab-list button.is-active {
+  border-color: #71a957;
+  background: #5f9848;
+  box-shadow: 0 -5px 12px rgba(95, 152, 72, 0.14);
+}
+
+.guide-pagination button:hover:not(:disabled) {
+  border-color: var(--figma-coral);
+  box-shadow: 0 8px 16px rgba(255, 107, 116, 0.1);
+}
+
 .guide-pagination button {
   min-height: 40px;
   padding: 0 14px;
@@ -365,12 +478,6 @@
   font: inherit;
   font-size: 13px;
   font-weight: 900;
-}
-
-.guide-filter-bar button:hover,
-.guide-pagination button:hover:not(:disabled) {
-  border-color: var(--figma-coral);
-  box-shadow: 0 8px 16px rgba(255, 107, 116, 0.1);
 }
 
 .guide-pagination button:disabled {
@@ -540,7 +647,7 @@
   min-height: 0;
   padding: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   column-gap: 12px;
   border: 1.4px solid #efd8b8;
@@ -607,25 +714,10 @@
   margin-top: 6px;
 }
 
-.guide-tip-card strong {
-  min-height: 28px;
-  margin-top: 0;
-  padding: 0 11px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: start;
-  justify-self: end;
-  border: 1px solid #efd8b8;
-  border-radius: 999px;
-  background: #fffaf2;
-  color: #8b673e;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .guide-tip-detail {
   padding: 28px;
+  display: flex;
+  flex-direction: column;
   align-self: stretch;
 }
 
@@ -703,7 +795,7 @@
 }
 
 .guide-tip-nutrition {
-  margin-top: 24px;
+  margin-top: auto;
   padding-top: 18px;
   border-top: 1px solid #f1d9b3;
 }
@@ -815,6 +907,7 @@
 
 .guide-recipe-card {
   position: relative;
+  cursor: pointer;
 }
 
 .guide-recipe-card__image {
@@ -989,10 +1082,13 @@
     line-height: 1.5;
   }
 
-  .guide-search {
+  .guide-search-wrap {
     width: 100%;
-    height: 44px;
     margin-top: 18px;
+  }
+
+  .guide-search {
+    height: 44px;
   }
 
   .guide-hero__art {
@@ -1058,9 +1154,13 @@
     margin-top: 12px;
   }
 
-  .guide-filter-bar {
-    grid-template-columns: 1fr;
-    gap: 10px;
+  .guide-category-tabs {
+    margin: -16px -16px 16px;
+    padding: 14px 16px 0;
+  }
+
+  .guide-category-tab-list button {
+    padding: 0 14px;
   }
 
   .guide-all__header {
@@ -1167,12 +1267,6 @@
     border-right: 2px solid #6f4b36;
     content: "";
     transform: rotate(45deg);
-  }
-
-  .guide-tip-card strong {
-    min-height: 28px;
-    margin-top: 0;
-    font-size: 11px;
   }
 
   .guide-tip-detail li {

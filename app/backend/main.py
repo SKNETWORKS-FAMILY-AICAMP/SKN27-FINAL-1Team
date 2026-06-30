@@ -13,6 +13,7 @@ from app.backend.api.recommendations import recommendations_api
 from app.backend.api.shopping import shopping_api
 from app.backend.api.notifications import notifications_api
 from app.backend.api.calendar import calendar_api
+from app.backend.api.chat import chat_api
 from app.backend.services.calendar_job import daily_calendar_loop
 from app.backend.services.inventory_service.inventory_seed import seed_common_inventory_standards
 
@@ -46,6 +47,7 @@ app.include_router(recommendations_api.router, prefix=API_V1_PREFIX)
 app.include_router(shopping_api.router, prefix=API_V1_PREFIX)
 app.include_router(notifications_api.router, prefix=API_V1_PREFIX)
 app.include_router(calendar_api.router, prefix=API_V1_PREFIX)
+app.include_router(chat_api.router, prefix=API_V1_PREFIX)
 
 
 @app.on_event("startup")

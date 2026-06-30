@@ -28,3 +28,4 @@ RUNPOD_TIMEOUT_SECONDS=20
 MCP tool:
 
 - `create_calendar_event`: creates or updates one Google Calendar event using `bobbeoriKey`.
+- `delete_calendar_event`: deletes one Google Calendar event using `bobbeoriKey`.

@@ -1,10 +1,16 @@
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, File, Path, Query, UploadFile
+
+from fastapi import APIRouter, Depends, File, Path, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from app.backend.api.calendar.calendar_api import _create_event_once, _get_access_token, _get_google_integration
+from app.backend.api.calendar.calendar_api import (
+    _create_event_once,
+    _delete_event_once,
+    _get_access_token,
+    _get_google_integration,
+)
 from app.backend.api.deps import get_current_user_required
 from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
@@ -90,20 +96,20 @@ async def confirm_receipt_items(
     total_price = sum(item.item_amount or 0 for item in request_data.items)
     purchase_datetime = _parse_receipt_calendar_datetime(request_data.purchase_datetime)
 
-    if request_data.calendar_cost_enabled and total_price > 0 and purchase_datetime:
-        try:
-            # 영수증 입고 비용은 스케줄러가 아니라 확정 시점에 바로 캘린더에 남긴다.
-            integration = _get_google_integration(db, current_user_id)
-            access_token = await _get_access_token(integration, db)
-            event_key = f"receipt-cost-{current_user_id}-{request_data.receipt_id}"
-            event = {
-                "summary": f"식재료 사용비용 {total_price:,}원",
-                "description": f"OCR 입고 {len(request_data.items)}개 항목 기준 사용비용입니다.",
-                "start": {"dateTime": purchase_datetime.isoformat()},
-                "end": {"dateTime": (purchase_datetime + timedelta(minutes=10)).isoformat()},
-                "colorId": "6",
-            }
-            async with httpx.AsyncClient(timeout=10.0) as client:
+    try:
+        # 영수증 입고 비용은 스케줄러가 아니라 확정 시점에 바로 캘린더에 남기거나 정리한다.
+        integration = _get_google_integration(db, current_user_id)
+        access_token = await _get_access_token(integration, db)
+        event_key = f"receipt-cost-{current_user_id}-{request_data.receipt_id}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if request_data.calendar_cost_enabled and total_price > 0 and purchase_datetime:
+                event = {
+                    "summary": f"식재료 사용비용 {total_price:,}원",
+                    "description": f"OCR 입고 {len(request_data.items)}개 항목 기준 사용비용입니다.",
+                    "start": {"dateTime": purchase_datetime.isoformat()},
+                    "end": {"dateTime": (purchase_datetime + timedelta(minutes=10)).isoformat()},
+                    "colorId": "6",
+                }
                 await _create_event_once(
                     client,
                     integration.calendar_id,
@@ -114,7 +120,20 @@ async def confirm_receipt_items(
                     current_user_id,
                     "receipt",
                 )
-        except Exception as exc:
+            else:
+                await _delete_event_once(
+                    client,
+                    integration.calendar_id,
+                    access_token,
+                    event_key,
+                    db,
+                    current_user_id,
+                    "receipt",
+                )
+    except HTTPException as exc:
+        if exc.status_code != 404:
             print(f"[ReceiptCalendar] user_id={current_user_id} failed: {exc}")
+    except Exception as exc:
+        print(f"[ReceiptCalendar] user_id={current_user_id} failed: {exc}")
 
     return {"message": f"성공적으로 {saved_item_count}개 품목을 저장했습니다."}
