@@ -50,7 +50,7 @@ def _clip(value: str | None, max_len: int) -> str | None:
 
 _SIZE_STEM = r"(?:중간사이즈|중간크기|중사이즈|중간|중자|작은|큰)"
 _CJK_SIZE = r"[小大中]"
-_AMOUNT_HINT = r"(?:적당량|적당히|넉넉하게|넉넉히|원하는만큼|약간|톡톡|넉넉|솔솔|조금)"
+_AMOUNT_HINT = r"(?:적당량|적당히|넉넉하게|넉넉히|원하는만큼|약간|톡톡|넉넉|솔솔|조금|듬뿍)"
 _MODIFIER_SUFFIX_PATTERNS = (
     rf"\s+{_SIZE_STEM}\s*(?:거|것|캔|크기|사이즈)?$",
     rf"^{_SIZE_STEM}\s*(?:거|것|캔|크기|사이즈)?\s+",
@@ -67,8 +67,40 @@ _PREP_SUFFIX_PATTERNS = (
     r"(?<=\S)다진(?:것|거)$",
 )
 _AMOUNT_ONLY = frozenset(
-    "약간 톡톡 조금 적당량 적당히 넉넉 넉넉히 넉넉하게 솔솔 원하는만큼".split()
+    "약간 톡톡 조금 적당량 적당히 넉넉 넉넉히 넉넉하게 솔솔 원하는만큼 듬뿍".split()
 )
+# ponytail: 정규화 규칙은 이 파일에서만 관리한다.
+# 단순 오타·표기 흔들림은 clean_ingredient_name()에서 순차 적용한다.
+_TYPO_REWRITES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"크린베리"), "크랜베리"),
+    (re.compile(r"고은"), "고운"),
+    (re.compile(r"그라노파다노"), "그라나파다노"),
+    (re.compile(r"줄거리"), "줄기"),
+    (re.compile(r"핫케익"), "핫케이크"),
+    (re.compile(r"파인애풀"), "파인애플"),
+    (re.compile(r"고추가루"), "고춧가루"),
+    (re.compile(r"청양고추가루"), "청양고춧가루"),
+    (re.compile(r"계핏가루"), "계피가루"),
+    (re.compile(r"들깻가루"), "들깨가루"),
+    (re.compile(r"쇠고기"), "소고기"),
+)
+
+_PREFIX_PATTERNS = (
+    r"^다진\s+",
+    r"^다진(?=[가-힣])",
+    r"^손질한\s*",
+    r"^손질\s+",
+    r"^냉동\s*",
+)
+
+_STATE_SUFFIX_PATTERNS = (
+    r"\s+손질\s*후$",
+    r"\s+데치기용$",
+    r"\s+간것$",
+    r"\s+간\s*것$",
+    r"\s+크게$",
+)
+
 # ponytail: 크롤 표기 흔들림 → 표시·dedup 통일 (필요 시 항목 추가)
 _CANONICAL_REWRITES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^갈아만든\s*배(?:음료)?$"), "갈아만든배"),
@@ -79,6 +111,27 @@ _CANONICAL_REWRITES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^고체\s*카레$"), "고형 카레"),
     (re.compile(r"^골뱅이(?:\s*통조림|캔)$"), "골뱅이"),
     (re.compile(r"^그라나파다노(?:\s*치즈)?$"), "그라나파다노치즈"),
+    (re.compile(r"^파마산\s*치즈(?:\s*가루)?$"), "파마산치즈"),
+    (re.compile(r"^참치\s*(?:캔|통조림)$"), "참치"),
+    (re.compile(r"^캔\s*참치$"), "참치"),
+    (re.compile(r"^고추참치\s*캔$"), "고추참치"),
+    (re.compile(r"^옥수수\s*캔$"), "옥수수"),
+    (re.compile(r"^캔\s*옥수수$"), "옥수수"),
+    (re.compile(r"^통조림\s*옥수수$"), "옥수수"),
+    (re.compile(r"^고등어\s*통조림$"), "고등어"),
+    (re.compile(r"^꽁치\s*통조림$"), "꽁치"),
+    (re.compile(r"^파인애플\s*통조림$"), "파인애플"),
+    (re.compile(r"^토마토\s*캔$"), "토마토"),
+    (re.compile(r"^홀\s*토마토\s*캔$"), "홀토마토"),
+    (re.compile(r"^건\s*표고(?:\s*버섯)?(?:\s*슬라이스)?$"), "건표고버섯"),
+    (re.compile(r"^슬라이스\s*건\s*표고$"), "건표고버섯"),
+    (re.compile(r"^채\s*썬\s*건\s*표고버섯$"), "건표고버섯"),
+    (re.compile(r"^고춧가루\s*스프$"), "고춧가루"),
+    (re.compile(r"^청양\s*고춧가루$"), "청양고춧가루"),
+    (re.compile(r"^핫케이크\s*가루$"), "핫케이크가루"),
+    (re.compile(r"^중력\s*밀가루$"), "밀가루 중력분"),
+    (re.compile(r"^파\s*$"), "대파"),
+    (re.compile(r"^대파\s*or\s*쪽파$"), "대파"),
 )
 
 
@@ -110,15 +163,28 @@ def clean_ingredient_name(name: str) -> str | None:
             if new != text:
                 text = new
                 changed = True
-    text = re.sub(r"크린베리", "크랜베리", text)
-    text = re.sub(r"고은", "고운", text)
-    text = re.sub(r"그라노파다노", "그라나파다노", text)
-    text = re.sub(r"줄거리", "줄기", text)
+    for pattern, replacement in _TYPO_REWRITES:
+        text = pattern.sub(replacement, text)
+
+    changed = True
+    while changed:
+        changed = False
+        for pattern in _PREFIX_PATTERNS:
+            new = re.sub(pattern, "", text).strip()
+            if new != text:
+                text = new
+                changed = True
+        for pattern in _STATE_SUFFIX_PATTERNS:
+            new = re.sub(pattern, "", text).strip()
+            if new != text:
+                text = new
+                changed = True
+
+    text = re.sub(r"전분\s*가루", "전분", text).strip()
     for pattern, canonical in _CANONICAL_REWRITES:
         if pattern.fullmatch(text):
             text = canonical
             break
-    text = re.sub(r"전분\s*가루", "전분", text).strip()
     if text in _AMOUNT_ONLY:
         return None
     if not text or re.fullmatch(r"[\?\s]+", text):
