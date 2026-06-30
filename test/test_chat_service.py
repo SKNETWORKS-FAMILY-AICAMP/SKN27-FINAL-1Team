@@ -13,13 +13,22 @@ def test_route_intent_examples() -> None:
         "오늘 먼저 먹어야 할 거 뭐야?": "inventory.expiring",
         "재료 기한 다되어 가는거 있어?": "inventory.expiring",
         "김치 유통기한 언제까지야": "inventory.expiring",
+        "내 냉장고 재료 뭐 있어?": "inventory.list",
+        "영수증 등록 어디서 해?": "receipt.guide",
         "파 어떻게 보관해?": "ingredient.guide",
         "파 보관법": "ingredient.guide",
+        "아보카도 보관법": "ingredient.guide",
+        "남은 피자 보관법": "ingredient.guide",
+        "계란 보관 어떻게 해": "ingredient.guide",
         "먹다 남은 햄버거 어떡하지?": "ingredient.guide",
         "두부로 뭐 만들수있어?": "recipe.recommend",
         "두부로 뭘 만들지?": "recipe.recommend",
         "이걸로 만들수 있는 메뉴 뭐야": "recipe.recommend",
         "파 빨리 써야 하는데 뭐하지": "recipe.recommend",
+        "감자로 간단하게 만들수 있는거 알려줘": "recipe.recommend",
+        "먹다남은 감자튀김 어디에 쓸수있을까": "recipe.recommend",
+        "바베큐 레시피 알려줘": "recipe.search",
+        "김치볶음밥 레시피": "recipe.search",
     }
 
     for message, expected in cases.items():
@@ -33,22 +42,35 @@ def test_extract_recipe_ingredient() -> None:
     assert chat_service._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
     assert chat_service._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
     assert chat_service._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
+    assert chat_service._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
     assert chat_service._extract_keyword("먹다 남은 햄버거 어떡하지?") == "햄버거"
+    assert chat_service._extract_keyword("아보카도 보관법") == "아보카도"
+    assert chat_service._extract_keyword("남은 피자 보관법") == "피자"
 
 
+def test_guide_result_match() -> None:
+    """가이드 검색이 비슷한 이름의 다른 재료를 답하지 않는지 확인합니다."""
+    assert not chat_service._is_guide_result_match("피자", "피자소스")
+    assert not chat_service._is_guide_result_match("김", "김치")
+    assert chat_service._is_guide_result_match("파", "대파")
+    assert chat_service._is_guide_result_match("마늘", "깐마늘")
 
 
 def test_search_result_relevance() -> None:
     """웹 검색 fallback이 질문 핵심어와 무관한 결과를 거르는지 확인합니다."""
     good = {"title": "남은 치킨 보관법", "content": "치킨은 밀폐 후 냉장 보관", "url": "https://example.com"}
     bad = {"title": "마늘 양파 보관법", "content": "마늘과 양파는 상온 보관", "url": "https://example.com"}
+    pizza_sauce = {"title": "피자소스 보관법", "content": "피자소스는 개봉 후 냉장 보관", "url": "https://example.com"}
 
     assert chat_service._is_relevant_search_result("먹다남은 치킨", good)
     assert not chat_service._is_relevant_search_result("먹다남은 치킨", bad)
+    assert not chat_service._is_relevant_search_result("피자", pizza_sauce)
+    assert not chat_service._is_relevant_search_result("보관법", good)
 
 
 if __name__ == "__main__":
     test_route_intent_examples()
     test_extract_recipe_ingredient()
+    test_guide_result_match()
     test_search_result_relevance()
     print("chat service tests ok")
