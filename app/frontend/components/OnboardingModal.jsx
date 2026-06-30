@@ -11,8 +11,11 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
   const [dislikes, setDislikes] = useState([]);
   const [preferred, setPreferred] = useState([]);
   const [customAllergy, setCustomAllergy] = useState('');
+  const [customAllergyTags, setCustomAllergyTags] = useState([]);
   const [customDislike, setCustomDislike] = useState('');
+  const [customDislikeTags, setCustomDislikeTags] = useState([]);
   const [customPreferred, setCustomPreferred] = useState('');
+  const [customPreferredTags, setCustomPreferredTags] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleSelection = (list, setList, item) => {
@@ -22,6 +25,48 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
       setList([...list, item]);
     }
   };
+
+  // 직접 입력값을 스페이스/엔터 기준 태그로 추가합니다.
+  const addTag = (tags, setTags, value, setValue) => {
+    const nextValue = value.trim();
+    if (!nextValue || tags.includes(nextValue)) return;
+    setTags([...tags, nextValue]);
+    setValue('');
+  };
+
+  // 입력창이 비어 있을 때 Backspace를 누르면 마지막 태그를 지웁니다.
+  const handleTagKeyDown = (event, tags, setTags, value, setValue) => {
+    if ((event.key === ' ' || event.key === 'Enter') && value.trim()) {
+      event.preventDefault();
+      addTag(tags, setTags, value, setValue);
+      return;
+    }
+
+    if (event.key === 'Backspace' && !value && tags.length > 0) {
+      event.preventDefault();
+      setTags(tags.slice(0, -1));
+    }
+  };
+
+  // 온보딩 3단계에서 같은 태그 입력 UI를 재사용합니다.
+  const renderTagInput = ({ tags, setTags, value, setValue, placeholder }) => (
+    <div className="tag-input" onClick={(event) => event.currentTarget.querySelector('input')?.focus()}>
+      {tags.map((item) => (
+        <span className="tag-input__chip" key={item}>
+          {item}
+          <button type="button" onClick={() => setTags(tags.filter((tag) => tag !== item))} aria-label={`${item} 삭제`}>×</button>
+        </span>
+      ))}
+      <input
+        type="text"
+        placeholder={tags.length ? '' : placeholder}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => handleTagKeyDown(event, tags, setTags, value, setValue)}
+        onBlur={() => addTag(tags, setTags, value, setValue)}
+      />
+    </div>
+  );
 
   const handleNext = () => {
     if (step < 3) setStep(step + 1);
@@ -35,17 +80,17 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
-    const finalAllergies = [...allergies];
+    const finalAllergies = [...allergies, ...customAllergyTags];
     if (customAllergy.trim() && !finalAllergies.includes(customAllergy.trim())) {
       finalAllergies.push(customAllergy.trim());
     }
     
-    const finalDislikes = [...dislikes];
+    const finalDislikes = [...dislikes, ...customDislikeTags];
     if (customDislike.trim() && !finalDislikes.includes(customDislike.trim())) {
       finalDislikes.push(customDislike.trim());
     }
 
-    const finalPreferred = [...preferred];
+    const finalPreferred = [...preferred, ...customPreferredTags];
     if (customPreferred.trim() && !finalPreferred.includes(customPreferred.trim())) {
       finalPreferred.push(customPreferred.trim());
     }
@@ -112,13 +157,13 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
                   </button>
                 ))}
               </div>
-              <input 
-                type="text" 
-                className="custom-input" 
-                placeholder="기타 알레르기가 있다면 적어주세요"
-                value={customAllergy}
-                onChange={(e) => setCustomAllergy(e.target.value)}
-              />
+              {renderTagInput({
+                tags: customAllergyTags,
+                setTags: setCustomAllergyTags,
+                value: customAllergy,
+                setValue: setCustomAllergy,
+                placeholder: '기타 알레르기가 있다면 적어주세요',
+              })}
             </div>
           )}
 
@@ -138,13 +183,13 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
                   </button>
                 ))}
               </div>
-              <input 
-                type="text" 
-                className="custom-input" 
-                placeholder="기타 싫어하는 식재료를 적어주세요 (띄어쓰기로 구분)"
-                value={customDislike}
-                onChange={(e) => setCustomDislike(e.target.value)}
-              />
+              {renderTagInput({
+                tags: customDislikeTags,
+                setTags: setCustomDislikeTags,
+                value: customDislike,
+                setValue: setCustomDislike,
+                placeholder: '기타 싫어하는 식재료를 적어주세요',
+              })}
             </div>
           )}
 
@@ -164,13 +209,13 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
                   </button>
                 ))}
               </div>
-              <input 
-                type="text" 
-                className="custom-input" 
-                placeholder="기타 선호하는 식재료를 적어주세요"
-                value={customPreferred}
-                onChange={(e) => setCustomPreferred(e.target.value)}
-              />
+              {renderTagInput({
+                tags: customPreferredTags,
+                setTags: setCustomPreferredTags,
+                value: customPreferred,
+                setValue: setCustomPreferred,
+                placeholder: '기타 선호하는 식재료를 적어주세요',
+              })}
             </div>
           )}
 
