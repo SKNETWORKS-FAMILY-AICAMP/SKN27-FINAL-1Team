@@ -14,6 +14,7 @@ const FILTER_TYPES = [
   { label: '전체', tone: '' },
   { label: '냉장', tone: 'cold' },
   { label: '냉동', tone: 'frozen' },
+  { label: '실온', tone: 'room' },
   { label: '소비 임박', tone: 'soon' },
   { label: '기한 지남', tone: 'soon' },
 ]
@@ -220,11 +221,21 @@ function Fridge() {
       전체: summary.total,
       냉장: summary.storage?.냉장 || 0,
       냉동: summary.storage?.냉동 || 0,
+      실온: summary.storage?.실온 || 0,
       '소비 임박': summary.expiring_soon || 0,
       '기한 지남': summary.expired || 0,
     }),
     [summary],
   )
+
+  const visibleFilters = useMemo(
+    () => FILTER_TYPES.filter((filter) => filter.label === '전체' || filterCounts[filter.label] > 0),
+    [filterCounts],
+  )
+
+  useEffect(() => {
+    if (!visibleFilters.some((filter) => filter.label === activeFilter)) setActiveFilter('전체')
+  }, [activeFilter, visibleFilters])
 
   const sortedIngredients = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -233,6 +244,7 @@ function Fridge() {
         activeFilter === '전체' ||
         (activeFilter === '냉장' && item.storage_method === '냉장') ||
         (activeFilter === '냉동' && item.storage_method === '냉동') ||
+        (activeFilter === '실온' && item.storage_method === '실온') ||
         (activeFilter === '소비 임박' && item.is_expiring_soon && !item.is_expired) ||
         (activeFilter === '기한 지남' && item.is_expired)
       const matchesSearch =
@@ -303,7 +315,7 @@ function Fridge() {
       quantity: Number(item.quantity) || 1,
       unit: item.unit || '개',
       purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
-      expiration_date: '',
+      expiration_date: item.expiration_date || '',
     })
     setEditingId(item.id)
     setIsModalOpen(true)
@@ -322,7 +334,7 @@ function Fridge() {
     }
     const payload = {
       ...formData,
-      quantity: Math.round(Number(formData.quantity) * 10) / 10,
+      quantity: Math.round(Number(formData.quantity) * 2) / 2,
       purchase_date: formData.purchase_date || null,
       expiration_date: formData.expiration_date || null,
     }
@@ -508,7 +520,7 @@ function Fridge() {
       return
     }
 
-    const newQuantity = Math.round((currentQty - consumeAmount) * 10) / 10
+    const newQuantity = Math.round((currentQty - consumeAmount) * 2) / 2
     const payload = {
       name: item.name,
       category: item.category,
@@ -545,6 +557,20 @@ function Fridge() {
       await showAlert('서버 오류로 소비 처리하지 못했습니다.', { title: '서버 오류' })
     }
   }
+
+  // 소비 모달은 공통 ConfirmModal이 아니라서 Enter 확인을 여기서 처리합니다.
+  useEffect(() => {
+    if (!consumeTarget) return
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+      executeConsume(consumeTarget.item, Number(consumeTarget.consumeAmount))
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [consumeTarget])
 
   // 영수증 입고 안내 배지를 숨깁니다.
   const clearStockNotice = () => {
@@ -583,10 +609,10 @@ function Fridge() {
             </div>
             <ImageSlot className="fridge-hero-card__image" src={iconReceipt} />
           </button>
-          <button className="fridge-hero-card fridge-hero-card--add" type="button" onClick={openAddModal}>
+          <button className="fridge-hero-card fridge-hero-card--add" type="button" onClick={() => navigate('/recipe-fridge')}>
             <div>
-              <strong>+ 재료 추가</strong>
-              <p>직접 입력해서 재료를 추가해요.</p>
+              <strong>레시피 추천 받기</strong>
+              <p>보유 재료로 만들 수 있는 메뉴를 추천받아요.</p>
             </div>
             <ImageSlot className="fridge-hero-card__image" src={imageAlarm} />
           </button>
@@ -599,7 +625,7 @@ function Fridge() {
         <main className="fridge-main">
           <div className="fridge-toolbar">
             <div className="fridge-filters" aria-label="재료 상태 필터">
-              {FILTER_TYPES.map((filter) => (
+              {visibleFilters.map((filter) => (
                 <button
                   className={['fridge-filter', activeFilter === filter.label ? 'is-active' : '', filter.tone ? `is-${filter.tone}` : '']
                     .filter(Boolean)
@@ -614,16 +640,18 @@ function Fridge() {
             </div>
 
             <div className="fridge-view-controls">
-              <button 
-                type="button" 
-                className={`fridge-edit-toggle ${isEditMode ? 'is-active' : ''}`}
-                onClick={() => {
-                  setIsEditMode(!isEditMode)
-                  setSelectedIds(new Set())
-                }}
-              >
-                {isEditMode ? '선택 취소' : '선택 폐기'}
-              </button>
+              {ingredients.length > 0 ? (
+                <button
+                  type="button"
+                  className={`fridge-edit-toggle ${isEditMode ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setIsEditMode(!isEditMode)
+                    setSelectedIds(new Set())
+                  }}
+                >
+                  {isEditMode ? '선택 취소' : '선택 폐기'}
+                </button>
+              ) : null}
               <button type="button" onClick={toggleSort}>{getSortLabel()}</button>
               <button className={viewMode === 'grid' ? 'fridge-view-button is-grid is-active' : 'fridge-view-button is-grid'} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
                 <span />
@@ -741,9 +769,9 @@ function Fridge() {
               소비할 수량:{' '}
               <input
                 type="number"
-                min="0.1"
+                min="0.5"
                 max={consumeTarget.item.quantity}
-                step="0.1"
+                step="0.5"
                 value={consumeTarget.consumeAmount}
                 onChange={(event) => setConsumeTarget({ ...consumeTarget, consumeAmount: event.target.value })}
                 style={{ width: '80px', padding: '8px', textAlign: 'center', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
@@ -803,13 +831,6 @@ function Fridge() {
           </div>
         </div>
       )}
-      <section className="fridge-bottom-tip">
-        <strong>활용 팁</strong>
-        <span>소비 임박 재료로 만들 수 있는 레시피를 추천받아 보세요.</span>
-        <button type="button" onClick={() => navigate('/recipe-fridge')}>레시피 추천 받기</button>
-        <ImageSlot className="fridge-bottom-tip__image" src={imageAlarm} />
-      </section>
-
       <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={openAddModal}>+</button>
     </section>
   )

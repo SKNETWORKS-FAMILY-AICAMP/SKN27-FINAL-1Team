@@ -1306,3 +1306,30 @@
 .fridge-item__actions.is-edit-mode {
   pointer-events: none;
 }
+
+/* 선택 폐기 버튼을 그림자 없는 일반 버튼 톤으로 맞춥니다. */
+.fridge-edit-toggle {
+  background: #fffdf8 !important;
+  border-color: #f0d7b1 !important;
+  color: #6d4128 !important;
+  box-shadow: none !important;
+}
+
+.fridge-edit-toggle.is-active {
+  background: #fff0f1 !important;
+  border-color: #ffb8bd !important;
+  color: var(--figma-coral) !important;
+}
+/* 상단 액션 카드 두 개의 배경과 테두리 톤을 통일합니다. */
+.fridge-hero-card--add {
+  border-color: #f0d7b1;
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.fridge-hero-card--add strong {
+  color: var(--figma-text);
+}
+/* 실온 보관 필터 색상을 기존 보관 탭 톤에 맞춥니다. */
+.fridge-filter.is-room {
+  color: #a06b2b;
+}

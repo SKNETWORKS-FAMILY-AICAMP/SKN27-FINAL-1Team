@@ -17,6 +17,19 @@ function AppDialog({ dialog, onCancel, onConfirm }) {
     }
   }, [dialog])
 
+  // 일반 알림/확인 모달에서도 Enter로 확인합니다.
+  useEffect(() => {
+    if (!dialog || dialog.type === 'prompt') return
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+      onConfirm(true)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [dialog, onConfirm])
   if (!dialog) {
     return null
   }
