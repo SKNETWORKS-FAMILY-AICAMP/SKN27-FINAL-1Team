@@ -779,6 +779,8 @@ a.guide-owned-badge::after {
 .guide-tip-source {
   margin: 18px 0 0;
   padding: 14px 0;
+  display: flex;
+  justify-content: flex-end;
   border-top: 1px solid #f1d9b3;
 }
 
