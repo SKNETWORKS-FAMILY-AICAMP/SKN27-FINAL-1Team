@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import './ShoppingList.css'
 
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
@@ -7,14 +7,26 @@ import iconCart from '../../assets/extracted/icons/icon_cart.png'
 import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageShop from '../../assets/extracted/images/image_shop.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
-import { priceRows, shoppingItems } from '../../mock/shoppingListMock.js'
-import {
-  formatWon,
-  serviceBadges,
-  serviceContext,
-  serviceSteps,
-  userProfile,
-} from '../../mock/userService.js'
+
+const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
+
+const markets = [
+  {
+    key: 'naver',
+    label: '네이버쇼핑',
+    buildUrl: (query) => `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(query)}`,
+  },
+  {
+    key: 'coupang',
+    label: '쿠팡',
+    buildUrl: (query) => `https://www.coupang.com/np/search?q=${encodeURIComponent(query)}`,
+  },
+  {
+    key: 'kurly',
+    label: '컬리',
+    buildUrl: (query) => `https://www.kurly.com/search?sword=${encodeURIComponent(query)}`,
+  },
+]
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -24,120 +36,169 @@ function ImageSlot({ src, alt = '', className = '' }) {
   )
 }
 
+function readShoppingContext() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SHOPPING_CONTEXT_KEY) || 'null')
+    if (!parsed || parsed.type !== 'recipe') {
+      return null
+    }
+    return {
+      ...parsed,
+      ownedIngredients: Array.isArray(parsed.ownedIngredients) ? parsed.ownedIngredients : [],
+      missingIngredients: Array.isArray(parsed.missingIngredients) ? parsed.missingIngredients : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+function formatCreatedAt(value) {
+  if (!value) {
+    return '최근 장보기'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '최근 장보기'
+  }
+
+  return date.toLocaleString('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function buildSearchQuery(item) {
+  return [item.name, item.amount].filter(Boolean).join(' ')
+}
+
+function ShoppingStart({ recentContext, onContinue, onRecipeBrowse }) {
+  return (
+    <section className="shopping-page shopping-page--start" aria-labelledby="shopping-title">
+      <div className="shopping-hero">
+        <div className="shopping-hero__copy">
+          <span className="shopping-eyebrow">장보기 시작</span>
+          <h1 id="shopping-title">무엇을 기준으로 장볼까요?</h1>
+          <p>
+            레시피에서 부족 재료를 바로 확인하거나, 최근 장보기 목록을 이어서 볼 수 있어요.
+          </p>
+        </div>
+        <div className="shopping-hero__art" aria-hidden="true">
+          <img src={imageShop} alt="" />
+        </div>
+      </div>
+
+      <div className="shopping-start-grid">
+        {recentContext ? (
+          <article className="shopping-start-card is-featured">
+            <span>최근 장바구니</span>
+            <h2>{recentContext.recipeTitle} 이어서 장보기</h2>
+            <p>
+              {recentContext.missingIngredients.length}가지 부족 재료가 저장되어 있어요.
+              {formatCreatedAt(recentContext.createdAt)} 기준 목록입니다.
+            </p>
+            <button className="shopping-primary-action" type="button" onClick={onContinue}>
+              이어서 장보기
+            </button>
+          </article>
+        ) : null}
+
+        <article className="shopping-start-card">
+          <span>1순위 흐름</span>
+          <h2>레시피 기준으로 장보기</h2>
+          <p>레시피 상세에서 냉장고 재료와 비교한 뒤 부족한 재료만 구매 링크로 연결해요.</p>
+          <button className="shopping-soft-action" type="button" onClick={onRecipeBrowse}>
+            레시피 먼저 확인하기
+          </button>
+        </article>
+
+        <article className="shopping-start-card">
+          <span>준비 중</span>
+          <h2>냉장고 보충 장보기</h2>
+          <p>자주 쓰는 재료, 곧 떨어지는 재료, 유통기한 임박 재료를 기준으로 추천하는 흐름입니다.</p>
+          <button className="shopping-soft-action" type="button" onClick={onRecipeBrowse}>
+            지금은 레시피에서 시작하기
+          </button>
+        </article>
+      </div>
+    </section>
+  )
+}
+
 function ShoppingList() {
   const navigate = useNavigate()
-  const { dialogNode, showAlert, showPrompt } = useAppDialog()
-  const [items, setItems] = useState(() =>
-    shoppingItems.map((item) => ({ ...item, selected: true, count: 1 })),
-  )
+  const [searchParams] = useSearchParams()
+  const { dialogNode } = useAppDialog()
+  const [storedContext] = useState(readShoppingContext)
+  const [activeContext, setActiveContext] = useState(() => (
+    searchParams.has('recipeId') || searchParams.get('source') === 'recipe' ? storedContext : null
+  ))
 
-  const selectedCount = items.filter((item) => item.selected).length
-  const selectedItems = items.filter((item) => item.selected)
-  const allSelected = selectedCount === items.length && items.length > 0
-  const selectedRatio = items.length ? selectedCount / items.length : 0
-  const cartTotal = Math.round((serviceContext.currentCartTotal * selectedRatio) / 10) * 10
-  const budgetLeft = serviceContext.cartBudget - cartTotal
-  const deliverySaving = serviceContext.deliveryTotal - cartTotal
+  const missingItems = activeContext?.missingIngredients ?? []
+  const ownedItems = activeContext?.ownedIngredients ?? []
+  const hasRecipeContext = Boolean(activeContext && missingItems.length > 0)
+
   const summary = useMemo(
     () => [
       {
-        label: '선택 재료',
-        value: `${selectedCount}개`,
-        note: `${items.length}개 중 ${userProfile.mealTarget}에 맞게 선택`,
+        label: '부족 재료',
+        value: `${missingItems.length}개`,
+        note: `${activeContext?.recipeTitle ?? '레시피'} 기준`,
         image: iconBasket,
       },
       {
-        label: '예상 결제',
-        value: formatWon(cartTotal),
-        note: `${serviceContext.selectedMarket} · ${serviceContext.deliveryEta}`,
-        image: iconCart,
-      },
-      {
-        label: '예산 상태',
-        value: budgetLeft >= 0 ? `${formatWon(budgetLeft)} 남음` : `${formatWon(Math.abs(budgetLeft))} 초과`,
-        note: `목표 ${userProfile.budgetLabel}`,
-        accent: budgetLeft >= 0,
-      },
-      {
-        label: '배달 대비 절약',
-        value: formatWon(Math.max(0, deliverySaving)),
-        note: `배달 예상 ${formatWon(serviceContext.deliveryTotal)} 대비`,
-        accent: true,
-      },
-      {
-        label: '냉장고 매칭',
-        value: serviceContext.fridgeMatch,
-        note: `${serviceContext.urgentIngredientCount}개 임박 재료 우선 반영`,
+        label: '보유 재료',
+        value: `${ownedItems.length}개`,
+        note: '내 냉장고와 비교',
         image: iconRefrigerator,
       },
+      {
+        label: '구매 연결',
+        value: `${markets.length}곳`,
+        note: '재료별 검색 링크 제공',
+        image: iconCart,
+      },
     ],
-    [budgetLeft, cartTotal, deliverySaving, items.length, selectedCount],
+    [activeContext?.recipeTitle, missingItems.length, ownedItems.length],
   )
 
-  const toggleAll = () => {
-    setItems((prev) => prev.map((item) => ({ ...item, selected: !allSelected })))
-  }
-
-  const toggleItem = (name) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.name === name ? { ...item, selected: !item.selected } : item,
-      ),
-    )
-  }
-
-  const changeCount = (name, amount) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.name === name ? { ...item, count: Math.max(1, item.count + amount) } : item,
-      ),
-    )
-  }
-
-  const addItem = async () => {
-    const name = await showPrompt('추가할 재료명을 입력해주세요.', {
-      title: '재료 추가',
-      placeholder: '예: 양파',
+  const openAllNaverLinks = () => {
+    missingItems.forEach((item, index) => {
+      window.setTimeout(() => {
+        window.open(markets[0].buildUrl(buildSearchQuery(item)), '_blank', 'noopener,noreferrer')
+      }, index * 120)
     })
-
-    if (!name?.trim()) {
-      return
-    }
-
-    setItems((prev) => [
-      ...prev,
-      {
-        name: name.trim(),
-        detail: '직접 추가',
-        quantity: '1개',
-        recipe: '직접 추가',
-        reason: '사용자가 직접 추가한 재료',
-        priority: '직접 추가',
-        selected: true,
-        count: 1,
-      },
-    ])
   }
 
-  const completePurchase = () => {
-    window.localStorage.setItem('bobbeori-last-stocked-count', String(selectedCount))
-    navigate('/fridge')
+  if (!hasRecipeContext) {
+    return (
+      <>
+        <ShoppingStart
+          recentContext={storedContext}
+          onContinue={() => setActiveContext(storedContext)}
+          onRecipeBrowse={() => navigate('/recipes')}
+        />
+        {dialogNode}
+      </>
+    )
   }
 
   return (
     <section className="shopping-page" aria-labelledby="shopping-title">
       <div className="shopping-hero">
         <div className="shopping-hero__copy">
-          <span className="shopping-eyebrow">사용자 맞춤 장보기</span>
-          <h1 id="shopping-title">{userProfile.mealTarget} 장보기 플랜</h1>
+          <span className="shopping-eyebrow">레시피 기준 장보기</span>
+          <h1 id="shopping-title">{activeContext.recipeTitle} 부족 재료</h1>
           <p>
-            {userProfile.household}, {userProfile.cookTime}, {userProfile.budgetLabel} 기준으로
-            필요한 재료만 골라 담았어요.
+            내 냉장고에 있는 재료는 제외하고, 이 레시피에 필요한 부족 재료만 구매 링크로 연결해요.
           </p>
-          <div className="shopping-service-badges" aria-label="맞춤 기준">
-            {serviceBadges.map((badge) => (
-              <span key={badge}>{badge}</span>
-            ))}
+          <div className="shopping-service-badges" aria-label="장보기 기준">
+            <span>{activeContext.servingLabel ?? '레시피 기준'}</span>
+            <span>냉장고 비교</span>
+            <span>부족 재료만</span>
+            <span>구매 링크 연결</span>
           </div>
         </div>
         <div className="shopping-hero__art" aria-hidden="true">
@@ -145,13 +206,13 @@ function ShoppingList() {
         </div>
       </div>
 
-      <div className="shopping-summary" aria-label="장보기 요약">
+      <div className="shopping-summary shopping-summary--compact" aria-label="장보기 요약">
         {summary.map((card) => (
           <article className="shopping-summary-card" key={card.label}>
             <ImageSlot className="shopping-summary-card__icon" src={card.image} />
             <div>
               <span>{card.label}</span>
-              <strong className={card.accent ? 'is-accent' : ''}>{card.value}</strong>
+              <strong>{card.value}</strong>
               <p>{card.note}</p>
             </div>
           </article>
@@ -160,219 +221,109 @@ function ShoppingList() {
 
       <section className="shopping-personal-panel" aria-labelledby="shopping-service-title">
         <div>
-          <span>오늘의 서비스 흐름</span>
-          <h2 id="shopping-service-title">
-            {serviceContext.selectedRecipe}에 필요한 것만 남겼어요
-          </h2>
+          <span>장보기 흐름</span>
+          <h2 id="shopping-service-title">레시피에서 이어진 부족 재료를 해결해요</h2>
           <p>
-            {userProfile.priority}를 기준으로 냉장고 재고와 부족 재료를 비교했고,
-            {serviceContext.pairedRecipe}까지 함께 만들 수 있는 장보기 조합입니다.
+            {activeContext.recipeTitle}에 필요한 재료 중 냉장고에 없는 항목만 추렸어요.
+            원하는 구매처 버튼을 누르면 해당 재료 검색 결과로 이동합니다.
           </p>
         </div>
         <ol>
-          {serviceSteps.map((step) => (
-            <li key={step.title}>
-              <strong>{step.title}</strong>
-              <p>{step.description}</p>
-            </li>
-          ))}
+          <li>
+            <strong>냉장고 확인</strong>
+            <p>보유 재료를 먼저 제외했어요.</p>
+          </li>
+          <li>
+            <strong>부족 재료 추림</strong>
+            <p>레시피에 꼭 필요한 재료만 남겼어요.</p>
+          </li>
+          <li>
+            <strong>구매 링크 연결</strong>
+            <p>재료별 쇼핑 검색으로 바로 이어져요.</p>
+          </li>
         </ol>
       </section>
 
-      <div className="shopping-main-grid">
+      <div className="shopping-main-grid shopping-main-grid--recipe">
         <section className="shopping-panel shopping-list-panel" aria-labelledby="shopping-list-title">
           <div className="shopping-panel__header">
             <div>
-              <h2 id="shopping-list-title">오늘 필요한 재료</h2>
-              <p>
-                선택한 {selectedCount}개 재료 기준 예상 결제 금액은 {formatWon(cartTotal)}입니다.
-              </p>
+              <h2 id="shopping-list-title">구매가 필요한 재료</h2>
+              <p>{missingItems.length}가지 재료를 구매하면 바로 조리를 시작할 수 있어요.</p>
             </div>
-            <button className="shopping-soft-button" type="button" onClick={() => navigate('/recipe-fridge')}>
-              추천 레시피 보기
-            </button>
-          </div>
-
-          <div className="shopping-items">
-            <div className="shopping-items__head">
-              <button type="button" onClick={toggleAll}>
-                {allSelected ? '전체 해제' : '전체 선택'}
-              </button>
-              <span>재료</span>
-              <span>필요 수량</span>
-              <span>사용 레시피</span>
-            </div>
-            {items.map((item) => (
-              <article className="shopping-item" key={item.name}>
-                <button
-                  className={`shopping-check ${item.selected ? 'is-checked' : ''}`}
-                  type="button"
-                  aria-label={`${item.name} 선택`}
-                  aria-pressed={item.selected}
-                  onClick={() => toggleItem(item.name)}
-                />
-                <div className="shopping-item__ingredient">
-                  <ImageSlot className="shopping-item__image" src={item.image} />
-                  <div>
-                    <div className="shopping-item__title-row">
-                      <strong>{item.name}</strong>
-                      <em>{item.priority}</em>
-                    </div>
-                    <p>{item.detail}</p>
-                    <small>{item.reason}</small>
-                  </div>
-                </div>
-                <div className="shopping-quantity" aria-label={`${item.name} 수량`}>
-                  <button type="button" onClick={() => changeCount(item.name, -1)}>-</button>
-                  <span>{item.count > 1 ? `${item.quantity}×${item.count}` : item.quantity}</span>
-                  <button type="button" onClick={() => changeCount(item.name, 1)}>+</button>
-                </div>
-                <span className="shopping-recipe-chip">{item.recipe}</span>
-              </article>
-            ))}
-          </div>
-
-          <button className="shopping-add-button" type="button" onClick={addItem}>
-            + 직접 재료 추가
-          </button>
-          <p className="shopping-tip">
-            {budgetLeft >= 0
-              ? `아직 ${formatWon(budgetLeft)} 여유가 있어요. 선택 재료를 모두 사도 예산 안에 들어옵니다.`
-              : `${formatWon(Math.abs(budgetLeft))} 초과예요. 선택 품목부터 빼면 예산 안에 맞출 수 있어요.`}
-          </p>
-        </section>
-
-        <section className="shopping-panel shopping-price-panel" aria-labelledby="price-title">
-          <div className="shopping-panel__header">
-            <div>
-              <h2 id="price-title">사용자 기준 최저가 조합</h2>
-              <p>{userProfile.budgetLabel}와 오늘 도착 가능 여부를 같이 봤어요.</p>
-            </div>
-          </div>
-
-          <div className="shopping-price-table" role="table" aria-label="구매처별 가격 비교">
-            <div className="shopping-price-row shopping-price-row--head" role="row">
-              <span role="columnheader">재료</span>
-              <span role="columnheader">마켓컬리</span>
-              <span role="columnheader">쿠팡</span>
-              <span role="columnheader">최저가</span>
-              <span role="columnheader">비교</span>
-            </div>
-            {priceRows.map((row) => (
-              <div className="shopping-price-row" role="row" key={row.name}>
-                <span role="cell">{row.name}</span>
-                <span role="cell">{row.marketA}</span>
-                <span role="cell">{row.marketB}</span>
-                <strong role="cell">{row.best}</strong>
-                <span role="cell">{row.diff}</span>
-              </div>
-            ))}
-            <div className="shopping-price-row shopping-price-row--total" role="row">
-              <span role="cell">합계</span>
-              <span role="cell">16,740원</span>
-              <span role="cell">15,690원</span>
-              <strong role="cell">15,690원</strong>
-              <span role="cell">-1,050원</span>
-            </div>
-          </div>
-
-          <div className="shopping-best-box">
-            <strong>추천 구매처: {serviceContext.selectedMarket} ({formatWon(cartTotal)})</strong>
             <button
               className="shopping-soft-button"
               type="button"
-              onClick={() => showAlert(`${selectedCount}개 재료를 최저가 장바구니에 담았어요.`, {
-                title: '장바구니 담기',
-              })}
+              onClick={() => navigate(activeContext.recipePath || '/recipes')}
             >
-              최저가 장바구니 담기
+              레시피로 돌아가기
             </button>
           </div>
 
-          <div className="shopping-service-note">
-            <strong>맞춤 제안</strong>
-            <p>
-              {selectedItems.some((item) => item.priority === '선택')
-                ? '예산을 더 줄이고 싶다면 선택 품목부터 빼는 것을 추천해요.'
-                : '선택한 재료는 오늘 메뉴에 바로 쓰이는 품목 위주예요.'}
-            </p>
+          <div className="shopping-link-list">
+            {missingItems.map((item, index) => (
+              <article className="shopping-link-item" key={`${item.ingredient_id ?? item.name}-${index}`}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <p>{item.amount || '필요 수량 확인'}</p>
+                </div>
+                <div className="shopping-market-links" aria-label={`${item.name} 구매 링크`}>
+                  {markets.map((market) => (
+                    <a
+                      key={market.key}
+                      href={market.buildUrl(buildSearchQuery(item))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {market.label}
+                    </a>
+                  ))}
+                </div>
+              </article>
+            ))}
           </div>
         </section>
-      </div>
 
-      <div className="shopping-metrics">
-        <section className="shopping-panel shopping-saving" aria-labelledby="saving-title">
-          <ImageSlot className="shopping-saving__image" src={imageShop} />
-          <div>
-            <h2 id="saving-title">배달 대비 절약</h2>
-            <div className="shopping-saving__compare">
-              <span>
-                장바구니 예상가
-                <strong>{formatWon(cartTotal)}</strong>
-              </span>
-              <span>
-                배달 예상가
-                <strong>{formatWon(serviceContext.deliveryTotal)}</strong>
-              </span>
-              <em>{formatWon(Math.max(0, deliverySaving))}</em>
+        <aside className="shopping-panel shopping-owned-panel" aria-labelledby="owned-title">
+          <div className="shopping-panel__header">
+            <div>
+              <h2 id="owned-title">이미 있는 재료</h2>
+              <p>냉장고에서 확인되어 장보기 목록에서 제외했어요.</p>
             </div>
           </div>
-        </section>
 
-        <section className="shopping-panel shopping-cost" aria-labelledby="cost-title">
-          <h2 id="cost-title">예산 안심 계산</h2>
-          <div className="shopping-cost__flow">
-            <span>
-              장보기 합계
-              <strong>{formatWon(cartTotal)}</strong>
-            </span>
-            <b>+</b>
-            <span>
-              집 재료 활용
-              <strong>{serviceContext.fridgeMatch}</strong>
-            </span>
-            <b>=</b>
-            <span>
-              남은 예산
-              <strong>{budgetLeft >= 0 ? formatWon(budgetLeft) : '초과'}</strong>
-            </span>
-            <em>{budgetLeft >= 0 ? '안심' : '조정'}</em>
+          {ownedItems.length > 0 ? (
+            <div className="shopping-owned-list">
+              {ownedItems.map((item, index) => (
+                <span key={`${item.name}-${index}`}>
+                  {item.name}{item.amount ? ` ${item.amount}` : ''}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="shopping-empty-note">보유 재료가 없거나 로그인 전이라 전체 재료가 부족 재료로 표시될 수 있어요.</p>
+          )}
+
+          <div className="shopping-service-note">
+            <strong>구매 링크 안내</strong>
+            <p>
+              쇼핑몰 장바구니에 직접 담는 제휴 API는 아직 연결하지 않았어요.
+              현재는 재료명 기준 검색 결과로 연결하는 MVP 흐름입니다.
+            </p>
           </div>
-        </section>
+        </aside>
       </div>
 
-      <div className="shopping-actions">
+      <div className="shopping-actions shopping-actions--recipe">
         <button
           className="shopping-soft-action"
           type="button"
-          onClick={() => navigate('/recipes/green-onion-tofu-egg-stew')}
+          onClick={() => navigate(activeContext.recipePath || '/recipes')}
         >
           레시피 상세 보기
         </button>
-        <button
-          className="shopping-soft-action"
-          type="button"
-          onClick={() => window.open('https://www.coupang.com/', '_blank', 'noopener,noreferrer')}
-        >
-          최저가 마켓 바로가기
-        </button>
-        <button
-          className="shopping-primary-action"
-          type="button"
-          disabled={selectedCount === 0}
-          onClick={completePurchase}
-        >
-          구매 완료하고 냉장고 입고
-          <ImageSlot className="shopping-primary-action__icon" src={iconRefrigerator} />
-        </button>
-        <button
-          className="shopping-soft-action"
-          type="button"
-          onClick={() => showAlert(`${selectedCount}개 재료를 장바구니에 담았어요.`, {
-            title: '장바구니 담기',
-          })}
-        >
-          장바구니 담기
+        <button className="shopping-primary-action" type="button" onClick={openAllNaverLinks}>
+          선택 재료 구매 링크 열기
         </button>
       </div>
       {dialogNode}
