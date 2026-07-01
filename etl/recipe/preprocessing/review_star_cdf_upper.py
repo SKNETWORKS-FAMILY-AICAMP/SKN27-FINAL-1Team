@@ -1,4 +1,4 @@
-"""review.csv star_count → 전역 CDF upper(star_cdf_upper) 컬럼 적재."""
+"""review_by_llm.csv star_count → 전역 CDF upper(star_cdf_upper) 컬럼 적재."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import pandas as pd
 
 from etl.recipe.preprocessing.recipe_processing import load_recipe_data, save_recipe_data
 
-REVIEW_CSV = ROOT / "storage" / "processed" / "recipe" / "review.csv"
+REVIEW_CSV = ROOT / "storage" / "processed" / "recipe" / "review_by_llm.csv"
 OUT_COL = "star_cdf_upper"
 
 
