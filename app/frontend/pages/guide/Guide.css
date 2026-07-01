@@ -184,11 +184,71 @@
   padding: 20px 24px;
 }
 
+.guide-ingredients__header {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guide-ingredients__header .guide-section-title {
+  margin-bottom: 0;
+}
+
+.guide-ingredients__header .guide-pagination__status {
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
 .guide-ingredient-list {
   display: grid;
   grid-template-columns: repeat(6, minmax(116px, 1fr));
   align-items: center;
   gap: 18px;
+}
+
+.guide-fridge-pager {
+  position: relative;
+  padding: 0 50px;
+}
+
+.guide-fridge-page-button {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1.4px solid #c79a74;
+  border-radius: 50%;
+  background: #fffdf8;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 900;
+  transform: translateY(-50%);
+}
+
+.guide-fridge-page-button.is-previous {
+  left: 0;
+}
+
+.guide-fridge-page-button.is-next {
+  right: 0;
+}
+
+.guide-fridge-page-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.guide-fridge-page-button:hover:not(:disabled) {
+  background: #fff4e3;
 }
 
 .guide-ingredient,
@@ -944,15 +1004,42 @@ a.guide-owned-badge::after {
   gap: 12px;
 }
 
+.guide-tip-nutrition__summary {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .guide-tip-nutrition__energy {
   color: var(--figma-coral);
-  font-size: 16px;
+  background: #fff0ec;
+}
+
+.guide-tip-nutrition__energy,
+.guide-tip-nutrition__amount {
+  min-height: 38px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-size: 14px;
   font-weight: 900;
 }
 
-.guide-tip-nutrition__header span {
-  min-height: 26px;
-  padding: 0 12px;
+.guide-tip-nutrition__amount {
+  background: #fff4e3;
+  color: #6d4128;
+}
+
+.guide-tip-nutrition__summary small {
+  color: #a77b52;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.guide-tip-nutrition__source {
+  min-height: 38px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
@@ -999,7 +1086,7 @@ a.guide-owned-badge::after {
 .guide-nutrition-grid {
   margin-bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1008,12 +1095,19 @@ a.guide-owned-badge::after {
   padding: 0 12px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border: 1.4px solid #efd8b8;
   border-radius: 12px;
   background: #fffdf8;
   color: #6d4128;
   font-size: 13px;
   font-weight: 900;
+}
+
+.guide-nutrition-grid b {
+  color: #8b673e;
+  white-space: nowrap;
 }
 
 .guide-recipes {
@@ -1276,6 +1370,24 @@ a.guide-owned-badge::after {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     overflow: visible;
+  }
+
+  .guide-fridge-page-button {
+    width: 34px;
+    height: 34px;
+    font-size: 24px;
+  }
+
+  .guide-fridge-pager {
+    padding: 0 40px;
+  }
+
+  .guide-fridge-page-button.is-previous {
+    left: 0;
+  }
+
+  .guide-fridge-page-button.is-next {
+    right: 0;
   }
 
   .guide-ingredient {

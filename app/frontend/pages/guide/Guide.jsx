@@ -3,10 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import './Guide.css'
 
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
-import imageGuide from '../../assets/extracted/images/image_guide.png'
+import imageGuide from '../../assets/extracted/images/image_guide_v2.png'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const GUIDE_PAGE_SIZE = 12
+const FRIDGE_PAGE_SIZE = 12
 const GUIDE_RECIPE_LIMIT = 12
 const GUIDE_RECIPE_VISIBLE_COUNT = 3
 const EMPTY_SUGGESTION_FORM = { content: '', sourceName: '', sourceUrl: '' }
@@ -169,6 +170,7 @@ function Guide() {
   const [isRecipeLoading, setIsRecipeLoading] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(hasLoginToken)
   const [fridgeIngredients, setFridgeIngredients] = useState([])
+  const [fridgePage, setFridgePage] = useState(1)
   const [isFridgeLoading, setIsFridgeLoading] = useState(false)
   const [fridgeErrorMessage, setFridgeErrorMessage] = useState('')
   const [recipeErrorMessage, setRecipeErrorMessage] = useState('')
@@ -192,6 +194,7 @@ function Guide() {
   useEffect(() => {
     if (!isLoggedIn) {
       setFridgeIngredients([])
+      setFridgePage(1)
       setFridgeErrorMessage('')
       setIsFridgeLoading(false)
       return undefined
@@ -216,7 +219,8 @@ function Guide() {
           uniqueNames.add(normalizedName)
           return true
         })
-        setFridgeIngredients(ingredients.slice(0, 6))
+        setFridgeIngredients(ingredients)
+        setFridgePage(1)
       } catch (error) {
         if (error.name !== 'AbortError') {
           setFridgeIngredients([])
@@ -385,7 +389,10 @@ function Guide() {
   }, [selectedGuide])
 
   const searchSuggestions = guideItems.slice(0, 6)
-  const featuredIngredients = isLoggedIn ? fridgeIngredients : searchSuggestions
+  const fridgeTotalPages = Math.max(1, Math.ceil(fridgeIngredients.length / FRIDGE_PAGE_SIZE))
+  const featuredIngredients = isLoggedIn
+    ? fridgeIngredients.slice((fridgePage - 1) * FRIDGE_PAGE_SIZE, fridgePage * FRIDGE_PAGE_SIZE)
+    : searchSuggestions
   const totalPages = Math.max(1, Math.ceil(totalCount / GUIDE_PAGE_SIZE))
   const guideTips = useMemo(() => buildGuideTips(selectedGuide), [selectedGuide])
   const selectedTip = guideTips.find((tip) => tip.title === selectedTipTitle) ?? guideTips[0]
@@ -563,13 +570,32 @@ function Guide() {
       {errorMessage ? <p className="guide-error">{errorMessage}</p> : null}
 
       <section className="guide-panel guide-ingredients" aria-labelledby="guide-ingredients-title">
-        <div className="guide-section-title" id="guide-ingredients-title">
-          {isLoggedIn ? '내 냉장고 재료' : '추천 식재료'}
+        <div className="guide-ingredients__header">
+          <div className="guide-section-title" id="guide-ingredients-title">
+            {isLoggedIn ? '내 냉장고 재료' : '추천 식재료'}
+          </div>
+          {isLoggedIn && fridgeTotalPages > 1 ? (
+            <span className="guide-pagination__status" aria-current="page">
+              {fridgePage} / {fridgeTotalPages}
+            </span>
+          ) : null}
         </div>
-        <div
-          className="guide-ingredient-list"
-          aria-label={isLoggedIn ? '내 냉장고 재료 목록' : '추천 식재료 목록'}
-        >
+        <div className="guide-fridge-pager">
+          {isLoggedIn && fridgeTotalPages > 1 ? (
+            <button
+              className="guide-fridge-page-button is-previous"
+              type="button"
+              aria-label="이전 냉장고 재료 페이지"
+              disabled={fridgePage <= 1}
+              onClick={() => setFridgePage((current) => Math.max(1, current - 1))}
+            >
+              ‹
+            </button>
+          ) : null}
+          <div
+            className="guide-ingredient-list"
+            aria-label={isLoggedIn ? '내 냉장고 재료 목록' : '추천 식재료 목록'}
+          >
           {featuredIngredients.map((ingredient) => (
             <button
               className={`guide-ingredient ${
@@ -600,6 +626,18 @@ function Guide() {
           ) : null}
           {!isLoggedIn && !isListLoading && searchSuggestions.length === 0 ? (
             <p className="guide-empty">추천할 식재료가 없습니다.</p>
+          ) : null}
+          </div>
+          {isLoggedIn && fridgeTotalPages > 1 ? (
+            <button
+              className="guide-fridge-page-button is-next"
+              type="button"
+              aria-label="다음 냉장고 재료 페이지"
+              disabled={fridgePage >= fridgeTotalPages}
+              onClick={() => setFridgePage((current) => Math.min(fridgeTotalPages, current + 1))}
+            >
+              ›
+            </button>
           ) : null}
         </div>
       </section>
@@ -868,20 +906,28 @@ function Guide() {
                   <section className="guide-tip-nutrition" aria-labelledby="guide-nutrition-title">
                     <div className="guide-tip-nutrition__header">
                       <h3 id="guide-nutrition-title">영양성분</h3>
-                      <strong className="guide-tip-nutrition__energy">
-                        {selectedGuide.energy_kcal ?? '-'} kcal
-                      </strong>
-                      <span>{selectedGuide.nutrition_base_amount || '기준량 정보 없음'}</span>
-                      {selectedGuide.nutrition_source_name ? <span>출처: {selectedGuide.nutrition_source_name}</span> : null}
+                      <div className="guide-tip-nutrition__summary">
+                        <strong className="guide-tip-nutrition__energy">
+                          <small>칼로리</small>
+                          {selectedGuide.energy_kcal ?? '-'} kcal
+                        </strong>
+                        <strong className="guide-tip-nutrition__amount">
+                          <small>기준량</small>
+                          {selectedGuide.nutrition_base_amount || '정보 없음'}
+                        </strong>
+                      </div>
+                      {selectedGuide.nutrition_source_name ? <span className="guide-tip-nutrition__source">출처: {selectedGuide.nutrition_source_name}</span> : null}
                     </div>
 
                     <div className="guide-nutrition-grid">
-                      <strong>단백질 {selectedGuide.protein_g ?? '-'} g</strong>
-                      <strong>지방 {selectedGuide.fat_g ?? '-'} g</strong>
-                      <strong>탄수화물 {selectedGuide.carbohydrate_g ?? '-'} g</strong>
-                      <strong>칼슘 {selectedGuide.calcium_mg ?? '-'} mg</strong>
-                      <strong>칼륨 {selectedGuide.potassium_mg ?? '-'} mg</strong>
-                      <strong>나트륨 {selectedGuide.sodium_mg ?? '-'} mg</strong>
+                      <strong><span>탄수화물</span><b>{selectedGuide.carbohydrate_g ?? '-'} g</b></strong>
+                      <strong><span>단백질</span><b>{selectedGuide.protein_g ?? '-'} g</b></strong>
+                      <strong><span>지방</span><b>{selectedGuide.fat_g ?? '-'} g</b></strong>
+                      <strong><span>당류</span><b>{selectedGuide.sugar_g ?? '-'} g</b></strong>
+                      <strong><span>나트륨</span><b>{selectedGuide.sodium_mg ?? '-'} mg</b></strong>
+                      <strong><span>포화지방</span><b>{selectedGuide.saturated_fat_g ?? '-'} g</b></strong>
+                      <strong><span>식이섬유</span><b>{selectedGuide.fiber_g ?? '-'} g</b></strong>
+                      <strong><span>칼륨</span><b>{selectedGuide.potassium_mg ?? '-'} mg</b></strong>
                     </div>
                   </section>
                 </aside>
