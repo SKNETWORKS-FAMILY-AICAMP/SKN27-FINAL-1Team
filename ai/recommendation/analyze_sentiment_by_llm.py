@@ -17,9 +17,9 @@ if __package__ is None:
 from etl.recipe.preprocessing.recipe_processing import load_recipe_data, save_recipe_data
 
 if __package__ is None:
-    from ai.recommendation.llm_sentiment_model import LLMSentimentAnalyzer, parse_sentiment_response
+    from ai.recommendation.sentiment_model_by_llm import LLMSentimentAnalyzer, parse_sentiment_response
 else:
-    from .llm_sentiment_model import LLMSentimentAnalyzer, parse_sentiment_response
+    from .sentiment_model_by_llm import LLMSentimentAnalyzer, parse_sentiment_response
 
 logger = logging.getLogger(__name__)
 
