@@ -127,12 +127,6 @@ export const menuRecommendProcess = [
   },
 ]
 
-const INGREDIENT_USAGE_MATCH_RATE = {
-  LOW: 30,
-  NORMAL: 50,
-  HIGH: 70,
-}
-
 export function buildRecommendRequestBody(filters, { excludeIds = [], refreshPool = false } = {}) {
   const body = {
     mode: 'menu_custom',
@@ -149,15 +143,6 @@ export function buildRecommendRequestBody(filters, { excludeIds = [], refreshPoo
   }
   if (filters.category !== 'ALL') {
     body.category = filters.category
-  }
-  if (filters.ingredientUsage !== 'ANY') {
-    body.min_display_match_rate = INGREDIENT_USAGE_MATCH_RATE[filters.ingredientUsage]
-  }
-  if (filters.allowMissing === 'DENY') {
-    body.require_any_owned = true
-  }
-  if (filters.expiryPriority === 'PRIORITIZE') {
-    body.use_expiry_priority = true
   }
 
   return body
