@@ -11,8 +11,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from app.backend.core.config import settings
-from app.backend.mcp_server.calendar_tools import CALENDAR_TOOLS
-from app.backend.mcp_server.inventory_tools import INVENTORY_TOOLS
+from ai.tools.calendar_tools import CALENDAR_TOOLS
+from ai.tools.inventory_tools import INVENTORY_TOOLS
 from app.backend.schemas.chat_state import GraphState
 
 logger = logging.getLogger(__name__)
