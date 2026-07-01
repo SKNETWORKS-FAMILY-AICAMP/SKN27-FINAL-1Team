@@ -9,10 +9,6 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(PROJECT_ROOT / ".env")
 
-_FOOD_GUIDE_CSV_PATH = os.getenv("FOOD_GUIDE_CSV_PATH")
-DEFAULT_FOOD_GUIDE_CSV = PROJECT_ROOT / _FOOD_GUIDE_CSV_PATH if _FOOD_GUIDE_CSV_PATH else None
-
-
 @dataclass(frozen=True)
 class Neo4jSettings:
     uri: str

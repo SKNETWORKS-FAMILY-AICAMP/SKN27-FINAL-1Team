@@ -1,24 +1,18 @@
 # 식재료 가이드 README
 
-> 업데이트: 2026-06-30
+> 업데이트: 2026-07-01
 
 ## 개요
 
-식재료 가이드 CSV를 Neo4j에 적재하고 웹·백엔드에서 활용하기 위한 프로젝트입니다.
-현재 공유 기준 파일은 `storage/processed/food_guide/food_guide_v2.csv`입니다.
+식재료 가이드 분할 CSV를 Neo4j에 적재하고 웹·백엔드에서 활용하기 위한 프로젝트입니다.
+현재 기준 데이터는 `storage/processed/food_guide`의 노드 8개·관계 8개 CSV입니다.
 
 JY-3.1의 범위는 Graph DB 무결성 검증과 추천 연동 경계 확정입니다. 식재료 가이드는
 Neo4j, 추천 레시피는 PostgreSQL/API가 담당하며 세부 완료 기준은 `docs/guide_neo4j.md`에 정리합니다.
 
-## 기준 CSV 설정
+## 기준 CSV 경로
 
-적재 파일은 코드에 버전명으로 고정하지 않고 `.env`의 상대경로로 지정합니다.
-
-```env
-FOOD_GUIDE_CSV_PATH=storage/processed/food_guide/food_guide_v2.csv
-```
-
-`etl/food_guide/load_to_neo4j/config.py`가 이 값을 프로젝트 루트와 결합하므로 사용자별 절대경로를 설정할 필요가 없습니다. 다른 버전으로 교체할 때는 코드 대신 `FOOD_GUIDE_CSV_PATH`만 변경합니다.
+기본 경로는 `storage/processed/food_guide`이며 단일 통합 CSV는 사용하지 않습니다.
 
 ## 사전 준비
 
@@ -28,7 +22,7 @@ FOOD_GUIDE_CSV_PATH=storage/processed/food_guide/food_guide_v2.csv
    pip install -r requirements.txt
    ```
    Neo4j 관련 패키지(`neo4j`, `graphdatascience`, `python-dotenv`)가 추가되었습니다.
-2. **환경 변수** `.env`에 `NEO4J_PASSWORD`, `FOOD_GUIDE_CSV_PATH`와 필요 시 `NEO4J_URI`, `NEO4J_USER`를 정의합니다.
+2. **환경 변수** `.env`에 `NEO4J_PASSWORD`와 필요 시 `NEO4J_URI`, `NEO4J_USER`를 정의합니다.
 3. **Docker 이미지 재빌드**
    ```bash
    docker compose build food_guide_load
@@ -48,19 +42,11 @@ docker compose run --rm --no-deps food_guide_load \
 
 `--split-dir`는 노드 CSV 8개를 먼저 적재하고 관계 CSV 8개를 ID로 연결합니다. 파일 누락, ID 중복, 잘못된 참조를 적재 전에 검사합니다. `--clear`는 식재료 가이드가 관리하는 그래프만 삭제하며 레시피 등 다른 데이터는 삭제하지 않습니다.
 
-현재 `food_guide_load` 서비스는 `cron_loader --once`로 실행됩니다. 서비스 실행 시 한 번만 적재하고 종료하므로 CSV를 수정한 뒤에는 위 재적재 명령을 다시 실행해야 합니다.
+`docker compose up`을 실행하면 `food_guide_load`가 분할 CSV를 초기화·적재한 뒤 종료합니다.
 
 ## 실행 및 검증
 
-Neo4j 적재 전 CSV를 자동 검수합니다.
-
-```bash
-python -m etl.food_guide.validate_food_guide \
-  storage/processed/food_guide/food_guide_v2.csv
-```
-
-필수값·출처·URL·분류 경로 중복·식품코드 중복·제철 월 범위를 검사합니다.
-오류가 있으면 종료 코드 1을 반환하며, `--strict`를 지정하면 경고도 실패로 처리합니다.
+분할 로더가 적재 전에 필수 파일, ID 중복, 관계 중복과 잘못된 참조를 자동 검사합니다.
 
 Neo4j 적재 후 노드 개수, 필수 관계 누락, 고아 노드를 검증합니다.
 
@@ -173,7 +159,7 @@ Nutrition: 388
 
 ### 배포 전 확인
 
-- [x] CSV 자동 검수 오류 0건
+- [x] 분할 CSV 참조 무결성 오류 0건
 - [ ] 보완 필요 표본의 문장·출처 수정
 - [ ] 민간 자료 이용조건과 개인정보 포함 여부 확인
 - [ ] LLM 초안 담당자 검수
@@ -189,7 +175,7 @@ Nutrition: 388
 
 ## 데이터 보완 과정
 
-`food_guide_v1.csv`를 기준으로 식재료 가이드 데이터를 보완했다.
+기존 통합 데이터를 기준으로 식재료 가이드 데이터를 보완했다.
 현재 기준 파일의 대상은 전체 389개 식재료이며, 주요 보완 필드는 `보관`, `손질`, `세척`, `신선도체크`이다.
 
 ### 1. 원본 데이터 분석
@@ -450,4 +436,4 @@ URL 형식 오류: 0개
 식품코드 경고: 21개 (누락 1개, 중복 행 20개)
 ```
 
-최종 파일 `food_guide_v2.csv`는 식재료 가이드 웹페이지, Neo4j 적재, 챗봇/RAG 응답용 지식 데이터로 사용할 수 있는 형태로 정리했다.
+최종 분할 CSV는 식재료 가이드 웹페이지와 Neo4j 조회에 사용하는 형태로 정리했다.
