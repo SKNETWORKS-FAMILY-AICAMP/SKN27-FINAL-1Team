@@ -68,6 +68,21 @@ def test_inventory_add_sentence_asks_storage_without_llm() -> None:
     result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.inventory", "history": []})
     assert result["response_text"] == "\ub450\ubd80 1\uac1c\ub97c \uc5b4\ub514\uc5d0 \ubcf4\uad00\ud560\uae4c\uc694? \ub0c9\uc7a5, \ub0c9\ub3d9, \uc2e4\uc628 \uc911\uc5d0\uc11c \uc54c\ub824\uc8fc\uc138\uc694."
 
+def test_pending_calendar_time_update_stays_calendar() -> None:
+    """일정 확인 문맥에서 시간만 바꿔도 재료 추가로 빠지지 않습니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "'럭키데이' 일정을 2024-07-07 09:00에 등록할까요?")]
+    state = {"text": '11시에 등록해줘', "service": FakeService("general"), "history": history}
+    assert router_node(state)["intent"] == "mcp.pending_calendar"
+    result = mcp_agent_node({"user_id": 1, "text": '11시에 등록해줘', "intent": "mcp.pending_calendar", "history": history})
+    assert result["response_text"] == "'럭키데이' 일정을 2024-07-07 11:00에 등록할까요?"
+    assert result["actions"][0]["data"]["message"] == '확인:add_calendar_event:럭키데이:2024-07-07T11:00:00+09:00'
+
+
 def test_pending_add_asks_storage_after_quantity() -> None:
     """수량만 답하면 보관 위치를 추가로 물어봅니다."""
     class Message:
@@ -247,6 +262,13 @@ def test_calendar_date_parser() -> None:
 
 
 
+def test_calendar_month_day_uses_current_year() -> None:
+    """월/일만 있는 일정은 LLM의 과거 연도를 버리고 현재 연도를 사용합니다."""
+    result = _calendar_datetime_from_text('7월7일 럭키데이 일정 등록해줘', "2023-07-07T09:00:00")
+    assert result.date() == date(date.today().year, 7, 7)
+    assert result.hour == 9
+
+
 def test_calendar_today_time_uses_current_date() -> None:
     """LLM이 과거 날짜를 줘도 사용자 원문의 오늘/시간을 우선합니다."""
     result = _calendar_datetime_from_text("오늘 11시에 미팅 일정 등록해줘", "2023-10-04T11:00:00")
@@ -266,6 +288,7 @@ if __name__ == "__main__":
     test_inventory_action_routes_to_mcp()
     test_delete_inventory_item_routes_to_mcp()
     test_calendar_action_routes_to_mcp()
+    test_pending_calendar_time_update_stays_calendar()
     test_confirm_and_cancel_route_to_mcp()
     test_inventory_add_sentence_asks_storage_without_llm()
     test_pending_add_asks_storage_after_quantity()
@@ -283,6 +306,7 @@ if __name__ == "__main__":
     test_pending_consume_quantity_builds_confirm_action()
     test_mcp_requires_login()
     test_calendar_date_parser()
+    test_calendar_month_day_uses_current_year()
     test_calendar_today_time_uses_current_date()
     test_route_intent_uses_lookup_table()
     print("chat graph tests ok")

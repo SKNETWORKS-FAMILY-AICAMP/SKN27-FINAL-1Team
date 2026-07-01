@@ -168,6 +168,12 @@ def _extract_add_items(text: str) -> list[dict]:
     return items
 
 
+def _pending_calendar_from_history(history) -> tuple[str, str] | None:
+    """최근 봇의 일정 등록 확인 문구에서 제목과 날짜를 찾습니다."""
+    text = _latest_bot_text(history)
+    match = re.search(r"'(.+?)'\s+\uc77c\uc815\uc744\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\uc5d0\s+\ub4f1\ub85d\ud560\uae4c\uc694", text)
+    return (match.group(1), match.group(2)) if match else None
+
 def _pending_add_many_from_history(history) -> bool:
     """최근 봇 응답이 여러 식재료 수량을 기다리는지 확인합니다."""
     return "각 식재료의 수량" in _latest_bot_text(history)
@@ -237,26 +243,38 @@ def _parse_calendar_date(date_str: str) -> date:
         return today + timedelta(days=1)
     if "\uc624\ub298" in text:
         return today
+    month_day = re.search(r"(\d{1,2})\s*\uc6d4\s*(\d{1,2})\s*\uc77c", text)
+    if month_day:
+        month, day = map(int, month_day.groups())
+        return date(today.year, month, day)
     try:
         return date.fromisoformat(text[:10])
     except ValueError:
         return today
 
 
+def _has_calendar_date_text(text: str) -> bool:
+    """사용자 원문에 날짜 표현이 있는지 확인합니다."""
+    return bool(
+        any(word in text for word in ("\uc624\ub298", "\ub0b4\uc77c", "\ubaa8\ub808"))
+        or re.search(r"\d{1,2}\s*\uc6d4\s*\d{1,2}\s*\uc77c", text)
+        or re.search(r"\d{4}-\d{2}-\d{2}", text)
+    )
+
 
 def _calendar_datetime_from_text(text: str, fallback: str) -> datetime:
     """사용자 원문을 우선해 캘린더 일정 시작 시간을 계산합니다."""
-    base_date = _parse_calendar_date(text if any(word in text for word in ("오늘", "내일", "모레")) else fallback)
-    time_match = re.search(r"(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?", text)
+    base_date = _parse_calendar_date(text if _has_calendar_date_text(text) else fallback)
+    time_match = re.search(r"(\uc624\uc804|\uc624\ud6c4)?\s*(\d{1,2})\s*\uc2dc(?:\s*(\d{1,2})\s*\ubd84)?", text)
     hour = 9
     minute = 0
     if time_match:
         meridiem, hour_text, minute_text = time_match.groups()
         hour = int(hour_text)
         minute = int(minute_text or 0)
-        if meridiem == "오후" and hour < 12:
+        if meridiem == "\uc624\ud6c4" and hour < 12:
             hour += 12
-        if meridiem == "오전" and hour == 12:
+        if meridiem == "\uc624\uc804" and hour == 12:
             hour = 0
     elif "T" in fallback:
         try:
@@ -355,6 +373,8 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.confirm"}
     if normalized in CANCEL_WORDS:
         return {"intent": "mcp.cancel"}
+    if _pending_calendar_from_history(history) and any(word in normalized for word in CALENDAR_WORDS + ADD_WORDS):
+        return {"intent": "mcp.pending_calendar"}
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
             return {"intent": "mcp.pending_add_many"}
@@ -445,6 +465,17 @@ def mcp_agent_node(state: GraphState) -> dict:
             return {"response_text": GENERAL_REPLY}
         text = f"{name} \ud3d0\uae30 \ucc98\ub9ac\ud560\uae4c\uc694?"
         command = f"\ud655\uc778:delete_ingredient:{name}"
+        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+
+    if state.get("intent") == "mcp.pending_calendar":
+        pending = _pending_calendar_from_history(state.get("history", []))
+        if not pending:
+            return {"response_text": GENERAL_REPLY}
+        title, fallback = pending
+        start_at = _calendar_datetime_from_text(state["text"], fallback)
+        date_value = start_at.isoformat()
+        text = f"'{title}' \uc77c\uc815\uc744 {_calendar_display(start_at)}\uc5d0 \ub4f1\ub85d\ud560\uae4c\uc694?"
+        command = f"\ud655\uc778:add_calendar_event:{title}:{date_value}"
         return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
 
     if state.get("intent") == "mcp.pending_consume":
