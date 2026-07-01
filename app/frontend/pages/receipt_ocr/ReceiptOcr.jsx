@@ -34,6 +34,76 @@ const aiAnalysisSteps = [
   '확인 화면 준비 중',
 ]
 
+const analysisStageStepMap = {
+  image_uploaded: 0,
+  ocr_extracted: 1,
+  ocr_retry_requested: 1,
+  result_normalized: 2,
+  receipt_document_validated: 2,
+  quality_validated: 2,
+  receipt_persisted: 3,
+  response_ready: 3,
+  reupload_required: 3,
+}
+
+function getAnalysisStepForStage(stage) {
+  return analysisStageStepMap[stage] ?? 0
+}
+
+function parseSseBlock(block) {
+  const dataLines = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart())
+
+  if (dataLines.length === 0) {
+    return null
+  }
+
+  return JSON.parse(dataLines.join('\n'))
+}
+
+async function readReceiptUploadStream(response, onEvent) {
+  const reader = response.body?.getReader()
+
+  if (!reader) {
+    throw new Error('실시간 분석 상태를 읽지 못했어요.')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    const blocks = buffer.split(/\r?\n\r?\n/)
+    buffer = blocks.pop() || ''
+
+    blocks.forEach((block) => {
+      const event = parseSseBlock(block)
+
+      if (event) {
+        onEvent(event)
+      }
+    })
+  }
+
+  buffer += decoder.decode()
+
+  if (buffer.trim()) {
+    const event = parseSseBlock(buffer)
+
+    if (event) {
+      onEvent(event)
+    }
+  }
+}
+
 function getItemDisplayName(item) {
   const rawName = typeof item === 'string' ? item : item?.normalized_name || item?.raw_name || item?.name || ''
 
@@ -654,27 +724,17 @@ function ReceiptOcr() {
     setAnalysisStep(0)
     setActiveStep(1)
 
-    flowTimersRef.current = [
-      ...aiAnalysisSteps.slice(1).map((_, index) =>
-        window.setTimeout(() => {
-          setAnalysisStep(index + 1)
-        }, (index + 1) * 800),
-      ),
-    ]
-
     const formData = new FormData()
     formData.append('file', file)
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/receipts/upload`, {
+      const response = await fetch(`${apiUrl}/api/v1/receipts/upload/stream`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
         body: formData,
       })
-      const data = await response.json().catch(() => ({}))
-
       if (response.status === 401) {
         window.localStorage.removeItem('bobbeori-token')
         window.dispatchEvent(new Event('bobbeori-auth-change'))
@@ -687,7 +747,47 @@ function ReceiptOcr() {
       }
 
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.detail || '영수증 OCR 분석에 실패했어요.')
+      }
+
+      let data = null
+
+      await readReceiptUploadStream(response, (event) => {
+        if (event.type === 'stage') {
+          setAnalysisStep(getAnalysisStepForStage(event.stage))
+          return
+        }
+
+        if (event.type === 'error') {
+          throw new Error(event.message || '?곸닔利?OCR 遺꾩꽍???ㅽ뙣?덉뼱??')
+        }
+
+        if (event.type === 'result') {
+          data = event.data
+        }
+      })
+
+      if (!data) {
+        throw new Error('?곸닔利?OCR 遺꾩꽍 寃곌낵瑜?諛쏆? 紐삵뻽?댁슂.')
+      }
+
+      if (data.needs_reupload) {
+        setHasUploaded(false)
+        setActiveStep(0)
+        setDetectedRows([])
+        setEditingRows({})
+        setReceiptMeta(null)
+        setReceiptSource(source)
+        await showAlert(
+          data.reupload_message ||
+            '영수증 이미지 인식 품질이 낮아요. 글자와 금액이 선명하게 보이도록 다시 촬영하거나 다른 이미지를 첨부해주세요.',
+          {
+            title: '영수증을 다시 첨부해주세요',
+            confirmText: '확인',
+          },
+        )
+        return
       }
 
       const nextRows = mapOcrItemsToRows(data.items)
@@ -793,8 +893,18 @@ function ReceiptOcr() {
     setSelectedRowIds((prev) => (prev.includes(rowId) ? prev.filter((value) => value !== rowId) : [...prev, rowId]))
   }
 
-  const deleteSelectedRows = () => {
+  const deleteSelectedRows = async () => {
     if (selectedRowIds.length === 0) {
+      return
+    }
+
+    const confirmed = await showConfirm(`총 ${selectedRowIds.length}개 삭제하시겠습니까?`, {
+      title: '선택 삭제',
+      confirmText: '삭제',
+      cancelText: '취소',
+    })
+
+    if (!confirmed) {
       return
     }
 
@@ -807,7 +917,21 @@ function ReceiptOcr() {
     exitRowSelection()
   }
 
-  const deleteAllRows = () => {
+  const deleteAllRows = async () => {
+    if (detectedRows.length === 0) {
+      return
+    }
+
+    const confirmed = await showConfirm('전체 삭제하시겠습니까?', {
+      title: '전체 삭제',
+      confirmText: '삭제',
+      cancelText: '취소',
+    })
+
+    if (!confirmed) {
+      return
+    }
+
     setDetectedRows([])
     setEditingRows({})
     exitRowSelection()
@@ -1064,7 +1188,7 @@ function ReceiptOcr() {
 
       {!isLoggedIn ? (
         <div className="receipt-branch receipt-guest-grid">
-          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
           <section className="receipt-panel receipt-login-notice" aria-labelledby="receipt-login-title">
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
@@ -1080,7 +1204,7 @@ function ReceiptOcr() {
         </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
-          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
           </aside>
@@ -1657,7 +1781,7 @@ function detectCameraCapture() {
   return Boolean(isCoarsePointer || isMobileUa || isMobileViewport)
 }
 
-function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
+function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify }) {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1681,7 +1805,7 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
   }, [])
 
   const handleFileChange = (event, source) => {
-    const file = event.target.files?.[0]
+    const files = event.target.files
     event.target.value = ''
 
     if (!canUpload) {
@@ -1689,6 +1813,12 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
       return
     }
 
+    if (files && files.length > 1) {
+      onNotify?.('영수증은 한 번에 한 장만 업로드할 수 있어요.', { title: '한 장만 올려주세요' })
+      return
+    }
+
+    const file = files?.[0]
     if (file) {
       onStartUpload(file, source)
     }
@@ -1703,7 +1833,13 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
       return
     }
 
-    const file = event.dataTransfer.files?.[0]
+    const files = event.dataTransfer.files
+    if (files && files.length > 1) {
+      onNotify?.('영수증은 한 번에 한 장만 업로드할 수 있어요.', { title: '한 장만 올려주세요' })
+      return
+    }
+
+    const file = files?.[0]
     if (file) {
       onStartUpload(file, '업로드 이미지')
     }

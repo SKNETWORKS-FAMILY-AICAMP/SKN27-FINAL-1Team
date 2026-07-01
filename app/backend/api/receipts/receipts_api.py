@@ -1,8 +1,10 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 import httpx
 
 from fastapi import APIRouter, Depends, File, Path, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -30,6 +32,11 @@ from app.backend.services.receipt_ocr_service import (
 
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
 KST = timezone(timedelta(hours=9))
+
+
+def _format_sse_event(payload: dict) -> str:
+    event_name = payload.get("type", "message")
+    return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _parse_receipt_calendar_datetime(value: str | None) -> datetime | None:
@@ -97,6 +104,29 @@ async def upload_receipt(
 ):
     """영수증 이미지를 OCR 분석하고, 사용자가 확인할 품목 후보를 반환한다."""
     return await receipt_ocr_service.analyze_upload(db=db, file=file, user_id=current_user_id)
+
+
+@router.post("/upload/stream")
+async def upload_receipt_stream(
+    file: UploadFile = File(...),
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Stream receipt OCR LangGraph stages and final upload result as SSE."""
+    event_stream = await receipt_ocr_service.create_upload_event_stream(db=db, file=file, user_id=current_user_id)
+
+    async def sse_stream():
+        async for payload in event_stream:
+            yield _format_sse_event(payload)
+
+    return StreamingResponse(
+        sse_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/confirm", response_model=MessageResponse)
