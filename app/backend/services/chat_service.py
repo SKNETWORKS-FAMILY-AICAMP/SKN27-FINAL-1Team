@@ -123,6 +123,11 @@ class ChatService:
         if self._is_cooking_time_question(text):
             return "recipe.search"
 
+        normalized = text.replace(" ", "").lower()
+        guide_words = ("\ubcf4\uad00", "\uc138\ucc99", "\uc53b", "\uc190\uc9c8", "\uc2e0\uc120", "\uac00\uc774\ub4dc", "\uc5b4\ub5a1", "\ub0a8\uc740")
+        if any(word in normalized for word in guide_words):
+            return "ingredient.guide"
+
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
             return self._route_intent(text)
 

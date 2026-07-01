@@ -21,6 +21,14 @@ const FILTER_TYPES = [
 
 const STORAGE_KEYS = ['냉장', '냉동', '실온']
 
+// 보관 위치 배지 색상을 실제 보관 위치 기준으로 고정합니다.
+function getStorageTone(storageMethod = '') {
+  if (storageMethod === STORAGE_KEYS[0]) return 'is-cold'
+  if (storageMethod === STORAGE_KEYS[1]) return 'is-frozen'
+  if (storageMethod === STORAGE_KEYS[2]) return 'is-room'
+  return ''
+}
+
 // 이미지가 없을 때도 같은 레이아웃을 유지하는 슬롯 컴포넌트입니다.
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -380,6 +388,13 @@ function Fridge() {
         return
       }
 
+      const savedItem = await response.json()
+      setIngredients((prev) => {
+        if (isEditing) {
+          return prev.map((item) => (item.id === editingId ? normalizeIngredient(savedItem) : item))
+        }
+        return [normalizeIngredient(savedItem), ...prev]
+      })
       closeModal()
       fetchFridgeData()
     } catch (err) {
@@ -706,7 +721,7 @@ function Fridge() {
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
                         <h2>{item.name}</h2>
-                        <span className={item.is_expiring_soon || item.is_expired ? 'is-urgent' : ''}>{item.storage_method}</span>
+                        <span className={['fridge-storage-badge', getStorageTone(item.storage_method)].filter(Boolean).join(' ')}>{item.storage_method}</span>
                       </div>
                       <dl>
                         <div>

@@ -5,7 +5,7 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.backend.services.chat_graph import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_delete_name, _extract_quantity, _parse_calendar_date, mcp_agent_node, route_intent, router_node
+from app.backend.services.chat_graph import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _parse_calendar_date, mcp_agent_node, route_intent, router_node
 
 
 class FakeService:
@@ -55,6 +55,85 @@ def test_confirm_and_cancel_route_to_mcp() -> None:
 
 
 
+
+
+
+
+def test_pending_add_asks_storage_after_quantity() -> None:
+    """수량만 답하면 보관 위치를 추가로 물어봅니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "냉동 새우를 몇 개 추가할까요? 수량을 알려주세요.")]
+    state = {"text": "1", "service": FakeService("general"), "history": history}
+    assert router_node(state)["intent"] == "mcp.pending_add"
+    result = mcp_agent_node({"user_id": 1, "text": "1", "intent": "mcp.pending_add", "history": history})
+    assert result["response_text"] == "냉동 새우 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
+
+
+def test_pending_add_storage_answer_builds_confirm_action() -> None:
+    """보관 위치만 답하면 직전 추가 요청의 수량과 합쳐 확인합니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "냉동 새우 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요.")]
+    state = {"text": "냉동실에", "service": FakeService("general"), "history": history}
+    assert _extract_storage("내 냉장고 재료 뭐 있어?") is None
+    assert _extract_storage("냉동실에") == "냉동"
+    assert router_node(state)["intent"] == "mcp.pending_add_storage"
+    result = mcp_agent_node({"user_id": 1, "text": "냉동실에", "intent": "mcp.pending_add_storage", "history": history})
+    assert result["response_text"] == "냉동 새우 1개를 냉동에 추가할까요?"
+    assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:냉동 새우:1.0:냉동"
+
+
+def test_inventory_list_ignores_pending_add_when_no_quantity_or_storage() -> None:
+    """냉장고 조회 질문은 직전 추가 대기 상태를 이어받지 않습니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "냉동 새우를 몇 개 추가할까요? 수량을 알려주세요.")]
+    state = {"text": "내 냉장고 재료 뭐 있어?", "service": FakeService("inventory.list"), "history": history}
+    assert router_node(state)["intent"] == "inventory.list"
+def test_pending_add_handles_short_quantity_question() -> None:
+    """봇이 짧게 수량을 물어도 후속 수량 답변을 추가 확인으로 이어갑니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "감자를 몇 개 추가하시겠어요?")]
+    state = {"text": "한개", "service": FakeService("general"), "history": history}
+    assert router_node(state)["intent"] == "mcp.pending_add"
+    result = mcp_agent_node({"user_id": 1, "text": "한개", "intent": "mcp.pending_add", "history": history})
+    assert result["response_text"] == "감자 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
+
+
+def test_multi_add_items_build_confirm_action() -> None:
+    """여러 식재료와 수량을 한 번에 말하면 일괄 추가 확인을 만듭니다."""
+    text = "파스타1, 토마토소스2, 냉동새우1"
+    items = _extract_add_items(text)
+    assert [item["name"] for item in items] == ["파스타", "토마토소스", "냉동새우"]
+    result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.pending_add_many", "history": []})
+    assert result["actions"][0]["data"]["message"] == "확인:add_ingredients:파스타,1.0,냉장|토마토소스,2.0,냉장|냉동새우,1.0,냉장"
+
+def test_pending_add_many_quantity_only_asks_for_named_quantities() -> None:
+    """여러 재료 추가 대기 중 수량만 오면 재료명까지 다시 요청합니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "각 식재료의 수량을 알려주시면 추가해드릴게요.")]
+    state = {"text": "1,1,1", "service": FakeService("general"), "history": history}
+    assert router_node(state)["intent"] == "mcp.pending_add_many_retry"
+    result = mcp_agent_node({"user_id": 1, "text": "1,1,1", "intent": "mcp.pending_add_many_retry", "history": history})
+    assert result["response_text"] == "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"
 def test_pending_add_quantity_routes_to_mcp() -> None:
     """?? ??? ?? ?? ?? ?? ?? ??? ??????."""
     class Message:
@@ -77,8 +156,7 @@ def test_pending_add_quantity_builds_confirm_action() -> None:
 
     history = [Message("bot", "팽이버섯을 몇 개 추가할까요? 수량을 알려주세요.")]
     result = mcp_agent_node({"user_id": 1, "text": "2개", "intent": "mcp.pending_add", "history": history})
-    assert result["response_text"] == "팽이버섯 2개를 냉장에 추가할까요?"
-    assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:팽이버섯:2.0:냉장"
+    assert result["response_text"] == "팽이버섯 2개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
 def test_pending_add_korean_quantity_and_storage() -> None:
@@ -144,6 +222,12 @@ if __name__ == "__main__":
     test_delete_inventory_item_routes_to_mcp()
     test_calendar_action_routes_to_mcp()
     test_confirm_and_cancel_route_to_mcp()
+    test_pending_add_asks_storage_after_quantity()
+    test_pending_add_storage_answer_builds_confirm_action()
+    test_inventory_list_ignores_pending_add_when_no_quantity_or_storage()
+    test_pending_add_handles_short_quantity_question()
+    test_multi_add_items_build_confirm_action()
+    test_pending_add_many_quantity_only_asks_for_named_quantities()
     test_pending_add_quantity_routes_to_mcp()
     test_pending_add_quantity_builds_confirm_action()
     test_pending_add_korean_quantity_and_storage()
