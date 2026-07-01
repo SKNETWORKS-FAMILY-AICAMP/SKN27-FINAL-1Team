@@ -25,3 +25,8 @@ numpy>=1.24.0
 scikit-learn
 matplotlib
 seaborn
+
+# --- recommendation 감성분석 (BERT/Korean-sentiment) ---
+# 모델: WhitePeak/bert-base-cased-Korean-sentiment
+# torch, transformers, pandas 는 상단 섹션 재사용
+tqdm>=4.67.0

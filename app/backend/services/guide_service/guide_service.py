@@ -188,6 +188,7 @@ class GuideService:
     def get_guide_detail(self, code: str) -> dict[str, Any] | None:
         query = """
         MATCH (g:FoodGuide {key: $code})
+        OPTIONAL MATCH (g)-[:HAS_NUTRITION]->(nutrition:Nutrition)
         RETURN g.key AS code,
                coalesce(g.name, g.rawName, g.representativeName) AS name,
                g.representativeName AS representative_name,
@@ -211,6 +212,9 @@ class GuideService:
                g.proteinG AS protein_g,
                g.fatG AS fat_g,
                g.carbohydrateG AS carbohydrate_g,
+               nutrition.sugarG AS sugar_g,
+               nutrition.saturatedFatG AS saturated_fat_g,
+               nutrition.fiberG AS fiber_g,
                g.calciumMg AS calcium_mg,
                g.potassiumMg AS potassium_mg,
                g.sodiumMg AS sodium_mg,

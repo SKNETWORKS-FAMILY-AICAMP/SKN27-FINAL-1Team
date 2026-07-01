@@ -99,7 +99,15 @@ services:
         volumes:
             - ./storage:/project/storage:ro
             - ./.env:/project/.env:ro
-        command: ["python", "-m", "etl.food_guide.load_to_neo4j"]
+        command:
+            [
+                "python",
+                "-m",
+                "etl.food_guide.load_to_neo4j",
+                "--split-dir",
+                "/project/storage/processed/food_guide",
+                "--clear",
+            ]
         depends_on:
             neo4j:
                 condition: service_healthy
