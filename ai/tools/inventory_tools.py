@@ -14,14 +14,17 @@ def consume_ingredient_tool(ingredient_name: str, quantity: float) -> str:
     # 지금은 테스트용 메시지를 반환합니다.
     return f"{ingredient_name} {quantity}개가 정상적으로 소비(차감) 처리되었습니다!"
 
+from typing import Optional
+
 class AddIngredientInput(BaseModel):
-    ingredient_name: str = Field(description="새로 추가할 식재료의 이름")
-    quantity: float = Field(description="추가할 수량")
-    storage_method: str = Field(default="\ub0c9\uc7a5", description="보관 방법 (냉장, 냉동, 실온 중 택 1)")
+    ingredient_name: str = Field(description="새로 추가할 식재료의 이름 (주의: 번호나 조사를 제외한 순수 식재료명만 추출하세요. 예: '파스타면', '양파')")
+    quantity: Optional[float] = Field(default=None, description="추가할 수량 (모르면 None)")
+    storage_method: Optional[str] = Field(default="냉장", description="보관 방법 (모르면 '냉장')")
 
 @tool("add_ingredient", args_schema=AddIngredientInput)
-def add_ingredient_tool(ingredient_name: str, quantity: float, storage_method: str) -> str:
-    """사용자가 냉장고에 새로운 식재료를 넣었다고 할 때 호출합니다."""
-    return f"{ingredient_name} {quantity}개가 {storage_method}에 추가되었습니다!"
+def add_ingredient_tool(ingredient_name: str, quantity: Optional[float] = None, storage_method: str = "냉장") -> str:
+    """사용자가 냉장고에 단일 식재료를 추가할 때 호출합니다. 
+    수량을 모르더라도 일단 이 도구를 호출하세요!"""
+    return f"{ingredient_name} 추가 요청됨"
 
 INVENTORY_TOOLS = [consume_ingredient_tool, add_ingredient_tool]

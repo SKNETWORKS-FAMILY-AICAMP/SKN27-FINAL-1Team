@@ -5,5 +5,7 @@ storage
 **/*.pyc
 app/frontend/node_modules
 test
-ai
+ai/*
+!ai/tools
+!ai/tools/**
 docs
