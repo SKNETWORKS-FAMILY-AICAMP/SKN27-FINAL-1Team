@@ -16,7 +16,9 @@ from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
 from app.backend.schemas.receipts import (
     ReceiptConfirmRequest,
+    ReceiptHistoryEntry,
     ReceiptHistoryResponse,
+    ReceiptUpdateRequest,
     ReceiptUploadResponse,
 )
 from app.backend.services.receipt_ocr_service import (
@@ -58,6 +60,22 @@ def get_receipt_history(
     """Return the user's most recently registered receipts with their items."""
     receipts = receipt_history_service.get_recent_receipts(db=db, user_id=current_user_id, limit=limit)
     return {"receipts": receipts}
+
+
+@router.patch("/{receipt_id}", response_model=ReceiptHistoryEntry)
+def update_receipt(
+    request_data: ReceiptUpdateRequest,
+    receipt_id: int = Path(..., ge=1),
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Update a receipt's store name (title)."""
+    return receipt_history_service.update_store_name(
+        db=db,
+        user_id=current_user_id,
+        receipt_id=receipt_id,
+        store_name=request_data.store_name,
+    )
 
 
 @router.delete("/{receipt_id}", response_model=MessageResponse)

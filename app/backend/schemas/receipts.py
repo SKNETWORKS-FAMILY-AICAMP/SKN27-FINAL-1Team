@@ -43,6 +43,10 @@ class ReceiptConfirmRequest(BaseModel):
     calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar cost event")
 
 
+class ReceiptUpdateRequest(BaseModel):
+    store_name: str = Field(..., min_length=1, max_length=100, description="New store name (receipt title)")
+
+
 class ReceiptHistoryItem(BaseModel):
     raw_name: str = Field(..., description="Original receipt item name")
     normalized_name: Optional[str] = Field(default=None, description="Confirmed item name")

@@ -275,7 +275,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
       <section className="receipt-panel receipt-chart" aria-labelledby={chartId}>
         <div>
           <h2 id={chartId}>식재료 구매 흐름</h2>
-          <p>최근 구매 금액과 월별 구매 횟수를 기준으로 보여줘요.</p>
+          <p> 최근 식재료 구매 패턴을 한눈에 확인해보세요.</p>
         </div>
         <div className="receipt-chart__bars" aria-hidden="true">
           <span style={{ height: '42%' }} />
@@ -1069,8 +1069,8 @@ function ReceiptOcr() {
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
             <p>
-              업로드한 영수증은 냉장고와 연결되어 저장돼요. 로그인하면 OCR 분석 결과를 바로
-              확인하고 내 식재료로 등록할 수 있어요.
+            영수증 한 장으로 내 냉장고를 채워보세요.<br />
+            로그인 후 바로 시작할 수 있어요.
             </p>
             <button className="receipt-primary-button" type="button" onClick={() => navigate('/login')}>
               로그인하러 가기
@@ -1822,6 +1822,9 @@ function RecentHistory() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+  const [editingTitleId, setEditingTitleId] = useState(null)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [isSavingTitle, setIsSavingTitle] = useState(false)
 
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -1907,6 +1910,61 @@ function RecentHistory() {
       await showAlert(error.message || '영수증 내역 삭제 중 문제가 발생했어요.', { title: '삭제 실패' })
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const startEditTitle = (item) => {
+    setEditingTitleId(item.id)
+    setTitleDraft(item.store === '상호명 미확인' ? '' : item.store)
+  }
+
+  const cancelEditTitle = () => {
+    setEditingTitleId(null)
+    setTitleDraft('')
+  }
+
+  const saveTitle = async (item) => {
+    const trimmed = titleDraft.trim()
+
+    if (!trimmed) {
+      await showAlert('영수증 제목을 입력해주세요.', { title: '제목 수정' })
+      return
+    }
+
+    if (trimmed === item.store) {
+      cancelEditTitle()
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      return
+    }
+
+    setIsSavingTitle(true)
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/receipts/${item.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ store_name: trimmed }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.detail || '영수증 제목 수정에 실패했어요.')
+      }
+
+      const updated = mapHistoryEntry(await response.json())
+      setHistory((prev) => prev.map((entry) => (entry.id === item.id ? updated : entry)))
+      cancelEditTitle()
+    } catch (error) {
+      await showAlert(error.message || '영수증 제목 수정 중 문제가 발생했어요.', { title: '수정 실패' })
+    } finally {
+      setIsSavingTitle(false)
     }
   }
 
@@ -2054,7 +2112,15 @@ function RecentHistory() {
                   key={item.id}
                   type="button"
                   aria-pressed={selectionMode ? isChecked : undefined}
-                  onClick={() => (selectionMode ? toggleSelect(item.id) : setSelectedId(item.id))}
+                  onClick={() => {
+                    if (selectionMode) {
+                      toggleSelect(item.id)
+                      return
+                    }
+
+                    cancelEditTitle()
+                    setSelectedId(item.id)
+                  }}
                 >
                   <span className="receipt-history-list__marker" aria-hidden="true" />
                   <div>
@@ -2071,7 +2137,44 @@ function RecentHistory() {
             <article className="receipt-history-detail" aria-label={`${selectedHistory.title} 상세 내역`}>
               <div>
                 <span>{selectedHistory.date}</span>
-                <strong>{selectedHistory.store}</strong>
+                {editingTitleId === selectedHistory.id ? (
+                  <div className="receipt-history-detail__title-edit">
+                    <input
+                      className="receipt-inline-input"
+                      type="text"
+                      value={titleDraft}
+                      maxLength={100}
+                      placeholder="영수증 제목"
+                      autoFocus
+                      disabled={isSavingTitle}
+                      onChange={(event) => setTitleDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          saveTitle(selectedHistory)
+                        } else if (event.key === 'Escape') {
+                          cancelEditTitle()
+                        }
+                      }}
+                    />
+                    <button type="button" disabled={isSavingTitle} onClick={() => saveTitle(selectedHistory)}>
+                      {isSavingTitle ? '저장 중...' : '저장'}
+                    </button>
+                    <button type="button" disabled={isSavingTitle} onClick={cancelEditTitle}>
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <div className="receipt-history-detail__title">
+                    <strong>{selectedHistory.store}</strong>
+                    <button
+                      type="button"
+                      className="receipt-history-detail__title-button"
+                      onClick={() => startEditTitle(selectedHistory)}
+                    >
+                      제목 수정
+                    </button>
+                  </div>
+                )}
                 <b>{selectedHistory.amount}</b>
               </div>
               <ul>
