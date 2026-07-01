@@ -6,6 +6,7 @@ COPY app/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY ai ./ai
 
 ENV PYTHONPATH=/project
 ENV PYTHONUNBUFFERED=1

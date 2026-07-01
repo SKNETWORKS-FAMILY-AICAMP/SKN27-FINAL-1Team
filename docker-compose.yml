@@ -15,6 +15,7 @@ services:
             NEO4J_URI: bolt://neo4j:7687
         volumes:
             - ./app:/project/app
+            - ./ai:/project/ai
         command:
             [
                 "uvicorn",
