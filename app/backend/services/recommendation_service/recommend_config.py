@@ -23,6 +23,15 @@ class RecipeRecommendConfig:
     difficulty: str | None = None
     cooking_time_label: str | None = None
 
+    # Preference (tier fallback 대상)
+    require_any_owned: bool = False
+    include_maybe_owned: bool = True
+    min_display_match_rate: int | None = None
+    use_expiry_priority: bool = False
+    expiring_soon_days: int = 3
+    urgency_base: int = 4
+    expiring_ingredient_bonus: int = 2
+
     # Pagination
     limit: int = 9
     pool_multiplier: int = DEFAULT_POOL_MULTIPLIER
@@ -31,6 +40,9 @@ class RecipeRecommendConfig:
     def fridge_consume_preset(cls) -> RecipeRecommendConfig:
         return cls(
             mode="fridge_consume",
+            require_any_owned=True,
+            include_maybe_owned=True,
+            use_expiry_priority=True,
             limit=cls.FRIDGE_CONSUME_LIMIT,
             pool_multiplier=cls.DEFAULT_POOL_MULTIPLIER,
         )
@@ -40,6 +52,7 @@ class RecipeRecommendConfig:
         pool_multiplier = filters.pop("pool_multiplier", cls.DEFAULT_POOL_MULTIPLIER)
         return cls(
             mode="menu_custom",
+            include_maybe_owned=True,
             limit=cls.clamp_limit(limit),
             pool_multiplier=cls.clamp_pool_multiplier(pool_multiplier),
             **filters,

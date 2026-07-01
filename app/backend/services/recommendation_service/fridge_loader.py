@@ -46,3 +46,7 @@ def fetch_fridge_snapshots(db: Session, user_id: int) -> list[FridgeItemSnapshot
         FridgeItemSnapshot(ingredient_id=row.ingredient_id, fridge_name=row.fridge_name)
         for row in _fetch_fridge_rows(db, user_id)
     ]
+
+
+def fetch_fridge_expiry_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
+    return _fetch_fridge_rows(db, user_id)
