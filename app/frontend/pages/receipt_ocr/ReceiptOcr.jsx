@@ -1749,7 +1749,6 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        <ImageSlot className="receipt-dropzone__icon" src={iconReceipt} />
         <p>
           {canUseCamera
             ? '영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.'
