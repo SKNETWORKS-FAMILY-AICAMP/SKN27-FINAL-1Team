@@ -575,8 +575,8 @@ function Guide() {
             {isLoggedIn ? '내 냉장고 재료' : '추천 식재료'}
           </div>
           {isLoggedIn && fridgeTotalPages > 1 ? (
-            <span className="guide-pagination__status" aria-current="page">
-              {fridgePage} / {fridgeTotalPages}
+            <span className="guide-list-summary" aria-current="page">
+              {fridgeIngredients.length}개 · {fridgePage}/{fridgeTotalPages}
             </span>
           ) : null}
         </div>
@@ -701,7 +701,9 @@ function Guide() {
               <h2 id="guide-all-title">전체 재료 목록</h2>
               <p>분류별로 재료를 넘겨 보며 보관, 손질, 세척 정보를 확인해요.</p>
             </div>
-            <span>{isListLoading ? '불러오는 중' : `${totalCount}개 · ${page}/${totalPages}`}</span>
+            <span className="guide-list-summary">
+              {isListLoading ? '불러오는 중' : `${totalCount}개 · ${page}/${totalPages}`}
+            </span>
           </div>
 
           <div className="guide-all-list" aria-label="전체 재료 목록">
@@ -788,7 +790,9 @@ function Guide() {
                   <div className="guide-tip-grid">
                     {guideTips.map((tip) => (
                       <section
-                        className={`guide-tip-card ${selectedTip.title === tip.title ? 'is-active' : ''}`}
+                        className={`guide-tip-card ${tip.isMissing ? 'is-missing' : ''} ${
+                          selectedTip.title === tip.title ? 'is-active' : ''
+                        }`}
                         key={tip.title}
                         role="button"
                         tabIndex={0}
@@ -822,15 +826,17 @@ function Guide() {
                       <li key={point}>{point}</li>
                     ))}
                   </ul>
-                  <div className="guide-tip-source">
-                    {selectedTip.sourceUrl ? (
-                      <a href={selectedTip.sourceUrl} target="_blank" rel="noreferrer">
-                        {selectedTip.source}
-                      </a>
-                    ) : (
-                      <span>{selectedTip.source}</span>
-                    )}
-                  </div>
+                  {!selectedTip.isMissing ? (
+                    <div className="guide-tip-source">
+                      {selectedTip.sourceUrl ? (
+                        <a href={selectedTip.sourceUrl} target="_blank" rel="noreferrer">
+                          {selectedTip.source}
+                        </a>
+                      ) : (
+                        <span>{selectedTip.source}</span>
+                      )}
+                    </div>
+                  ) : null}
 
                   {selectedTip.isMissing ? (
                     <section className="guide-suggestion" aria-labelledby="guide-suggestion-title">

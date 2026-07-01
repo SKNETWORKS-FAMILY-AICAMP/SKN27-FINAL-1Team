@@ -196,14 +196,6 @@
   margin-bottom: 0;
 }
 
-.guide-ingredients__header .guide-pagination__status {
-  min-width: 0;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 9px;
-  font-size: 12px;
-}
-
 .guide-ingredient-list {
   display: grid;
   grid-template-columns: repeat(6, minmax(116px, 1fr));
@@ -566,7 +558,7 @@ a.guide-owned-badge::after {
   line-height: 1.5;
 }
 
-.guide-all__header > span {
+.guide-list-summary {
   min-height: 30px;
   padding: 0 12px;
   display: inline-flex;
@@ -742,6 +734,31 @@ a.guide-owned-badge::after {
   box-shadow: inset 0 0 0 1px rgba(255, 107, 116, 0.18);
 }
 
+.guide-tip-card.is-missing {
+  border-color: rgba(40, 30, 25, 0.18);
+  background: rgba(40, 30, 25, 0.04);
+  box-shadow: none;
+}
+
+.guide-tip-card.is-missing.is-active {
+  border-color: rgba(40, 30, 25, 0.28);
+  background: rgba(40, 30, 25, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(40, 30, 25, 0.08);
+}
+
+.guide-tip-card.is-missing .guide-tip-card__title span {
+  border-color: #efd8b8;
+  background: #fff4e3;
+}
+
+.guide-tip-card.is-missing .guide-tip-card__title span::before {
+  background: #c98a4b;
+}
+
+.guide-tip-card.is-missing h3 {
+  color: #6d6259;
+}
+
 .guide-tip-card__title {
   display: flex;
   align-items: center;
@@ -912,6 +929,9 @@ a.guide-owned-badge::after {
 .guide-suggestion__open {
   width: 100%;
   margin-top: 12px;
+  border-color: var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
 }
 
 .guide-suggestion__open:hover,
