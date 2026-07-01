@@ -42,6 +42,7 @@ root/
 │  │  │  ├─ receipt_ocr_service/    (박준희 담당 / OCR 결과 처리 로직)
 │  │  │  ├─ guide_service/          (김주영 담당 / 가이드 조회 로직)
 │  │  │  └─ recommendation_service/ (김경수 담당 / 추천 계산 로직)
+│  │  ├─ mcp_server/                (LLM 에이전트와 연동되는 MCP 도구 명세)
 │  │  ├─ requirements.txt           (백엔드 Web용 의존성)
 │  │  └─ Dockerfile                 (백엔드 전용 빌드 명세서)
 │  │

@@ -9,6 +9,21 @@ function normalizeIngredientImageName(name = '') {
   return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
 }
 
+const INGREDIENT_SEARCH_ALIASES = {
+  계란: ['달걀'],
+  달걀: ['계란'],
+  쇠고기: ['소고기'],
+  돈육: ['돼지고기'],
+  고추가루: ['고춧가루'],
+  케찹: ['케첩'],
+}
+
+// 사용자가 동의어로 검색해도 대표 식재료가 자동완성되도록 검색 키를 확장합니다.
+function getIngredientSearchKeys(keyword = '') {
+  const key = normalizeIngredientImageName(keyword)
+  return [key, ...(INGREDIENT_SEARCH_ALIASES[key] || []).map(normalizeIngredientImageName)]
+}
+
 const ingredientImages = Object.entries(
   import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
     eager: true,
@@ -83,6 +98,7 @@ export default function IngredientModal({
   useEffect(() => {
     const keyword = formData.name.trim()
     const key = normalizeIngredientImageName(keyword)
+    const searchKeys = getIngredientSearchKeys(keyword)
     if (!isOpen || (editingId && !hasEditedName) || !key) {
       setSuggestions([])
       return
@@ -90,11 +106,11 @@ export default function IngredientModal({
 
     setSuggestions(
       ingredientImages
-        .filter((item) => item.key.includes(key))
+        .filter((item) => searchKeys.some((searchKey) => item.key.includes(searchKey)))
         // 정확히 일치하는 식재료를 먼저 보여줍니다.
         .sort((a, b) =>
-          Number(b.key === key) - Number(a.key === key) ||
-          Number(b.key.startsWith(key)) - Number(a.key.startsWith(key)) ||
+          Number(searchKeys.includes(b.key)) - Number(searchKeys.includes(a.key)) ||
+          Number(searchKeys.some((searchKey) => b.key.startsWith(searchKey))) - Number(searchKeys.some((searchKey) => a.key.startsWith(searchKey))) ||
           a.name.localeCompare(b.name, 'ko'),
         )
         .slice(0, 6),
