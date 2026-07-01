@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 import httpx
 from fastapi import HTTPException
@@ -16,12 +16,16 @@ from ai.tools.inventory_tools import INVENTORY_TOOLS
 from app.backend.schemas.chat_state import GraphState
 
 logger = logging.getLogger(__name__)
-
+# 챗봇 기본 응답 문구
 LOGIN_REQUIRED_REPLY = "\ub85c\uadf8\uc778\uc774 \ud544\uc694\ud55c \uc9c8\ubb38\uc774\uc5d0\uc694. \ube44\ud68c\uc6d0 \uc0c1\ud0dc\uc5d0\uc11c\ub294 \ubcf4\uad00\ubc95\uc774\ub098 \uc77c\ubc18 \ub808\uc2dc\ud53c \uac80\uc0c9\uc744 \uc774\uc6a9\ud560 \uc218 \uc788\uc5b4\uc694."
 GENERAL_REPLY = "\uc694\ub9ac\uc640 \uc2dd\uc7ac\ub8cc \uad00\ub828 \uc9c8\ubb38\uc744 \ubb3c\uc5b4\ubd10 \uc8fc\uc138\uc694.\n\uc608: \uc591\ud30c \ubcf4\uad00\ubc95, \uac10\uc790\ud280\uae40 \uc5d0\uc5b4\ud504\ub77c\uc774\uae30 \uc2dc\uac04, \ub450\ubd80 \ub808\uc2dc\ud53c"
 CANCEL_REPLY = "\uc54c\uaca0\uc5b4\uc694. \uc791\uc5c5\uc744 \ucde8\uc18c\ud588\uc5b4\uc694."
+
+# 확인/취소 액션 키워드
 CONFIRM_PREFIX = "\ud655\uc778:"
 CANCEL_WORDS = ("\ucde8\uc18c", "\uc544\ub2c8", "\uc544\ub2c8\uc694", "\ucde8\uc18c\ud560\uac8c")
+
+# 의도 분류용 키워드
 INVENTORY_ACTION_WORDS = (
     "\uba39\uc5c8\uc5b4",
     "\ub2e4\uc37c\uc5b4",
@@ -38,8 +42,14 @@ INVENTORY_ACTION_WORDS = (
     "\uc0bf\uc5b4",
     "\uc0ac\uc654\uc5b4",
     "\uad6c\ub9e4\ud588",
+    "\uc0ad\uc81c",
+    "\ud3d0\uae30",
+    "\uc9c0\uc6cc",
 )
 CALENDAR_WORDS = ("\uc77c\uc815", "\uce98\ub9b0\ub354")
+DELETE_WORDS = ("\uc0ad\uc81c", "\ud3d0\uae30", "\uc9c0\uc6cc", "\ubc84\ub824")
+
+# 식재료 입력 파싱용 기본값
 DEFAULT_STORAGE = "\ub0c9\uc7a5"
 STORAGE_KEYS = ("\ub0c9\uc7a5", "\ub0c9\ub3d9", "\uc2e4\uc628")
 KOREAN_QUANTITIES = {
@@ -88,6 +98,20 @@ def _extract_quantity(text: str) -> float | None:
     return None
 
 
+
+
+def _extract_delete_name(text: str) -> str:
+    """\uc0ad\uc81c/\ud3d0\uae30 \ubb38\uc7a5\uc5d0\uc11c \uc2dd\uc7ac\ub8cc\uba85\ub9cc \uac04\ub2e8\ud788 \ucd94\ucd9c\ud569\ub2c8\ub2e4."""
+    target = text
+    for word in DELETE_WORDS:
+        if word in target:
+            target = target.split(word, 1)[0]
+            break
+    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc"):
+        target = target.replace(token, " ")
+    return target.strip().rstrip("\uc744\ub97c\uc740\ub294\uc774\uac00")
+
+
 def _extract_storage(text: str) -> str | None:
     """사용자 문장에서 보관 위치를 찾습니다."""
     return next((storage for storage in STORAGE_KEYS if storage in text), None)
@@ -129,6 +153,34 @@ def _parse_calendar_date(date_str: str) -> date:
         return today
 
 
+
+def _calendar_datetime_from_text(text: str, fallback: str) -> datetime:
+    """사용자 원문을 우선해 캘린더 일정 시작 시간을 계산합니다."""
+    base_date = _parse_calendar_date(text if any(word in text for word in ("오늘", "내일", "모레")) else fallback)
+    time_match = re.search(r"(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?", text)
+    hour = 9
+    minute = 0
+    if time_match:
+        meridiem, hour_text, minute_text = time_match.groups()
+        hour = int(hour_text)
+        minute = int(minute_text or 0)
+        if meridiem == "오후" and hour < 12:
+            hour += 12
+        if meridiem == "오전" and hour == 12:
+            hour = 0
+    elif "T" in fallback:
+        try:
+            parsed = datetime.fromisoformat(fallback[:19])
+            hour, minute = parsed.hour, parsed.minute
+        except ValueError:
+            pass
+    return datetime.combine(base_date, time(hour, minute), timezone(timedelta(hours=9)))
+
+
+def _calendar_display(value: datetime) -> str:
+    """캘린더 확인 문구에 보여줄 날짜와 시간을 만듭니다."""
+    return value.strftime("%Y-%m-%d %H:%M")
+
 def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
     """Google Calendar 연동 정보를 이용해 실제 캘린더 일정을 생성합니다."""
     from app.backend.api.calendar.calendar_api import _create_event_once, _get_access_token, _get_google_integration
@@ -136,13 +188,15 @@ def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
     async def create_event() -> None:
         integration = _get_google_integration(db, user_id)
         access_token = await _get_access_token(integration, db)
-        target_date = _parse_calendar_date(date_str)
-        event_key = f"chat-{user_id}-{target_date.isoformat()}-{hashlib.sha1(title.encode()).hexdigest()[:8]}"
+        start_at = _calendar_datetime_from_text(date_str, date_str)
+        end_at = start_at + timedelta(hours=1)
+        target_date = start_at.date()
+        event_key = f"chat-{user_id}-{start_at.isoformat()}-{hashlib.sha1(title.encode()).hexdigest()[:8]}"
         event = {
             "summary": title,
             "description": "\ubc25\ubc8c\uc774 \ucc57\ubd07\uc5d0\uc11c \ub4f1\ub85d\ud55c \uc77c\uc815\uc785\ub2c8\ub2e4.",
-            "start": {"date": target_date.isoformat()},
-            "end": {"date": (target_date + timedelta(days=1)).isoformat()},
+            "start": {"dateTime": start_at.isoformat()},
+            "end": {"dateTime": end_at.isoformat()},
             "extendedProperties": {"private": {"bobbeoriKey": event_key}},
         }
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -150,7 +204,7 @@ def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
 
     try:
         asyncio.run(create_event())
-        return f"'{title}' \uc77c\uc815\uc744 {_parse_calendar_date(date_str).isoformat()}\uc5d0 \ub4f1\ub85d\ud588\uc5b4\uc694."
+        return f"'{title}' \uc77c\uc815\uc744 {_calendar_display(_calendar_datetime_from_text(date_str, date_str))}\uc5d0 \ub4f1\ub85d\ud588\uc5b4\uc694."
     except HTTPException as exc:
         if exc.status_code == 404:
             return "Google Calendar \uc5f0\ub3d9\uc774 \ud544\uc694\ud574\uc694. \ub9c8\uc774\ud398\uc774\uc9c0\uc5d0\uc11c \uce98\ub9b0\ub354\ub97c \uba3c\uc800 \uc5f0\uacb0\ud574\uc8fc\uc138\uc694."
@@ -180,8 +234,12 @@ def _execute_confirmed_action(state: GraphState) -> dict:
             reply = inventory_service.add_ingredient_by_name(state["db"], state["user_id"], parts[2], float(parts[3]), parts[4])
             return {"response_text": reply, "actions": [_inventory_refresh_action()]}
 
+
+        if action == "delete_ingredient" and len(parts) >= 3:
+            reply = inventory_service.delete_ingredient_by_name(state["db"], state["user_id"], parts[2])
+            return {"response_text": reply, "actions": [_inventory_refresh_action()]}
         if action == "add_calendar_event" and len(parts) >= 4:
-            reply = _execute_calendar_event(state["db"], state["user_id"], parts[2], parts[3])
+            reply = _execute_calendar_event(state["db"], state["user_id"], parts[2], ":".join(parts[3:]))
             return {"response_text": reply}
     except Exception:
         state["db"].rollback()
@@ -205,7 +263,9 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.pending_consume"}
 
     intent = state["service"]._route_intent_with_llm(text, state.get("history", []))
-    if any(word in normalized for word in CALENDAR_WORDS):
+    if any(word in normalized for word in DELETE_WORDS):
+        intent = "mcp.delete"
+    elif any(word in normalized for word in CALENDAR_WORDS):
         intent = "mcp.calendar"
     elif any(word in normalized for word in INVENTORY_ACTION_WORDS):
         intent = "mcp.inventory"
@@ -219,6 +279,14 @@ def mcp_agent_node(state: GraphState) -> dict:
         return {"response_text": CANCEL_REPLY}
     if state.get("intent") == "mcp.confirm":
         return _execute_confirmed_action(state)
+    if state.get("intent") == "mcp.delete":
+        name = _extract_delete_name(state["text"])
+        if not name:
+            return {"response_text": GENERAL_REPLY}
+        text = f"{name} \ud3d0\uae30 \ucc98\ub9ac\ud560\uae4c\uc694?"
+        command = f"\ud655\uc778:delete_ingredient:{name}"
+        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+
     if state.get("intent") == "mcp.pending_consume":
         name = _pending_consume_from_history(state.get("history", [])) or ""
         quantity = _extract_quantity(state["text"]) or 1
@@ -267,10 +335,11 @@ def mcp_agent_node(state: GraphState) -> dict:
     if func_name == "add_calendar_event":
         title = args.get("title", "\uc77c\uc815")
         date_str = args.get("date_str", "\uc624\ub298")
-        text = f"'{title}' \uc77c\uc815\uc744 {date_str}\uc5d0 \ub4f1\ub85d\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:add_calendar_event:{title}:{date_str}"
+        start_at = _calendar_datetime_from_text(state["text"], date_str)
+        date_value = start_at.isoformat()
+        text = f"'{title}' \uc77c\uc815\uc744 {_calendar_display(start_at)}\uc5d0 \ub4f1\ub85d\ud560\uae4c\uc694?"
+        command = f"\ud655\uc778:add_calendar_event:{title}:{date_value}"
         return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")], "messages": messages + [response]}
-
     return {"response_text": "\uc544\uc9c1 \uc9c0\uc6d0\ud558\uc9c0 \uc54a\ub294 \ucc57\ubd07 \uc791\uc5c5\uc774\uc5d0\uc694.", "messages": messages + [response]}
 
 

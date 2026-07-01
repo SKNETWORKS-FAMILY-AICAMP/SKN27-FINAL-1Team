@@ -5,7 +5,7 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.backend.services.chat_graph import LOGIN_REQUIRED_REPLY, _extract_quantity, _parse_calendar_date, mcp_agent_node, route_intent, router_node
+from app.backend.services.chat_graph import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_delete_name, _extract_quantity, _parse_calendar_date, mcp_agent_node, route_intent, router_node
 
 
 class FakeService:
@@ -32,6 +32,16 @@ def test_inventory_action_routes_to_mcp() -> None:
     assert router_node({"text": "\ub450\ubd80 \uc5b4\uc81c 1\uac1c \uc0bf\uc5b4", "service": FakeService("ingredient.guide"), "history": []})["intent"] == "mcp.inventory"
 
 
+
+
+def test_delete_inventory_item_routes_to_mcp() -> None:
+    """삭제/폐기 문장은 전체 폐기 확인 플로우로 보냅니다."""
+    text = "냉장고에 두부 폐기처리 해줘"
+    assert _extract_delete_name(text) == "두부"
+    assert router_node({"text": text, "service": FakeService("general"), "history": []})["intent"] == "mcp.delete"
+    result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
+    assert result["response_text"] == "두부 폐기 처리할까요?"
+    assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
 def test_calendar_action_routes_to_mcp() -> None:
     """일정/캘린더 문장은 calendar MCP 노드로 보냅니다."""
     state = {"text": "\ub0b4\uc77c \uc800\ub141 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918", "service": FakeService("general"), "history": []}
@@ -113,6 +123,14 @@ def test_calendar_date_parser() -> None:
     assert _parse_calendar_date("2026-07-01") == date(2026, 7, 1)
 
 
+
+def test_calendar_today_time_uses_current_date() -> None:
+    """LLM이 과거 날짜를 줘도 사용자 원문의 오늘/시간을 우선합니다."""
+    result = _calendar_datetime_from_text("오늘 11시에 미팅 일정 등록해줘", "2023-10-04T11:00:00")
+    assert result.date() == date.today()
+    assert result.hour == 11
+    assert result.minute == 0
+
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
     assert route_intent({"intent": "recipe.search"}) == "recipe_search_node"
@@ -123,6 +141,7 @@ def test_route_intent_uses_lookup_table() -> None:
 if __name__ == "__main__":
     test_inventory_expiry_does_not_route_to_mcp()
     test_inventory_action_routes_to_mcp()
+    test_delete_inventory_item_routes_to_mcp()
     test_calendar_action_routes_to_mcp()
     test_confirm_and_cancel_route_to_mcp()
     test_pending_add_quantity_routes_to_mcp()
@@ -131,5 +150,6 @@ if __name__ == "__main__":
     test_pending_consume_quantity_builds_confirm_action()
     test_mcp_requires_login()
     test_calendar_date_parser()
+    test_calendar_today_time_uses_current_date()
     test_route_intent_uses_lookup_table()
     print("chat graph tests ok")
