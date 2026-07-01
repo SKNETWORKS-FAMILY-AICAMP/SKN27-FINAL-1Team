@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mascot from '../assets/mascot.png'
+import ChatWelcome from './ChatWelcome'
 import './FloatingChatbot.css'
 
 const initialSettings = {
@@ -11,7 +12,7 @@ const initialSettings = {
 }
 
 const initialMessages = [
-  { role: 'bot', text: '안녕하세요. 레시피, 보관법, 장보기를 도와드릴게요.' },
+  { role: 'bot', text: '무엇을 도와드릴까요? 요리에 관한 모든 것을 물어보세요.' },
 ]
 
 // 응답 안의 '재료명' 표기를 작은 강조 배지로 바꿔 보여줍니다.
@@ -155,9 +156,34 @@ function FloatingChatbot() {
                 </span>
               </div>
             </div>
-            <button type="button" aria-label="챗봇 닫기" onClick={() => setIsOpen(false)}>
-              ×
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                type="button"
+                aria-label="새 채팅"
+                title="새 채팅 시작"
+                onClick={() => setMessages(initialMessages)}
+                style={{ 
+                  width: 'auto',
+                  height: 'auto',
+                  fontSize: '0.8rem', 
+                  padding: '6px 12px', 
+                  borderRadius: '16px', 
+                  border: '1px solid #e0e0e0', 
+                  backgroundColor: '#ffffff',
+                  color: '#555',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  lineHeight: '1'
+                }}
+              >
+                <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>+</span> 새 채팅
+              </button>
+              <button type="button" aria-label="챗봇 닫기" onClick={() => setIsOpen(false)} style={{ fontSize: '1.4rem' }}>
+                ×
+              </button>
+            </div>
           </header>
 
           <div className="floating-chatbot__messages">
@@ -232,6 +258,9 @@ function FloatingChatbot() {
                   </div>
                 </div>
               </div>
+            ) : null}
+            {messages.length === 1 && !isSending ? (
+              <ChatWelcome onRequestChat={requestChat} />
             ) : null}
             <div ref={messagesEndRef} />
           </div>

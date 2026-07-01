@@ -147,8 +147,8 @@ class ChatService:
 - recipe.search: "김치볶음밥 레시피", "파스타 요리법" 등 특정 요리 검색
 - ingredient.guide: "치킨 보관법", "남은 재료 어떡해", "두부 손질" 등 식재료 관리/보관
 - inventory.expiring: "상하는 거 뭐 있어", "소비기한 임박", "d-day" 등 임박 재료 확인
-- inventory.list: "냉장고에 뭐 있지?", "내 재료 목록" 등 보유 식재료 단순 확인
-- general: 위 어느 것에도 해당하지 않는 단순 인사나 일상 대화
+- inventory.list: "냉장고에 뭐 있지?", "내 재료 목록" 등 보유 식재료 단순 확인 (주의: 식재료 '추가'나 '삭제' 요청은 제외)
+- general: 식재료 추가/수정/삭제 요청(예: "마늘 추가해줘", "감자 지워줘") 및 위 어느 것에도 해당하지 않는 일상 대화
 
 [매우 중요한 주의사항]
 사용자가 "그거 말고", "다른 거", "딴거", "사이드 메뉴는?", "더 알려줘" 와 같이 지시대명사나 후속 질문을 던질 경우, 반드시 직전 대화의 챗봇 응답이 어떤 의도였는지 파악하세요. 직전에 레시피를 추천했다면 반드시 'recipe.recommend'를 출력해야 합니다. 'general'로 분류하지 마세요!
@@ -517,8 +517,8 @@ class ChatService:
                 response = client_ai.chat.completions.create(
                     model=app_settings.OPENAI_MODEL,
                     messages=[
-                        {"role": "system", "content": "검색 결과 안에서만 한국어로 답해. 조리 시간이나 온도 질문이면 시간과 온도를 먼저 말하고, 레시피 질문이면 핵심 조리 흐름을 3문장 이내로 안내해. 추측은 하지 마."},
-                        {"role": "user", "content": f"질문: {query_text or keyword}\n검색 결과:\n{content}"},
+                        {"role": "system", "content": "당신은 요리와 냉장고 관리를 도와주는 친절한 비서 챗봇 '밥벌이'입니다. 검색 결과를 바탕으로 사용자의 질문에 다정하게 대답하세요. 특정 요리의 레시피를 묻는다면 핵심 조리 흐름을 3문장 이내로 요약해주고, 메뉴 추천을 원한다면 상황에 어울리는 요리 2~3가지를 다정하게 추천해주세요."},
+                        {"role": "user", "content": f"질문/키워드: {query_text or keyword}\n검색 결과:\n{content}\n\n위 내용을 바탕으로 친절하게 답변해줘."},
                     ],
                     temperature=0.2,
                 )
@@ -540,7 +540,7 @@ class ChatService:
                 from langchain_openai import ChatOpenAI
                 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
                 llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
-                messages = [SystemMessage(content="사용자 대화 맥락을 보고, 사용자가 현재 요리를 추천받고 싶어하는 '핵심 식재료 이름(예: 치킨, 소고기, 양파)' 1개만 단답형으로 출력해. 사용자가 '그거 말고 딴거'처럼 지시대명사를 쓰면 이전 맥락의 주재료를 찾아서 반환해. 절대 부연설명 없이 단어 1개만 출력해. 도저히 찾을 수 없으면 'None' 반환.")]
+                messages = [SystemMessage(content="사용자 대화 맥락을 보고, 요리 추천을 위해 검색할 '핵심 식재료' 또는 '요리 상황/컨셉(예: 비올때, 매운거, 다이어트 등)' 키워드 1개만 단답형으로 출력해. 사용자가 '그거 말고 딴거'처럼 지시대명사를 쓰면 이전 맥락의 키워드를 찾아서 반환해. 절대 부연설명 없이 단어 1개만 출력해. 도저히 찾을 수 없으면 'None' 반환.")]
                 for msg in history[-4:]:
                     messages.append(HumanMessage(content=msg.text) if msg.role == 'user' else AIMessage(content=msg.text))
                 messages.append(HumanMessage(content=text))
@@ -583,7 +583,7 @@ class ChatService:
             }
             if not items:
                 reply, _sources = self._reply_external_recipe(keyword)
-                return reply, [list_action]
+                return reply, []
 
             titles = [item["title"] for item in items]
             actions = self._recipe_actions(items) + [list_action]
@@ -602,12 +602,28 @@ class ChatService:
         except Exception:
             return "냉장고 기반 추천을 불러오지 못했어요. 재료명을 넣어서 다시 물어봐주세요.", []
 
-        items = [item for item in result.get("items", []) if item.get("missing_ingredient_count", 0) == 0]
-        if not items:
-            return "현재 냉장고 재료만으로 완성 가능한 레시피를 찾지 못했어요. 부족 재료를 허용하면 더 넓게 추천할 수 있어요.", []
+        raw_items = result.get("items", [])
+        sorted_items = sorted(
+            raw_items,
+            key=lambda x: (
+                -x.get("owned_ingredient_count", 0),
+                x.get("missing_ingredient_count", 0),
+                -x.get("final_score", 0)
+            )
+        )
 
-        titles = [item["title"] for item in items[:3]]
-        return "현재 냉장고 재료만으로 만들 수 있는 레시피예요.\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), self._recipe_actions(items)
+        items_perfect = [item for item in sorted_items if item.get("missing_ingredient_count", 0) == 0]
+        if items_perfect:
+            items = items_perfect[:3]
+            prefix = "현재 냉장고 재료만으로 완벽하게 만들 수 있는 레시피예요.\n"
+        else:
+            items = sorted_items[:3]
+            if not items or items[0].get("owned_ingredient_count", 0) == 0:
+                return "현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.", []
+            prefix = "부족한 재료가 약간 있지만, 냉장고 재료를 최대한 활용할 수 있는 레시피예요.\n"
+
+        titles = [item["title"] for item in items]
+        return prefix + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), self._recipe_actions(items)
 
 
 chat_service = ChatService()
