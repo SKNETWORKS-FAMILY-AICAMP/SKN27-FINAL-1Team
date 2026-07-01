@@ -868,15 +868,18 @@ function Guide() {
                   <section className="guide-tip-nutrition" aria-labelledby="guide-nutrition-title">
                     <div className="guide-tip-nutrition__header">
                       <h3 id="guide-nutrition-title">영양성분</h3>
+                      <strong className="guide-tip-nutrition__energy">
+                        {selectedGuide.energy_kcal ?? '-'} kcal
+                      </strong>
                       <span>{selectedGuide.nutrition_base_amount || '기준량 정보 없음'}</span>
                       {selectedGuide.nutrition_source_name ? <span>출처: {selectedGuide.nutrition_source_name}</span> : null}
                     </div>
 
                     <div className="guide-nutrition-grid">
-                      <strong>에너지 {selectedGuide.energy_kcal ?? '-'} kcal</strong>
                       <strong>단백질 {selectedGuide.protein_g ?? '-'} g</strong>
                       <strong>지방 {selectedGuide.fat_g ?? '-'} g</strong>
                       <strong>탄수화물 {selectedGuide.carbohydrate_g ?? '-'} g</strong>
+                      <strong>칼슘 {selectedGuide.calcium_mg ?? '-'} mg</strong>
                       <strong>칼륨 {selectedGuide.potassium_mg ?? '-'} mg</strong>
                       <strong>나트륨 {selectedGuide.sodium_mg ?? '-'} mg</strong>
                     </div>

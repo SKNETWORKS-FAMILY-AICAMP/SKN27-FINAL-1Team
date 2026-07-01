@@ -940,7 +940,14 @@ a.guide-owned-badge::after {
   margin-bottom: 14px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.guide-tip-nutrition__energy {
+  color: var(--figma-coral);
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .guide-tip-nutrition__header span {
