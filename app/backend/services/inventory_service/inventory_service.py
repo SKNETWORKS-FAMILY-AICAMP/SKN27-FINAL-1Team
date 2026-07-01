@@ -457,6 +457,21 @@ class InventoryService:
         display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
         return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}\uc5d0 \ucd94\uac00\ud588\uc5b4\uc694."
 
+    def _find_item_by_name(self, items, ingredient_name: str):
+        """챗봇에서 받은 이름으로 표시명과 마스터명을 함께 비교합니다."""
+        target = self._normalize_ingredient_name(ingredient_name)
+
+        # 먼저 공백만 다른 정확 일치를 찾고, 없으면 부분 일치를 허용합니다.
+        for allow_partial in (False, True):
+            for fridge_item, ingredient in items:
+                names = [fridge_item.display_name, ingredient.name, ingredient.normalized_name]
+                normalized_names = [self._normalize_ingredient_name(name) for name in names if name]
+                if not allow_partial and target in normalized_names:
+                    return fridge_item
+                if allow_partial and any(target in name or name in target for name in normalized_names):
+                    return fridge_item
+        return None
+
     def delete_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str) -> str:
         """챗봇에서 식재료 이름을 받아 냉장고 항목을 폐기 처리합니다."""
         items = (
@@ -465,16 +480,7 @@ class InventoryService:
             .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
             .all()
         )
-        target_item = None
-        for fridge_item, ingredient in items:
-            if ingredient.name == ingredient_name:
-                target_item = fridge_item
-                break
-        if not target_item:
-            for fridge_item, ingredient in items:
-                if ingredient_name in ingredient.name or ingredient.name in ingredient_name:
-                    target_item = fridge_item
-                    break
+        target_item = self._find_item_by_name(items, ingredient_name)
         if not target_item:
             return f"냉장고에서 {ingredient_name}{_object_particle(ingredient_name)} 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
         target_item.status = "used"
@@ -491,25 +497,10 @@ class InventoryService:
             .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
             .all()
         )
-        
-        # 이름 매칭 (정확도 우선)
-        target_item = None
-        for fridge_item, ingredient in items:
-            if ingredient.name == ingredient_name:
-                target_item = fridge_item
-                break
-        
-        if not target_item:
-            # 부분 매칭 시도
-            for fridge_item, ingredient in items:
-                if ingredient_name in ingredient.name or ingredient.name in ingredient_name:
-                    target_item = fridge_item
-                    break
-                    
+        target_item = self._find_item_by_name(items, ingredient_name)
         if not target_item:
             return f"냉장고에서 {ingredient_name}{_object_particle(ingredient_name)} 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
             
-        # 수량 차감
         current_qty = target_item.quantity or Decimal("1")
         consume_qty = Decimal(str(quantity or 1))
         new_qty = current_qty - consume_qty
@@ -524,6 +515,7 @@ class InventoryService:
             display_quantity = int(consume_qty) if consume_qty == consume_qty.to_integral() else consume_qty
             display_remaining = int(new_qty) if new_qty == new_qty.to_integral() else new_qty
             return f"{ingredient_name}{_object_particle(ingredient_name)} {display_quantity}개 소비했습니다. (남은 수량: {display_remaining})"
+
 
 
 

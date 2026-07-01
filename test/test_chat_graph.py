@@ -59,6 +59,15 @@ def test_confirm_and_cancel_route_to_mcp() -> None:
 
 
 
+
+
+def test_inventory_add_sentence_asks_storage_without_llm() -> None:
+    """\uc2dd\uc7ac\ub8cc \uad6c\ub9e4 \ubb38\uc7a5\uc740 LLM \ubcf4\uad00\ubc95\uc73c\ub85c \uc0c8\uc9c0 \uc54a\uace0 \ucd94\uac00 \ud655\uc778\uc73c\ub85c \uac11\ub2c8\ub2e4."""
+    text = "\ub450\ubd80 \uc5b4\uc81c 1\uac1c \uc0c0\uc5b4"
+    assert router_node({"text": text, "service": FakeService("ingredient.guide"), "history": []})["intent"] == "mcp.inventory"
+    result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.inventory", "history": []})
+    assert result["response_text"] == "\ub450\ubd80 1\uac1c\ub97c \uc5b4\ub514\uc5d0 \ubcf4\uad00\ud560\uae4c\uc694? \ub0c9\uc7a5, \ub0c9\ub3d9, \uc2e4\uc628 \uc911\uc5d0\uc11c \uc54c\ub824\uc8fc\uc138\uc694."
+
 def test_pending_add_asks_storage_after_quantity() -> None:
     """수량만 답하면 보관 위치를 추가로 물어봅니다."""
     class Message:
@@ -122,6 +131,14 @@ def test_multi_add_items_build_confirm_action() -> None:
     result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.pending_add_many", "history": []})
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredients:파스타,1.0,냉장|토마토소스,2.0,냉장|냉동새우,1.0,냉장"
 
+def test_extract_add_item_trims_also_particle() -> None:
+    """추가 요청의 '도' 조사는 제거하고 실제 재료명은 보존합니다."""
+    assert _extract_add_items("토마토 소스도 추가해줘")[0]["name"] == "토마토 소스"
+    assert _extract_add_items("양파도 추가해줘")[0]["name"] == "양파"
+    assert _extract_add_items("포도 추가해줘")[0]["name"] == "포도"
+    assert _extract_add_items("아보카도 추가해줘")[0]["name"] == "아보카도"
+
+
 def test_pending_add_many_quantity_only_asks_for_named_quantities() -> None:
     """여러 재료 추가 대기 중 수량만 오면 재료명까지 다시 요청합니다."""
     class Message:
@@ -135,13 +152,13 @@ def test_pending_add_many_quantity_only_asks_for_named_quantities() -> None:
     result = mcp_agent_node({"user_id": 1, "text": "1,1,1", "intent": "mcp.pending_add_many_retry", "history": history})
     assert result["response_text"] == "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"
 def test_pending_add_quantity_routes_to_mcp() -> None:
-    """?? ??? ?? ?? ?? ?? ?? ??? ??????."""
+    """추가 대기 중 수량만 답해도 MCP로 이어집니다."""
     class Message:
         def __init__(self, role, text):
             self.role = role
             self.text = text
 
-    history = [Message("bot", "\ud33d\uc774\ubc84\uc12f\uc744 \uba87 \uac1c \ucd94\uac00\ud560\uae4c\uc694? \uc218\ub7c9\uc744 \uc54c\ub824\uc8fc\uc138\uc694.")]
+    history = [Message("bot", "팽이버섯을 몇 개 추가할까요? 수량을 알려주세요.")]
     state = {"text": "2\uac1c", "service": FakeService("general"), "history": history}
     assert router_node(state)["intent"] == "mcp.pending_add"
 
@@ -173,6 +190,34 @@ def test_pending_add_korean_quantity_and_storage() -> None:
     result = mcp_agent_node({"user_id": 1, "text": "한개 냉장", "intent": "mcp.pending_add", "history": history})
     assert result["response_text"] == "두부 1개를 냉장에 추가할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:두부:1.0:냉장"
+
+
+def test_stale_pending_add_history_is_ignored() -> None:
+    """이미 끝난 추가 질문은 숫자 응답으로 다시 살아나면 안 됩니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [
+        Message("bot", '토마토 소스 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요.'),
+        Message("bot", '알겠어요. 작업을 취소했어요.'),
+    ]
+    assert router_node({"text": "1", "service": FakeService("general"), "history": history})["intent"] == "general"
+
+
+def test_latest_pending_question_wins_over_old_add_history() -> None:
+    """과거 추가 질문보다 최신 소비 질문을 우선합니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [
+        Message("bot", '토마토 소스 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요.'),
+        Message("bot", '양파를 몇 개 소비할까요?'),
+    ]
+    assert router_node({"text": "1", "service": FakeService("general"), "history": history})["intent"] == "mcp.pending_consume"
 
 
 def test_pending_consume_quantity_builds_confirm_action() -> None:
@@ -222,15 +267,19 @@ if __name__ == "__main__":
     test_delete_inventory_item_routes_to_mcp()
     test_calendar_action_routes_to_mcp()
     test_confirm_and_cancel_route_to_mcp()
+    test_inventory_add_sentence_asks_storage_without_llm()
     test_pending_add_asks_storage_after_quantity()
     test_pending_add_storage_answer_builds_confirm_action()
     test_inventory_list_ignores_pending_add_when_no_quantity_or_storage()
     test_pending_add_handles_short_quantity_question()
     test_multi_add_items_build_confirm_action()
+    test_extract_add_item_trims_also_particle()
     test_pending_add_many_quantity_only_asks_for_named_quantities()
     test_pending_add_quantity_routes_to_mcp()
     test_pending_add_quantity_builds_confirm_action()
     test_pending_add_korean_quantity_and_storage()
+    test_stale_pending_add_history_is_ignored()
+    test_latest_pending_question_wins_over_old_add_history()
     test_pending_consume_quantity_builds_confirm_action()
     test_mcp_requires_login()
     test_calendar_date_parser()

@@ -25,6 +25,8 @@ except ImportError:
 class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
 
+    EMPTY_INVENTORY_REPLY = '냉장고가 비어 있어요. 재료를 등록하면 소비 임박 재료와 추천 메뉴를 알려드릴게요.'
+
     def handle_message(self, db: Session, user_id: int, message: str, history: list[Any] = None, user_settings: Any = None) -> dict[str, Any]:
         """LangGraph를 활용하여 메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
@@ -279,7 +281,7 @@ class ChatService:
         """냉장고 보유 재료를 짧게 요약합니다."""
         items = inventory_service.get_ingredients(db=db, user_id=user_id)
         if not items:
-            return "현재 냉장고에 등록된 재료가 없어요."
+            return self.EMPTY_INVENTORY_REPLY
 
         names = [item["name"] for item in items[:8]]
         suffix = "" if len(items) <= 8 else f" 외 {len(items) - 8}개"
@@ -301,6 +303,9 @@ class ChatService:
     def _reply_expiring_items(self, db: Session, user_id: int, text: str = "") -> str:
         """소비기한이 가까운 재료 또는 특정 재료의 D-day를 안내합니다."""
         items = inventory_service.get_ingredients(db=db, user_id=user_id)
+        if not items:
+            return self.EMPTY_INVENTORY_REPLY
+
         keyword = self._extract_expiry_keyword(text)
         if keyword:
             matched = [item for item in items if keyword in item.get("name", "")]
@@ -589,6 +594,9 @@ class ChatService:
             actions = self._recipe_actions(items) + [list_action]
             prefix = f"{self._apply_josa(keyword, '이가')} 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{self._apply_josa(keyword, '이가')} 주재료인 레시피는 "
             return prefix + "\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), actions
+
+        if not inventory_service.get_ingredients(db=db, user_id=user_id):
+            return self.EMPTY_INVENTORY_REPLY, []
 
         try:
             config = RecipeRecommendConfig.fridge_consume_preset()

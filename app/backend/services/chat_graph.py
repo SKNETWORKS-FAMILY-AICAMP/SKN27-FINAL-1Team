@@ -12,7 +12,6 @@ from langgraph.graph import END, StateGraph
 
 from app.backend.core.config import settings
 from ai.tools.calendar_tools import CALENDAR_TOOLS
-from ai.tools.inventory_tools import INVENTORY_TOOLS
 from app.backend.schemas.chat_state import GraphState
 
 logger = logging.getLogger(__name__)
@@ -50,6 +49,7 @@ INVENTORY_ACTION_WORDS = (
 )
 CALENDAR_WORDS = ("\uc77c\uc815", "\uce98\ub9b0\ub354")
 DELETE_WORDS = ("\uc0ad\uc81c", "\ud3d0\uae30", "\uc9c0\uc6cc", "\ubc84\ub824")
+CONSUME_WORDS = ("\uba39\uc5c8\uc5b4", "\ub2e4\uc37c\uc5b4", "\ub2e4\uba39\uc5c8\uc5b4", "\uc18c\ube44\ud588", "\uc0ac\uc6a9\ud588", "\uc37c\uc5b4")
 INVENTORY_LIST_WORDS = ("뭐 있어", "뭐 있지", "뭐있", "뭐잇", "머있", "머잇", "뭐이", "목록", "현재 재료", "현재 냉장고")
 ADD_WORDS = ("\ucd94\uac00", "\ub4f1\ub85d", "\ub123", "\uc0c0", "\uc0bf", "\uc0ac\uc654", "\uad6c\ub9e4")
 
@@ -111,21 +111,38 @@ def _extract_delete_name(text: str) -> str:
         if word in target:
             target = target.split(word, 1)[0]
             break
-    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc"):
+    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc", "\uc5b4\uc81c", "\uc624\ub298", "\ubc29\uae08"):
         target = target.replace(token, " ")
     return target.strip().rstrip("\uc744\ub97c\uc740\ub294\uc774\uac00")
 
 
 
 
+def _extract_consume_name(text: str) -> str:
+    """소비 문장에서 식재료명만 간단히 추출합니다."""
+    target = text
+    for word in CONSUME_WORDS:
+        if word in target:
+            target = target.split(word, 1)[0]
+            break
+    target = re.sub(r"\d+(?:\.\d+)?\s*(?:\uac1c|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
+    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc", "\uc5b4\uc81c", "\uc624\ub298", "\ubc29\uae08"):
+        target = target.replace(token, " ")
+    return target.strip(" ,/\t\n\uc744\ub97c\uc740\ub294\uc774\uac00\ub3c4")
+
+
 def _strip_add_name(name: str) -> str:
-    """\ucd94\uac00 \ubb38\uc7a5\uc5d0\uc11c \uc2dd\uc7ac\ub8cc\uba85\uc5d0 \ubd99\uc740 \ubd88\ud544\uc694\ud55c \ub2e8\uc5b4\ub97c \uc815\ub9ac\ud569\ub2c8\ub2e4."""
+    """추가 문장에서 식재료명에 붙은 불필요한 단어를 정리합니다."""
     cleaned = name
-    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc"):
+    for token in ('냉장고에서', '냉장고에', '냉장고', '재료', '식재료', '어제', '오늘', '방금'):
         cleaned = cleaned.replace(token, " ")
     for storage in STORAGE_KEYS:
         cleaned = re.sub(rf"(?<![\uac00-\ud7a3A-Za-z0-9]){storage}(?![\uac00-\ud7a3A-Za-z0-9])", " ", cleaned)
-    return cleaned.strip(" ,/\t\n\uc744\ub97c\uc740\ub294\uc774\uac00")
+    cleaned = cleaned.strip(" ,/\t\n\uc744\ub97c\uc740\ub294\uc774\uac00")
+    # '양파도 추가해줘'처럼 이어 말한 조사만 제거하되, 포도/아보카도 같은 재료명은 보존합니다.
+    if cleaned.endswith("\ub3c4") and (" " in cleaned or (len(cleaned) > 2 and not cleaned.endswith(('포도', '아보카도')))):
+        cleaned = cleaned[:-1].rstrip()
+    return cleaned
 
 
 def _extract_add_items(text: str) -> list[dict]:
@@ -152,13 +169,8 @@ def _extract_add_items(text: str) -> list[dict]:
 
 
 def _pending_add_many_from_history(history) -> bool:
-    """\uc9c1\uc804 \ubd07 \uc751\ub2f5\uc774 \uc5ec\ub7ec \uc2dd\uc7ac\ub8cc \uc218\ub7c9\uc744 \uae30\ub2e4\ub9ac\ub294\uc9c0 \ud655\uc778\ud569\ub2c8\ub2e4."""
-    for message in reversed(history or []):
-        if getattr(message, "role", "") != "bot":
-            continue
-        text = getattr(message, "text", "")
-        return "\uac01 \uc2dd\uc7ac\ub8cc\uc758 \uc218\ub7c9" in text
-    return False
+    """최근 봇 응답이 여러 식재료 수량을 기다리는지 확인합니다."""
+    return "각 식재료의 수량" in _latest_bot_text(history)
 
 def _is_quantity_only_list(text: str) -> bool:
     """여러 재료 추가 대기 중 수량만 나열한 응답인지 확인합니다."""
@@ -168,6 +180,14 @@ def _is_quantity_only_list(text: str) -> bool:
         and not _strip_add_name(re.sub(r"\d+(?:\.\d+)?\s*(?:\uac1c|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE))
         for part in parts
     )
+
+def _latest_bot_text(history) -> str:
+    """가장 최근 봇 응답만 후속 작업 대기 상태로 확인합니다."""
+    for message in reversed(history or []):
+        if getattr(message, "role", "") == "bot":
+            return getattr(message, "text", "")
+    return ""
+
 def _extract_storage(text: str) -> str | None:
     """사용자 문장에서 보관 위치를 찾습니다."""
     normalized = text.replace(" ", "")
@@ -182,42 +202,30 @@ def _extract_storage(text: str) -> str | None:
 
 
 def _pending_add_storage_from_history(history) -> tuple[str, float] | None:
-    """직전 봇의 보관 위치 질문에서 추가 대기 중인 식재료명과 수량을 찾습니다."""
+    """최근 봇의 보관 위치 질문에서 추가 대기 중인 식재료명과 수량을 찾습니다."""
     pattern = r"(.+?)\s+(\d+(?:\.\d+)?)개를\s+어디에\s+보관"
-    for message in reversed(history or []):
-        if getattr(message, "role", "") != "bot":
-            continue
-        match = re.search(pattern, getattr(message, "text", ""))
-        if match:
-            return match.group(1).strip(), float(match.group(2))
-    return None
+    match = re.search(pattern, _latest_bot_text(history))
+    return (match.group(1).strip(), float(match.group(2))) if match else None
 
 
 def _pending_add_from_history(history) -> str | None:
-    """직전 봇의 수량 질문에서 추가 대기 중인 식재료명을 찾습니다."""
+    """최근 봇의 수량 질문에서 추가 대기 중인 식재료명을 찾습니다."""
     patterns = (
         r"(.+?)(?:\uc744|\ub97c)\s*\uba87\s*\uac1c.*\ucd94\uac00",
         r"(.+?)\s*\uba87\s*\uac1c.*\ucd94\uac00",
     )
-    for message in reversed(history or []):
-        if getattr(message, "role", "") != "bot":
-            continue
-        text = getattr(message, "text", "")
-        for pattern in patterns:
-            match = re.search(pattern, text)
-            if match:
-                return match.group(1).strip(" \"'.,!?\uc744\ub97c")
+    text = _latest_bot_text(history)
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip(" \"'.,!?\uc744\ub97c")
     return None
 
 
 def _pending_consume_from_history(history) -> str | None:
-    """직전 봇의 수량 질문에서 소비 대기 중인 식재료명을 찾습니다."""
-    for message in reversed(history or []):
-        if getattr(message, "role", "") != "bot":
-            continue
-        match = re.search(r"(.+?)(?:\uc744|\ub97c) \uba87 \uac1c (?:\uba39|\uc18c\ube44)", getattr(message, "text", ""))
-        return match.group(1).strip() if match else None
-    return None
+    """최근 봇의 수량 질문에서 소비 대기 중인 식재료명을 찾습니다."""
+    match = re.search(r"(.+?)(?:\uc744|\ub97c) \uba87 \uac1c (?:\uba39|\uc18c\ube44)", _latest_bot_text(history))
+    return match.group(1).strip() if match else None
 
 def _parse_calendar_date(date_str: str) -> date:
     """챗봇이 뽑은 짧은 날짜 표현을 캘린더 날짜로 변환합니다."""
@@ -341,43 +349,88 @@ def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
     text = state["text"]
     normalized = _normalize_text(text)
+    history = state.get("history", [])
 
     if normalized.startswith(CONFIRM_PREFIX):
         return {"intent": "mcp.confirm"}
     if normalized in CANCEL_WORDS:
         return {"intent": "mcp.cancel"}
-    if _pending_add_many_from_history(state.get("history", [])):
+    if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
             return {"intent": "mcp.pending_add_many"}
         if _is_quantity_only_list(text):
             return {"intent": "mcp.pending_add_many_retry"}
-    if _pending_consume_from_history(state.get("history", [])) and _extract_quantity(text):
+    if _pending_add_storage_from_history(history) and _extract_storage(text):
+        return {"intent": "mcp.pending_add_storage"}
+    if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
+        return {"intent": "mcp.pending_add"}
+    if _pending_consume_from_history(history) and _extract_quantity(text):
         return {"intent": "mcp.pending_consume"}
-    
-    if _pending_add_from_history(state.get("history", [])) and _extract_quantity(text):
-        return {"intent": "mcp.pending_add_quantity"}
 
-    history = state.get("history", [])
-    if history:
-        last_msg = history[-1]
-        if getattr(last_msg, "role", "") == "bot":
-            last_text = getattr(last_msg, "text", "")
-            if "먼저 어떤 식재료를 추가하시겠어요?" in last_text or "어디에 보관할까요" in last_text or "몇 개를 추가" in last_text or "수량을 알려주" in last_text or "보관 방법" in last_text:
-                return {"intent": "mcp.inventory"}
+    # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
+    if any(word in normalized for word in DELETE_WORDS):
+        return {"intent": "mcp.delete"}
+    if any(word in normalized for word in CONSUME_WORDS):
+        return {"intent": "mcp.inventory"}
+    if any(word in normalized for word in CALENDAR_WORDS):
+        return {"intent": "mcp.calendar"}
+    if any(word in normalized for word in ADD_WORDS):
+        return {"intent": "mcp.inventory"}
+    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
+        return {"intent": "inventory.list"}
 
-    intent = state["service"]._route_intent_with_llm(text, history)
-    
-    if intent == "general":
-        if any(word in normalized for word in DELETE_WORDS):
-            intent = "mcp.delete"
-        elif any(word in normalized for word in CALENDAR_WORDS):
-            intent = "mcp.calendar"
-        elif any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
-            intent = "inventory.list"
-        elif any(word in normalized for word in INVENTORY_ACTION_WORDS):
-            intent = "mcp.inventory"
+    return {"intent": state["service"]._route_intent_with_llm(text, history)}
 
-    return {"intent": intent}
+
+def _storage_choice_response(name: str, quantity: float) -> dict:
+    """보관 위치 선택 버튼을 만듭니다."""
+    text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c \uc5b4\ub514\uc5d0 \ubcf4\uad00\ud560\uae4c\uc694? \ub0c9\uc7a5, \ub0c9\ub3d9, \uc2e4\uc628 \uc911\uc5d0\uc11c \uc54c\ub824\uc8fc\uc138\uc694."
+    return {
+        "response_text": text,
+        "actions": [
+            _confirm_action("\ub0c9\uc7a5", f"\ud655\uc778:add_ingredient:{name}:{quantity}:\ub0c9\uc7a5"),
+            _confirm_action("\ub0c9\ub3d9", f"\ud655\uc778:add_ingredient:{name}:{quantity}:\ub0c9\ub3d9"),
+            _confirm_action("\uc2e4\uc628", f"\ud655\uc778:add_ingredient:{name}:{quantity}:\uc2e4\uc628"),
+            _confirm_action("\ucde8\uc18c", "\ucde8\uc18c"),
+        ],
+    }
+
+
+def _handle_inventory_action(state: GraphState) -> dict:
+    """식재료 추가/소비는 LLM 대신 규칙 기반으로 처리합니다."""
+    text = state["text"]
+    normalized = _normalize_text(text)
+
+    if any(word in normalized for word in ADD_WORDS):
+        items = _extract_add_items(text)
+        if len(items) > 1:
+            if any(item["quantity"] is None for item in items):
+                return {"response_text": "\uac01 \uc2dd\uc7ac\ub8cc\uc758 \uc218\ub7c9\uc744 \uc54c\ub824\uc8fc\uc2dc\uba74 \ucd94\uac00\ud574\ub4dc\ub9b4\uac8c\uc694."}
+            payload = "|".join(f"{item['name']},{item['quantity']},{item['storage'] or DEFAULT_STORAGE}" for item in items)
+            summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'])}\uac1c" for item in items)
+            return {"response_text": f"{summary}\ub97c \ub0c9\uc7a5\uace0\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?", "actions": [_confirm_action("\ud655\uc778", f"\ud655\uc778:add_ingredients:{payload}"), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        if len(items) == 1:
+            item = items[0]
+            if item["quantity"] is None:
+                return {"response_text": f"{item['name']}\ub97c \uba87 \uac1c \ucd94\uac00\ud558\uc2dc\uaca0\uc5b4\uc694?"}
+            if not item["storage"]:
+                return _storage_choice_response(item["name"], item["quantity"])
+            text = f"{item['name']} {_quantity_text(item['quantity'])}\uac1c\ub97c {item['storage']}\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
+            command = f"\ud655\uc778:add_ingredient:{item['name']}:{item['quantity']}:{item['storage']}"
+            return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        return {"response_text": "\uc5b4\ub5a4 \uc2dd\uc7ac\ub8cc\ub97c \ucd94\uac00\ud560\uae4c\uc694? \uc2dd\uc7ac\ub8cc\uba85\uacfc \uc218\ub7c9\uc744 \ud568\uaed8 \uc54c\ub824\uc8fc\uc138\uc694."}
+
+    if any(word in normalized for word in CONSUME_WORDS):
+        name = _extract_consume_name(text)
+        if not name:
+            return {"response_text": "\uc5b4\ub5a4 \uc2dd\uc7ac\ub8cc\ub97c \uc18c\ube44 \ucc98\ub9ac\ud560\uae4c\uc694?"}
+        quantity = _extract_quantity(text)
+        if quantity is None:
+            return {"response_text": f"{name}\ub97c \uba87 \uac1c \uc18c\ube44\ud560\uae4c\uc694?"}
+        command = f"\ud655\uc778:consume_ingredient:{name}:{quantity}"
+        return {"response_text": f"{name} {_quantity_text(quantity)}\uac1c\ub97c \uc18c\ube44 \ucc98\ub9ac\ud560\uae4c\uc694?", "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+
+    return {"response_text": GENERAL_REPLY}
 
 
 def mcp_agent_node(state: GraphState) -> dict:
@@ -400,21 +453,29 @@ def mcp_agent_node(state: GraphState) -> dict:
         text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c \uc18c\ube44 \ucc98\ub9ac\ud560\uae4c\uc694?"
         command = f"\ud655\uc778:consume_ingredient:{name}:{quantity}"
         return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
-        
-    if state.get("intent") == "mcp.pending_add_quantity":
+
+    if state.get("intent") == "mcp.pending_add_storage":
+        pending = _pending_add_storage_from_history(state.get("history", []))
+        storage = _extract_storage(state["text"]) or DEFAULT_STORAGE
+        if not pending:
+            return {"response_text": GENERAL_REPLY}
+        name, quantity = pending
+        text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c {storage}\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
+        command = f"\ud655\uc778:add_ingredient:{name}:{quantity}:{storage}"
+        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+
+    if state.get("intent") == "mcp.pending_add":
         name = _pending_add_from_history(state.get("history", [])) or ""
         quantity = _extract_quantity(state["text"]) or 1
-        text = f"{name} {_quantity_text(quantity)}개를 어디에 보관하여 추가할까요?"
-        actions = [
-            _confirm_action("냉장", f"확인:add_ingredient:{name}:{quantity}:냉장"),
-            _confirm_action("냉동", f"확인:add_ingredient:{name}:{quantity}:냉동"),
-            _confirm_action("실온", f"확인:add_ingredient:{name}:{quantity}:실온"),
-            _confirm_action("취소", "취소")
-        ]
-        return {"response_text": text, "actions": actions}
+        storage = _extract_storage(state["text"])
+        if not storage:
+            return _storage_choice_response(name, quantity)
+        text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c {storage}\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
+        command = f"\ud655\uc778:add_ingredient:{name}:{quantity}:{storage}"
+        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
 
     if state.get("intent") == "mcp.pending_add_many_retry":
-        return {"response_text": "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"}
+        return {"response_text": "\uc2dd\uc7ac\ub8cc\uc640 \uac2f\uc218\ub97c \ud568\uaed8 \ub9d0\ud574\uc8fc\uc138\uc694. \uc608: \ud30c\uc2a4\ud0c0\uba741, \ud1a0\ub9c8\ud1a0\uc18c\uc2a41, \ub0c9\ub3d9 \uc0c8\uc6b01"}
 
     if state.get("intent") == "mcp.pending_add_many":
         items = _extract_add_items(state["text"])
@@ -423,73 +484,26 @@ def mcp_agent_node(state: GraphState) -> dict:
         text = f"{summary}\ub97c \ub0c9\uc7a5\uace0\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
         return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", f"\ud655\uc778:add_ingredients:{payload}"), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
 
-
     if not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
 
-    messages = state.get("messages") or [HumanMessage(content=state["text"])]
     if state.get("intent") == "mcp.inventory":
-        sys_msg = SystemMessage(content="[절대 규칙]\n1. 식재료 추가 요청 시 수량을 모르면 '몇 개 추가할까요?'만 질문하세요.\n2. 사용자가 수량을 말해주거나 이미 알고 있다면, 텍스트로 대답하지 말고 반드시 `add_ingredient` 도구를 호출하세요.\n3. 절대로 '추가해두었어요', '넣어두세요' 같은 텍스트 답변을 금지합니다. 무조건 도구(Tool)를 실행해야 합니다.")
-        if not any(getattr(m, "type", "") == "system" for m in messages):
-            messages = [sys_msg] + messages
-    elif state.get("intent") == "mcp.calendar":
-        sys_msg = SystemMessage(content="당신은 사용자의 일정을 관리하는 비서입니다. 사용자가 캘린더에 일정을 추가해 달라고 요청할 때, 일정의 제목(무엇을 할지)과 날짜 정보가 모두 있다면 절대로 당신이 직접 '등록했습니다'라고 텍스트로 말하지 마세요. **반드시 즉시 add_calendar_event 도구(tool)를 호출해야 합니다.** 도구를 호출해야만 실제 시스템에 등록됩니다.")
-        if not any(getattr(m, "type", "") == "system" for m in messages):
-            messages = [sys_msg] + messages
-    tools_by_intent = {"mcp.inventory": INVENTORY_TOOLS, "mcp.calendar": CALENDAR_TOOLS}
-    tools = tools_by_intent.get(state["intent"], [])
+        return _handle_inventory_action(state)
 
+    messages = state.get("messages") or [HumanMessage(content=state["text"])]
+    if state.get("intent") == "mcp.calendar":
+        sys_msg = SystemMessage(content="\ub2f9\uc2e0\uc740 \uc0ac\uc6a9\uc790\uc758 \uc77c\uc815\uc744 \uad00\ub9ac\ud558\ub294 \ube44\uc11c\uc785\ub2c8\ub2e4. \uc0ac\uc6a9\uc790\uac00 \uce98\ub9b0\ub354\uc5d0 \uc77c\uc815\uc744 \ucd94\uac00\ud574 \ub2ec\ub77c\uace0 \uc694\uccad\ud560 \ub54c, \uc77c\uc815\uc758 \uc81c\ubaa9\uacfc \ub0a0\uc9dc \uc815\ubcf4\uac00 \ubaa8\ub450 \uc788\ub2e4\uba74 \ubc18\ub4dc\uc2dc add_calendar_event \ub3c4\uad6c\ub97c \ud638\ucd9c\ud558\uc138\uc694.")
+        if not any(getattr(m, "type", "") == "system" for m in messages):
+            messages = [sys_msg] + messages
     llm = ChatOpenAI(model=settings.OPENAI_MODEL, api_key=settings.OPENAI_API_KEY, temperature=0.0)
-    response = llm.bind_tools(tools).invoke(messages)
+    response = llm.bind_tools(CALENDAR_TOOLS).invoke(messages)
 
     if not response.tool_calls:
-        resp_data = {"response_text": response.content, "messages": messages + [response]}
-        if any(kw in response.content for kw in ("어디에 보관", "보관 방법", "어떻게 보관", "냉장, 냉동, 실온")):
-            resp_data["actions"] = [
-                _confirm_action("냉장", "냉장"),
-                _confirm_action("냉동", "냉동"),
-                _confirm_action("실온", "실온")
-            ]
-        return resp_data
+        return {"response_text": "\uc77c\uc815 \uc81c\ubaa9\uacfc \ub0a0\uc9dc\ub97c \ud568\uaed8 \uc54c\ub824\uc8fc\uc138\uc694."}
 
     tool_call = response.tool_calls[0]
-    func_name = tool_call["name"]
-    args = tool_call["args"]
-
-    from langchain_core.messages import ToolMessage
-    
-    if func_name == "consume_ingredient":
-        raw_name = args.get("ingredient_name", "")
-        name = re.sub(r'^\d+\.\s*', '', raw_name).rstrip('은는이가을를')
-        quantity = float(args.get("quantity") or 1)
-        text = f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?"
-        command = f"확인:consume_ingredient:{name}:{quantity}"
-        tool_msg = ToolMessage(content="사용자에게 소비 확인 버튼을 띄웠습니다.", tool_call_id=tool_call["id"])
-        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "messages": messages + [response, tool_msg]}
-
-    if func_name == "add_ingredient":
-        raw_name = args.get("ingredient_name", "")
-        name = re.sub(r'^\d+\.\s*', '', raw_name).rstrip('은는이가을를')
-        quantity = args.get("quantity")
-        if quantity is None:
-            tool_msg = ToolMessage(content="사용자에게 수량을 물어보고 대답을 기다리는 중입니다.", tool_call_id=tool_call["id"])
-            return {"response_text": f"{name} 몇 개 추가할까요?", "messages": messages + [response, tool_msg]}
-            
-        quantity = float(quantity)
-        storage_method = args.get("storage_method") or DEFAULT_STORAGE
-        text = f"{name} {_quantity_text(quantity)}개를 어디에 보관하여 추가할까요?"
-        actions = [
-            _confirm_action("냉장", f"확인:add_ingredient:{name}:{quantity}:냉장"),
-            _confirm_action("냉동", f"확인:add_ingredient:{name}:{quantity}:냉동"),
-            _confirm_action("실온", f"확인:add_ingredient:{name}:{quantity}:실온"),
-            _confirm_action("취소", "취소")
-        ]
-        tool_msg = ToolMessage(content="사용자에게 보관방법 선택 버튼을 띄웠습니다.", tool_call_id=tool_call["id"])
-        return {"response_text": text, "actions": actions, "messages": messages + [response, tool_msg]}
-
-
-        
-    if func_name == "add_calendar_event":
+    if tool_call["name"] == "add_calendar_event":
+        args = tool_call["args"]
         title = args.get("title", "\uc77c\uc815")
         date_str = args.get("date_str", "\uc624\ub298")
         start_at = _calendar_datetime_from_text(state["text"], date_str)
