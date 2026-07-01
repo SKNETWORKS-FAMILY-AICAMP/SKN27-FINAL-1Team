@@ -20,6 +20,7 @@ root/
 │  │  ├─ normalize_agent/           (식재료명 정규화 Agent 작업 공간)
 │  │  ├─ inventory_agent/           (냉장고 재고 분석 Agent 작업 공간)
 │  │  └─ recipe_agent/              (레시피 추천 Agent 작업 공간)
+│  ├─ tools/                        (챗봇 Tool Calling용 도구 정의)
 │  ├─ ocr/                          (박준희 담당 / 영수증 OCR 모델·파싱 실험 공간)
 │  ├─ recommendation/               (김경수 담당 / 레시피 추천 로직·ML 실험 공간)
 │  ├─ experiments/                  (공용 / 임시 실험, PoC 코드 보관 공간)
@@ -42,7 +43,6 @@ root/
 │  │  │  ├─ receipt_ocr_service/    (박준희 담당 / OCR 결과 처리 로직)
 │  │  │  ├─ guide_service/          (김주영 담당 / 가이드 조회 로직)
 │  │  │  └─ recommendation_service/ (김경수 담당 / 추천 계산 로직)
-│  │  ├─ mcp_server/                (LLM 에이전트와 연동되는 MCP 도구 명세)
 │  │  ├─ requirements.txt           (백엔드 Web용 의존성)
 │  │  └─ Dockerfile                 (백엔드 전용 빌드 명세서)
 │  │
