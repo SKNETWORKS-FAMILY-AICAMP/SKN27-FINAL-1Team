@@ -188,6 +188,7 @@ CREATE TABLE fridge_items (
     purchased_date DATE,
     expiry_date DATE,
     status VARCHAR(30) NOT NULL DEFAULT 'normal',
+    is_ai_recommended BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT ck_fridge_items_status
         CHECK (status IN ('normal', 'expiring', 'expired', 'used'))
