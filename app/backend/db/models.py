@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -189,6 +190,7 @@ class Receipt(Base):
     store_name = Column(Text, nullable=True)
     purchased_at = Column(DateTime(timezone=True), nullable=True)
     total_price = Column(Integer, nullable=True)
+    confirmed_result_json = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 영수증 소유자와 OCR로 추출된 품목을 연결합니다.

@@ -22,6 +22,13 @@ class ReceiptUploadResponse(BaseModel):
     total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
     currency: str = Field(default="KRW", description="Currency code")
     confidence_note: Optional[str] = Field(default=None, description="Uncertain OCR details")
+    document_type: Optional[str] = Field(default=None, description="OCR document classification")
+    is_receipt_like: Optional[bool] = Field(default=None, description="Whether the upload looks like a receipt")
+    quality_score: Optional[float] = Field(default=None, description="Internal OCR quality score")
+    quality_issues: List[str] = Field(default_factory=list, description="Internal OCR quality issue codes")
+    receipt_validation_issues: List[str] = Field(default_factory=list, description="Receipt document validation issue codes")
+    needs_reupload: bool = Field(default=False, description="Whether the user should upload a clearer receipt image")
+    reupload_message: Optional[str] = Field(default=None, description="User-facing reupload guidance")
 
 
 class ReceiptConfirmItem(BaseModel):
@@ -41,6 +48,10 @@ class ReceiptConfirmRequest(BaseModel):
     total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
     items: List[ReceiptConfirmItem] = Field(default_factory=list, description="User-confirmed item list")
     calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar cost event")
+
+
+class ReceiptUpdateRequest(BaseModel):
+    store_name: str = Field(..., min_length=1, max_length=100, description="New store name (receipt title)")
 
 
 class ReceiptHistoryItem(BaseModel):

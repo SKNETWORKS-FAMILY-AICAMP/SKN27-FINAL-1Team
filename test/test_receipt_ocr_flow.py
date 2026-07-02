@@ -1,8 +1,11 @@
+import asyncio
+import io
 import os
 import sys
 from unittest.mock import patch
 
 import pytest
+from fastapi import UploadFile
 from sqlalchemy import BigInteger, create_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +23,7 @@ from app.backend.db.models import (
     User,
 )
 from app.backend.schemas.receipts import ReceiptConfirmRequest
+from app.backend.core.config import settings
 from app.backend.services.ingredient_match_service import ingredient_name_matcher
 from app.backend.services.receipt_ocr_service.receipt_confirm_service import receipt_confirm_service
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
@@ -131,6 +135,182 @@ def test_ocr_normalize_result_uses_neo4j_standard_name_or_raw_name_fallback(db_s
     assert normalized["items"][1]["normalized_name"] == UNKNOWN_PRODUCT
 
 
+def test_analyze_upload_retries_low_quality_ocr_result(db_session, monkeypatch, tmp_path):
+    user = User(email="receipt-graph@example.com", nickname="receipt graph tester")
+    db_session.add(user)
+    db_session.flush()
+
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(tmp_path / "raw"))
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
+
+    service = ReceiptOcrService()
+    calls = []
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        calls.append(retry_note)
+        if len(calls) == 1:
+            return {
+                "image_id": image_id,
+                "store_name": None,
+                "purchase_datetime": None,
+                "items": [{"raw_name": "???", "quantity": None, "unit": None, "item_amount": None}],
+                "total_item_count": None,
+                "total_amount": None,
+                "currency": "KRW",
+                "confidence_note": "Unreadable first pass",
+            }
+        return {
+            "image_id": image_id,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-06-29 12:30:00",
+            "items": [{"raw_name": BANANA_IMPORTED, "quantity": 1, "unit": EA, "item_amount": 2000}],
+            "total_item_count": 1,
+            "total_amount": 2000,
+            "currency": "KRW",
+            "confidence_note": None,
+        }
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = UploadFile(filename="receipt.png", file=io.BytesIO(b"fake-image-bytes"))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+
+    assert len(calls) == 2
+    assert calls[0] is None
+    assert "item_names_unclear" in calls[1]
+    assert "many_item_amounts_missing" in calls[1]
+    assert result["items"][0]["raw_name"] == BANANA_IMPORTED
+    assert result["items"][0]["normalized_name"] == BANANA
+    assert result["receipt_id"] is not None
+
+
+def test_analyze_upload_does_not_retry_when_only_total_amount_is_visible(db_session, monkeypatch, tmp_path):
+    user = User(email="receipt-total-only@example.com", nickname="receipt total tester")
+    db_session.add(user)
+    db_session.flush()
+
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(tmp_path / "raw"))
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [(ingredient_name_matcher._match_key(BANANA), BANANA)],
+    )
+
+    service = ReceiptOcrService()
+    calls = []
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        calls.append(retry_note)
+        if len(calls) == 1:
+            return {
+                "image_id": image_id,
+                "store_name": STORE_NAME,
+                "purchase_datetime": "2026-06-29 12:30:00",
+                "items": [],
+                "total_item_count": None,
+                "total_amount": 2000,
+                "currency": "KRW",
+                "confidence_note": "Only total amount was visible",
+            }
+        return {
+            "image_id": image_id,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-06-29 12:30:00",
+            "items": [{"raw_name": BANANA_IMPORTED, "quantity": 1, "unit": EA, "item_amount": 2000}],
+            "total_item_count": 1,
+            "total_amount": 2000,
+            "currency": "KRW",
+            "confidence_note": None,
+        }
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = UploadFile(filename="receipt.png", file=io.BytesIO(b"fake-image-bytes"))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+
+    assert len(calls) == 1
+    assert result["items"] == []
+    assert result["total_amount"] == 2000
+
+
+def test_analyze_upload_requests_reupload_when_retry_stays_low_quality(db_session, monkeypatch, tmp_path):
+    user = User(email="receipt-reupload@example.com", nickname="receipt reupload tester")
+    db_session.add(user)
+    db_session.flush()
+
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(tmp_path / "raw"))
+
+    service = ReceiptOcrService()
+    calls = []
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        calls.append(retry_note)
+        return {
+            "image_id": image_id,
+            "store_name": None,
+            "purchase_datetime": None,
+            "items": [{"raw_name": "???", "quantity": None, "unit": None, "item_amount": None}],
+            "total_item_count": None,
+            "total_amount": None,
+            "currency": "KRW",
+            "confidence_note": "Unreadable receipt image",
+        }
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = UploadFile(filename="receipt.png", file=io.BytesIO(b"fake-image-bytes"))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+
+    assert len(calls) == 2
+    assert result["needs_reupload"] is True
+    assert result["receipt_id"] is None
+    assert "\uc601\uc218\uc99d" in result["reupload_message"]
+    assert db_session.query(Receipt).count() == 0
+
+
+def test_analyze_upload_requests_reupload_for_non_receipt_document(db_session, monkeypatch, tmp_path):
+    user = User(email="receipt-non-receipt@example.com", nickname="receipt document tester")
+    db_session.add(user)
+    db_session.flush()
+
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(tmp_path / "raw"))
+
+    service = ReceiptOcrService()
+    calls = []
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        calls.append(retry_note)
+        return {
+            "image_id": image_id,
+            "document_type": "non_receipt",
+            "is_receipt_like": False,
+            "store_name": None,
+            "purchase_datetime": None,
+            "items": [],
+            "total_item_count": None,
+            "total_amount": None,
+            "currency": "KRW",
+            "confidence_note": "The image is a project table, not a purchase receipt.",
+        }
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = UploadFile(filename="table.png", file=io.BytesIO(b"fake-image-bytes"))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+
+    assert len(calls) == 1
+    assert result["needs_reupload"] is True
+    assert result["receipt_id"] is None
+    assert result["document_type"] == "non_receipt"
+    assert "non_receipt_document" in result["receipt_validation_issues"]
+    assert "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0\uac00 \uc544\ub2cc \uac83" in result["reupload_message"]
+    assert db_session.query(Receipt).count() == 0
+
+
 def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(db_session, monkeypatch):
     user, receipt = seed_user_and_receipt(db_session)
     banana = seed_ingredient(db_session, BANANA)
@@ -178,6 +358,10 @@ def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(d
     assert fridge_item.receipt_item_id == receipt_item.id
     assert fridge_item.display_name == BANANA
     assert fridge_item.ingredient_id == banana.id
+    db_session.refresh(receipt)
+    assert receipt.confirmed_result_json["receipt_id"] == receipt.id
+    assert receipt.confirmed_result_json["items"][0]["normalized_name"] == BANANA
+    assert receipt.confirmed_result_json["items"][0]["storage_method"] == COLD_STORAGE
 
 
 def test_confirm_receipt_keeps_raw_name_when_no_neo4j_standard_name_matches(db_session, monkeypatch):
