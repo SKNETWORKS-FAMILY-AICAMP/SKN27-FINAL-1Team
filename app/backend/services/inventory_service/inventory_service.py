@@ -240,6 +240,7 @@ class InventoryService:
         return {
             "id": item.id,
             "fridge_id": item.id,
+            "receipt_item_id": item.receipt_item_id,
             "name": item.display_name or ingredient.name,
             "category": ingredient.category or DEFAULT_CATEGORY,
             "quantity": float(item.quantity) if item.quantity is not None else 1.0,
