@@ -120,7 +120,7 @@ const features = [
     ],
   },
   {
-    label: '보관 가이드',
+    label: '식재료 가이드',
     icon: imageGuide,
     summary: '식재료를 오래 보관하고 상한 상태를 구분하는 기준을 제공합니다.',
     description: [
@@ -247,7 +247,7 @@ function SolutionSection() {
               <h2>밥벌이가 도와주는 일</h2>
             </div>
             <div className="home-feature-header__side">
-              <span>재료 등록부터 추천, 장보기, 보관 가이드까지 식재료를 쓰는 전 과정을 한 흐름으로 연결합니다.</span>
+              <span>재료 등록부터 추천, 장보기, 식재료 가이드까지 식재료를 쓰는 전 과정을 한 흐름으로 연결합니다.</span>
               <div className="home-feature-controls" aria-label="밥벌이가 도와주는 일 슬라이드 이동">
                 <button type="button" aria-label="이전 도움 항목" onClick={() => moveFeature(-1)}>
                   &lt;

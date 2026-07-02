@@ -11,7 +11,7 @@ const breadcrumbMap = {
   '/recipe-recommend': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '레시피 추천' }],
   '/login': [{ label: '홈', to: '/' }, { label: '로그인' }],
   '/mypage': [{ label: '홈', to: '/' }, { label: '마이페이지' }],
-  '/guide': [{ label: '홈', to: '/' }, { label: '보관 가이드' }],
+  '/guide': [{ label: '홈', to: '/' }, { label: '식재료 가이드' }],
   '/shopping-list': [{ label: '홈', to: '/' }, { label: '장보기' }],
   '/faq': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '자주 묻는 질문' }],
   '/support': [{ label: '홈', to: '/' }, { label: '고객 서비스' }, { label: '고객 지원' }],
@@ -42,8 +42,8 @@ function Breadcrumbs() {
     : pathname.startsWith('/guide/') && pathname !== '/guide'
     ? [
         { label: '홈', to: '/' },
-        { label: '보관 가이드', to: '/guide' },
-        { label: '식재료가이드' },
+        { label: '식재료 가이드', to: '/guide' },
+        { label: '식재료 가이드' },
       ]
     : pathname.startsWith('/recipes/') && pathname !== '/recipes'
       ? [
