@@ -31,8 +31,8 @@ def test_fridge_consume_preset_flags():
 
     assert config.mode == "fridge_consume"
     assert config.limit == RecipeRecommendConfig.FRIDGE_CONSUME_LIMIT
-    assert config.pool_multiplier == 4
-    assert config.pool_size == 36
+    assert config.pool_multiplier == 10
+    assert config.pool_size == 90
     assert config.require_any_owned is True
     assert config.use_expiry_priority is True
 
@@ -117,6 +117,10 @@ def test_menu_custom_pipeline_slices_to_limit():
             "app.backend.services.recommendation_service.recommendation_service.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
         ),
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.fetch_review_rank_scores",
+            return_value=_default_rank_scores(recipes),
+        ),
     ):
         config = RecipeRecommendConfig.menu_custom_preset(5, pool_multiplier=2)
         result = service.recommend_recipes(db, user_id=1, config=config)
@@ -136,12 +140,17 @@ def test_clamp_limit():
     assert RecipeRecommendConfig.clamp_limit(7) == 7
 
 
+def _default_rank_scores(recipes) -> dict[int, float]:
+    return {recipe.id: 50.0 for recipe in recipes}
+
+
 @contextmanager
-def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_items=None, expiry_rows=None):
+def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_items=None, expiry_rows=None, rank_scores=None):
     query_chain = MagicMock()
     query_chain.order_by.return_value.all.return_value = recipes
     fridge_items = fridge_items or []
     expiry_rows = expiry_rows or []
+    rank_scores = rank_scores if rank_scores is not None else _default_rank_scores(recipes)
 
     with (
         patch(
@@ -159,6 +168,10 @@ def _menu_custom_mock_pipeline(service, db, recipes, ingredient_rows, *, fridge_
         patch(
             "app.backend.services.recommendation_service.recommendation_service.fetch_fridge_expiry_rows",
             return_value=expiry_rows,
+        ),
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.fetch_review_rank_scores",
+            return_value=rank_scores,
         ),
     ):
         yield query_chain
@@ -258,6 +271,10 @@ def test_hard_filter_excludes_before_eval():
             "app.backend.services.recommendation_service.recommendation_service.load_recipe_ingredients_bulk",
             return_value=ingredient_rows,
         ) as load_bulk,
+        patch(
+            "app.backend.services.recommendation_service.recommendation_service.fetch_review_rank_scores",
+            return_value=_default_rank_scores(recipes),
+        ),
     ):
         config = RecipeRecommendConfig.menu_custom_preset(3)
         service.recommend_recipes(
@@ -494,3 +511,73 @@ def test_response_includes_scoring_fields():
     assert "missing_ingredient_count" in item
     assert "display_match_rate" in item
     assert item["display_match_rate"] == 100
+
+
+def test_zero_rank_score_allowed_when_min_is_zero():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [_recipe(1), _recipe(2)]
+    ingredient_rows = {
+        1: [{"name": "대파", "amount": None, "ingredient_id": 1}],
+        2: [{"name": "대파", "amount": None, "ingredient_id": 1}],
+    }
+
+    with _menu_custom_mock_pipeline(
+        service,
+        db,
+        recipes,
+        ingredient_rows,
+        rank_scores={1: 0.0, 2: 50.0},
+    ):
+        result = service.recommend_recipes(
+            db, user_id=1, config=RecipeRecommendConfig.menu_custom_preset(3)
+        )
+
+    assert result["returned_count"] == 2
+    assert result["items"][0]["recipe_id"] == 2
+
+
+def test_negative_rank_score_filtered_out():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [_recipe(1)]
+    ingredient_rows = {1: [{"name": "대파", "amount": None, "ingredient_id": 1}]}
+
+    with _menu_custom_mock_pipeline(
+        service,
+        db,
+        recipes,
+        ingredient_rows,
+        rank_scores={1: -1.0},
+    ):
+        result = service.recommend_recipes(
+            db, user_id=1, config=RecipeRecommendConfig.menu_custom_preset(3)
+        )
+
+    assert result["returned_count"] == 0
+    assert result["empty_reason"] == "no_scorable_recipes"
+
+
+def test_review_rank_score_sorts_higher_first():
+    service = RecommendationService()
+    db = MagicMock()
+    recipes = [_recipe(1), _recipe(2)]
+    ingredient_rows = {
+        1: [{"name": "대파", "amount": None, "ingredient_id": 1}],
+        2: [{"name": "대파", "amount": None, "ingredient_id": 1}],
+    }
+
+    with _menu_custom_mock_pipeline(
+        service,
+        db,
+        recipes,
+        ingredient_rows,
+        rank_scores={1: 90.0, 2: 20.0},
+    ):
+        result = service.recommend_recipes(
+            db, user_id=1, config=RecipeRecommendConfig.menu_custom_preset(2)
+        )
+
+    assert result["returned_count"] == 2
+    assert result["items"][0]["recipe_id"] == 1
+    assert result["items"][1]["recipe_id"] == 2

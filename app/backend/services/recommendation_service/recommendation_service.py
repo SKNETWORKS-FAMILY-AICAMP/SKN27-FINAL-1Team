@@ -31,6 +31,7 @@ from app.backend.services.recommendation_service.recipe_candidate_query import (
     load_recipe_ingredients_bulk,
     recipe_to_list_item,
 )
+from app.backend.services.recommendation_service.recipe_graph_service import fetch_review_rank_scores
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
 __all__ = [
@@ -357,6 +358,15 @@ class RecommendationService:
 
         recipes = recipes[: config.pool_size]
 
+        rank_scores = fetch_review_rank_scores([recipe.id for recipe in recipes])
+        recipes = [
+            recipe
+            for recipe in recipes
+            if rank_scores.get(recipe.id, 0.0) >= RecipeRecommendConfig.MIN_REVIEW_RANK_SCORE
+        ]
+        if not recipes:
+            return _empty_recommend_result("no_scorable_recipes")
+
         expiry_rows = fetch_fridge_expiry_rows(db, user_id)
         fridge_snapshots = fetch_fridge_snapshots(db, user_id)
         expiry_by_id = {row.ingredient_id: row for row in expiry_rows}
@@ -372,6 +382,7 @@ class RecommendationService:
             expiry_by_name,
             config,
             date.today(),
+            rank_scores=rank_scores,
         )
         if not scored:
             return _empty_recommend_result("no_scorable_recipes")
@@ -406,6 +417,8 @@ class RecommendationService:
         expiry_by_name: dict[str, FridgeExpiryRow],
         config: RecipeRecommendConfig,
         today: date,
+        *,
+        rank_scores: dict[int, float],
     ) -> list[dict[str, Any]]:
         ranked: list[dict[str, Any]] = []
 
@@ -440,6 +453,7 @@ class RecommendationService:
                     "_fridge_match": fridge_match,
                     "_recipe_ingredients": recipe_ingredients,
                     "final_score": final_score,
+                    "review_rank_score": rank_scores.get(recipe.id, 0.0),
                 }
             )
 
@@ -450,6 +464,7 @@ class RecommendationService:
         del config
         ranked.sort(
             key=lambda row: (
+                -row["review_rank_score"],
                 -row["final_score"],
                 -row["display_match_rate"],
                 -row["recipe_id"],

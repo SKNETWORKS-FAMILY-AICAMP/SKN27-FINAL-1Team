@@ -11,9 +11,10 @@ class RecipeRecommendConfig:
     FRIDGE_CONSUME_LIMIT = 9
     LIMIT_MIN = 1
     LIMIT_MAX = 50
-    DEFAULT_POOL_MULTIPLIER = 4
+    DEFAULT_POOL_MULTIPLIER = 10
     POOL_MULTIPLIER_MIN = 1
     POOL_MULTIPLIER_MAX = 10
+    MIN_REVIEW_RANK_SCORE = 0.0
 
     mode: Literal["fridge_consume", "menu_custom"] = "fridge_consume"
 
