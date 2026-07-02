@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -47,6 +47,7 @@ class ReceiptConfirmService:
             db.query(ReceiptItem).filter(ReceiptItem.id.in_(existing_item_ids)).delete(synchronize_session=False)
 
         saved_count = 0
+        confirmed_items: List[Dict[str, Any]] = []
         for item in request_data.items:
             raw_name = (item.raw_name or "").strip()
             normalized_name = (item.normalized_name or raw_name).strip()
@@ -81,7 +82,30 @@ class ReceiptConfirmService:
                 receipt_item=receipt_item,
                 ingredient=ingredient,
             )
+            confirmed_items.append(
+                {
+                    "receipt_item_id": receipt_item.id,
+                    "ingredient_id": ingredient.id,
+                    "raw_name": receipt_item.raw_name,
+                    "normalized_name": receipt_item.normalized_name,
+                    "quantity": float(receipt_item.quantity) if receipt_item.quantity is not None else None,
+                    "unit": receipt_item.unit,
+                    "item_amount": receipt_item.item_amount,
+                    "storage_method": receipt_item.storage_method,
+                    "item_memo": receipt_item.item_memo,
+                }
+            )
             saved_count += 1
+
+        receipt.confirmed_result_json = {
+            "receipt_id": receipt.id,
+            "store_name": receipt.store_name,
+            "purchase_datetime": request_data.purchase_datetime,
+            "total_amount": receipt.total_price,
+            "items": confirmed_items,
+            "calendar_cost_enabled": request_data.calendar_cost_enabled,
+            "source": "user_confirmed_receipt",
+        }
 
         db.commit()
         return saved_count

@@ -59,6 +59,48 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
     assert body["items"][0]["unit"] == EA
 
 
+def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
+    async def fake_create_upload_event_stream(*, db, file, user_id):
+        assert user_id == 7
+        assert file.filename == "receipt.png"
+
+        async def events():
+            yield {"type": "stage", "stage": "image_uploaded"}
+            yield {
+                "type": "result",
+                "data": {
+                    "receipt_id": 10,
+                    "original_file_name": "receipt.png",
+                    "original_file_path": "storage/raw/receipts/7/receipt.png",
+                    "store_name": STORE_NAME,
+                    "purchase_datetime": "2026-06-29 12:30:00",
+                    "items": [],
+                    "total_item_count": 0,
+                    "total_amount": 2000,
+                    "currency": "KRW",
+                    "confidence_note": None,
+                    "needs_reupload": False,
+                },
+            }
+
+        return events()
+
+    monkeypatch.setattr(receipts_api.receipt_ocr_service, "create_upload_event_stream", fake_create_upload_event_stream)
+
+    client = create_test_client()
+    response = client.post(
+        "/api/v1/receipts/upload/stream",
+        files={"file": ("receipt.png", b"fake-image-bytes", "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+    assert "event: stage" in response.text
+    assert '"stage": "image_uploaded"' in response.text
+    assert "event: result" in response.text
+    assert '"receipt_id": 10' in response.text
+
+
 def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
     saved = {}
 
