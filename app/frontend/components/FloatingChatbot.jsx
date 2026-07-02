@@ -216,7 +216,14 @@ function FloatingChatbot() {
                         <button
                           type="button"
                           key={`${action.label}-${actionIndex}`}
+                          disabled={item.actionDisabled}
                           onClick={() => {
+                            // 사용자가 액션 버튼을 클릭하면 해당 그룹의 버튼들을 모두 비활성화
+                            setMessages((prev) => {
+                              const next = [...prev]
+                              next[index] = { ...next[index], actionDisabled: true }
+                              return next
+                            })
                             // 챗봇 액션은 메시지 전송, 냉장고 갱신, 페이지 이동 중 하나로 처리합니다.
                             if (action.data?.message) {
                               requestChat(action.data.message, action.label)

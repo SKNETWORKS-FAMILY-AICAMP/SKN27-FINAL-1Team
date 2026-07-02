@@ -9,9 +9,18 @@ import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import './Login.css'
 
 const loginMethods = [
-  { label: '카카오로 로그인', mark: 'K', className: 'kakao', provider: 'kakao', envKey: 'VITE_KAKAO_CLIENT_ID' },
-  { label: '네이버로 로그인', mark: 'N', className: 'naver', provider: 'naver', envKey: 'VITE_NAVER_CLIENT_ID' },
-  { label: '구글로 로그인', mark: 'G', className: 'google', provider: 'google', envKey: 'VITE_GOOGLE_CLIENT_ID' },
+  {
+    label: '카카오 로그인', className: 'kakao', provider: 'kakao', envKey: 'VITE_KAKAO_CLIENT_ID',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.85 1.83 5.34 4.58 6.74-.24.89-.86 3.19-.9 3.39-.05.24.11.24.23.16.09-.06 2.97-1.99 4.14-2.77.62.08 1.28.13 1.95.13 5.52 0 10-3.58 10-8s-4.48-8-10-8z" /></svg>
+  },
+  {
+    label: '네이버 로그인', className: 'naver', provider: 'naver', envKey: 'VITE_NAVER_CLIENT_ID',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M16.7 13.78L8.6 3H3.2v18h5.1v-10.8l8.1 10.8h5.4V3h-5.1v10.78z" /></svg>
+  },
+  {
+    label: 'Google 로그인', className: 'google', provider: 'google', envKey: 'VITE_GOOGLE_CLIENT_ID',
+    icon: <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M23.74 12.27c0-.85-.08-1.67-.22-2.47H12v4.67h6.58c-.28 1.5-1.12 2.78-2.38 3.63v3h3.86c2.26-2.08 3.56-5.14 3.56-8.83z" /><path fill="#34A853" d="M12 24c3.31 0 6.08-1.1 8.11-2.97l-3.86-3c-1.1.74-2.51 1.18-4.25 1.18-3.26 0-6.03-2.2-7.02-5.16H1.05v3.1A11.984 11.984 0 0 0 12 24z" /><path fill="#FBBC05" d="M4.98 14.05A7.16 7.16 0 0 1 4.6 12c0-.71.12-1.4.35-2.05v-3.1H1.05A11.964 11.964 0 0 0 0 12c0 1.94.46 3.76 1.25 5.4l3.73-3.35z" /><path fill="#EA4335" d="M12 4.75c1.8 0 3.42.62 4.69 1.83l3.52-3.52C18.08 1.1 15.31 0 12 0 7.42 0 3.52 2.61 1.05 6.85l3.93 3.1c.99-2.96 3.76-5.2 7.02-5.2z" /></svg>
+  },
 ]
 
 const serviceFeatures = [
@@ -126,7 +135,7 @@ function Login() {
                 {isCalendarMode ? '밥벌이 알림을' : '맛있는 한 끼,'}
               </p>
               <h1>
-                <strong>{isCalendarMode ? '캘린더에 등록해요' : '밥벌이와 함께해요!'}</strong>
+                <strong>{isCalendarMode ? '캘린더에 등록해요' : '밥벌이와 함께!'}</strong>
               </h1>
               <p className="login-card__description">
                 {isCalendarMode ? (
@@ -137,7 +146,7 @@ function Login() {
                   </>
                 ) : (
                   <>
-                    냉장고 재료로 오늘의 한 끼를 쉽게 만들고,
+                    냉장고 재료로 오늘의 한 끼를 쉽게 만들고
                     <br />
                     식재료 낭비는 줄이고, 맛있는 일상은 더해요.
                   </>
@@ -149,17 +158,7 @@ function Login() {
               <img className="login-card__art" src={visualImage} alt="" />
             </div>
 
-            <div className="login-card__features">
-              {features.map((feature) => (
-                <div className="login-card__feature" key={feature.title}>
-                  <img src={feature.image} alt="" />
-                  <div>
-                    <strong>{feature.title}</strong>
-                    <span>{feature.description}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+
           </div>
 
           <div className="login-card__form-wrap">
@@ -205,8 +204,9 @@ function Login() {
                       key={method.label}
                       onClick={() => handleSocialLogin(method)}
                     >
-                      <span className={`login-card__provider ${method.className}`}>{method.mark}</span>
-                      {method.label.replace('로그인', '시작하기')}
+                      <span className="login-card__provider">{method.icon}</span>
+                      <span className="login-card__button-text">{method.label}</span>
+                      <span className="login-card__button-ghost"></span>
                     </button>
                   ))
                 )}
@@ -224,7 +224,7 @@ function Login() {
                 ) : (
                   <>
                     로그인하면 밥벌이의 <a href="/terms">이용약관</a> 및{' '}
-                    <a href="/privacy">개인정보 처리방침</a>에 동의한 것으로 간주합니다.
+                    <a href="/privacy">개인정보 처리방침</a>에 동의하게 됩니다.
                   </>
                 )}
               </p>
