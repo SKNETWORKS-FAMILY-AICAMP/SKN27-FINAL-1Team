@@ -1673,9 +1673,9 @@
   min-height: 72px;
   padding: 12px;
   display: grid;
-  grid-template-columns: minmax(180px, 0.88fr) minmax(250px, 0.92fr) minmax(82px, 0.3fr) minmax(124px, 0.46fr);
+  grid-template-columns: minmax(188px, 1fr) minmax(300px, 1.2fr) minmax(88px, 0.36fr) minmax(124px, 0.48fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid #f1d9b3;
   border-radius: 16px;
   background: #fffdf8;
@@ -1790,9 +1790,9 @@
 
 .receipt-mapping-details {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(96px, 0.66fr);
+  grid-template-columns: 178px minmax(112px, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .receipt-mapping-details label {
@@ -1855,8 +1855,8 @@
 }
 
 .receipt-quantity-field {
-  grid-template-columns: minmax(0, 1fr) 52px;
-  column-gap: 4px;
+  grid-template-columns: 116px 54px;
+  column-gap: 8px;
 }
 
 .receipt-quantity-field > small {
@@ -1866,9 +1866,9 @@
 .receipt-quantity-control {
   min-width: 0;
   display: grid;
-  grid-template-columns: 24px minmax(38px, 1fr) 24px;
+  grid-template-columns: 24px 56px 24px;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .receipt-quantity-control button {
@@ -2087,6 +2087,73 @@
 .receipt-stock-button:disabled .receipt-stock-button__arrow {
   background: rgba(255, 255, 255, 0.2);
   color: #a9896f;
+}
+
+.receipt-stock-button.is-loading {
+  cursor: wait;
+}
+
+.receipt-spinner,
+.receipt-stocking-card__spinner {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border: 3px solid rgba(255, 255, 255, 0.48);
+  border-top-color: #fff;
+  border-radius: 999px;
+  animation: receipt-spin 760ms linear infinite;
+}
+
+.receipt-stocking-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(60, 40, 24, 0.22);
+  backdrop-filter: blur(2px);
+}
+
+.receipt-stocking-card {
+  min-width: min(360px, 100%);
+  padding: 28px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #f0d4ad;
+  border-radius: 20px;
+  background: #fffdf8;
+  color: #2d1b12;
+  box-shadow: 0 22px 48px rgba(91, 58, 29, 0.2);
+  text-align: center;
+}
+
+.receipt-stocking-card__spinner {
+  width: 34px;
+  height: 34px;
+  border-color: #ffe1b5;
+  border-top-color: var(--figma-coral);
+}
+
+.receipt-stocking-card strong {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.receipt-stocking-card p {
+  margin: 0;
+  color: #7d5f45;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+@keyframes receipt-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1120px) {

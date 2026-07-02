@@ -617,6 +617,7 @@ function ReceiptOcr() {
   const [isAddRowOpen, setIsAddRowOpen] = useState(false)
   const [rowSelectionMode, setRowSelectionMode] = useState(false)
   const [selectedRowIds, setSelectedRowIds] = useState([])
+  const [isStocking, setIsStocking] = useState(false)
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -628,7 +629,7 @@ function ReceiptOcr() {
   const currentStepLabel = steps[activeStep]
   const isReadyToStock = hasUploaded && activeStep >= steps.length - 1
   const isAllConfirmed = detectedRows.length > 0 && reviewCount === 0
-  const isStockDisabled = reviewCount > 0 || detectedRows.length === 0
+  const isStockDisabled = reviewCount > 0 || detectedRows.length === 0 || isStocking
   const isShowingAnalysisProgress = isProcessing && activeStep === 1
   const analysisProgressPercent = Math.round(((analysisStep + 1) / aiAnalysisSteps.length) * 100)
 
@@ -1054,6 +1055,10 @@ function ReceiptOcr() {
   }
 
   const stockIngredients = async () => {
+    if (isStocking) {
+      return
+    }
+
     if (!hasUploaded) {
       return
     }
@@ -1089,7 +1094,15 @@ function ReceiptOcr() {
       return
     }
 
+    setIsStocking(true)
+
     const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      setIsStocking(false)
+      requestLogin()
+      return
+    }
+
     if (token) {
       const calendarCostEnabled = window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false'
 
@@ -1124,6 +1137,7 @@ function ReceiptOcr() {
         }
       } catch (err) {
         console.error(err)
+        setIsStocking(false)
         await showAlert(err.message || '냉장고 입고 저장 중 문제가 발생했어요.', {
           title: '저장에 실패했어요',
         })
@@ -1506,21 +1520,27 @@ function ReceiptOcr() {
                     <span>확인 필요<em>{reviewCount}개</em></span>
                   </div>
                   <button
-                    className="receipt-stock-button"
+                    className={`receipt-stock-button ${isStocking ? 'is-loading' : ''}`}
                     type="button"
                     disabled={isStockDisabled}
                     onClick={stockIngredients}
                   >
                     <ImageSlot className="receipt-stock-button__icon" src={iconRefrigerator} />
-                    <span className="receipt-stock-button__title">냉장고에 입고하기</span>
+                    <span className="receipt-stock-button__title">
+                      {isStocking ? '냉장고에 입고 중' : '냉장고에 입고하기'}
+                    </span>
                     <small>
-                      {reviewCount > 0
+                      {isStocking
+                        ? '재료를 저장하고 있어요. 잠시만 기다려주세요.'
+                        : reviewCount > 0
                         ? `확인 필요 항목 ${reviewCount}개를 먼저 완료해주세요.`
                         : detectedRows.length === 0
                           ? '등록할 품목을 먼저 추가해주세요.'
                         : `총 ${detectedRows.length}개 재료가 등록돼요!`}
                     </small>
-                    <span className="receipt-stock-button__arrow" aria-hidden="true">→</span>
+                    <span className="receipt-stock-button__arrow" aria-hidden="true">
+                      {isStocking ? <i className="receipt-spinner" /> : '→'}
+                    </span>
                   </button>
                 </>
               ) : null}
@@ -1530,6 +1550,15 @@ function ReceiptOcr() {
       )}
       {isAddRowOpen ? <AddRowModal onClose={() => setIsAddRowOpen(false)} onSubmit={submitAddRow} /> : null}
       {dialogNode}
+      {isStocking ? (
+        <div className="receipt-stocking-overlay" role="status" aria-live="polite">
+          <div className="receipt-stocking-card">
+            <span className="receipt-stocking-card__spinner" aria-hidden="true" />
+            <strong>냉장고에 입고 중이에요</strong>
+            <p>재료와 구매 기록을 저장하고 있어요.</p>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -1805,7 +1834,7 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify
   }, [])
 
   const handleFileChange = (event, source) => {
-    const files = event.target.files
+    const files = Array.from(event.target.files || [])
     event.target.value = ''
 
     if (!canUpload) {
@@ -1813,12 +1842,12 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify
       return
     }
 
-    if (files && files.length > 1) {
+    if (files.length > 1) {
       onNotify?.('영수증은 한 번에 한 장만 업로드할 수 있어요.', { title: '한 장만 올려주세요' })
       return
     }
 
-    const file = files?.[0]
+    const file = files[0]
     if (file) {
       onStartUpload(file, source)
     }
