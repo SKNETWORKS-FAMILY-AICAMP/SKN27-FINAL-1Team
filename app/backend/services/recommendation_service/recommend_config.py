@@ -14,7 +14,7 @@ class RecipeRecommendConfig:
     DEFAULT_POOL_MULTIPLIER = 10
     POOL_MULTIPLIER_MIN = 1
     POOL_MULTIPLIER_MAX = 10
-    MIN_REVIEW_RANK_SCORE = 0.0
+    MIN_REVIEW_RANK_SCORE = 0.01
 
     mode: Literal["fridge_consume", "menu_custom"] = "fridge_consume"
 
