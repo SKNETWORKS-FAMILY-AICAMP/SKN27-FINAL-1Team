@@ -38,7 +38,9 @@ SET r.name = row.name,
     r.inqCnt = row.inqCnt,
     r.inqCntRate = row.inqCntRate,
     r.reviewStarIdfAvg = row.reviewStarIdfAvg,
-    r.reviewSentimentAvg = row.reviewSentimentAvg
+    r.reviewSentimentAvg = row.reviewSentimentAvg,
+    r.reviewRankDistance = row.reviewRankDistance,
+    r.reviewRankScore = row.reviewRankScore
 """
 
 UPSERT_REVIEWER_QUERY = """
@@ -155,6 +157,8 @@ def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "inqCntRate": _number(row.get("INQ_CNT_RATE")),
                 "reviewStarIdfAvg": _number(row.get("REVIEW_STAR_IDF_AVG")),
                 "reviewSentimentAvg": _number(row.get("REVIEW_SENTIMENT_AVG")),
+                "reviewRankDistance": _number(row.get("REVIEW_RANK_DISTANCE")),
+                "reviewRankScore": _number(row.get("REVIEW_RANK_SCORE")),
             }
         )
     return rows
@@ -272,8 +276,13 @@ def _self_check() -> None:
     assert isinstance(recipe_rows[0]["inqCntRate"], float)
     assert "reviewStarIdfAvg" in recipe_rows[0]
     assert "reviewSentimentAvg" in recipe_rows[0]
+    assert "reviewRankDistance" in recipe_rows[0]
+    assert "reviewRankScore" in recipe_rows[0]
     assert any(row["reviewStarIdfAvg"] is None for row in recipe_rows)
     assert any(row["reviewSentimentAvg"] is None for row in recipe_rows)
+    assert any(row["reviewRankDistance"] is None for row in recipe_rows)
+    assert any(row["reviewRankScore"] is None for row in recipe_rows)
+    assert any(row["reviewRankScore"] is not None for row in recipe_rows)
 
     assert len(reviewer_rows) > 900
     assert reviewer_rows[0]["reviewerId"] > 0
