@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 const CATEGORY_OPTIONS = ['기타', '채소', '과일', '육류', '수산물', '유제품', '가공식품']
 const STORAGE_OPTIONS = ['냉장', '냉동', '실온']
@@ -53,6 +53,17 @@ export default function IngredientModal({
   const [suggestions, setSuggestions] = useState([])
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
   const [hasEditedName, setHasEditedName] = useState(false)
+  const [focusedSuggestionIndex, setFocusedSuggestionIndex] = useState(-1)
+  const suggestionListRef = useRef(null)
+
+  useEffect(() => {
+    if (focusedSuggestionIndex >= 0 && suggestionListRef.current) {
+      const activeElement = suggestionListRef.current.children[focusedSuggestionIndex]
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: 'nearest' })
+      }
+    }
+  }, [focusedSuggestionIndex])
 
   // 수정 모달은 처음 열릴 때 자동완성을 숨기고, 사용자가 이름을 바꾼 뒤 다시 보여줍니다.
   useEffect(() => {
@@ -102,9 +113,11 @@ export default function IngredientModal({
     const searchKeys = getIngredientSearchKeys(keyword)
     if (!isOpen || (editingId && !hasEditedName) || !key) {
       setSuggestions([])
+      setFocusedSuggestionIndex(-1)
       return
     }
 
+    setFocusedSuggestionIndex(-1)
     setSuggestions(
       ingredientImages
         .filter((item) => searchKeys.some((searchKey) => item.key.includes(searchKey)))
@@ -168,6 +181,7 @@ export default function IngredientModal({
             <input
               type="text"
               name="name"
+              disabled={!!editingId}
               autoComplete="off"
               autoFocus
               placeholder="예: 양파, 두부, 우유"
@@ -177,6 +191,25 @@ export default function IngredientModal({
                 setIsSuggestionOpen(true)
                 handleFormChange(event)
               }}
+              onKeyDown={(e) => {
+                if (isSuggestionOpen && suggestions.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setFocusedSuggestionIndex((prev) => Math.min(prev + 1, suggestions.length - 1))
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setFocusedSuggestionIndex((prev) => Math.max(prev - 1, 0))
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (focusedSuggestionIndex >= 0) {
+                      handleSelectSuggestion(suggestions[focusedSuggestionIndex])
+                    } else {
+                      handleSelectSuggestion(suggestions[0])
+                    }
+                  }
+                }
+              }}
               onFocus={() => (!editingId || hasEditedName) && setIsSuggestionOpen(true)}
               onBlur={() => {
                 setIsSuggestionOpen(false)
@@ -184,11 +217,12 @@ export default function IngredientModal({
               }}
             />
             {(!editingId || hasEditedName) && isSuggestionOpen && suggestions.length > 0 ? (
-              <div className="fridge-suggestion-list">
-                {suggestions.map((suggestion) => (
+              <div className="fridge-suggestion-list" ref={suggestionListRef}>
+                {suggestions.map((suggestion, index) => (
                   <button
                     type="button"
                     key={suggestion.key}
+                    className={index === focusedSuggestionIndex ? 'is-focused' : ''}
                     onMouseDown={(event) => {
                       event.preventDefault()
                       handleSelectSuggestion(suggestion)
