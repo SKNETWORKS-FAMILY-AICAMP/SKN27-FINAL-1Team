@@ -47,7 +47,7 @@
 
 .recipe-list-hero__copy h1 strong {
   display: block;
-  color: var(--figma-coral);
+  color: var(--figma-text);
   font-style: normal;
 }
 
