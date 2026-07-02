@@ -16,56 +16,55 @@ from app.backend.schemas.chat_state import GraphState
 
 logger = logging.getLogger(__name__)
 # 챗봇 기본 응답 문구
-LOGIN_REQUIRED_REPLY = "\ub85c\uadf8\uc778\uc774 \ud544\uc694\ud55c \uc9c8\ubb38\uc774\uc5d0\uc694. \ube44\ud68c\uc6d0 \uc0c1\ud0dc\uc5d0\uc11c\ub294 \ubcf4\uad00\ubc95\uc774\ub098 \uc77c\ubc18 \ub808\uc2dc\ud53c \uac80\uc0c9\uc744 \uc774\uc6a9\ud560 \uc218 \uc788\uc5b4\uc694."
-GENERAL_REPLY = "\uc694\ub9ac\uc640 \uc2dd\uc7ac\ub8cc \uad00\ub828 \uc9c8\ubb38\uc744 \ubb3c\uc5b4\ubd10 \uc8fc\uc138\uc694.\n\uc608: \uc591\ud30c \ubcf4\uad00\ubc95, \uac10\uc790\ud280\uae40 \uc5d0\uc5b4\ud504\ub77c\uc774\uae30 \uc2dc\uac04, \ub450\ubd80 \ub808\uc2dc\ud53c"
-CANCEL_REPLY = "\uc54c\uaca0\uc5b4\uc694. \uc791\uc5c5\uc744 \ucde8\uc18c\ud588\uc5b4\uc694."
+LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
+GENERAL_REPLY = "요리와 식재료 관련 질문을 물어봐 주세요.\n예: 양파 보관법, 감자튀김 에어프라이기 시간, 두부 레시피"
+CANCEL_REPLY = "알겠습니다. 작업을 취소하겠습니다."
 
 # 확인/취소 액션 키워드
-CONFIRM_PREFIX = "\ud655\uc778:"
-CANCEL_WORDS = ("\ucde8\uc18c", "\uc544\ub2c8", "\uc544\ub2c8\uc694", "\ucde8\uc18c\ud560\uac8c")
+CONFIRM_PREFIX = "확인:"
+CANCEL_WORDS = ("취소", "아니", "아니요", "취소할게")
 
 # 의도 분류용 키워드
 INVENTORY_ACTION_WORDS = (
-    "\uba39\uc5c8\uc5b4",
-    "\ub2e4\uc37c\uc5b4",
-    "\ub2e4\uba39\uc5c8\uc5b4",
-    "\ubc84\ub838\uc5b4",
-    "\uc18c\ube44\ud588",
-    "\uc0ac\uc6a9\ud588",
-    "\uc37c\uc5b4",
-    "\ucd94\uac00",
-    "\ucd94\uac00\ud574\uc918",
-    "\ub4f1\ub85d",
-    "\ub4f1\ub85d\ud574\uc918",
-    "\ub123\uc5c8\uc5b4",
-    "\ub123\uc5b4\uc918",
-    "\uc0c0\uc5b4",
-    "\uc0bf\uc5b4",
-    "\uc0ac\uc654\uc5b4",
-    "\uad6c\ub9e4\ud588",
-    "\uc0ad\uc81c",
-    "\ud3d0\uae30",
-    "\uc9c0\uc6cc",
+    "먹었어",
+    "다썼어",
+    "다먹었어",
+    "버렸어",
+    "소비했",
+    "사용했",
+    "썼어",
+    "추가",
+    "추가해줘",
+    "등록",
+    "등록해줘",
+    "넣었어",
+    "넣어줘",
+    "샀어",
+    "사왔어",
+    "구매했",
+    "삭제",
+    "폐기",
+    "지워",
 )
-CALENDAR_WORDS = ("\uc77c\uc815", "\uce98\ub9b0\ub354")
-DELETE_WORDS = ("\uc0ad\uc81c", "\ud3d0\uae30", "\uc9c0\uc6cc", "\ubc84\ub824")
-CONSUME_WORDS = ("\uba39\uc5c8\uc5b4", "\ub2e4\uc37c\uc5b4", "\ub2e4\uba39\uc5c8\uc5b4", "\uc18c\ube44\ud588", "\uc0ac\uc6a9\ud588", "\uc37c\uc5b4")
+CALENDAR_WORDS = ("일정", "캘린더")
+DELETE_WORDS = ("삭제", "폐기", "지워", "버려")
+CONSUME_WORDS = ("먹었어", "다썼어", "다먹었어", "소비했", "사용했", "썼어")
 INVENTORY_LIST_WORDS = ("뭐 있어", "뭐 있지", "뭐있", "뭐잇", "머있", "머잇", "뭐이", "목록", "현재 재료", "현재 냉장고")
 EXPIRING_WORDS = ("임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "d-day", "디데이")
-ADD_WORDS = ("\ucd94\uac00", "\ub4f1\ub85d", "\ub123", "\uc0c0", "\uc0bf", "\uc0ac\uc654", "\uad6c\ub9e4")
+ADD_WORDS = ("추가", "등록", "넣", "샀", "사왔", "구매")
 
 # 식재료 입력 파싱용 기본값
-DEFAULT_STORAGE = "\ub0c9\uc7a5"
-STORAGE_KEYS = ("\ub0c9\uc7a5", "\ub0c9\ub3d9", "\uc2e4\uc628")
+DEFAULT_STORAGE = "냉장"
+STORAGE_KEYS = ("냉장", "냉동", "실온")
 KOREAN_QUANTITIES = {
-    "\ud55c": 1,
-    "\ud558\ub098": 1,
-    "\ub450": 2,
-    "\ub458": 2,
-    "\uc138": 3,
-    "\uc14b": 3,
-    "\ub124": 4,
-    "\ub137": 4,
+    "한": 1,
+    "하나": 1,
+    "두": 2,
+    "둘": 2,
+    "세": 3,
+    "셋": 3,
+    "네": 4,
+    "넷": 4,
 }
 
 
@@ -81,7 +80,7 @@ def _confirm_action(label: str, command: str) -> dict:
 
 def _inventory_refresh_action() -> dict:
     """냉장고 목록을 다시 불러오도록 프론트에 전달할 액션을 만듭니다."""
-    return {"label": "\ub0c9\uc7a5\uace0 \uc0c8\ub85c\uace0\uce68", "data": {"refreshInventory": True}}
+    return {"label": "냉장고 새로고침", "data": {"refreshInventory": True}}
 
 
 def _quantity_text(quantity: float) -> str:
