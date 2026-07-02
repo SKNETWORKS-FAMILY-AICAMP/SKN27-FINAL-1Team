@@ -737,7 +737,12 @@ function Fridge() {
                         />
                       </div>
                     )}
-                    <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
+                    <div className="fridge-item__left">
+                      <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
+                      {item.is_ai_recommended ? (
+                        <span className="fridge-ai-badge is-bottom-left" title="AI가 추천한 소비기한입니다">✨ AI 추천</span>
+                      ) : null}
+                    </div>
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
                         <h2>{item.name}</h2>
@@ -754,9 +759,11 @@ function Fridge() {
                         </div>
                         <div>
                           <dt>소비기한</dt>
-                          <dd className={item.is_expiring_soon || item.is_expired ? 'fridge-dday-urgent' : 'fridge-dday-normal'}>
-                            {getDdayLabel(item)}
-                            {item.expiration_date ? <small className="fridge-dday-date">({item.expiration_date})</small> : null}
+                          <dd className="fridge-dday-wrapper">
+                            <div className={item.is_expiring_soon || item.is_expired ? 'fridge-dday-urgent' : 'fridge-dday-normal'}>
+                              {getDdayLabel(item)}
+                              {item.expiration_date ? <small className="fridge-dday-date">({item.expiration_date})</small> : null}
+                            </div>
                           </dd>
                         </div>
                       </dl>
