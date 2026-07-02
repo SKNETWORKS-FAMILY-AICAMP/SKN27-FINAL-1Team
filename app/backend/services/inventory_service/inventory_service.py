@@ -229,7 +229,7 @@ class InventoryService:
             return True
         return False
 
-    def _map_to_response(self, item: FridgeItem, ingredient: Ingredient) -> dict:
+    def _map_to_response(self, item: FridgeItem, ingredient: Ingredient, is_ai_recommended: bool = False) -> dict:
         """FridgeItem과 Ingredient를 프론트엔드 응답 스키마로 변환합니다."""
         calc_info = self._calculate_expiration_info(
             expiry_date=item.expiry_date,
@@ -237,6 +237,10 @@ class InventoryService:
             ingredient=ingredient,
             storage_location=item.storage_location,
         )
+        # DB 컬럼이 있으면 우선 사용, 없으면 파라미터 값 사용 (하위 호환성)
+        ai_flag = getattr(item, 'is_ai_recommended', None)
+        if ai_flag is None:
+            ai_flag = is_ai_recommended
         return {
             "id": item.id,
             "fridge_id": item.id,
@@ -254,6 +258,7 @@ class InventoryService:
             "is_expiring_soon": calc_info["is_expiring_soon"],
             "is_expired": calc_info["is_expired"],
             "status": calc_info["status"],
+            "is_ai_recommended": bool(ai_flag),
         }
 
     def _get_or_create_ingredient(self, db: Session, data: IngredientCreate) -> Ingredient:
@@ -287,22 +292,24 @@ class InventoryService:
                 return ingredient
             raise
 
-    def _resolve_item_dates_and_storage(self, db: Session, ingredient: Ingredient, data: IngredientCreate) -> tuple[str, date]:
-        """요청값과 AI/캐시 기준으로 보관 위치와 소비기한을 확정합니다."""
+    def _resolve_item_dates_and_storage(self, db: Session, ingredient: Ingredient, data: IngredientCreate) -> tuple[str, date, bool]:
+        """요청값과 AI/캐시 기준으로 보관 위치와 소비기한을 확정합니다.
+        반환값: (storage_location, expiration_date, is_ai_recommended)
+        """
         purchase_date = self._parse_date(data.purchase_date) or date.today()
         expiration_date = self._parse_date(data.expiration_date)
 
         if expiration_date:
             storage_location, _ = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
-            return storage_location, expiration_date
+            return storage_location, expiration_date, False
 
         storage_location, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
-        return storage_location, purchase_date + timedelta(days=lifespan_days)
+        return storage_location, purchase_date + timedelta(days=lifespan_days), True
 
     def add_ingredient(self, db: Session, user_id: int, data: IngredientCreate):
         """사용자 냉장고에 식재료를 추가합니다."""
         ingredient = self._get_or_create_ingredient(db, data)
-        storage_location, expiration_date = self._resolve_item_dates_and_storage(db, ingredient, data)
+        storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(db, ingredient, data)
         purchase_date = self._parse_date(data.purchase_date) or date.today()
         d_day = (expiration_date - date.today()).days
 
@@ -316,6 +323,7 @@ class InventoryService:
             purchased_date=purchase_date,
             expiry_date=expiration_date,
             status=self._get_status_from_d_day(d_day),
+            is_ai_recommended=is_ai_recommended,
         )
         db.add(fridge_item)
         db.commit()
@@ -389,7 +397,7 @@ class InventoryService:
 
         # 수정된 재료명 기준으로 식재료 마스터를 다시 매핑합니다.
         ingredient = self._get_or_create_ingredient(db, data)
-        storage_location, expiration_date = self._resolve_item_dates_and_storage(db, ingredient, data)
+        storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(db, ingredient, data)
         purchase_date = self._parse_date(data.purchase_date) or date.today()
         d_day = (expiration_date - date.today()).days
 
@@ -401,6 +409,7 @@ class InventoryService:
         fridge_item.purchased_date = purchase_date
         fridge_item.expiry_date = expiration_date
         fridge_item.status = self._get_status_from_d_day(d_day)
+        fridge_item.is_ai_recommended = is_ai_recommended
 
         db.commit()
         db.refresh(fridge_item)

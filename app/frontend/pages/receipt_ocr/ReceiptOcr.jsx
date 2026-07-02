@@ -34,6 +34,76 @@ const aiAnalysisSteps = [
   '확인 화면 준비 중',
 ]
 
+const analysisStageStepMap = {
+  image_uploaded: 0,
+  ocr_extracted: 1,
+  ocr_retry_requested: 1,
+  result_normalized: 2,
+  receipt_document_validated: 2,
+  quality_validated: 2,
+  receipt_persisted: 3,
+  response_ready: 3,
+  reupload_required: 3,
+}
+
+function getAnalysisStepForStage(stage) {
+  return analysisStageStepMap[stage] ?? 0
+}
+
+function parseSseBlock(block) {
+  const dataLines = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart())
+
+  if (dataLines.length === 0) {
+    return null
+  }
+
+  return JSON.parse(dataLines.join('\n'))
+}
+
+async function readReceiptUploadStream(response, onEvent) {
+  const reader = response.body?.getReader()
+
+  if (!reader) {
+    throw new Error('실시간 분석 상태를 읽지 못했어요.')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    const blocks = buffer.split(/\r?\n\r?\n/)
+    buffer = blocks.pop() || ''
+
+    blocks.forEach((block) => {
+      const event = parseSseBlock(block)
+
+      if (event) {
+        onEvent(event)
+      }
+    })
+  }
+
+  buffer += decoder.decode()
+
+  if (buffer.trim()) {
+    const event = parseSseBlock(buffer)
+
+    if (event) {
+      onEvent(event)
+    }
+  }
+}
+
 function getItemDisplayName(item) {
   const rawName = typeof item === 'string' ? item : item?.normalized_name || item?.raw_name || item?.name || ''
 
@@ -275,7 +345,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
       <section className="receipt-panel receipt-chart" aria-labelledby={chartId}>
         <div>
           <h2 id={chartId}>식재료 구매 흐름</h2>
-          <p>최근 구매 금액과 월별 구매 횟수를 기준으로 보여줘요.</p>
+          <p> 최근 식재료 구매 패턴을 한눈에 확인해보세요.</p>
         </div>
         <div className="receipt-chart__bars" aria-hidden="true">
           <span style={{ height: '42%' }} />
@@ -547,6 +617,7 @@ function ReceiptOcr() {
   const [isAddRowOpen, setIsAddRowOpen] = useState(false)
   const [rowSelectionMode, setRowSelectionMode] = useState(false)
   const [selectedRowIds, setSelectedRowIds] = useState([])
+  const [isStocking, setIsStocking] = useState(false)
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -558,7 +629,7 @@ function ReceiptOcr() {
   const currentStepLabel = steps[activeStep]
   const isReadyToStock = hasUploaded && activeStep >= steps.length - 1
   const isAllConfirmed = detectedRows.length > 0 && reviewCount === 0
-  const isStockDisabled = reviewCount > 0 || detectedRows.length === 0
+  const isStockDisabled = reviewCount > 0 || detectedRows.length === 0 || isStocking
   const isShowingAnalysisProgress = isProcessing && activeStep === 1
   const analysisProgressPercent = Math.round(((analysisStep + 1) / aiAnalysisSteps.length) * 100)
 
@@ -654,27 +725,17 @@ function ReceiptOcr() {
     setAnalysisStep(0)
     setActiveStep(1)
 
-    flowTimersRef.current = [
-      ...aiAnalysisSteps.slice(1).map((_, index) =>
-        window.setTimeout(() => {
-          setAnalysisStep(index + 1)
-        }, (index + 1) * 800),
-      ),
-    ]
-
     const formData = new FormData()
     formData.append('file', file)
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/receipts/upload`, {
+      const response = await fetch(`${apiUrl}/api/v1/receipts/upload/stream`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
         body: formData,
       })
-      const data = await response.json().catch(() => ({}))
-
       if (response.status === 401) {
         window.localStorage.removeItem('bobbeori-token')
         window.dispatchEvent(new Event('bobbeori-auth-change'))
@@ -687,7 +748,47 @@ function ReceiptOcr() {
       }
 
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.detail || '영수증 OCR 분석에 실패했어요.')
+      }
+
+      let data = null
+
+      await readReceiptUploadStream(response, (event) => {
+        if (event.type === 'stage') {
+          setAnalysisStep(getAnalysisStepForStage(event.stage))
+          return
+        }
+
+        if (event.type === 'error') {
+          throw new Error(event.message || '?곸닔利?OCR 遺꾩꽍???ㅽ뙣?덉뼱??')
+        }
+
+        if (event.type === 'result') {
+          data = event.data
+        }
+      })
+
+      if (!data) {
+        throw new Error('?곸닔利?OCR 遺꾩꽍 寃곌낵瑜?諛쏆? 紐삵뻽?댁슂.')
+      }
+
+      if (data.needs_reupload) {
+        setHasUploaded(false)
+        setActiveStep(0)
+        setDetectedRows([])
+        setEditingRows({})
+        setReceiptMeta(null)
+        setReceiptSource(source)
+        await showAlert(
+          data.reupload_message ||
+            '영수증 이미지 인식 품질이 낮아요. 글자와 금액이 선명하게 보이도록 다시 촬영하거나 다른 이미지를 첨부해주세요.',
+          {
+            title: '영수증을 다시 첨부해주세요',
+            confirmText: '확인',
+          },
+        )
+        return
       }
 
       const nextRows = mapOcrItemsToRows(data.items)
@@ -793,8 +894,18 @@ function ReceiptOcr() {
     setSelectedRowIds((prev) => (prev.includes(rowId) ? prev.filter((value) => value !== rowId) : [...prev, rowId]))
   }
 
-  const deleteSelectedRows = () => {
+  const deleteSelectedRows = async () => {
     if (selectedRowIds.length === 0) {
+      return
+    }
+
+    const confirmed = await showConfirm(`총 ${selectedRowIds.length}개 삭제하시겠습니까?`, {
+      title: '선택 삭제',
+      confirmText: '삭제',
+      cancelText: '취소',
+    })
+
+    if (!confirmed) {
       return
     }
 
@@ -807,7 +918,21 @@ function ReceiptOcr() {
     exitRowSelection()
   }
 
-  const deleteAllRows = () => {
+  const deleteAllRows = async () => {
+    if (detectedRows.length === 0) {
+      return
+    }
+
+    const confirmed = await showConfirm('전체 삭제하시겠습니까?', {
+      title: '전체 삭제',
+      confirmText: '삭제',
+      cancelText: '취소',
+    })
+
+    if (!confirmed) {
+      return
+    }
+
     setDetectedRows([])
     setEditingRows({})
     exitRowSelection()
@@ -930,6 +1055,10 @@ function ReceiptOcr() {
   }
 
   const stockIngredients = async () => {
+    if (isStocking) {
+      return
+    }
+
     if (!hasUploaded) {
       return
     }
@@ -965,7 +1094,15 @@ function ReceiptOcr() {
       return
     }
 
+    setIsStocking(true)
+
     const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      setIsStocking(false)
+      requestLogin()
+      return
+    }
+
     if (token) {
       const calendarCostEnabled = window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false'
 
@@ -1000,6 +1137,7 @@ function ReceiptOcr() {
         }
       } catch (err) {
         console.error(err)
+        setIsStocking(false)
         await showAlert(err.message || '냉장고 입고 저장 중 문제가 발생했어요.', {
           title: '저장에 실패했어요',
         })
@@ -1064,13 +1202,13 @@ function ReceiptOcr() {
 
       {!isLoggedIn ? (
         <div className="receipt-branch receipt-guest-grid">
-          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
           <section className="receipt-panel receipt-login-notice" aria-labelledby="receipt-login-title">
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
             <p>
-              업로드한 영수증은 냉장고와 연결되어 저장돼요. 로그인하면 OCR 분석 결과를 바로
-              확인하고 내 식재료로 등록할 수 있어요.
+            영수증 한 장으로 내 냉장고를 채워보세요.<br />
+            로그인 후 바로 시작할 수 있어요.
             </p>
             <button className="receipt-primary-button" type="button" onClick={() => navigate('/login')}>
               로그인하러 가기
@@ -1080,7 +1218,7 @@ function ReceiptOcr() {
         </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
-          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} />
+          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
           </aside>
@@ -1382,21 +1520,27 @@ function ReceiptOcr() {
                     <span>확인 필요<em>{reviewCount}개</em></span>
                   </div>
                   <button
-                    className="receipt-stock-button"
+                    className={`receipt-stock-button ${isStocking ? 'is-loading' : ''}`}
                     type="button"
                     disabled={isStockDisabled}
                     onClick={stockIngredients}
                   >
                     <ImageSlot className="receipt-stock-button__icon" src={iconRefrigerator} />
-                    <span className="receipt-stock-button__title">냉장고에 입고하기</span>
+                    <span className="receipt-stock-button__title">
+                      {isStocking ? '냉장고에 입고 중' : '냉장고에 입고하기'}
+                    </span>
                     <small>
-                      {reviewCount > 0
+                      {isStocking
+                        ? '재료를 저장하고 있어요. 잠시만 기다려주세요.'
+                        : reviewCount > 0
                         ? `확인 필요 항목 ${reviewCount}개를 먼저 완료해주세요.`
                         : detectedRows.length === 0
                           ? '등록할 품목을 먼저 추가해주세요.'
                         : `총 ${detectedRows.length}개 재료가 등록돼요!`}
                     </small>
-                    <span className="receipt-stock-button__arrow" aria-hidden="true">→</span>
+                    <span className="receipt-stock-button__arrow" aria-hidden="true">
+                      {isStocking ? <i className="receipt-spinner" /> : '→'}
+                    </span>
                   </button>
                 </>
               ) : null}
@@ -1406,6 +1550,15 @@ function ReceiptOcr() {
       )}
       {isAddRowOpen ? <AddRowModal onClose={() => setIsAddRowOpen(false)} onSubmit={submitAddRow} /> : null}
       {dialogNode}
+      {isStocking ? (
+        <div className="receipt-stocking-overlay" role="status" aria-live="polite">
+          <div className="receipt-stocking-card">
+            <span className="receipt-stocking-card__spinner" aria-hidden="true" />
+            <strong>냉장고에 입고 중이에요</strong>
+            <p>재료와 구매 기록을 저장하고 있어요.</p>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -1657,7 +1810,7 @@ function detectCameraCapture() {
   return Boolean(isCoarsePointer || isMobileUa || isMobileViewport)
 }
 
-function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
+function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify }) {
   const uploadInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1681,7 +1834,7 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
   }, [])
 
   const handleFileChange = (event, source) => {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files || [])
     event.target.value = ''
 
     if (!canUpload) {
@@ -1689,6 +1842,12 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
       return
     }
 
+    if (files.length > 1) {
+      onNotify?.('영수증은 한 번에 한 장만 업로드할 수 있어요.', { title: '한 장만 올려주세요' })
+      return
+    }
+
+    const file = files[0]
     if (file) {
       onStartUpload(file, source)
     }
@@ -1703,7 +1862,13 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
       return
     }
 
-    const file = event.dataTransfer.files?.[0]
+    const files = event.dataTransfer.files
+    if (files && files.length > 1) {
+      onNotify?.('영수증은 한 번에 한 장만 업로드할 수 있어요.', { title: '한 장만 올려주세요' })
+      return
+    }
+
+    const file = files?.[0]
     if (file) {
       onStartUpload(file, '업로드 이미지')
     }
@@ -1749,7 +1914,6 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload }) {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        <ImageSlot className="receipt-dropzone__icon" src={iconReceipt} />
         <p>
           {canUseCamera
             ? '영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.'
@@ -1823,6 +1987,9 @@ function RecentHistory() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+  const [editingTitleId, setEditingTitleId] = useState(null)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [isSavingTitle, setIsSavingTitle] = useState(false)
 
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -1908,6 +2075,61 @@ function RecentHistory() {
       await showAlert(error.message || '영수증 내역 삭제 중 문제가 발생했어요.', { title: '삭제 실패' })
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const startEditTitle = (item) => {
+    setEditingTitleId(item.id)
+    setTitleDraft(item.store === '상호명 미확인' ? '' : item.store)
+  }
+
+  const cancelEditTitle = () => {
+    setEditingTitleId(null)
+    setTitleDraft('')
+  }
+
+  const saveTitle = async (item) => {
+    const trimmed = titleDraft.trim()
+
+    if (!trimmed) {
+      await showAlert('영수증 제목을 입력해주세요.', { title: '제목 수정' })
+      return
+    }
+
+    if (trimmed === item.store) {
+      cancelEditTitle()
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      return
+    }
+
+    setIsSavingTitle(true)
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/receipts/${item.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ store_name: trimmed }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.detail || '영수증 제목 수정에 실패했어요.')
+      }
+
+      const updated = mapHistoryEntry(await response.json())
+      setHistory((prev) => prev.map((entry) => (entry.id === item.id ? updated : entry)))
+      cancelEditTitle()
+    } catch (error) {
+      await showAlert(error.message || '영수증 제목 수정 중 문제가 발생했어요.', { title: '수정 실패' })
+    } finally {
+      setIsSavingTitle(false)
     }
   }
 
@@ -2055,7 +2277,15 @@ function RecentHistory() {
                   key={item.id}
                   type="button"
                   aria-pressed={selectionMode ? isChecked : undefined}
-                  onClick={() => (selectionMode ? toggleSelect(item.id) : setSelectedId(item.id))}
+                  onClick={() => {
+                    if (selectionMode) {
+                      toggleSelect(item.id)
+                      return
+                    }
+
+                    cancelEditTitle()
+                    setSelectedId(item.id)
+                  }}
                 >
                   <span className="receipt-history-list__marker" aria-hidden="true" />
                   <div>
@@ -2072,7 +2302,44 @@ function RecentHistory() {
             <article className="receipt-history-detail" aria-label={`${selectedHistory.title} 상세 내역`}>
               <div>
                 <span>{selectedHistory.date}</span>
-                <strong>{selectedHistory.store}</strong>
+                {editingTitleId === selectedHistory.id ? (
+                  <div className="receipt-history-detail__title-edit">
+                    <input
+                      className="receipt-inline-input"
+                      type="text"
+                      value={titleDraft}
+                      maxLength={100}
+                      placeholder="영수증 제목"
+                      autoFocus
+                      disabled={isSavingTitle}
+                      onChange={(event) => setTitleDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          saveTitle(selectedHistory)
+                        } else if (event.key === 'Escape') {
+                          cancelEditTitle()
+                        }
+                      }}
+                    />
+                    <button type="button" disabled={isSavingTitle} onClick={() => saveTitle(selectedHistory)}>
+                      {isSavingTitle ? '저장 중...' : '저장'}
+                    </button>
+                    <button type="button" disabled={isSavingTitle} onClick={cancelEditTitle}>
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <div className="receipt-history-detail__title">
+                    <strong>{selectedHistory.store}</strong>
+                    <button
+                      type="button"
+                      className="receipt-history-detail__title-button"
+                      onClick={() => startEditTitle(selectedHistory)}
+                    >
+                      제목 수정
+                    </button>
+                  </div>
+                )}
                 <b>{selectedHistory.amount}</b>
               </div>
               <ul>

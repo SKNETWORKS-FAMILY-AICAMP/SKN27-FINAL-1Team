@@ -35,6 +35,7 @@ class IngredientResponse(IngredientBase):
     is_expiring_soon: bool = Field(default=False, description="D-3 이내 소비 임박 여부")
     is_expired: bool = Field(default=False, description="소비기한 경과 여부")
     status: str = Field(default="normal", description="normal, expiring, expired, used 중 하나")
+    is_ai_recommended: bool = Field(default=False, description="AI 추천 소비기한 여부")
 
     class Config:
         from_attributes = True

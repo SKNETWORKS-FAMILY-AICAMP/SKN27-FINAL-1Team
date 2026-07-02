@@ -73,9 +73,7 @@ const ingredientImages = Object.entries(
 // 재료 이름에 맞는 대표 식재료 이미지를 선택합니다.
 function getIngredientIcon(name = '') {
   const key = normalizeIngredientImageKey(name)
-  const image =
-    ingredientImages.find((item) => item.key === key) ||
-    ingredientImages.find((item) => key.includes(item.key) || item.key.includes(key))
+  const image = ingredientImages.find((item) => item.key === key)
   return image?.src || null
 }
 
@@ -739,7 +737,12 @@ function Fridge() {
                         />
                       </div>
                     )}
-                    <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
+                    <div className="fridge-item__left">
+                      <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
+                      {item.is_ai_recommended ? (
+                        <span className="fridge-ai-badge is-bottom-left" title="AI가 추천한 소비기한입니다">AI</span>
+                      ) : null}
+                    </div>
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
                         <h2>{item.name}</h2>
@@ -756,9 +759,11 @@ function Fridge() {
                         </div>
                         <div>
                           <dt>소비기한</dt>
-                          <dd className={item.is_expiring_soon || item.is_expired ? 'fridge-dday-urgent' : 'fridge-dday-normal'}>
-                            {getDdayLabel(item)}
-                            {item.expiration_date ? <small className="fridge-dday-date">({item.expiration_date})</small> : null}
+                          <dd className="fridge-dday-wrapper">
+                            <div className={item.is_expiring_soon || item.is_expired ? 'fridge-dday-urgent' : 'fridge-dday-normal'}>
+                              {getDdayLabel(item)}
+                              {item.expiration_date ? <small className="fridge-dday-date">({item.expiration_date})</small> : null}
+                            </div>
                           </dd>
                         </div>
                       </dl>
