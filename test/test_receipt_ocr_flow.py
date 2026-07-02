@@ -358,6 +358,10 @@ def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(d
     assert fridge_item.receipt_item_id == receipt_item.id
     assert fridge_item.display_name == BANANA
     assert fridge_item.ingredient_id == banana.id
+    db_session.refresh(receipt)
+    assert receipt.confirmed_result_json["receipt_id"] == receipt.id
+    assert receipt.confirmed_result_json["items"][0]["normalized_name"] == BANANA
+    assert receipt.confirmed_result_json["items"][0]["storage_method"] == COLD_STORAGE
 
 
 def test_confirm_receipt_keeps_raw_name_when_no_neo4j_standard_name_matches(db_session, monkeypatch):

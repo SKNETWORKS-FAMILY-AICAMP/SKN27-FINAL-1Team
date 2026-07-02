@@ -135,6 +135,7 @@ CREATE TABLE receipts (
     store_name TEXT,
     purchased_at TIMESTAMPTZ,
     total_price INTEGER,
+    confirmed_result_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
