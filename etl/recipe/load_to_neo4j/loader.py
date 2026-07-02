@@ -51,7 +51,7 @@ MERGE (v:Reviewer {reviewerId: row.reviewerId})
 MERGE (v)-[rel:WROTE_REVIEW]->(r)
 SET rel.content = row.content,
     rel.starCount = row.starCount,
-    rel.starCdfUpper = row.starCdfUpper,
+    rel.starIdf = row.starIdf,
     rel.positive = row.positive,
     rel.negative = row.negative
 """
@@ -178,7 +178,7 @@ def build_review_rel_rows(review_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "reviewerId": int(reviewer_id),
                 "content": _text(row.get("content")),
                 "starCount": _number(row.get("star_count")),
-                "starCdfUpper": _number(row.get("star_cdf_upper")),
+                "starIdf": _number(row.get("star_idf")),
                 "positive": _number(row.get("positive")),
                 "negative": _number(row.get("negative")),
             }
@@ -271,7 +271,7 @@ def _self_check() -> None:
     assert reviewer_rows[0]["reviewerId"] > 0
 
     assert review_rel_rows
-    assert "starCdfUpper" in review_rel_rows[0]
+    assert "starIdf" in review_rel_rows[0]
     assert review_rel_rows[0]["starCount"] is not None
 
     assert comment_rel_rows
