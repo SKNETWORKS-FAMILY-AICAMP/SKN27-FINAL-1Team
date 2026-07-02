@@ -251,6 +251,7 @@ class FridgeItem(Base):
     purchased_date = Column(Date, nullable=True)
     expiry_date = Column(Date, nullable=True)
     status = Column(String(30), nullable=False, server_default="normal")
+    is_ai_recommended = Column(Boolean, nullable=False, server_default=false())
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 냉장고 항목의 소유자, 식재료, 영수증 등록 항목, 알림을 연결합니다.
