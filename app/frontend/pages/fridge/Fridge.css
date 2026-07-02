@@ -53,37 +53,6 @@
   line-height: 1.55;
 }
 
-.fridge-stock-notice {
-  width: fit-content;
-  max-width: 100%;
-  min-height: 38px;
-  margin-top: 12px;
-  padding: 5px 6px 5px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #b9ddb5;
-  border-radius: 999px;
-  background: #f0fbec;
-  color: #246a35;
-  box-sizing: border-box;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.fridge-stock-notice button {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 999px;
-  background: #246a35;
-  color: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .fridge-search {
   box-sizing: border-box;
   width: min(100%, 560px);
@@ -149,7 +118,7 @@
   min-height: 132px;
   padding: 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   border: 1.4px solid #f0d7b1;
@@ -183,11 +152,6 @@
   font-size: 13px;
   font-weight: 800;
   line-height: 1.45;
-}
-
-.fridge-hero-card__image {
-  width: 76px;
-  height: 76px;
 }
 
 .fridge-hero__image {
@@ -379,6 +343,15 @@
   background: #fff8f6;
 }
 
+.fridge-item.is-recent-stocked {
+  border-color: #5a9dff;
+  box-shadow: 0 0 0 2px rgba(90, 157, 255, 0.18);
+}
+
+.fridge-item.is-urgent.is-recent-stocked {
+  border-color: #5a9dff;
+}
+
 .fridge-item__image {
   width: 82px;
   height: 82px;
@@ -419,7 +392,17 @@
   font-weight: 900;
 }
 
-.fridge-item__title span.is-urgent {
+.fridge-storage-badge.is-cold {
+  background: #eaf5fb;
+  color: #3d7fa7;
+}
+
+.fridge-storage-badge.is-frozen {
+  background: #eef0ff;
+  color: #5c61c8;
+}
+
+.fridge-storage-badge.is-room {
   background: #fff0d8;
   color: #d88720;
 }
@@ -635,14 +618,6 @@
     font-size: 12px;
   }
 
-  .fridge-stock-notice {
-    grid-column: 1 / -1;
-    width: 100%;
-    justify-content: space-between;
-    margin-top: 0;
-    font-size: 11px;
-  }
-
   .fridge-search {
     grid-column: 1 / -1;
     height: 44px;
@@ -658,7 +633,7 @@
   .fridge-hero-card {
     min-height: 82px;
     padding: 12px;
-    grid-template-columns: minmax(0, 1fr) 56px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .fridge-hero-card strong {
@@ -667,11 +642,6 @@
 
   .fridge-hero-card p {
     display: none;
-  }
-
-  .fridge-hero-card__image {
-    width: 56px;
-    height: 56px;
   }
 
   .fridge-hero__image {

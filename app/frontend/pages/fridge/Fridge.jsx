@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Fridge.css'
 
-import iconReceipt from '../../assets/extracted/icons/icon_receipt.png'
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
@@ -21,6 +20,14 @@ const FILTER_TYPES = [
 
 const STORAGE_KEYS = ['냉장', '냉동', '실온']
 
+// 보관 위치 배지 색상을 실제 보관 위치 기준으로 고정합니다.
+function getStorageTone(storageMethod = '') {
+  if (storageMethod === STORAGE_KEYS[0]) return 'is-cold'
+  if (storageMethod === STORAGE_KEYS[1]) return 'is-frozen'
+  if (storageMethod === STORAGE_KEYS[2]) return 'is-room'
+  return ''
+}
+
 // 이미지가 없을 때도 같은 레이아웃을 유지하는 슬롯 컴포넌트입니다.
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -34,6 +41,7 @@ function ImageSlot({ src, alt = '', className = '' }) {
 function normalizeIngredientImageName(name = '') {
   return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
 }
+
 
 const INGREDIENT_IMAGE_ALIASES = {
   계란: '달걀',
@@ -155,10 +163,37 @@ function Fridge() {
   const [consumeTarget, setConsumeTarget] = useState(null)
   const [isEditMode, setIsEditMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
-  const [stockedCount, setStockedCount] = useState(() => {
-    if (typeof window === 'undefined') return 0
-    return Number(window.localStorage.getItem('bobbeori-last-stocked-count') ?? 0)
-  })
+  const [recentStockTick, setRecentStockTick] = useState(0)
+  const recentStockedItemIdSet = useMemo(() => {
+    const receiptItems = ingredients
+      .filter((item) => item.receipt_item_id && item.created_at)
+      .map((item) => ({ id: Number(item.id), createdAt: new Date(item.created_at).getTime() }))
+      .filter((item) => Number.isFinite(item.createdAt))
+
+    if (!receiptItems.length) return new Set()
+
+    // 최신 OCR 입고 묶음만 잠시 강조합니다.
+    const latestCreatedAt = Math.max(...receiptItems.map((item) => item.createdAt))
+    if (Date.now() - latestCreatedAt > 60 * 1000) return new Set()
+
+    return new Set(receiptItems.filter((item) => latestCreatedAt - item.createdAt <= 60 * 1000).map((item) => item.id))
+  }, [ingredients, recentStockTick])
+
+  // OCR 입고 강조가 1분 뒤 자동으로 사라지도록 화면을 한 번 갱신합니다.
+  useEffect(() => {
+    const receiptTimes = ingredients
+      .filter((item) => item.receipt_item_id && item.created_at)
+      .map((item) => new Date(item.created_at).getTime())
+      .filter(Number.isFinite)
+
+    if (!receiptTimes.length) return undefined
+
+    const remainingMs = 60 * 1000 - (Date.now() - Math.max(...receiptTimes))
+    if (remainingMs <= 0) return undefined
+
+    const timer = window.setTimeout(() => setRecentStockTick((tick) => tick + 1), remainingMs + 50)
+    return () => window.clearTimeout(timer)
+  }, [ingredients])
 
   // 현재 브라우저에 저장된 로그인 토큰을 반환합니다.
   const getToken = () => window.localStorage.getItem('bobbeori-token')
@@ -380,6 +415,13 @@ function Fridge() {
         return
       }
 
+      const savedItem = await response.json()
+      setIngredients((prev) => {
+        if (isEditing) {
+          return prev.map((item) => (item.id === editingId ? normalizeIngredient(savedItem) : item))
+        }
+        return [normalizeIngredient(savedItem), ...prev]
+      })
       closeModal()
       fetchFridgeData()
     } catch (err) {
@@ -578,11 +620,6 @@ function Fridge() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [consumeTarget])
 
-  // 영수증 입고 안내 배지를 숨깁니다.
-  const clearStockNotice = () => {
-    setStockedCount(0)
-    window.localStorage.removeItem('bobbeori-last-stocked-count')
-  }
 
   return (
     <section className="fridge-page" aria-labelledby="fridge-title">
@@ -590,12 +627,6 @@ function Fridge() {
         <div className="fridge-hero__copy">
           <h1 id="fridge-title">냉장고 재료 관리</h1>
           <p>우리 집 재료를 한눈에 관리하고, 소비기한이 가까운 재료를 먼저 확인해요.</p>
-          {stockedCount > 0 ? (
-            <div className="fridge-stock-notice">
-              <span>영수증에서 {stockedCount}개 재료가 입고되었어요.</span>
-              <button type="button" onClick={clearStockNotice}>확인</button>
-            </div>
-          ) : null}
           <label className="fridge-search" aria-label="재료명 검색">
             <span aria-hidden="true" />
             <input
@@ -613,14 +644,12 @@ function Fridge() {
               <strong>영수증 OCR 입고</strong>
               <p>영수증 촬영으로 재료를 한 번에 등록해요.</p>
             </div>
-            <ImageSlot className="fridge-hero-card__image" src={iconReceipt} />
           </button>
           <button className="fridge-hero-card fridge-hero-card--add" type="button" onClick={() => navigate('/recipe-fridge')}>
             <div>
               <strong>레시피 추천 받기</strong>
               <p>보유 재료로 만들 수 있는 메뉴를 추천받아요.</p>
             </div>
-            <ImageSlot className="fridge-hero-card__image" src={imageAlarm} />
           </button>
         </div>
 
@@ -683,9 +712,17 @@ function Fridge() {
               </div>
             ) : (
               <>
-                {sortedIngredients.map((item) => (
+                {sortedIngredients.map((item) => {
+                  const isRecentlyStocked = recentStockedItemIdSet.has(Number(item.id))
+
+                  return (
                   <article 
-                    className={`fridge-item ${item.is_expiring_soon || item.is_expired ? 'is-urgent' : ''} ${selectedIds.has(item.id) ? 'is-selected' : ''}`} 
+                    className={[
+                      'fridge-item',
+                      item.is_expiring_soon || item.is_expired ? 'is-urgent' : '',
+                      selectedIds.has(item.id) ? 'is-selected' : '',
+                      isRecentlyStocked ? 'is-recent-stocked' : '',
+                    ].filter(Boolean).join(' ')}
                     key={item.id}
                     onClick={() => {
                       if (isEditMode) toggleSelect(item.id)
@@ -706,7 +743,7 @@ function Fridge() {
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
                         <h2>{item.name}</h2>
-                        <span className={item.is_expiring_soon || item.is_expired ? 'is-urgent' : ''}>{item.storage_method}</span>
+                        <span className={['fridge-storage-badge', getStorageTone(item.storage_method)].filter(Boolean).join(' ')}>{item.storage_method}</span>
                       </div>
                       <dl>
                         <div>
@@ -732,7 +769,8 @@ function Fridge() {
                       <button type="button" onClick={() => handleDeleteClick(item.id, item.name)}>폐기</button>
                     </div>
                   </article>
-                ))}
+                  )
+                })}
 
                 <article className="fridge-add-card">
                   <ImageSlot className="fridge-add-card__image" src={imageAlarm} />
