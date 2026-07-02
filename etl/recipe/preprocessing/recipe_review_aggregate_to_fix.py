@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
-from math import isclose
+from math import isclose, sqrt
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 if __package__ is None:
@@ -18,6 +18,11 @@ RECIPE_FIX_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
 REVIEW_CSV = ROOT / "storage" / "processed" / "recipe" / "review_by_llm.csv"
 STAR_AVG_COL = "REVIEW_STAR_IDF_AVG"
 SENTIMENT_AVG_COL = "REVIEW_SENTIMENT_AVG"
+RANK_DISTANCE_COL = "REVIEW_RANK_DISTANCE"
+RANK_SCORE_COL = "REVIEW_RANK_SCORE"
+TARGET_STAR = 1.0
+TARGET_SENTIMENT = 1.0
+MAX_DISTANCE = sqrt((TARGET_STAR - (-1.0)) ** 2 + (TARGET_SENTIMENT - (-1.0)) ** 2)
 
 
 def build_recipe_review_aggregate(review_df: pd.DataFrame) -> pd.DataFrame:
@@ -39,6 +44,16 @@ def build_recipe_review_aggregate(review_df: pd.DataFrame) -> pd.DataFrame:
             }
         )
     )
+    valid_mask = grouped[STAR_AVG_COL].notna() & grouped[SENTIMENT_AVG_COL].notna()
+    grouped[RANK_DISTANCE_COL] = pd.NA
+    grouped[RANK_SCORE_COL] = pd.NA
+    grouped.loc[valid_mask, RANK_DISTANCE_COL] = (
+        (TARGET_STAR - grouped.loc[valid_mask, STAR_AVG_COL]) ** 2
+        + (TARGET_SENTIMENT - grouped.loc[valid_mask, SENTIMENT_AVG_COL]) ** 2
+    ) ** 0.5
+    grouped.loc[valid_mask, RANK_SCORE_COL] = 100 * (
+        1 - (grouped.loc[valid_mask, RANK_DISTANCE_COL] / MAX_DISTANCE)
+    )
     grouped["recipe_id"] = grouped["recipe_id"].astype(int)
     return grouped
 
@@ -51,7 +66,7 @@ def apply_review_averages(
         raise ValueError("필수 컬럼 누락: RCP_SNO")
     base = recipe_fix_df.copy()
     base["RCP_SNO"] = pd.to_numeric(base["RCP_SNO"], errors="coerce")
-    base = base.drop(columns=[STAR_AVG_COL, SENTIMENT_AVG_COL], errors="ignore")
+    base = base.drop(columns=[STAR_AVG_COL, SENTIMENT_AVG_COL, RANK_DISTANCE_COL, RANK_SCORE_COL], errors="ignore")
     agg = build_recipe_review_aggregate(review_df)
     merged = base.merge(agg, how="left", left_on="RCP_SNO", right_on="recipe_id")
     merged = merged.drop(columns=["recipe_id"], errors="ignore")
@@ -71,6 +86,10 @@ def _self_check() -> None:
     row100 = agg.loc[agg["recipe_id"] == 100].iloc[0]
     assert isclose(row100[STAR_AVG_COL], 0.7)
     assert isclose(row100[SENTIMENT_AVG_COL], 0.6)
+    expected_distance_100 = sqrt((TARGET_STAR - 0.7) ** 2 + (TARGET_SENTIMENT - 0.6) ** 2)
+    expected_score_100 = 100 * (1 - expected_distance_100 / MAX_DISTANCE)
+    assert isclose(float(row100[RANK_DISTANCE_COL]), expected_distance_100)
+    assert isclose(float(row100[RANK_SCORE_COL]), expected_score_100)
     row101 = agg.loc[agg["recipe_id"] == 101].iloc[0]
     assert isclose(row101[STAR_AVG_COL], -0.3)
     assert isclose(row101[SENTIMENT_AVG_COL], -0.05)
@@ -79,17 +98,25 @@ def _self_check() -> None:
     applied = apply_review_averages(recipe_fix_sample, review_sample)
     assert STAR_AVG_COL in applied.columns
     assert SENTIMENT_AVG_COL in applied.columns
+    assert RANK_DISTANCE_COL in applied.columns
+    assert RANK_SCORE_COL in applied.columns
     val100 = applied.loc[applied["RCP_SNO"] == 100, STAR_AVG_COL].iloc[0]
     assert isclose(val100, 0.7)
     assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, STAR_AVG_COL].iloc[0])
+    assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, RANK_DISTANCE_COL].iloc[0])
+    assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, RANK_SCORE_COL].iloc[0])
 
     overwrite_sample = recipe_fix_sample.copy()
     overwrite_sample[STAR_AVG_COL] = 999.0
     overwrite_sample[SENTIMENT_AVG_COL] = 999.0
+    overwrite_sample[RANK_DISTANCE_COL] = 999.0
+    overwrite_sample[RANK_SCORE_COL] = 999.0
     overwritten = apply_review_averages(overwrite_sample, review_sample)
     overwritten_100 = overwritten.loc[overwritten["RCP_SNO"] == 100].iloc[0]
     assert isclose(overwritten_100[STAR_AVG_COL], 0.7)
     assert isclose(overwritten_100[SENTIMENT_AVG_COL], 0.6)
+    assert isclose(float(overwritten_100[RANK_DISTANCE_COL]), expected_distance_100)
+    assert isclose(float(overwritten_100[RANK_SCORE_COL]), expected_score_100)
 
 
 def main() -> None:
@@ -98,7 +125,8 @@ def main() -> None:
     result = apply_review_averages(recipe_fix_df, review_df)
     save_recipe_data(result, RECIPE_FIX_CSV)
     mapped = int(result[STAR_AVG_COL].notna().sum())
-    print(f"리뷰 평균 컬럼 적재 완료: {mapped}/{len(result)}행")
+    ranked = int(result[RANK_SCORE_COL].notna().sum())
+    print(f"리뷰 평균/랭크 컬럼 적재 완료: 평균 {mapped}/{len(result)}행, 랭크 {ranked}/{len(result)}행")
 
 
 if __name__ == "__main__":
