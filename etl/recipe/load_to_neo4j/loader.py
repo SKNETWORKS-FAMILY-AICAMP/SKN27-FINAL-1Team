@@ -36,7 +36,9 @@ UNWIND $rows AS row
 MERGE (r:Recipe {recipeId: row.recipeId})
 SET r.name = row.name,
     r.inqCnt = row.inqCnt,
-    r.inqCntRate = row.inqCntRate
+    r.inqCntRate = row.inqCntRate,
+    r.reviewStarIdfAvg = row.reviewStarIdfAvg,
+    r.reviewSentimentAvg = row.reviewSentimentAvg
 """
 
 UPSERT_REVIEWER_QUERY = """
@@ -151,6 +153,8 @@ def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "name": _text(row["CKG_NM"]),
                 "inqCnt": _number(row.get("INQ_CNT")),
                 "inqCntRate": _number(row.get("INQ_CNT_RATE")),
+                "reviewStarIdfAvg": _number(row.get("REVIEW_STAR_IDF_AVG")),
+                "reviewSentimentAvg": _number(row.get("REVIEW_SENTIMENT_AVG")),
             }
         )
     return rows
@@ -266,6 +270,10 @@ def _self_check() -> None:
     assert len(recipe_rows) > 3000
     assert recipe_rows[0]["recipeId"] == int(recipe_df.iloc[0]["RCP_SNO"])
     assert isinstance(recipe_rows[0]["inqCntRate"], float)
+    assert "reviewStarIdfAvg" in recipe_rows[0]
+    assert "reviewSentimentAvg" in recipe_rows[0]
+    assert any(row["reviewStarIdfAvg"] is None for row in recipe_rows)
+    assert any(row["reviewSentimentAvg"] is None for row in recipe_rows)
 
     assert len(reviewer_rows) > 900
     assert reviewer_rows[0]["reviewerId"] > 0
