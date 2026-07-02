@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -189,6 +190,7 @@ class Receipt(Base):
     store_name = Column(Text, nullable=True)
     purchased_at = Column(DateTime(timezone=True), nullable=True)
     total_price = Column(Integer, nullable=True)
+    confirmed_result_json = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 영수증 소유자와 OCR로 추출된 품목을 연결합니다.
@@ -251,6 +253,7 @@ class FridgeItem(Base):
     purchased_date = Column(Date, nullable=True)
     expiry_date = Column(Date, nullable=True)
     status = Column(String(30), nullable=False, server_default="normal")
+    is_ai_recommended = Column(Boolean, nullable=False, server_default=false())
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 냉장고 항목의 소유자, 식재료, 영수증 등록 항목, 알림을 연결합니다.

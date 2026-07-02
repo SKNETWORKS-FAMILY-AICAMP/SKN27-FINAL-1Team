@@ -25,6 +25,8 @@ except ImportError:
 class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
 
+    EMPTY_INVENTORY_REPLY = '냉장고가 비어 있어요. 재료를 등록하면 소비 임박 재료와 추천 메뉴를 알려드릴게요.'
+
     def handle_message(self, db: Session, user_id: int, message: str, history: list[Any] = None, user_settings: Any = None) -> dict[str, Any]:
         """LangGraph를 활용하여 메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
@@ -118,10 +120,22 @@ class ChatService:
         normalized = text.replace(" ", "").lower()
         return any(word in normalized for word in ("에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간"))
 
+    def _is_expiring_question(self, text: str) -> bool:
+        """소비기한 임박 재료를 묻는 질문인지 먼저 확인합니다."""
+        normalized = text.replace(" ", "").lower()
+        return any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이"))
+        
     def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
         """LangChain LLM을 활용하여 대화 문맥(history)과 현재 메시지로 의도를 파악합니다."""
+        if self._is_expiring_question(text):
+            return "inventory.expiring"
         if self._is_cooking_time_question(text):
             return "recipe.search"
+
+        normalized = text.replace(" ", "").lower()
+        guide_words = ("\ubcf4\uad00", "\uc138\ucc99", "\uc53b", "\uc190\uc9c8", "\uc2e0\uc120", "\uac00\uc774\ub4dc", "\uc5b4\ub5a1", "\ub0a8\uc740")
+        if any(word in normalized for word in guide_words):
+            return "ingredient.guide"
 
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
             return self._route_intent(text)
@@ -142,8 +156,8 @@ class ChatService:
 - recipe.search: "김치볶음밥 레시피", "파스타 요리법" 등 특정 요리 검색
 - ingredient.guide: "치킨 보관법", "남은 재료 어떡해", "두부 손질" 등 식재료 관리/보관
 - inventory.expiring: "상하는 거 뭐 있어", "소비기한 임박", "d-day" 등 임박 재료 확인
-- inventory.list: "냉장고에 뭐 있지?", "내 재료 목록" 등 보유 식재료 단순 확인
-- general: 위 어느 것에도 해당하지 않는 단순 인사나 일상 대화
+- inventory.list: "냉장고에 뭐 있지?", "내 재료 목록" 등 보유 식재료 단순 확인 (주의: 식재료 '추가'나 '삭제' 요청은 제외)
+- general: 식재료 추가/수정/삭제 요청(예: "마늘 추가해줘", "감자 지워줘") 및 위 어느 것에도 해당하지 않는 일상 대화
 
 [매우 중요한 주의사항]
 사용자가 "그거 말고", "다른 거", "딴거", "사이드 메뉴는?", "더 알려줘" 와 같이 지시대명사나 후속 질문을 던질 경우, 반드시 직전 대화의 챗봇 응답이 어떤 의도였는지 파악하세요. 직전에 레시피를 추천했다면 반드시 'recipe.recommend'를 출력해야 합니다. 'general'로 분류하지 마세요!
@@ -177,6 +191,8 @@ class ChatService:
         if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
             return "receipt.guide"
             
+        if self._is_expiring_question(text):
+            return "inventory.expiring"
         if self._is_cooking_time_question(text):
             return "recipe.search"
             
@@ -274,7 +290,7 @@ class ChatService:
         """냉장고 보유 재료를 짧게 요약합니다."""
         items = inventory_service.get_ingredients(db=db, user_id=user_id)
         if not items:
-            return "현재 냉장고에 등록된 재료가 없어요."
+            return self.EMPTY_INVENTORY_REPLY
 
         names = [item["name"] for item in items[:8]]
         suffix = "" if len(items) <= 8 else f" 외 {len(items) - 8}개"
@@ -296,6 +312,9 @@ class ChatService:
     def _reply_expiring_items(self, db: Session, user_id: int, text: str = "") -> str:
         """소비기한이 가까운 재료 또는 특정 재료의 D-day를 안내합니다."""
         items = inventory_service.get_ingredients(db=db, user_id=user_id)
+        if not items:
+            return self.EMPTY_INVENTORY_REPLY
+
         keyword = self._extract_expiry_keyword(text)
         if keyword:
             matched = [item for item in items if keyword in item.get("name", "")]
@@ -512,8 +531,8 @@ class ChatService:
                 response = client_ai.chat.completions.create(
                     model=app_settings.OPENAI_MODEL,
                     messages=[
-                        {"role": "system", "content": "검색 결과 안에서만 한국어로 답해. 조리 시간이나 온도 질문이면 시간과 온도를 먼저 말하고, 레시피 질문이면 핵심 조리 흐름을 3문장 이내로 안내해. 추측은 하지 마."},
-                        {"role": "user", "content": f"질문: {query_text or keyword}\n검색 결과:\n{content}"},
+                        {"role": "system", "content": "당신은 요리와 냉장고 관리를 도와주는 친절한 비서 챗봇 '밥벌이'입니다. 검색 결과를 바탕으로 사용자의 질문에 다정하게 대답하세요. 특정 요리의 레시피를 묻는다면 핵심 조리 흐름을 3문장 이내로 요약해주고, 메뉴 추천을 원한다면 상황에 어울리는 요리 2~3가지를 다정하게 추천해주세요."},
+                        {"role": "user", "content": f"질문/키워드: {query_text or keyword}\n검색 결과:\n{content}\n\n위 내용을 바탕으로 친절하게 답변해줘."},
                     ],
                     temperature=0.2,
                 )
@@ -535,7 +554,7 @@ class ChatService:
                 from langchain_openai import ChatOpenAI
                 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
                 llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
-                messages = [SystemMessage(content="사용자 대화 맥락을 보고, 사용자가 현재 요리를 추천받고 싶어하는 '핵심 식재료 이름(예: 치킨, 소고기, 양파)' 1개만 단답형으로 출력해. 사용자가 '그거 말고 딴거'처럼 지시대명사를 쓰면 이전 맥락의 주재료를 찾아서 반환해. 절대 부연설명 없이 단어 1개만 출력해. 도저히 찾을 수 없으면 'None' 반환.")]
+                messages = [SystemMessage(content="사용자 대화 맥락을 보고, 요리 추천을 위해 검색할 '핵심 식재료' 또는 '요리 상황/컨셉(예: 비올때, 매운거, 다이어트 등)' 키워드 1개만 단답형으로 출력해. 사용자가 '그거 말고 딴거'처럼 지시대명사를 쓰면 이전 맥락의 키워드를 찾아서 반환해. 절대 부연설명 없이 단어 1개만 출력해. 도저히 찾을 수 없으면 'None' 반환.")]
                 for msg in history[-4:]:
                     messages.append(HumanMessage(content=msg.text) if msg.role == 'user' else AIMessage(content=msg.text))
                 messages.append(HumanMessage(content=text))
@@ -578,12 +597,15 @@ class ChatService:
             }
             if not items:
                 reply, _sources = self._reply_external_recipe(keyword)
-                return reply, [list_action]
+                return reply, []
 
             titles = [item["title"] for item in items]
             actions = self._recipe_actions(items) + [list_action]
             prefix = f"{self._apply_josa(keyword, '이가')} 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{self._apply_josa(keyword, '이가')} 주재료인 레시피는 "
             return prefix + "\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), actions
+
+        if not inventory_service.get_ingredients(db=db, user_id=user_id):
+            return self.EMPTY_INVENTORY_REPLY, []
 
         try:
             config = RecipeRecommendConfig.fridge_consume_preset()
@@ -597,12 +619,28 @@ class ChatService:
         except Exception:
             return "냉장고 기반 추천을 불러오지 못했어요. 재료명을 넣어서 다시 물어봐주세요.", []
 
-        items = [item for item in result.get("items", []) if item.get("missing_ingredient_count", 0) == 0]
-        if not items:
-            return "현재 냉장고 재료만으로 완성 가능한 레시피를 찾지 못했어요. 부족 재료를 허용하면 더 넓게 추천할 수 있어요.", []
+        raw_items = result.get("items", [])
+        sorted_items = sorted(
+            raw_items,
+            key=lambda x: (
+                -x.get("owned_ingredient_count", 0),
+                x.get("missing_ingredient_count", 0),
+                -x.get("final_score", 0)
+            )
+        )
 
-        titles = [item["title"] for item in items[:3]]
-        return "현재 냉장고 재료만으로 만들 수 있는 레시피예요.\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), self._recipe_actions(items)
+        items_perfect = [item for item in sorted_items if item.get("missing_ingredient_count", 0) == 0]
+        if items_perfect:
+            items = items_perfect[:3]
+            prefix = "현재 냉장고 재료만으로 완벽하게 만들 수 있는 레시피예요.\n"
+        else:
+            items = sorted_items[:3]
+            if not items or items[0].get("owned_ingredient_count", 0) == 0:
+                return "현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.", []
+            prefix = "부족한 재료가 약간 있지만, 냉장고 재료를 최대한 활용할 수 있는 레시피예요.\n"
+
+        titles = [item["title"] for item in items]
+        return prefix + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), self._recipe_actions(items)
 
 
 chat_service = ChatService()

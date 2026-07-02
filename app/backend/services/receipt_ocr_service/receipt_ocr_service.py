@@ -3,10 +3,11 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
+from langgraph.graph import END, StateGraph
 from openai import OpenAI
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -21,13 +22,51 @@ KST = timezone(timedelta(hours=9))
 DEFAULT_UNIT = "\uac1c"
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
+OCR_MIN_QUALITY_SCORE = 0.75
+OCR_MAX_RETRIES = 1
+
+
+class ReceiptOcrGraphState(TypedDict, total=False):
+    db: Session
+    user_id: int
+    image_bytes: bytes
+    image_id: str
+    original_file_name: str
+    original_file_path: str
+    ocr_result: Dict[str, Any]
+    normalized: Dict[str, Any]
+    receipt_id: int
+    retry_count: int
+    max_retries: int
+    quality_score: float
+    quality_issues: List[str]
+    receipt_validation_issues: List[str]
+    stage: str
+    response: Dict[str, Any]
 
 
 class ReceiptOcrService:
     def __init__(self) -> None:
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+        self.graph = self._build_graph()
 
     async def analyze_upload(self, *, db: Session, file: UploadFile, user_id: int) -> Dict[str, Any]:
+        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id)
+        original_file_path = initial_state["original_file_path"]
+
+        try:
+            final_state = await self.graph.ainvoke(initial_state)
+        except Exception:
+            db.rollback()
+            self._delete_saved_file(original_file_path)
+            raise
+
+        if final_state["response"].get("needs_reupload"):
+            self._delete_saved_file(original_file_path)
+
+        return final_state["response"]
+
+    async def _prepare_upload_state(self, *, db: Session, file: UploadFile, user_id: int) -> ReceiptOcrGraphState:
         image_bytes = await file.read()
         self._validate_upload(file, image_bytes)
 
@@ -37,36 +76,168 @@ class ReceiptOcrService:
             image_bytes=image_bytes,
         )
 
-        try:
-            image_id = Path(file.filename or original_file_path).stem
-            ocr_result = await run_in_threadpool(
-                self._call_openai_vision,
-                image_bytes=image_bytes,
-                filename=file.filename or "receipt.jpg",
-                image_id=image_id,
-            )
-            normalized = self._normalize_ocr_result(ocr_result, image_id=image_id, db=db)
-
-            receipt = Receipt(
-                user_id=user_id,
-                original_file_name=file.filename,
-                original_file_path=original_file_path,
-                store_name=normalized.get("store_name"),
-                purchased_at=self._parse_purchase_datetime(normalized.get("purchase_datetime")),
-                total_price=normalized.get("total_amount"),
-            )
-            db.add(receipt)
-            db.commit()
-            db.refresh(receipt)
-        except Exception:
-            db.rollback()
-            self._delete_saved_file(original_file_path)
-            raise
-
+        image_id = Path(file.filename or original_file_path).stem
         return {
-            "receipt_id": receipt.id,
-            "original_file_name": receipt.original_file_name,
-            "original_file_path": receipt.original_file_path,
+            "db": db,
+            "user_id": user_id,
+            "image_bytes": image_bytes,
+            "image_id": image_id,
+            "original_file_name": file.filename,
+            "original_file_path": original_file_path,
+            "retry_count": 0,
+            "max_retries": OCR_MAX_RETRIES,
+            "stage": "image_uploaded",
+        }
+
+    async def create_upload_event_stream(self, *, db: Session, file: UploadFile, user_id: int):
+        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id)
+        original_file_path = initial_state["original_file_path"]
+
+        async def event_stream():
+            try:
+                yield {
+                    "type": "stage",
+                    "stage": "image_uploaded",
+                    "retry_count": initial_state.get("retry_count", 0),
+                    "max_retries": initial_state.get("max_retries", OCR_MAX_RETRIES),
+                }
+
+                async for update in self.graph.astream(initial_state, stream_mode="updates"):
+                    for node_update in update.values():
+                        if not isinstance(node_update, dict):
+                            continue
+
+                        stage = node_update.get("stage")
+                        if stage:
+                            yield {
+                                "type": "stage",
+                                "stage": stage,
+                                "retry_count": node_update.get("retry_count"),
+                                "quality_score": node_update.get("quality_score"),
+                                "quality_issues": node_update.get("quality_issues", []),
+                                "receipt_validation_issues": node_update.get("receipt_validation_issues", []),
+                            }
+
+                        response = node_update.get("response")
+                        if response:
+                            if response.get("needs_reupload"):
+                                self._delete_saved_file(original_file_path)
+                            yield {"type": "result", "data": response}
+            except Exception as exc:
+                db.rollback()
+                self._delete_saved_file(original_file_path)
+                yield {"type": "error", "message": self._format_error_message(exc)}
+
+        return event_stream()
+
+    def _format_error_message(self, exc: Exception) -> str:
+        if isinstance(exc, HTTPException):
+            return str(exc.detail)
+        return str(exc) or "Receipt OCR analysis failed."
+
+    def _build_graph(self):
+        workflow = StateGraph(ReceiptOcrGraphState)
+        workflow.add_node("extract_ocr", self._extract_ocr_node)
+        workflow.add_node("normalize_result", self._normalize_result_node)
+        workflow.add_node("validate_receipt_document", self._validate_receipt_document_node)
+        workflow.add_node("validate_quality", self._validate_quality_node)
+        workflow.add_node("retry_ocr", self._retry_ocr_node)
+        workflow.add_node("persist_receipt", self._persist_receipt_node)
+        workflow.add_node("build_reupload_response", self._build_reupload_response_node)
+        workflow.add_node("build_response", self._build_response_node)
+
+        workflow.set_entry_point("extract_ocr")
+        workflow.add_edge("extract_ocr", "normalize_result")
+        workflow.add_edge("normalize_result", "validate_receipt_document")
+        workflow.add_conditional_edges(
+            "validate_receipt_document",
+            self._route_after_document_validation,
+            {"quality": "validate_quality", "reupload": "build_reupload_response"},
+        )
+        workflow.add_conditional_edges(
+            "validate_quality",
+            self._route_after_validation,
+            {"retry": "retry_ocr", "persist": "persist_receipt", "reupload": "build_reupload_response"},
+        )
+        workflow.add_edge("retry_ocr", "extract_ocr")
+        workflow.add_edge("persist_receipt", "build_response")
+        workflow.add_edge("build_reupload_response", END)
+        workflow.add_edge("build_response", END)
+        return workflow.compile()
+
+    async def _extract_ocr_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        retry_note = self._build_retry_note(state.get("quality_issues", []))
+        ocr_result = await run_in_threadpool(
+            self._call_openai_vision,
+            image_bytes=state["image_bytes"],
+            filename=state.get("original_file_name") or "receipt.jpg",
+            image_id=state["image_id"],
+            retry_note=retry_note,
+        )
+        return {"ocr_result": ocr_result, "stage": "ocr_extracted"}
+
+    def _normalize_result_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        normalized = self._normalize_ocr_result(state["ocr_result"], image_id=state["image_id"], db=state["db"])
+        return {"normalized": normalized, "stage": "result_normalized"}
+
+    def _validate_quality_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        quality_score, quality_issues = self._score_ocr_quality(state["normalized"])
+        return {
+            "quality_score": quality_score,
+            "quality_issues": quality_issues,
+            "stage": "quality_validated",
+        }
+
+    def _validate_receipt_document_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        receipt_validation_issues = self._validate_receipt_document(state["normalized"])
+        updates: Dict[str, Any] = {
+            "receipt_validation_issues": receipt_validation_issues,
+            "stage": "receipt_document_validated",
+        }
+        if receipt_validation_issues:
+            updates["quality_score"] = 0.0
+            updates["quality_issues"] = receipt_validation_issues
+        return updates
+
+    def _route_after_document_validation(self, state: ReceiptOcrGraphState) -> str:
+        if state.get("receipt_validation_issues"):
+            return "reupload"
+        return "quality"
+
+    def _route_after_validation(self, state: ReceiptOcrGraphState) -> str:
+        if state.get("quality_score", 0.0) < OCR_MIN_QUALITY_SCORE and state.get("retry_count", 0) < state.get(
+            "max_retries", OCR_MAX_RETRIES
+        ):
+            return "retry"
+        if state.get("quality_score", 0.0) < OCR_MIN_QUALITY_SCORE:
+            return "reupload"
+        return "persist"
+
+    def _retry_ocr_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        return {"retry_count": state.get("retry_count", 0) + 1, "stage": "ocr_retry_requested"}
+
+    async def _persist_receipt_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        normalized = state["normalized"]
+        receipt = Receipt(
+            user_id=state["user_id"],
+            original_file_name=state.get("original_file_name"),
+            original_file_path=state["original_file_path"],
+            store_name=normalized.get("store_name"),
+            purchased_at=self._parse_purchase_datetime(normalized.get("purchase_datetime")),
+            total_price=normalized.get("total_amount"),
+        )
+        db = state["db"]
+        db.add(receipt)
+        db.commit()
+        db.refresh(receipt)
+        return {"receipt_id": receipt.id, "stage": "receipt_persisted"}
+
+    def _build_response_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        normalized = state["normalized"]
+        response = {
+            "receipt_id": state["receipt_id"],
+            "original_file_name": state.get("original_file_name"),
+            "original_file_path": state["original_file_path"],
             "store_name": normalized.get("store_name"),
             "purchase_datetime": normalized.get("purchase_datetime"),
             "items": normalized.get("items", []),
@@ -74,7 +245,57 @@ class ReceiptOcrService:
             "total_amount": normalized.get("total_amount"),
             "currency": normalized.get("currency", "KRW"),
             "confidence_note": normalized.get("confidence_note"),
+            "document_type": normalized.get("document_type"),
+            "is_receipt_like": normalized.get("is_receipt_like"),
+            "quality_score": state.get("quality_score"),
+            "quality_issues": state.get("quality_issues", []),
+            "receipt_validation_issues": state.get("receipt_validation_issues", []),
+            "needs_reupload": False,
         }
+        return {"response": response, "stage": "response_ready"}
+
+    def _build_reupload_response_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
+        normalized = state.get("normalized") or {}
+        receipt_validation_issues = state.get("receipt_validation_issues", [])
+        reupload_message = (
+            "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0\uac00 \uc544\ub2cc \uac83 \uac19\uc544\uc694. "
+            "\ub9e4\uc7a5\uba85, \uad6c\ub9e4\uc77c\uc790, \ud488\ubaa9, \uacb0\uc81c \ub0b4\uc5ed \uc911 \ud558\ub098 \uc774\uc0c1\uc774 "
+            "\ubcf4\uc774\ub294 \uc601\uc218\uc99d\uc744 \ub2e4\uc2dc \ucca8\ubd80\ud574\uc8fc\uc138\uc694."
+            if receipt_validation_issues
+            else "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0 \uc778\uc2dd \ud488\uc9c8\uc774 \ub0ae\uc544\uc694. "
+            "\uae00\uc790\uc640 \uae08\uc561\uc774 \uc120\uba85\ud558\uac8c \ubcf4\uc774\ub3c4\ub85d \ub2e4\uc2dc \ucd2c\uc601\ud558\uac70\ub098 "
+            "\ub2e4\ub978 \uc774\ubbf8\uc9c0\ub97c \ucca8\ubd80\ud574\uc8fc\uc138\uc694."
+        )
+        response = {
+            "receipt_id": None,
+            "original_file_name": state.get("original_file_name"),
+            "original_file_path": None,
+            "store_name": None,
+            "purchase_datetime": None,
+            "items": [],
+            "total_item_count": None,
+            "total_amount": None,
+            "currency": "KRW",
+            "confidence_note": "OCR quality stayed below the operational threshold after retry.",
+            "quality_score": state.get("quality_score"),
+            "quality_issues": state.get("quality_issues", []),
+            "needs_reupload": True,
+            "reupload_message": "영수증 이미지 인식 품질이 낮아요. 글자와 금액이 선명하게 보이도록 다시 촬영하거나 다른 이미지를 첨부해주세요.",
+        }
+        response.update(
+            {
+                "confidence_note": (
+                    "Uploaded image did not contain enough receipt evidence."
+                    if receipt_validation_issues
+                    else "OCR quality stayed below the operational threshold after retry."
+                ),
+                "document_type": normalized.get("document_type"),
+                "is_receipt_like": normalized.get("is_receipt_like"),
+                "receipt_validation_issues": receipt_validation_issues,
+                "reupload_message": reupload_message,
+            }
+        )
+        return {"response": response, "stage": "reupload_required"}
 
     def _validate_upload(self, file: UploadFile, image_bytes: bytes) -> None:
         if not image_bytes:
@@ -108,7 +329,14 @@ class ReceiptOcrService:
         stored_path.write_bytes(image_bytes)
         return self._to_project_relative_path(stored_path)
 
-    def _call_openai_vision(self, *, image_bytes: bytes, filename: str, image_id: str) -> Dict[str, Any]:
+    def _call_openai_vision(
+        self,
+        *,
+        image_bytes: bytes,
+        filename: str,
+        image_id: str,
+        retry_note: Optional[str] = None,
+    ) -> Dict[str, Any]:
         if settings.OCR_ENGINE != "openai_vision":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported OCR_ENGINE.")
         if not self.client:
@@ -116,7 +344,7 @@ class ReceiptOcrService:
 
         mime_type = self._guess_mime_type(filename)
         data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
-        prompt = self._build_prompt(image_id)
+        prompt = self._build_prompt(image_id, retry_note=retry_note)
 
         try:
             response = self.client.chat.completions.create(
@@ -165,6 +393,8 @@ class ReceiptOcrService:
 
         return {
             "image_id": self._nullable_str(result.get("image_id")) or image_id,
+            "document_type": self._normalize_document_type(result.get("document_type")),
+            "is_receipt_like": self._nullable_bool(result.get("is_receipt_like")),
             "store_name": self._nullable_str(result.get("store_name")),
             "purchase_datetime": self._nullable_str(result.get("purchase_datetime")),
             "items": items,
@@ -174,11 +404,131 @@ class ReceiptOcrService:
             "confidence_note": self._nullable_str(result.get("confidence_note")),
         }
 
-    def _build_prompt(self, image_id: str) -> str:
-        return f"""
+    def _validate_receipt_document(self, normalized: Dict[str, Any]) -> List[str]:
+        issues: List[str] = []
+        document_type = normalized.get("document_type") or "unknown"
+        is_receipt_like = normalized.get("is_receipt_like")
+
+        if document_type == "non_receipt" or is_receipt_like is False:
+            issues.append("non_receipt_document")
+
+        if not self._has_receipt_evidence(normalized):
+            issues.append("receipt_evidence_missing")
+
+        return issues
+
+    def _has_receipt_evidence(self, normalized: Dict[str, Any]) -> bool:
+        if normalized.get("items"):
+            return True
+        if normalized.get("store_name") or normalized.get("purchase_datetime"):
+            return True
+
+        total_amount = normalized.get("total_amount")
+        if total_amount:
+            return True
+
+        confidence_note = (normalized.get("confidence_note") or "").lower()
+        if any(
+            keyword in confidence_note
+            for keyword in (
+                "not a receipt",
+                "not a purchase receipt",
+                "non_receipt",
+                "non-receipt",
+                "\uc601\uc218\uc99d\uc774 \uc544\ub2d8",
+                "\uc601\uc218\uc99d\uc774 \uc544\ub2cc",
+            )
+        ):
+            return False
+        return any(
+            keyword in confidence_note
+            for keyword in (
+                "receipt",
+                "card approval",
+                "card slip",
+                "e-receipt",
+                "payment",
+                "\uc601\uc218\uc99d",
+                "\uacb0\uc81c",
+                "\uc2b9\uc778",
+                "\uce74\ub4dc",
+            )
+        )
+
+    def _score_ocr_quality(self, normalized: Dict[str, Any]) -> tuple[float, List[str]]:
+        score = 1.0
+        issues: List[str] = []
+        items = normalized.get("items") or []
+        total_amount = normalized.get("total_amount")
+
+        if not normalized.get("store_name"):
+            score -= 0.05
+            issues.append("store_name_missing")
+        if not normalized.get("purchase_datetime"):
+            score -= 0.05
+            issues.append("purchase_datetime_missing")
+
+        confidence_note = (normalized.get("confidence_note") or "").lower()
+        if any(keyword in confidence_note for keyword in ("unreadable", "hard-to-read", "illegible", "uncertain")):
+            score -= 0.2
+            issues.append("text_uncertain")
+
+        item_amounts = [item.get("item_amount") for item in items if item.get("item_amount") is not None]
+        if items and len(item_amounts) / len(items) < 0.5:
+            score -= 0.2
+            issues.append("many_item_amounts_missing")
+
+        if items:
+            unclear_item_count = sum(1 for item in items if self._is_unclear_item_name(item.get("raw_name")))
+            if unclear_item_count:
+                ratio = unclear_item_count / len(items)
+                score -= 0.3 if ratio >= 0.5 else 0.15
+                issues.append("item_names_unclear")
+        elif not normalized.get("total_amount") and not confidence_note:
+            score -= 0.15
+            issues.append("insufficient_receipt_evidence")
+
+        if total_amount and item_amounts:
+            item_sum = sum(int(amount) for amount in item_amounts)
+            tolerance = max(1000, int(total_amount * 0.15))
+            if abs(int(total_amount) - item_sum) > tolerance:
+                score -= 0.05
+                issues.append("total_amount_mismatch")
+
+        total_item_count = normalized.get("total_item_count")
+        if total_item_count is not None and items:
+            try:
+                if abs(float(total_item_count) - len(items)) > max(2, len(items) * 0.5):
+                    score -= 0.1
+                    issues.append("total_item_count_mismatch")
+            except (TypeError, ValueError):
+                pass
+
+        return max(0.0, round(score, 2)), issues
+
+    def _is_unclear_item_name(self, value: Any) -> bool:
+        text = self._nullable_str(value)
+        if not text:
+            return True
+        if "�" in text or "?" in text:
+            return True
+        letters = re.findall(r"[0-9A-Za-z\uac00-\ud7a3]", text)
+        if len(text) >= 4 and len(letters) / len(text) < 0.5:
+            return True
+        return len(text) <= 1
+
+    def _build_retry_note(self, quality_issues: List[str]) -> Optional[str]:
+        if not quality_issues:
+            return None
+        return ", ".join(quality_issues)
+
+    def _build_prompt(self, image_id: str, *, retry_note: Optional[str] = None) -> str:
+        prompt = f"""
 You are an OCR and structured data extraction assistant for Korean receipts.
 
 Extract only the following information from the receipt image:
+- document_type
+- is_receipt_like
 - store_name
 - purchase_datetime
 - purchased item names
@@ -193,6 +543,8 @@ Return only one valid JSON object. Do not include Markdown, code fences, comment
 Output schema:
 {{
   "image_id": "{image_id}",
+  "document_type": "receipt|card_slip|e_receipt|non_receipt|unknown",
+  "is_receipt_like": true,
   "store_name": "string|null",
   "purchase_datetime": "YYYY-MM-DD HH:mm:ss|null",
   "items": [
@@ -211,17 +563,26 @@ Output schema:
 
 Rules:
 1. Use "{image_id}" as image_id exactly.
-2. Put only real purchased products or menu items in items.
-3. Exclude subtotals, taxes, payment methods, card numbers, approval numbers, and notices from items.
-4. Exclude discount lines and zero-price option lines from items.
-5. If the receipt is a card approval screen or e-receipt without visible item rows, return an empty items array.
-6. Return quantity as a number. Use null if unknown.
-7. Use only "\uac1c", "kg", or null for unit. Use "\uac1c" for normal packaged/menu items.
-8. Keep volume text such as ml or L inside raw_name, not unit.
-9. item_amount is the line amount for that item, not the unit price unless only unit price is visible.
-10. total_amount is a reference value. Use null if uncertain.
-11. Write uncertainty about hard-to-read text, inferred values, or omitted lines in confidence_note.
+2. Classify document_type first. Use non_receipt for tables, reports, presentations, menus without purchase/payment evidence, product lists, screenshots, or unrelated documents.
+3. Set is_receipt_like to true only when the image contains at least one receipt clue such as store name, purchase date/time, purchased item rows, total/payment amount, card approval/payment text, receipt number, or approval number.
+4. If document_type is non_receipt, return is_receipt_like false, items empty, all receipt fields null, and explain the reason in confidence_note.
+5. Put only real purchased products or menu items in items.
+6. Exclude subtotals, taxes, payment methods, card numbers, approval numbers, and notices from items.
+7. Exclude discount lines and zero-price option lines from items.
+8. If the receipt is a card approval screen or e-receipt without visible item rows, return an empty items array.
+9. Return quantity as a number. Use null if unknown.
+10. Use only "\uac1c", "kg", or null for unit. Use "\uac1c" for normal packaged/menu items.
+11. Keep volume text such as ml or L inside raw_name, not unit.
+12. item_amount is the line amount for that item, not the unit price unless only unit price is visible.
+13. total_amount is a reference value. Use null if uncertain.
+14. Write uncertainty about hard-to-read text, inferred values, omitted lines, or non-receipt classification in confidence_note.
 """.strip()
+        if retry_note:
+            prompt += "\n\n" + f"""Retry guidance:
+The previous extraction was rejected by validation because of: {retry_note}.
+Re-read the receipt image carefully and fix only the problematic fields. If the receipt truly has no visible item rows, keep items empty and explain that in confidence_note.
+""".strip()
+        return prompt
 
     def _parse_json_object(self, content: str) -> Dict[str, Any]:
         text = content.strip()
@@ -293,6 +654,24 @@ Rules:
         if not text or text.lower() == "null":
             return None
         return text
+
+    def _nullable_bool(self, value: Any) -> Optional[bool]:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return None
+        text = str(value).strip().lower()
+        if text in {"true", "1", "yes"}:
+            return True
+        if text in {"false", "0", "no"}:
+            return False
+        return None
+
+    def _normalize_document_type(self, value: Any) -> str:
+        text = (self._nullable_str(value) or "unknown").strip().lower().replace("-", "_").replace(" ", "_")
+        if text in {"receipt", "card_slip", "e_receipt", "non_receipt"}:
+            return text
+        return "unknown"
 
     def _nullable_number(self, value: Any) -> Optional[float]:
         if value is None or value == "":

@@ -15,6 +15,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 class ReceiptHistoryService:
     """최근에 등록(확정)된 영수증 내역을 조회/삭제하는 서비스입니다."""
 
+    def update_store_name(self, *, db: Session, user_id: int, receipt_id: int, store_name: str) -> Dict[str, Any]:
+        receipt = (
+            db.query(Receipt)
+            .filter(Receipt.id == receipt_id, Receipt.user_id == user_id)
+            .options(selectinload(Receipt.items))
+            .first()
+        )
+        if not receipt:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="영수증을 찾을 수 없습니다.")
+
+        cleaned = store_name.strip()
+        if not cleaned:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="영수증 제목을 입력해주세요.")
+
+        receipt.store_name = cleaned
+        db.commit()
+        db.refresh(receipt)
+
+        return self._serialize(receipt)
+
     def delete_receipt(self, *, db: Session, user_id: int, receipt_id: int) -> None:
         receipt = (
             db.query(Receipt)
