@@ -120,8 +120,15 @@ class ChatService:
         normalized = text.replace(" ", "").lower()
         return any(word in normalized for word in ("에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간"))
 
+    def _is_expiring_question(self, text: str) -> bool:
+        """소비기한 임박 재료를 묻는 질문인지 먼저 확인합니다."""
+        normalized = text.replace(" ", "").lower()
+        return any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이"))
+        
     def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
         """LangChain LLM을 활용하여 대화 문맥(history)과 현재 메시지로 의도를 파악합니다."""
+        if self._is_expiring_question(text):
+            return "inventory.expiring"
         if self._is_cooking_time_question(text):
             return "recipe.search"
 
@@ -184,6 +191,8 @@ class ChatService:
         if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
             return "receipt.guide"
             
+        if self._is_expiring_question(text):
+            return "inventory.expiring"
         if self._is_cooking_time_question(text):
             return "recipe.search"
             

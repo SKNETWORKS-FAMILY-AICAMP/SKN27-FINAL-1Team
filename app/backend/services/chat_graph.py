@@ -51,6 +51,7 @@ CALENDAR_WORDS = ("\uc77c\uc815", "\uce98\ub9b0\ub354")
 DELETE_WORDS = ("\uc0ad\uc81c", "\ud3d0\uae30", "\uc9c0\uc6cc", "\ubc84\ub824")
 CONSUME_WORDS = ("\uba39\uc5c8\uc5b4", "\ub2e4\uc37c\uc5b4", "\ub2e4\uba39\uc5c8\uc5b4", "\uc18c\ube44\ud588", "\uc0ac\uc6a9\ud588", "\uc37c\uc5b4")
 INVENTORY_LIST_WORDS = ("뭐 있어", "뭐 있지", "뭐있", "뭐잇", "머있", "머잇", "뭐이", "목록", "현재 재료", "현재 냉장고")
+EXPIRING_WORDS = ("임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "d-day", "디데이")
 ADD_WORDS = ("\ucd94\uac00", "\ub4f1\ub85d", "\ub123", "\uc0c0", "\uc0bf", "\uc0ac\uc654", "\uad6c\ub9e4")
 
 # 식재료 입력 파싱용 기본값
@@ -396,6 +397,8 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.calendar"}
     if any(word in normalized for word in ADD_WORDS):
         return {"intent": "mcp.inventory"}
+    if any(word in normalized for word in EXPIRING_WORDS):
+        return {"intent": "inventory.expiring"}
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return {"intent": "inventory.list"}
 
@@ -589,27 +592,8 @@ def receipt_guide_node(state: GraphState) -> dict:
 
 
 def general_node(state: GraphState) -> dict:
-    """지원 범위 밖 질문이나 일상 대화에 대해 LLM으로 자연스럽게 응답합니다."""
-    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-    
-    llm = ChatOpenAI(model=settings.OPENAI_MODEL, api_key=settings.OPENAI_API_KEY, temperature=0.7)
-    sys_msg = SystemMessage(content="당신은 요리와 냉장고 관리를 돕는 친절한 비서 챗봇입니다. 사용자의 일상적인 인사나 대화에 다정하고 친절하게 1~2문장으로 짧게 답하세요. 대화 끝에는 자연스럽게 요리나 식재료 관리에 도움이 필요한지 가볍게 물어보세요.")
-    
-    messages = [sys_msg]
-    if "history" in state and state["history"]:
-        for msg in state["history"][-4:]:
-            if getattr(msg, "role", "") == "user":
-                messages.append(HumanMessage(content=getattr(msg, "text", "")))
-            elif getattr(msg, "role", "") == "bot":
-                messages.append(AIMessage(content=getattr(msg, "text", "")))
-                
-    messages.append(HumanMessage(content=state["text"]))
-    
-    try:
-        response = llm.invoke(messages)
-        return {"response_text": response.content}
-    except Exception:
-        return {"response_text": GENERAL_REPLY}
+    """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
+    return {"response_text": GENERAL_REPLY}
 
 
 def route_intent(state: GraphState) -> str:
