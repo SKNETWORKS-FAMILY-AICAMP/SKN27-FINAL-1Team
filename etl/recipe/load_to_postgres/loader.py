@@ -36,6 +36,8 @@ _REQUIRED_COLUMNS = {
     "ingredients": ("name", "normalized_name"),
     "recipes": ("id", "title", "recipe_steps"),
     "recipe_ingredients": ("recipe_id", "ingredient_id"),
+    # backend runtime (inventory / recommend)
+    "fridge_items": ("is_ai_recommended",),
 }
 
 

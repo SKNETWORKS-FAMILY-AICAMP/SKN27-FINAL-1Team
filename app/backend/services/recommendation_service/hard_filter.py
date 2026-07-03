@@ -71,15 +71,20 @@ def filter_candidates_by_id(
     return [recipe for recipe in recipes if recipe.id not in exclude]
 
 
-def filter_scored_by_banned(
-    scored: list[dict[str, Any]],
+def filter_recipes_by_banned(
+    recipes: list[Recipe],
+    ingredients_by_recipe: dict[int, list[dict[str, Any]]],
     ctx: UserHardFilterContext,
-) -> list[dict[str, Any]]:
-    if not ctx.banned_items:
-        return scored
-    banned = list(ctx.banned_items)
-    return [
-        row
-        for row in scored
-        if not recipe_contains_banned(row["_recipe_ingredients"], banned)
-    ]
+) -> list[Recipe]:
+    """알레르기·기피 재료 포함 및 재료 정보 없는 레시피 제외 (pool cap 전)."""
+    banned = list(ctx.banned_items) if ctx.banned_items else None
+    filtered: list[Recipe] = []
+    for recipe in recipes:
+        ingredients = ingredients_by_recipe.get(recipe.id)
+        if not ingredients:
+            continue
+        if banned and recipe_contains_banned(ingredients, banned):
+            continue
+        filtered.append(recipe)
+    return filtered
+

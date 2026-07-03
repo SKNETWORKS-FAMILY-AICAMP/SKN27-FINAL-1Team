@@ -13,44 +13,36 @@ if __package__ is None:
 
 import pandas as pd
 
-from etl.recipe.load_to_postgres.loader import (
-    clean_ingredient_name,
-    parse_ingredient_rows,
-    resolve_ingredient_name,
-)
+from etl.recipe.load_to_postgres.loader import clean_ingredient_name, parse_ingredient_rows
 from etl.recipe.preprocessing.recipe_processing import load_recipe_data, save_recipe_data
 
 RECIPE_FIX_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
 OUTPUT_CSV = ROOT / "storage" / "processed" / "recipe" / "ingredient_recipe_index.csv"
 
 
-def collect_ingredient_index(df: pd.DataFrame) -> dict[str, dict]:
-    """normalized_name → {name, recipe_ids} 집계."""
-    index: dict[str, dict] = {}
+def collect_ingredient_index(df: pd.DataFrame) -> dict[str, set[int]]:
+    """name(clean) → recipe_ids 집계."""
+    index: dict[str, set[int]] = {}
     for _, row in df.iterrows():
         recipe_id = int(row["RCP_SNO"])
         for item in parse_ingredient_rows(row["CKG_MTRL_CN"]):
             raw_name = str(item[0]).strip()
-            resolved = resolve_ingredient_name(raw_name)
-            if not resolved:
+            name = clean_ingredient_name(raw_name)
+            if not name:
                 continue
-            cleaned_name, norm = resolved
-            bucket = index.setdefault(norm, {"name": cleaned_name, "recipe_ids": set()})
-            bucket["recipe_ids"].add(recipe_id)
+            index.setdefault(name, set()).add(recipe_id)
     return index
 
 
-def build_index_dataframe(index: dict[str, dict]) -> pd.DataFrame:
+def build_index_dataframe(index: dict[str, set[int]]) -> pd.DataFrame:
     """ingredient_id 순 정렬 DataFrame 생성."""
     rows: list[dict] = []
-    for ingredient_id, norm in enumerate(sorted(index), start=1):
-        data = index[norm]
-        recipe_ids = sorted(data["recipe_ids"])
+    for ingredient_id, name in enumerate(sorted(index), start=1):
+        recipe_ids = sorted(index[name])
         rows.append(
             {
                 "ingredient_id": ingredient_id,
-                "name": data["name"],
-                "normalized_name": norm,
+                "name": name,
                 "recipe_ids": json.dumps(recipe_ids, ensure_ascii=False),
                 "recipe_count": len(recipe_ids),
             }
@@ -163,18 +155,18 @@ def _self_check() -> None:
     assert len(index) == 7
     assert "?" not in index
     assert "a" not in index
-    assert index["식빵"]["name"] == "식빵"
-    assert index["통깨"]["name"] == "통깨"
-    assert len(index["양파"]["recipe_ids"]) == 2
-    assert index["양파"]["recipe_ids"] == {1, 2}
-    assert index["a1스테이크소스"]["name"] == "a1스테이크소스"
-    assert index["a1스테이크소스"]["recipe_ids"] == {7024950}
+    assert index["식빵"] == {3}
+    assert index["통깨"] == {3}
+    assert len(index["양파"]) == 2
+    assert index["양파"] == {1, 2}
+    assert index["a1스테이크소스"] == {7024950}
 
     result = build_index_dataframe(index)
     assert list(result["ingredient_id"]) == [1, 2, 3, 4, 5, 6, 7]
     assert result["recipe_count"].sum() == 8
-    onion_row = result.loc[result["normalized_name"] == "양파"].iloc[0]
+    onion_row = result.loc[result["name"] == "양파"].iloc[0]
     assert json.loads(onion_row["recipe_ids"]) == [1, 2]
+    assert "normalized_name" not in result.columns
 
 
 def _parse_args() -> argparse.Namespace:
