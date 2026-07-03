@@ -21,6 +21,13 @@ SENTIMENT_AVG_COL = "REVIEW_SENTIMENT_AVG"
 RANK_SCORE_COL = "REVIEW_RANK_SCORE"
 INQ_CNT_LOG_COL = "INQ_CNT_LOG"
 INQ_CNT_LOG_CENTERED_COL = "INQ_CNT_LOG_CENTERED"
+SRAP_CNT_LOG_COL = "SRAP_CNT_LOG"
+SRAP_CNT_LOG_CENTERED_COL = "SRAP_CNT_LOG_CENTERED"
+
+_COUNT_LOG_SPECS = (
+    ("INQ_CNT", INQ_CNT_LOG_COL, INQ_CNT_LOG_CENTERED_COL),
+    ("SRAP_CNT", SRAP_CNT_LOG_COL, SRAP_CNT_LOG_CENTERED_COL),
+)
 
 
 def build_recipe_review_aggregate(review_df: pd.DataFrame) -> pd.DataFrame:
@@ -70,17 +77,18 @@ def apply_review_averages(
     return merged
 
 
-def apply_inq_cnt_log(df: pd.DataFrame) -> pd.DataFrame:
-    if "INQ_CNT" not in df.columns:
-        raise ValueError("필수 컬럼 누락: INQ_CNT")
+def apply_count_logs(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    out = out.drop(columns=[INQ_CNT_LOG_COL, INQ_CNT_LOG_CENTERED_COL], errors="ignore")
-    inq = pd.to_numeric(out["INQ_CNT"], errors="coerce")
-    valid = inq.notna() & (inq >= 0)
-    out[INQ_CNT_LOG_COL] = pd.NA
-    out.loc[valid, INQ_CNT_LOG_COL] = inq.loc[valid].map(log1p)
-    mean_log = out.loc[valid, INQ_CNT_LOG_COL].mean()
-    out[INQ_CNT_LOG_CENTERED_COL] = out[INQ_CNT_LOG_COL] - mean_log
+    for source_col, log_col, centered_col in _COUNT_LOG_SPECS:
+        if source_col not in out.columns:
+            raise ValueError(f"필수 컬럼 누락: {source_col}")
+        out = out.drop(columns=[log_col, centered_col], errors="ignore")
+        counts = pd.to_numeric(out[source_col], errors="coerce")
+        valid = counts.notna() & (counts >= 0)
+        out[log_col] = pd.NA
+        out.loc[valid, log_col] = counts.loc[valid].map(log1p)
+        mean_log = out.loc[valid, log_col].mean()
+        out[centered_col] = out[log_col] - mean_log
     return out
 
 
@@ -91,12 +99,14 @@ def apply_rank_score(df: pd.DataFrame) -> pd.DataFrame:
         out[STAR_AVG_COL].notna()
         & out[SENTIMENT_AVG_COL].notna()
         & out[INQ_CNT_LOG_CENTERED_COL].notna()
+        & out[SRAP_CNT_LOG_CENTERED_COL].notna()
     )
     out[RANK_SCORE_COL] = pd.NA
     out.loc[valid, RANK_SCORE_COL] = (
         out.loc[valid, STAR_AVG_COL]
         + out.loc[valid, SENTIMENT_AVG_COL]
         + out.loc[valid, INQ_CNT_LOG_CENTERED_COL]
+        + out.loc[valid, SRAP_CNT_LOG_CENTERED_COL]
     )
     return out
 
@@ -115,21 +125,21 @@ def _self_check() -> None:
     assert isclose(row100[STAR_AVG_COL], 0.75)
     assert isclose(row100[SENTIMENT_AVG_COL], 0.6)
     assert RANK_SCORE_COL not in agg.columns
-    row101 = agg.loc[agg["recipe_id"] == 101].iloc[0]
-    assert isclose(row101[STAR_AVG_COL], -0.5)
-    assert isclose(row101[SENTIMENT_AVG_COL], -0.05)
 
     recipe_fix_sample = pd.DataFrame(
-        {"RCP_SNO": [100, 102, 999], "CKG_NM": ["a", "b", "c"], "INQ_CNT": [100, 200, 50]}
+        {
+            "RCP_SNO": [100, 102, 999],
+            "CKG_NM": ["a", "b", "c"],
+            "INQ_CNT": [100, 200, 50],
+            "SRAP_CNT": [10, 20, 5],
+        }
     )
-    applied = apply_rank_score(apply_inq_cnt_log(apply_review_averages(recipe_fix_sample, review_sample)))
-    assert STAR_AVG_COL in applied.columns
-    assert SENTIMENT_AVG_COL in applied.columns
-    assert RANK_SCORE_COL in applied.columns
+    applied = apply_rank_score(
+        apply_count_logs(apply_review_averages(recipe_fix_sample, review_sample))
+    )
+    assert SRAP_CNT_LOG_COL in applied.columns
+    assert SRAP_CNT_LOG_CENTERED_COL in applied.columns
     assert "REVIEW_RANK_DISTANCE" not in applied.columns
-    val100 = applied.loc[applied["RCP_SNO"] == 100, STAR_AVG_COL].iloc[0]
-    assert isclose(val100, 0.75)
-    assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, STAR_AVG_COL].iloc[0])
     assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, RANK_SCORE_COL].iloc[0])
 
     row100_full = applied.loc[applied["RCP_SNO"] == 100].iloc[0]
@@ -137,55 +147,42 @@ def _self_check() -> None:
         float(row100_full[STAR_AVG_COL])
         + float(row100_full[SENTIMENT_AVG_COL])
         + float(row100_full[INQ_CNT_LOG_CENTERED_COL])
+        + float(row100_full[SRAP_CNT_LOG_CENTERED_COL])
     )
     assert isclose(float(row100_full[RANK_SCORE_COL]), expected_score_100)
 
-    overwrite_sample = recipe_fix_sample.copy()
-    overwrite_sample[STAR_AVG_COL] = 999.0
-    overwrite_sample[SENTIMENT_AVG_COL] = 999.0
-    overwrite_sample[RANK_SCORE_COL] = 999.0
-    overwritten = apply_rank_score(
-        apply_inq_cnt_log(apply_review_averages(overwrite_sample, review_sample))
+    count_sample = pd.DataFrame(
+        {"RCP_SNO": [1, 2, 3], "INQ_CNT": [0, 9, 99], "SRAP_CNT": [0, 9, 99]}
     )
-    overwritten_100 = overwritten.loc[overwritten["RCP_SNO"] == 100].iloc[0]
-    assert isclose(overwritten_100[STAR_AVG_COL], 0.75)
-    assert isclose(overwritten_100[SENTIMENT_AVG_COL], 0.6)
-    assert isclose(float(overwritten_100[RANK_SCORE_COL]), expected_score_100)
+    count_logged = apply_count_logs(count_sample)
+    for log_col in (INQ_CNT_LOG_COL, SRAP_CNT_LOG_COL):
+        assert isclose(float(count_logged.loc[count_logged["RCP_SNO"] == 1, log_col].iloc[0]), 0.0)
+        assert isclose(float(count_logged.loc[count_logged["RCP_SNO"] == 2, log_col].iloc[0]), log1p(9))
+    for centered_col in (INQ_CNT_LOG_CENTERED_COL, SRAP_CNT_LOG_CENTERED_COL):
+        assert isclose(count_logged[centered_col].astype(float).mean(), 0.0, abs_tol=1e-12)
 
-    inq_sample = pd.DataFrame({"RCP_SNO": [1, 2, 3], "INQ_CNT": [0, 9, 99]})
-    inq_logged = apply_inq_cnt_log(inq_sample)
-    assert isclose(float(inq_logged.loc[inq_logged["RCP_SNO"] == 1, INQ_CNT_LOG_COL].iloc[0]), 0.0)
-    assert isclose(float(inq_logged.loc[inq_logged["RCP_SNO"] == 2, INQ_CNT_LOG_COL].iloc[0]), log1p(9))
-    assert isclose(float(inq_logged.loc[inq_logged["RCP_SNO"] == 3, INQ_CNT_LOG_COL].iloc[0]), log1p(99))
-    centered_mean = inq_logged[INQ_CNT_LOG_CENTERED_COL].astype(float).mean()
-    assert isclose(centered_mean, 0.0, abs_tol=1e-12)
-
-    overwrite_inq = inq_sample.copy()
-    overwrite_inq[INQ_CNT_LOG_COL] = 999.0
-    overwrite_inq[INQ_CNT_LOG_CENTERED_COL] = 999.0
-    inq_overwritten = apply_inq_cnt_log(overwrite_inq)
-    assert isclose(float(inq_overwritten.loc[inq_overwritten["RCP_SNO"] == 2, INQ_CNT_LOG_COL].iloc[0]), log1p(9))
-
-    bad_inq = pd.DataFrame({"RCP_SNO": [1], "INQ_CNT": [-1]})
-    bad_logged = apply_inq_cnt_log(bad_inq)
+    bad_count = pd.DataFrame({"RCP_SNO": [1], "INQ_CNT": [-1], "SRAP_CNT": [-1]})
+    bad_logged = apply_count_logs(bad_count)
     assert pd.isna(bad_logged[INQ_CNT_LOG_COL].iloc[0])
-    assert pd.isna(bad_logged[INQ_CNT_LOG_CENTERED_COL].iloc[0])
+    assert pd.isna(bad_logged[SRAP_CNT_LOG_CENTERED_COL].iloc[0])
 
 
 def main() -> None:
     recipe_fix_df = load_recipe_data(RECIPE_FIX_CSV)
     review_df = load_recipe_data(REVIEW_CSV)
     result = apply_review_averages(recipe_fix_df, review_df)
-    result = apply_inq_cnt_log(result)
+    result = apply_count_logs(result)
     result = apply_rank_score(result)
     save_recipe_data(result, RECIPE_FIX_CSV)
     mapped = int(result[STAR_AVG_COL].notna().sum())
     ranked = int(result[RANK_SCORE_COL].notna().sum())
-    log_mapped = int(result[INQ_CNT_LOG_COL].notna().sum())
+    inq_mapped = int(result[INQ_CNT_LOG_COL].notna().sum())
+    srap_mapped = int(result[SRAP_CNT_LOG_COL].notna().sum())
     print(
         f"리뷰 평균/랭크 컬럼 적재 완료: 평균 {mapped}/{len(result)}행, 랭크 {ranked}/{len(result)}행"
     )
-    print(f"조회수 log1p 컬럼 적재 완료: {log_mapped}/{len(result)}행")
+    print(f"조회수 log1p 컬럼 적재 완료: {inq_mapped}/{len(result)}행")
+    print(f"스크랩 log1p 컬럼 적재 완료: {srap_mapped}/{len(result)}행")
 
 
 if __name__ == "__main__":

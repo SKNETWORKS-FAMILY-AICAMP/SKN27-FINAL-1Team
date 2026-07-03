@@ -38,6 +38,8 @@ SET r.name = row.name,
     r.inqCnt = row.inqCnt,
     r.inqCntRate = row.inqCntRate,
     r.inqCntLogCentered = row.inqCntLogCentered,
+    r.srapCnt = row.srapCnt,
+    r.srapCntLogCentered = row.srapCntLogCentered,
     r.reviewStarNormAvg = row.reviewStarNormAvg,
     r.reviewSentimentAvg = row.reviewSentimentAvg,
     r.reviewRankScore = row.reviewRankScore
@@ -156,6 +158,8 @@ def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "inqCnt": _number(row.get("INQ_CNT")),
                 "inqCntRate": _number(row.get("INQ_CNT_RATE")),
                 "inqCntLogCentered": _number(row.get("INQ_CNT_LOG_CENTERED")),
+                "srapCnt": _number(row.get("SRAP_CNT")),
+                "srapCntLogCentered": _number(row.get("SRAP_CNT_LOG_CENTERED")),
                 "reviewStarNormAvg": _number(row.get("REVIEW_STAR_NORM_AVG")),
                 "reviewSentimentAvg": _number(row.get("REVIEW_SENTIMENT_AVG")),
                 "reviewRankScore": _number(row.get("REVIEW_RANK_SCORE")),
@@ -276,6 +280,10 @@ def _self_check() -> None:
     assert isinstance(recipe_rows[0]["inqCntRate"], float)
     assert "inqCntLogCentered" in recipe_rows[0]
     assert any(row["inqCntLogCentered"] is not None for row in recipe_rows)
+    assert "srapCnt" in recipe_rows[0]
+    assert "srapCntLogCentered" in recipe_rows[0]
+    assert any(row["srapCnt"] is not None for row in recipe_rows)
+    assert any(row["srapCntLogCentered"] is not None for row in recipe_rows)
     assert "reviewStarNormAvg" in recipe_rows[0]
     assert "reviewSentimentAvg" in recipe_rows[0]
     assert "reviewRankScore" in recipe_rows[0]
