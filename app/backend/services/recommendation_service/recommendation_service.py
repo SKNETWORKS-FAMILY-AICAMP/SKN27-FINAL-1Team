@@ -359,11 +359,7 @@ class RecommendationService:
         recipes = recipes[: config.pool_size]
 
         rank_scores = fetch_review_rank_scores([recipe.id for recipe in recipes])
-        recipes = [
-            recipe
-            for recipe in recipes
-            if rank_scores.get(recipe.id, 0.0) >= RecipeRecommendConfig.MIN_REVIEW_RANK_SCORE
-        ]
+        recipes = [recipe for recipe in recipes if recipe.id in rank_scores]
         if not recipes:
             return _empty_recommend_result("no_scorable_recipes")
 
@@ -453,7 +449,7 @@ class RecommendationService:
                     "_fridge_match": fridge_match,
                     "_recipe_ingredients": recipe_ingredients,
                     "final_score": final_score,
-                    "review_rank_score": rank_scores.get(recipe.id, 0.0),
+                    "review_rank_score": rank_scores[recipe.id],
                 }
             )
 

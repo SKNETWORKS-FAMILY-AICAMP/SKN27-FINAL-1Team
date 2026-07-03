@@ -13,12 +13,6 @@ RETURN recipeId, r.reviewRankScore AS review_rank_score
 """
 
 
-def _normalize_score(value: object) -> float:
-    if value is None:
-        return 0.0
-    return float(value)
-
-
 def fetch_review_rank_scores(recipe_ids: list[int]) -> dict[int, float]:
     if not recipe_ids:
         return {}
@@ -26,17 +20,34 @@ def fetch_review_rank_scores(recipe_ids: list[int]) -> dict[int, float]:
         with graph_session() as session:
             records = session.run(_REVIEW_RANK_SCORE_QUERY, recipe_ids=recipe_ids)
             return {
-                int(record["recipeId"]): _normalize_score(record["review_rank_score"])
+                int(record["recipeId"]): float(record["review_rank_score"])
                 for record in records
+                if record["review_rank_score"] is not None
             }
     except Neo4jError:
         return {}
 
 
 def _self_check() -> None:
-    assert _normalize_score(None) == 0.0
-    assert _normalize_score(91.34) == 91.34
     assert fetch_review_rank_scores([]) == {}
+
+    records = [
+        {"recipeId": 1, "review_rank_score": 3.5},
+        {"recipeId": 2, "review_rank_score": None},
+        {"recipeId": 3, "review_rank_score": -1.0},
+        {"recipeId": 4, "review_rank_score": 0.0},
+    ]
+    scores = {
+        int(record["recipeId"]): float(record["review_rank_score"])
+        for record in records
+        if record["review_rank_score"] is not None
+    }
+    assert scores == {1: 3.5, 3: -1.0, 4: 0.0}
+    assert 2 not in scores
+
+    recipe_ids = [1, 2, 3]
+    included = [recipe_id for recipe_id in recipe_ids if recipe_id in scores]
+    assert included == [1, 3]
 
 
 if __name__ == "__main__":
