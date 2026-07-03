@@ -7,6 +7,7 @@ import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png
 import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageReceipt from '../../assets/extracted/images/image_receipt registration.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import { API_URL } from '../../utils/api.js'
 import {
   receiptHistory,
   receiptRows as rows,
@@ -24,7 +25,6 @@ const purchaseFlowWeekCount = 4
 
 const quantityUnitOptions = ['kg', '개']
 const storageOptions = ['냉동', '냉장', '실온']
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const maxUploadSizeMb = 10
 const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 const aiAnalysisSteps = [
@@ -307,7 +307,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
     let active = true
     setPurchaseFlowStatus('loading')
 
-    fetch(`${apiUrl}/api/v1/receipts/history?limit=100`, {
+    fetch(`${API_URL}/api/v1/receipts/history?limit=100`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (response) => {
@@ -729,7 +729,7 @@ function ReceiptOcr() {
     formData.append('file', file)
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/receipts/upload/stream`, {
+      const response = await fetch(`${API_URL}/api/v1/receipts/upload/stream`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1107,7 +1107,7 @@ function ReceiptOcr() {
       const calendarCostEnabled = window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false'
 
       try {
-        const response = await fetch(`${apiUrl}/api/v1/receipts/confirm`, {
+        const response = await fetch(`${API_URL}/api/v1/receipts/confirm`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2003,7 +2003,7 @@ function RecentHistory() {
     let active = true
     setStatus('loading')
 
-    fetch(`${apiUrl}/api/v1/receipts/history`, {
+    fetch(`${API_URL}/api/v1/receipts/history`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (response) => {
@@ -2055,7 +2055,7 @@ function RecentHistory() {
     setDeletingId(item.id)
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/receipts/${item.id}`, {
+      const response = await fetch(`${API_URL}/api/v1/receipts/${item.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -2109,7 +2109,7 @@ function RecentHistory() {
     setIsSavingTitle(true)
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/receipts/${item.id}`, {
+      const response = await fetch(`${API_URL}/api/v1/receipts/${item.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -2176,7 +2176,7 @@ function RecentHistory() {
     try {
       const results = await Promise.allSettled(
         targetIds.map((id) =>
-          fetch(`${apiUrl}/api/v1/receipts/${id}`, {
+          fetch(`${API_URL}/api/v1/receipts/${id}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` },
           }),

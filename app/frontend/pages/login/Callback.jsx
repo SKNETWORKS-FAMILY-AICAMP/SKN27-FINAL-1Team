@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { API_URL } from '../../utils/api.js'
 import './Login.css'
 
 // StrictMode 더블 렌더링에 의한 비동기 Race Condition 방어용 모듈 레벨 변수
@@ -38,7 +39,6 @@ function Callback() {
     if (isFetching.current) return
     isFetching.current = true
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
     const fetchToken = async () => {
       try {
@@ -48,7 +48,7 @@ function Callback() {
             throw new Error('캘린더 연동은 로그인이 필요합니다.')
           }
 
-          const response = await fetch(`${apiUrl}/api/v1/calendar/google/connect`, {
+          const response = await fetch(`${API_URL}/api/v1/calendar/google/connect`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ function Callback() {
           return
         }
 
-        const response = await fetch(`${apiUrl}/api/v1/auth/social-login`, {
+        const response = await fetch(`${API_URL}/api/v1/auth/social-login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

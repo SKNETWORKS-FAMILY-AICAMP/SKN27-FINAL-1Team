@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mascot from '../assets/mascot.png'
+import { API_URL } from '../utils/api.js'
 import ChatWelcome from './ChatWelcome'
 import './FloatingChatbot.css'
 
@@ -89,7 +90,6 @@ function FloatingChatbot() {
     setIsSending(true)
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       const token = localStorage.getItem('bobbeori-token')
       const headers = { 'Content-Type': 'application/json' }
       // 비회원 챗봇 요청은 Authorization 헤더 없이 보내 게스트로 처리합니다.
@@ -97,7 +97,7 @@ function FloatingChatbot() {
         headers.Authorization = `Bearer ${token}`
       }
       // 입력 메시지를 백엔드 챗봇 라우터로 전달합니다.
-      const response = await fetch(`${apiUrl}/api/v1/chat`, {
+      const response = await fetch(`${API_URL}/api/v1/chat`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

@@ -39,29 +39,9 @@ def load_settings() -> Neo4jSettings:
     )
 
 
-#####################################################################################
-# 싱글톤 패턴
-#####################################################################################
-
-
-class Singleton(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
-#####################################################################################
-# 싱글톤 클래스 상속받아서 neo4j 연결 객체 생성
-#####################################################################################
-
-
-class Neo4j_Connection(metaclass=Singleton):
+class Neo4j_Connection:
     """
     Neo4j DB 연결 객체 생성 및 관련 내장 클래스 정의
-    - 클래스는 싱글톤으로 구성
     - 객체에는 공통으로 사용하는 변수와 매서드만 우선적으로 내장한다. (close, 초기화 등...)
     """
 
@@ -70,26 +50,14 @@ class Neo4j_Connection(metaclass=Singleton):
         uri,
         user,
         password,
-        embedding_model="qwen3-embedding:0.6b",
         database: str | None = None,
     ):
         self._uri = uri
         self._user = user
         self._password = password
         self._database = database or os.getenv("NEO4J_DATABASE", "neo4j").strip() or "neo4j"
-        self._embedding_model = embedding_model
-        self._gds: Any | None = None
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         logger.info("Neo4j 연결 성공: %s", uri)
-        logger.info("임베딩 모델: %s", embedding_model)
-
-    @property
-    def gds(self):
-        if self._gds is None:
-            from graphdatascience import GraphDataScience
-
-            self._gds = GraphDataScience(self._uri, auth=(self._user, self._password))
-        return self._gds
 
     def _ensure_driver(self):
         if self.driver is None:
@@ -101,7 +69,6 @@ class Neo4j_Connection(metaclass=Singleton):
         if self.driver is not None:
             self.driver.close()
             self.driver = None
-        self._gds = None
         logger.info("Neo4j 드라이버 연결 해제 완료")
 
     def execute_write(self, query: str, parameters: dict[str, Any] | None = None) -> None:
@@ -134,24 +101,11 @@ if __name__ == "__main__":
         uri=settings.uri,
         user=settings.user,
         password=settings.password,
-        embedding_model=os.getenv("NEO4J_EMBEDDING_MODEL", "qwen3-embedding:0.6b"),
         database=settings.database,
     )
-    conn2 = Neo4j_Connection(
-        uri=settings.uri,
-        user=settings.user,
-        password=settings.password,
-        embedding_model=os.getenv("NEO4J_EMBEDDING_MODEL", "qwen3-embedding:0.6b"),
-        database=settings.database,
-    )
-
     logger.info("첫 번째 연결: %s", conn1)
-    logger.info("두 번째 연결: %s", conn2)
 
     try:
-        if conn1 is conn2:
-            logger.info("같은 연결인가? %s", conn1 is conn2)
-            logger.info("싱글톤 패턴 적용 완료: 동일한 연결을 재사용합니다.")
         rows = conn1.execute_query("RETURN 1 AS test")
         logger.info("쿼리 smoke: %s", rows)
     except Exception as e:

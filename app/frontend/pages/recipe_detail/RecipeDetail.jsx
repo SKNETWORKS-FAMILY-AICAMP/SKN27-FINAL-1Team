@@ -5,9 +5,9 @@ import './RecipeDetail.css'
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrigerator.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import { API_URL } from '../../utils/api.js'
 import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
 
 function ImageSlot({ src, alt = '', className = '' }) {
@@ -109,7 +109,7 @@ function RecipeDetail() {
 
     setIsSaving(true)
     try {
-      const response = await fetch(`${apiUrl}/api/v1/recommendations`, {
+      const response = await fetch(`${API_URL}/api/v1/recommendations`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -182,7 +182,7 @@ function RecipeDetail() {
       }
 
       try {
-        const response = await fetch(`${apiUrl}/api/v1/recipes/${recipeId}`, {
+        const response = await fetch(`${API_URL}/api/v1/recipes/${recipeId}`, {
           signal: controller.signal,
           headers,
         })

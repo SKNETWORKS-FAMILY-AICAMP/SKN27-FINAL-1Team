@@ -4,8 +4,8 @@ import './Guide.css'
 
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageGuide from '../../assets/extracted/images/image_guide_v2.png'
+import { API_URL } from '../../utils/api.js'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 12
 const GUIDE_RECIPE_LIMIT = 12
@@ -204,7 +204,7 @@ function Guide() {
       setIsFridgeLoading(true)
       setFridgeErrorMessage('')
       try {
-        const response = await fetch(`${apiUrl}/api/v1/inventory`, {
+        const response = await fetch(`${API_URL}/api/v1/inventory`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -247,7 +247,7 @@ function Guide() {
         if (searchTerm.trim()) params.set('keyword', searchTerm.trim())
         if (selectedMajorCategory) params.set('major_category', selectedMajorCategory)
         if (selectedMiddleCategory) params.set('middle_category', selectedMiddleCategory)
-        const response = await fetch(`${apiUrl}/api/v1/guide?${params}`, {
+        const response = await fetch(`${API_URL}/api/v1/guide?${params}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -290,7 +290,7 @@ function Guide() {
         if (searchTerm.trim()) params.set('keyword', searchTerm.trim())
         if (selectedMajorCategory) params.set('major_category', selectedMajorCategory)
         if (selectedMiddleCategory) params.set('middle_category', selectedMiddleCategory)
-        const response = await fetch(`${apiUrl}/api/v1/guide/categories?${params}`, {
+        const response = await fetch(`${API_URL}/api/v1/guide/categories?${params}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -323,7 +323,7 @@ function Guide() {
       setIsDetailLoading(true)
       setErrorMessage('')
       try {
-        const response = await fetch(`${apiUrl}/api/v1/guide/detail/${encodeURIComponent(selectedCode)}`, {
+        const response = await fetch(`${API_URL}/api/v1/guide/detail/${encodeURIComponent(selectedCode)}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -365,7 +365,7 @@ function Guide() {
           page: '1',
           page_size: String(GUIDE_RECIPE_LIMIT),
         })
-        const response = await fetch(`${apiUrl}/api/v1/recipes/search?${params}`, {
+        const response = await fetch(`${API_URL}/api/v1/recipes/search?${params}`, {
           signal: controller.signal,
         })
         if (!response.ok) throw new Error('추천 레시피를 불러오지 못했습니다.')
@@ -436,7 +436,7 @@ function Guide() {
         page: '1',
         page_size: String(GUIDE_PAGE_SIZE),
       })
-      const response = await fetch(`${apiUrl}/api/v1/guide?${params}`, { headers: getAuthHeaders() })
+      const response = await fetch(`${API_URL}/api/v1/guide?${params}`, { headers: getAuthHeaders() })
       if (response.ok) {
         const data = await response.json()
         const exactMatch = (data.items || []).find(
@@ -488,7 +488,7 @@ function Guide() {
     setIsSuggestionSubmitting(true)
     setSuggestionMessage('')
     try {
-      const response = await fetch(`${apiUrl}/api/v1/guide/suggestions`, {
+      const response = await fetch(`${API_URL}/api/v1/guide/suggestions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

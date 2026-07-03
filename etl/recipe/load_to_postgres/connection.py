@@ -11,23 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 #################################################################
-# 싱글톤 클래스 
-#################################################################
-class Singleton(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
-
-#################################################################
 # PostgreSQL 연결 
 #################################################################
-class PostgreDB(metaclass=Singleton):
-    """PostgreSQL 싱글톤 연결·쿼리 실행."""
+class PostgreDB:
+    """PostgreSQL 연결·쿼리 실행."""
 
     def __init__(self) -> None:
         last_error = None

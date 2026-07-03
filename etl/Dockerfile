@@ -5,12 +5,7 @@ WORKDIR /project
 COPY etl/requirements.txt ./etl/requirements.txt
 RUN pip install --no-cache-dir -r etl/requirements.txt
 
-COPY etl/__init__.py ./etl/__init__.py
-COPY etl/recipe/__init__.py ./etl/recipe/__init__.py
-COPY etl/recipe/load_to_postgres ./etl/recipe/load_to_postgres
-COPY etl/recipe/load_to_neo4j ./etl/recipe/load_to_neo4j
-COPY etl/food_guide ./etl/food_guide
-COPY etl/load_to_neo4j ./etl/load_to_neo4j
+COPY etl ./etl
 
 ENV PYTHONPATH=/project
 ENV PYTHONUNBUFFERED=1
