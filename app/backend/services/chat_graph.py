@@ -93,12 +93,12 @@ def _quantity_text(quantity: float) -> str:
 
 def _extract_quantity(text: str) -> float | None:
     """사용자 문장에서 수량만 간단히 추출합니다."""
-    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:\uac1c|g|kg|ml|l)?", text, re.IGNORECASE)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:개|g|kg|ml|l)?", text, re.IGNORECASE)
     if match:
         return float(match.group(1))
     normalized = text.replace(" ", "")
     for word, quantity in KOREAN_QUANTITIES.items():
-        if f"{word}\uac1c" in normalized:
+        if f"{word}개" in normalized:
             return float(quantity)
     return None
 
@@ -106,15 +106,15 @@ def _extract_quantity(text: str) -> float | None:
 
 
 def _extract_delete_name(text: str) -> str:
-    """\uc0ad\uc81c/\ud3d0\uae30 \ubb38\uc7a5\uc5d0\uc11c \uc2dd\uc7ac\ub8cc\uba85\ub9cc \uac04\ub2e8\ud788 \ucd94\ucd9c\ud569\ub2c8\ub2e4."""
+    """삭제/폐기 문장에서 식재료명만 간단히 추출합니다."""
     target = text
     for word in DELETE_WORDS:
         if word in target:
             target = target.split(word, 1)[0]
             break
-    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc", "\uc5b4\uc81c", "\uc624\ub298", "\ubc29\uae08"):
+    for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
-    return target.strip().rstrip("\uc744\ub97c\uc740\ub294\uc774\uac00")
+    return target.strip().rstrip("을를은는이가")
 
 
 
@@ -126,10 +126,10 @@ def _extract_consume_name(text: str) -> str:
         if word in target:
             target = target.split(word, 1)[0]
             break
-    target = re.sub(r"\d+(?:\.\d+)?\s*(?:\uac1c|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
-    for token in ("\ub0c9\uc7a5\uace0\uc5d0\uc11c", "\ub0c9\uc7a5\uace0\uc5d0", "\ub0c9\uc7a5\uace0", "\uc7ac\ub8cc", "\uc2dd\uc7ac\ub8cc", "\uc5b4\uc81c", "\uc624\ub298", "\ubc29\uae08"):
+    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
+    for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
-    return target.strip(" ,/\t\n\uc744\ub97c\uc740\ub294\uc774\uac00\ub3c4")
+    return target.strip(" ,/\t\n을를은는이가도")
 
 
 def _strip_add_name(name: str) -> str:
@@ -138,16 +138,16 @@ def _strip_add_name(name: str) -> str:
     for token in ('냉장고에서', '냉장고에', '냉장고', '재료', '식재료', '어제', '오늘', '방금'):
         cleaned = cleaned.replace(token, " ")
     for storage in STORAGE_KEYS:
-        cleaned = re.sub(rf"(?<![\uac00-\ud7a3A-Za-z0-9]){storage}(?![\uac00-\ud7a3A-Za-z0-9])", " ", cleaned)
-    cleaned = cleaned.strip(" ,/\t\n\uc744\ub97c\uc740\ub294\uc774\uac00")
+        cleaned = re.sub(rf"(?<![가-힣A-Za-z0-9]){storage}(?![가-힣A-Za-z0-9])", " ", cleaned)
+    cleaned = cleaned.strip(" ,/\t\n을를은는이가")
     # '양파도 추가해줘'처럼 이어 말한 조사만 제거하되, 포도/아보카도 같은 재료명은 보존합니다.
-    if cleaned.endswith("\ub3c4") and (" " in cleaned or (len(cleaned) > 2 and not cleaned.endswith(('포도', '아보카도')))):
+    if cleaned.endswith("도") and (" " in cleaned or (len(cleaned) > 2 and not cleaned.endswith(('포도', '아보카도')))):
         cleaned = cleaned[:-1].rstrip()
     return cleaned
 
 
 def _extract_add_items(text: str) -> list[dict]:
-    """\ucd94\uac00 \uc694\uccad\uc5d0\uc11c \uc2dd\uc7ac\ub8cc\uba85, \uc218\ub7c9, \ubcf4\uad00 \uc704\uce58\ub97c \uac04\ub2e8\ud788 \ucd94\ucd9c\ud569\ub2c8\ub2e4."""
+    """추가 요청에서 식재료명, 수량, 보관 위치를 간단히 추출합니다."""
     target = text
     for word in ADD_WORDS:
         if word in target:
@@ -160,9 +160,9 @@ def _extract_add_items(text: str) -> list[dict]:
             continue
         storage = _extract_storage(part)
         quantity = _extract_quantity(part)
-        name = re.sub(r"\d+(?:\.\d+)?\s*(?:\uac1c|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE)
+        name = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE)
         for word in KOREAN_QUANTITIES:
-            name = name.replace(f"{word}\uac1c", " ")
+            name = name.replace(f"{word}개", " ")
         name = _strip_add_name(name)
         if name:
             items.append({"name": name, "quantity": quantity, "storage": storage})
@@ -172,7 +172,7 @@ def _extract_add_items(text: str) -> list[dict]:
 def _pending_calendar_from_history(history) -> tuple[str, str] | None:
     """최근 봇의 일정 등록 확인 문구에서 제목과 날짜를 찾습니다."""
     text = _latest_bot_text(history)
-    match = re.search(r"'(.+?)'\s+\uc77c\uc815\uc744\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\uc5d0\s+\ub4f1\ub85d\ud560\uae4c\uc694", text)
+    match = re.search(r"'(.+?)'\s+일정을\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})에\s+등록할까요", text)
     return (match.group(1), match.group(2)) if match else None
 
 def _pending_add_many_from_history(history) -> bool:
@@ -184,7 +184,7 @@ def _is_quantity_only_list(text: str) -> bool:
     parts = [part.strip() for part in re.split(r"[,/]", text) if part.strip()]
     return len(parts) > 1 and all(
         _extract_quantity(part) is not None
-        and not _strip_add_name(re.sub(r"\d+(?:\.\d+)?\s*(?:\uac1c|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE))
+        and not _strip_add_name(re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE))
         for part in parts
     )
 
@@ -218,33 +218,33 @@ def _pending_add_storage_from_history(history) -> tuple[str, float] | None:
 def _pending_add_from_history(history) -> str | None:
     """최근 봇의 수량 질문에서 추가 대기 중인 식재료명을 찾습니다."""
     patterns = (
-        r"(.+?)(?:\uc744|\ub97c)\s*\uba87\s*\uac1c.*\ucd94\uac00",
-        r"(.+?)\s*\uba87\s*\uac1c.*\ucd94\uac00",
+        r"(.+?)(?:을|를)\s*몇\s*개.*추가",
+        r"(.+?)\s*몇\s*개.*추가",
     )
     text = _latest_bot_text(history)
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
-            return match.group(1).strip(" \"'.,!?\uc744\ub97c")
+            return match.group(1).strip(" \"'.,!?을를")
     return None
 
 
 def _pending_consume_from_history(history) -> str | None:
     """최근 봇의 수량 질문에서 소비 대기 중인 식재료명을 찾습니다."""
-    match = re.search(r"(.+?)(?:\uc744|\ub97c) \uba87 \uac1c (?:\uba39|\uc18c\ube44)", _latest_bot_text(history))
+    match = re.search(r"(.+?)(?:을|를) 몇 개 (?:먹|소비)", _latest_bot_text(history))
     return match.group(1).strip() if match else None
 
 def _parse_calendar_date(date_str: str) -> date:
     """챗봇이 뽑은 짧은 날짜 표현을 캘린더 날짜로 변환합니다."""
-    text = (date_str or "\uc624\ub298").strip()
+    text = (date_str or "오늘").strip()
     today = date.today()
-    if "\ubaa8\ub808" in text:
+    if "모레" in text:
         return today + timedelta(days=2)
-    if "\ub0b4\uc77c" in text:
+    if "내일" in text:
         return today + timedelta(days=1)
-    if "\uc624\ub298" in text:
+    if "오늘" in text:
         return today
-    month_day = re.search(r"(\d{1,2})\s*\uc6d4\s*(\d{1,2})\s*\uc77c", text)
+    month_day = re.search(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일", text)
     if month_day:
         month, day = map(int, month_day.groups())
         return date(today.year, month, day)
@@ -257,8 +257,8 @@ def _parse_calendar_date(date_str: str) -> date:
 def _has_calendar_date_text(text: str) -> bool:
     """사용자 원문에 날짜 표현이 있는지 확인합니다."""
     return bool(
-        any(word in text for word in ("\uc624\ub298", "\ub0b4\uc77c", "\ubaa8\ub808"))
-        or re.search(r"\d{1,2}\s*\uc6d4\s*\d{1,2}\s*\uc77c", text)
+        any(word in text for word in ("오늘", "내일", "모레"))
+        or re.search(r"\d{1,2}\s*월\s*\d{1,2}\s*일", text)
         or re.search(r"\d{4}-\d{2}-\d{2}", text)
     )
 
@@ -266,16 +266,16 @@ def _has_calendar_date_text(text: str) -> bool:
 def _calendar_datetime_from_text(text: str, fallback: str) -> datetime:
     """사용자 원문을 우선해 캘린더 일정 시작 시간을 계산합니다."""
     base_date = _parse_calendar_date(text if _has_calendar_date_text(text) else fallback)
-    time_match = re.search(r"(\uc624\uc804|\uc624\ud6c4)?\s*(\d{1,2})\s*\uc2dc(?:\s*(\d{1,2})\s*\ubd84)?", text)
+    time_match = re.search(r"(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?", text)
     hour = 9
     minute = 0
     if time_match:
         meridiem, hour_text, minute_text = time_match.groups()
         hour = int(hour_text)
         minute = int(minute_text or 0)
-        if meridiem == "\uc624\ud6c4" and hour < 12:
+        if meridiem == "오후" and hour < 12:
             hour += 12
-        if meridiem == "\uc624\uc804" and hour == 12:
+        if meridiem == "오전" and hour == 12:
             hour = 0
     elif "T" in fallback:
         try:
@@ -303,7 +303,7 @@ def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
         event_key = f"chat-{user_id}-{start_at.isoformat()}-{hashlib.sha1(title.encode()).hexdigest()[:8]}"
         event = {
             "summary": title,
-            "description": "\ubc25\ubc8c\uc774 \ucc57\ubd07\uc5d0\uc11c \ub4f1\ub85d\ud55c \uc77c\uc815\uc785\ub2c8\ub2e4.",
+            "description": "밥벌이 챗봇에서 등록한 일정입니다.",
             "start": {"dateTime": start_at.isoformat()},
             "end": {"dateTime": end_at.isoformat()},
             "extendedProperties": {"private": {"bobbeoriKey": event_key}},
@@ -313,13 +313,13 @@ def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
 
     try:
         asyncio.run(create_event())
-        return f"'{title}' \uc77c\uc815\uc744 {_calendar_display(_calendar_datetime_from_text(date_str, date_str))}\uc5d0 \ub4f1\ub85d\ud588\uc5b4\uc694."
+        return f"'{title}' 일정을 {_calendar_display(_calendar_datetime_from_text(date_str, date_str))}에 등록했어요."
     except HTTPException as exc:
         if exc.status_code == 404:
-            return "Google Calendar \uc5f0\ub3d9\uc774 \ud544\uc694\ud574\uc694. \ub9c8\uc774\ud398\uc774\uc9c0\uc5d0\uc11c \uce98\ub9b0\ub354\ub97c \uba3c\uc800 \uc5f0\uacb0\ud574\uc8fc\uc138\uc694."
-        return "\uce98\ub9b0\ub354 \ub4f1\ub85d \uc911 \ubb38\uc81c\uac00 \uc0dd\uacbc\uc5b4\uc694. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574\uc8fc\uc138\uc694."
+            return "Google Calendar 연동이 필요해요. 마이페이지에서 캘린더를 먼저 연결해주세요."
+        return "캘린더 등록 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
     except Exception:
-        return "\uce98\ub9b0\ub354 \ub4f1\ub85d \uc911 \ubb38\uc81c\uac00 \uc0dd\uacbc\uc5b4\uc694. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574\uc8fc\uc138\uc694."
+        return "캘린더 등록 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
 
 
 def _execute_confirmed_action(state: GraphState) -> dict:
@@ -361,7 +361,7 @@ def _execute_confirmed_action(state: GraphState) -> dict:
         state["db"].rollback()
         logger.exception("챗봇 확인 작업 실행 실패: %s", action)
         return {"response_text": "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."}
-    return {"response_text": "\ud655\uc778\ud560 \uc791\uc5c5\uc744 \ucc3e\uc9c0 \ubabb\ud588\uc5b4\uc694. \ub2e4\uc2dc \uc694\uccad\ud574\uc8fc\uc138\uc694."}
+    return {"response_text": "확인할 작업을 찾지 못했어요. 다시 요청해주세요."}
 
 
 def router_node(state: GraphState) -> dict:
@@ -407,14 +407,14 @@ def router_node(state: GraphState) -> dict:
 
 def _storage_choice_response(name: str, quantity: float) -> dict:
     """보관 위치 선택 버튼을 만듭니다."""
-    text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c \uc5b4\ub514\uc5d0 \ubcf4\uad00\ud560\uae4c\uc694? \ub0c9\uc7a5, \ub0c9\ub3d9, \uc2e4\uc628 \uc911\uc5d0\uc11c \uc54c\ub824\uc8fc\uc138\uc694."
+    text = f"{name} {_quantity_text(quantity)}개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
     return {
         "response_text": text,
         "actions": [
-            _confirm_action("\ub0c9\uc7a5", f"\ud655\uc778:add_ingredient:{name}:{quantity}:\ub0c9\uc7a5"),
-            _confirm_action("\ub0c9\ub3d9", f"\ud655\uc778:add_ingredient:{name}:{quantity}:\ub0c9\ub3d9"),
-            _confirm_action("\uc2e4\uc628", f"\ud655\uc778:add_ingredient:{name}:{quantity}:\uc2e4\uc628"),
-            _confirm_action("\ucde8\uc18c", "\ucde8\uc18c"),
+            _confirm_action("냉장", f"확인:add_ingredient:{name}:{quantity}:냉장"),
+            _confirm_action("냉동", f"확인:add_ingredient:{name}:{quantity}:냉동"),
+            _confirm_action("실온", f"확인:add_ingredient:{name}:{quantity}:실온"),
+            _confirm_action("취소", "취소"),
         ],
     }
 
@@ -428,30 +428,30 @@ def _handle_inventory_action(state: GraphState) -> dict:
         items = _extract_add_items(text)
         if len(items) > 1:
             if any(item["quantity"] is None for item in items):
-                return {"response_text": "\uac01 \uc2dd\uc7ac\ub8cc\uc758 \uc218\ub7c9\uc744 \uc54c\ub824\uc8fc\uc2dc\uba74 \ucd94\uac00\ud574\ub4dc\ub9b4\uac8c\uc694."}
+                return {"response_text": "각 식재료의 수량을 알려주시면 추가해드릴게요."}
             payload = "|".join(f"{item['name']},{item['quantity']},{item['storage'] or DEFAULT_STORAGE}" for item in items)
-            summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'])}\uac1c" for item in items)
-            return {"response_text": f"{summary}\ub97c \ub0c9\uc7a5\uace0\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?", "actions": [_confirm_action("\ud655\uc778", f"\ud655\uc778:add_ingredients:{payload}"), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+            summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'])}개" for item in items)
+            return {"response_text": f"{summary}를 냉장고에 추가할까요?", "actions": [_confirm_action("확인", f"확인:add_ingredients:{payload}"), _confirm_action("취소", "취소")]}
         if len(items) == 1:
             item = items[0]
             if item["quantity"] is None:
-                return {"response_text": f"{item['name']}\ub97c \uba87 \uac1c \ucd94\uac00\ud558\uc2dc\uaca0\uc5b4\uc694?"}
+                return {"response_text": f"{item['name']}를 몇 개 추가하시겠어요?"}
             if not item["storage"]:
                 return _storage_choice_response(item["name"], item["quantity"])
-            text = f"{item['name']} {_quantity_text(item['quantity'])}\uac1c\ub97c {item['storage']}\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
-            command = f"\ud655\uc778:add_ingredient:{item['name']}:{item['quantity']}:{item['storage']}"
-            return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
-        return {"response_text": "\uc5b4\ub5a4 \uc2dd\uc7ac\ub8cc\ub97c \ucd94\uac00\ud560\uae4c\uc694? \uc2dd\uc7ac\ub8cc\uba85\uacfc \uc218\ub7c9\uc744 \ud568\uaed8 \uc54c\ub824\uc8fc\uc138\uc694."}
+            text = f"{item['name']} {_quantity_text(item['quantity'])}개를 {item['storage']}에 추가할까요?"
+            command = f"확인:add_ingredient:{item['name']}:{item['quantity']}:{item['storage']}"
+            return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+        return {"response_text": "어떤 식재료를 추가할까요? 식재료명과 수량을 함께 알려주세요."}
 
     if any(word in normalized for word in CONSUME_WORDS):
         name = _extract_consume_name(text)
         if not name:
-            return {"response_text": "\uc5b4\ub5a4 \uc2dd\uc7ac\ub8cc\ub97c \uc18c\ube44 \ucc98\ub9ac\ud560\uae4c\uc694?"}
+            return {"response_text": "어떤 식재료를 소비 처리할까요?"}
         quantity = _extract_quantity(text)
         if quantity is None:
-            return {"response_text": f"{name}\ub97c \uba87 \uac1c \uc18c\ube44\ud560\uae4c\uc694?"}
-        command = f"\ud655\uc778:consume_ingredient:{name}:{quantity}"
-        return {"response_text": f"{name} {_quantity_text(quantity)}\uac1c\ub97c \uc18c\ube44 \ucc98\ub9ac\ud560\uae4c\uc694?", "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+            return {"response_text": f"{name}를 몇 개 소비할까요?"}
+        command = f"확인:consume_ingredient:{name}:{quantity}"
+        return {"response_text": f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?", "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     return {"response_text": GENERAL_REPLY}
 
@@ -466,9 +466,9 @@ def mcp_agent_node(state: GraphState) -> dict:
         name = _extract_delete_name(state["text"])
         if not name:
             return {"response_text": GENERAL_REPLY}
-        text = f"{name} \ud3d0\uae30 \ucc98\ub9ac\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:delete_ingredient:{name}"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        text = f"{name} 폐기 처리할까요?"
+        command = f"확인:delete_ingredient:{name}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if state.get("intent") == "mcp.pending_calendar":
         pending = _pending_calendar_from_history(state.get("history", []))
@@ -477,16 +477,16 @@ def mcp_agent_node(state: GraphState) -> dict:
         title, fallback = pending
         start_at = _calendar_datetime_from_text(state["text"], fallback)
         date_value = start_at.isoformat()
-        text = f"'{title}' \uc77c\uc815\uc744 {_calendar_display(start_at)}\uc5d0 \ub4f1\ub85d\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:add_calendar_event:{title}:{date_value}"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        text = f"'{title}' 일정을 {_calendar_display(start_at)}에 등록할까요?"
+        command = f"확인:add_calendar_event:{title}:{date_value}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if state.get("intent") == "mcp.pending_consume":
         name = _pending_consume_from_history(state.get("history", [])) or ""
         quantity = _extract_quantity(state["text"]) or 1
-        text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c \uc18c\ube44 \ucc98\ub9ac\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:consume_ingredient:{name}:{quantity}"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        text = f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?"
+        command = f"확인:consume_ingredient:{name}:{quantity}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if state.get("intent") == "mcp.pending_add_storage":
         pending = _pending_add_storage_from_history(state.get("history", []))
@@ -494,9 +494,9 @@ def mcp_agent_node(state: GraphState) -> dict:
         if not pending:
             return {"response_text": GENERAL_REPLY}
         name, quantity = pending
-        text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c {storage}\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:add_ingredient:{name}:{quantity}:{storage}"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        text = f"{name} {_quantity_text(quantity)}개를 {storage}에 추가할까요?"
+        command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if state.get("intent") == "mcp.pending_add":
         name = _pending_add_from_history(state.get("history", [])) or ""
@@ -504,19 +504,19 @@ def mcp_agent_node(state: GraphState) -> dict:
         storage = _extract_storage(state["text"])
         if not storage:
             return _storage_choice_response(name, quantity)
-        text = f"{name} {_quantity_text(quantity)}\uac1c\ub97c {storage}\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:add_ingredient:{name}:{quantity}:{storage}"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        text = f"{name} {_quantity_text(quantity)}개를 {storage}에 추가할까요?"
+        command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if state.get("intent") == "mcp.pending_add_many_retry":
-        return {"response_text": "\uc2dd\uc7ac\ub8cc\uc640 \uac2f\uc218\ub97c \ud568\uaed8 \ub9d0\ud574\uc8fc\uc138\uc694. \uc608: \ud30c\uc2a4\ud0c0\uba741, \ud1a0\ub9c8\ud1a0\uc18c\uc2a41, \ub0c9\ub3d9 \uc0c8\uc6b01"}
+        return {"response_text": "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"}
 
     if state.get("intent") == "mcp.pending_add_many":
         items = _extract_add_items(state["text"])
         payload = "|".join(f"{item['name']},{item['quantity'] or 1},{item['storage'] or DEFAULT_STORAGE}" for item in items)
-        summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'] or 1)}\uac1c" for item in items)
-        text = f"{summary}\ub97c \ub0c9\uc7a5\uace0\uc5d0 \ucd94\uac00\ud560\uae4c\uc694?"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", f"\ud655\uc778:add_ingredients:{payload}"), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")]}
+        summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'] or 1)}개" for item in items)
+        text = f"{summary}를 냉장고에 추가할까요?"
+        return {"response_text": text, "actions": [_confirm_action("확인", f"확인:add_ingredients:{payload}"), _confirm_action("취소", "취소")]}
 
     if not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
@@ -526,26 +526,26 @@ def mcp_agent_node(state: GraphState) -> dict:
 
     messages = state.get("messages") or [HumanMessage(content=state["text"])]
     if state.get("intent") == "mcp.calendar":
-        sys_msg = SystemMessage(content="\ub2f9\uc2e0\uc740 \uc0ac\uc6a9\uc790\uc758 \uc77c\uc815\uc744 \uad00\ub9ac\ud558\ub294 \ube44\uc11c\uc785\ub2c8\ub2e4. \uc0ac\uc6a9\uc790\uac00 \uce98\ub9b0\ub354\uc5d0 \uc77c\uc815\uc744 \ucd94\uac00\ud574 \ub2ec\ub77c\uace0 \uc694\uccad\ud560 \ub54c, \uc77c\uc815\uc758 \uc81c\ubaa9\uacfc \ub0a0\uc9dc \uc815\ubcf4\uac00 \ubaa8\ub450 \uc788\ub2e4\uba74 \ubc18\ub4dc\uc2dc add_calendar_event \ub3c4\uad6c\ub97c \ud638\ucd9c\ud558\uc138\uc694.")
+        sys_msg = SystemMessage(content="당신은 사용자의 일정을 관리하는 비서입니다. 사용자가 캘린더에 일정을 추가해 달라고 요청할 때, 일정의 제목과 날짜 정보가 모두 있다면 반드시 add_calendar_event 도구를 호출하세요.")
         if not any(getattr(m, "type", "") == "system" for m in messages):
             messages = [sys_msg] + messages
     llm = ChatOpenAI(model=settings.OPENAI_MODEL, api_key=settings.OPENAI_API_KEY, temperature=0.0)
     response = llm.bind_tools(CALENDAR_TOOLS).invoke(messages)
 
     if not response.tool_calls:
-        return {"response_text": "\uc77c\uc815 \uc81c\ubaa9\uacfc \ub0a0\uc9dc\ub97c \ud568\uaed8 \uc54c\ub824\uc8fc\uc138\uc694."}
+        return {"response_text": "일정 제목과 날짜를 함께 알려주세요."}
 
     tool_call = response.tool_calls[0]
     if tool_call["name"] == "add_calendar_event":
         args = tool_call["args"]
-        title = args.get("title", "\uc77c\uc815")
-        date_str = args.get("date_str", "\uc624\ub298")
+        title = args.get("title", "일정")
+        date_str = args.get("date_str", "오늘")
         start_at = _calendar_datetime_from_text(state["text"], date_str)
         date_value = start_at.isoformat()
-        text = f"'{title}' \uc77c\uc815\uc744 {_calendar_display(start_at)}\uc5d0 \ub4f1\ub85d\ud560\uae4c\uc694?"
-        command = f"\ud655\uc778:add_calendar_event:{title}:{date_value}"
-        return {"response_text": text, "actions": [_confirm_action("\ud655\uc778", command), _confirm_action("\ucde8\uc18c", "\ucde8\uc18c")], "messages": messages + [response]}
-    return {"response_text": "\uc544\uc9c1 \uc9c0\uc6d0\ud558\uc9c0 \uc54a\ub294 \ucc57\ubd07 \uc791\uc5c5\uc774\uc5d0\uc694.", "messages": messages + [response]}
+        text = f"'{title}' 일정을 {_calendar_display(start_at)}에 등록할까요?"
+        command = f"확인:add_calendar_event:{title}:{date_value}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "messages": messages + [response]}
+    return {"response_text": "아직 지원하지 않는 챗봇 작업이에요.", "messages": messages + [response]}
 
 
 def inventory_list_node(state: GraphState) -> dict:
@@ -586,8 +586,8 @@ def recipe_search_node(state: GraphState) -> dict:
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
     return {
-        "response_text": "\uc601\uc218\uc99d\uc740 \ud30c\uc77c \uc5c5\ub85c\ub4dc\uac00 \ud544\uc694\ud574\uc11c \uc544\ub798 \ubc84\ud2bc\uc744 \ub20c\ub7ec \uc601\uc218\uc99d \ub4f1\ub85d \ud654\uba74\uc73c\ub85c \uc774\ub3d9\ud574\uc8fc\uc138\uc694.",
-        "actions": [{"label": "\uc601\uc218\uc99d \ub4f1\ub85d\ud558\ub7ec \uac00\uae30", "url": "/receipt-ocr"}],
+        "response_text": "영수증은 파일 업로드가 필요해서 아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요.",
+        "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
 
 
