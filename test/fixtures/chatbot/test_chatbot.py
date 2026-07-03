@@ -216,6 +216,19 @@ def test_pending_calendar_time_update_stays_calendar() -> None:
     assert result["actions"][0]["data"]["message"] == '확인:add_calendar_event:럭키데이:2024-07-07T11:00:00+09:00'
 
 
+def test_pending_add_cancel_word_routes_to_cancel() -> None:
+    """추가 대기 상태에서 거절 표현은 새 추가 요청으로 보지 않습니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "감자를 몇 개 추가하시겠어요?")]
+    state = {"text": "안넣어", "service": FakeService("general"), "history": history}
+
+    assert router_node(state)["intent"] == "mcp.cancel"
+
+
 def test_pending_add_asks_storage_after_quantity() -> None:
     """수량만 답하면 보관 위치를 추가로 물어봅니다."""
     class Message:
@@ -473,3 +486,85 @@ def test_empty_inventory_replies_are_helpful() -> None:
 if __name__ == "__main__":
     test_empty_inventory_replies_are_helpful()
     print("empty inventory chat tests ok")
+
+
+def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> None:
+    """인사말은 수량 질문으로 넘기지 않고 거절합니다."""
+    import app.backend.services.chat_graph as chat_graph
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
+
+    result = chat_graph.mcp_agent_node({
+        "user_id": 1,
+        "db": object(),
+        "text": "안녕 냉장고에 넣어줘",
+        "intent": "mcp.inventory",
+        "history": [],
+    })
+
+    assert result["response_text"] == "올바른 식재료명을 입력해주세요."
+
+
+def test_inventory_add_unknown_name_asks_quantity(monkeypatch) -> None:
+    """마스터에 없는 식재료는 1개로 두고 보관 위치를 확인합니다."""
+    import app.backend.services.chat_graph as chat_graph
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
+
+    result = chat_graph.mcp_agent_node({
+        "user_id": 1,
+        "db": object(),
+        "text": "게살 냉장고에 넣어줘",
+        "intent": "mcp.inventory",
+        "history": [],
+    })
+
+    assert result["response_text"] == "게살 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
+    assert result["actions"][0]["data"]["message"] == "확인:add_ingredient_unchecked:게살:1.0:냉장"
+
+
+
+def test_extract_add_items_keeps_leading_ga() -> None:
+    """식재료명 맨 앞의 가를 조사로 잘라내지 않습니다."""
+    items = _extract_add_items("가지튀김 냉장고에 넣어줘")
+
+    assert items[0]["name"] == "가지튀김"
+
+
+def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> None:
+    """부정 표현이 섞인 재료명은 보관 위치를 묻지 않습니다."""
+    import app.backend.services.chat_graph as chat_graph
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
+
+    result = chat_graph.mcp_agent_node({
+        "user_id": 1,
+        "db": object(),
+        "text": "가지 안튀김 냉장고에 넣어줘",
+        "intent": "mcp.inventory",
+        "history": [],
+    })
+
+    assert result["response_text"] == "올바른 식재료명을 입력해주세요."
+    assert "actions" not in result
+
+
+def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None:
+    """안으로 시작하는 실제 재료명은 부정 표현으로 처리하지 않습니다."""
+    import app.backend.services.chat_graph as chat_graph
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
+
+    result = chat_graph.mcp_agent_node({
+        "user_id": 1,
+        "db": object(),
+        "text": "안심 냉장고에 넣어줘",
+        "intent": "mcp.inventory",
+        "history": [],
+    })
+
+    assert result["response_text"] == "안심 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."

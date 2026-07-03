@@ -22,7 +22,7 @@ CANCEL_REPLY = "알겠습니다. 작업을 취소하겠습니다."
 
 # 확인/취소 액션 키워드
 CONFIRM_PREFIX = "확인:"
-CANCEL_WORDS = ("취소", "아니", "아니요", "취소할게")
+CANCEL_WORDS = ("취소", "아니", "아니요", "취소할게", "안넣어", "넣지마", "추가하지마")
 
 # 의도 분류용 키워드
 INVENTORY_ACTION_WORDS = (
@@ -139,7 +139,7 @@ def _strip_add_name(name: str) -> str:
         cleaned = cleaned.replace(token, " ")
     for storage in STORAGE_KEYS:
         cleaned = re.sub(rf"(?<![가-힣A-Za-z0-9]){storage}(?![가-힣A-Za-z0-9])", " ", cleaned)
-    cleaned = cleaned.strip(" ,/\t\n을를은는이가")
+    cleaned = cleaned.strip(" ,/\t\n").rstrip("을를은는이가")
     # '양파도 추가해줘'처럼 이어 말한 조사만 제거하되, 포도/아보카도 같은 재료명은 보존합니다.
     if cleaned.endswith("도") and (" " in cleaned or (len(cleaned) > 2 and not cleaned.endswith(('포도', '아보카도')))):
         cleaned = cleaned[:-1].rstrip()
@@ -343,6 +343,10 @@ def _execute_confirmed_action(state: GraphState) -> dict:
             reply = inventory_service.add_ingredient_by_name(state["db"], state["user_id"], parts[2], float(parts[3]), parts[4])
             return {"response_text": reply, "actions": [_inventory_refresh_action()]}
 
+        if action == "add_ingredient_unchecked" and len(parts) >= 5:
+            reply = inventory_service.add_ingredient_unchecked_by_name(state["db"], state["user_id"], parts[2], float(parts[3]), parts[4])
+            return {"response_text": reply, "actions": [_inventory_refresh_action()]}
+
 
         if action == "add_ingredients" and len(parts) >= 3:
             added = []
@@ -405,18 +409,45 @@ def router_node(state: GraphState) -> dict:
     return {"intent": state["service"]._route_intent_with_llm(text, history)}
 
 
-def _storage_choice_response(name: str, quantity: float) -> dict:
+def _storage_choice_response(name: str, quantity: float, unchecked: bool = False) -> dict:
     """보관 위치 선택 버튼을 만듭니다."""
     text = f"{name} {_quantity_text(quantity)}개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
+    action = "add_ingredient_unchecked" if unchecked else "add_ingredient"
     return {
         "response_text": text,
         "actions": [
-            _confirm_action("냉장", f"확인:add_ingredient:{name}:{quantity}:냉장"),
-            _confirm_action("냉동", f"확인:add_ingredient:{name}:{quantity}:냉동"),
-            _confirm_action("실온", f"확인:add_ingredient:{name}:{quantity}:실온"),
+            _confirm_action("냉장", f"확인:{action}:{name}:{quantity}:냉장"),
+            _confirm_action("냉동", f"확인:{action}:{name}:{quantity}:냉동"),
+            _confirm_action("실온", f"확인:{action}:{name}:{quantity}:실온"),
             _confirm_action("취소", "취소"),
         ],
     }
+
+
+def _unknown_add_response(state: GraphState, items: list[dict]) -> dict | None:
+    """마스터에 없는 이름은 사용자 확인 후 추가하도록 안내합니다."""
+    db = state.get("db")
+    if not db:
+        return None
+
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    for item in items:
+        resolved_name = inventory_service._resolve_known_ingredient_name(db, item["name"])
+        if resolved_name:
+            item["name"] = resolved_name
+            continue
+        # 부정 표현이 섞인 문장은 임의 식재료로 추가하지 않습니다.
+        if _normalize_text(item["name"]) in {"안녕", "하이", "hello", "hi"} or any(token in {"안튀김", "안구이", "안볶음", "안삶음", "안찜", "안조림"} for token in item["name"].split()):
+            return {"response_text": "올바른 식재료명을 입력해주세요."}
+        if item.get("quantity") is None:
+            item["quantity"] = 1.0
+        if not item.get("storage"):
+            return _storage_choice_response(item["name"], item["quantity"], unchecked=True)
+        text = f"{item['name']} {_quantity_text(item['quantity'])}개를 {item['storage']}에 추가할까요?"
+        command = f"확인:add_ingredient_unchecked:{item['name']}:{item['quantity']}:{item['storage']}"
+        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+    return None
 
 
 def _handle_inventory_action(state: GraphState) -> dict:
@@ -426,6 +457,9 @@ def _handle_inventory_action(state: GraphState) -> dict:
 
     if any(word in normalized for word in ADD_WORDS):
         items = _extract_add_items(text)
+        unknown_response = _unknown_add_response(state, items)
+        if unknown_response:
+            return unknown_response
         if len(items) > 1:
             if any(item["quantity"] is None for item in items):
                 return {"response_text": "각 식재료의 수량을 알려주시면 추가해드릴게요."}

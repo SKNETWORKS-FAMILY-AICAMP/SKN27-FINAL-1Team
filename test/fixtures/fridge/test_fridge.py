@@ -129,3 +129,30 @@ if __name__ == "__main__":
     test_get_fridge_items_tool_response_shape()
     test_write_tool_rolls_back_on_error()
     print("fridge mcp tools tests ok")
+
+
+class EmptyIngredientQuery:
+    """식재료 마스터와 별칭이 모두 비어 있는 상황을 흉내냅니다."""
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def first(self):
+        return None
+
+    def all(self):
+        return []
+
+
+class EmptyIngredientDb:
+    """query 호출만 제공하는 냉장고 서비스 테스트용 DB 대역입니다."""
+
+    def query(self, *args, **kwargs):
+        return EmptyIngredientQuery()
+
+
+def test_chat_add_rejects_unknown_ingredient_name(monkeypatch) -> None:
+    """챗봇 등록은 마스터/별칭에 없는 이름을 냉장고에 추가하지 않습니다."""
+    result = inventory_service.add_ingredient_by_name(EmptyIngredientDb(), 1, "일이삼사오", 3, "냉장")
+
+    assert "올바른 식재료명을 입력해주세요" in result
