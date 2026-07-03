@@ -73,6 +73,15 @@ def _normalize_text(text: str) -> str:
     """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
     return text.replace(" ", "").lower()
 
+def _get_josa(word: str, josa_with_jongseong: str, josa_without_jongseong: str) -> str:
+    """단어의 마지막 글자 받침 유무에 따라 적절한 조사를 반환합니다."""
+    if not word: return josa_with_jongseong
+    last_char = word[-1]
+    if '가' <= last_char <= '힣':
+        has_jongseong = (ord(last_char) - ord('가')) % 28 > 0
+        return josa_with_jongseong if has_jongseong else josa_without_jongseong
+    return josa_with_jongseong
+
 
 def _confirm_action(label: str, command: str) -> dict:
     """쓰기 작업 전 사용자 확인 버튼을 만듭니다."""
@@ -134,7 +143,8 @@ def _extract_consume_name(text: str) -> str:
 
 def _strip_add_name(name: str) -> str:
     """추가 문장에서 식재료명에 붙은 불필요한 단어를 정리합니다."""
-    cleaned = name
+    cleaned = name.strip()
+    cleaned = re.sub(r"^(그러면|그럼|그리고|아니면|아|음|자)\s+", "", cleaned)
     for token in ('냉장고에서', '냉장고에', '냉장고', '재료', '식재료', '어제', '오늘', '방금'):
         cleaned = cleaned.replace(token, " ")
     for storage in STORAGE_KEYS:
@@ -457,6 +467,14 @@ def _handle_inventory_action(state: GraphState) -> dict:
 
     if any(word in normalized for word in ADD_WORDS):
         items = _extract_add_items(text)
+        
+        from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+        invalid_items = [item['name'] for item in items if not expiration_ai_service.is_valid_ingredient_name(item['name'])]
+        if invalid_items:
+            name = invalid_items[0]
+            josa = _get_josa(name, "은", "는")
+            return {"response_text": f"'{name}'{josa} 올바른 식재료 이름이 아닙니다. 식용 가능한 재료만 추가할 수 있어요."}
+
         unknown_response = _unknown_add_response(state, items)
         if unknown_response:
             return unknown_response
