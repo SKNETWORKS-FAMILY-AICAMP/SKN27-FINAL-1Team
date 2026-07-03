@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { API_URL } from './utils/api.js'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
@@ -36,10 +37,9 @@ function AppLayout() {
     if (isAuthPage || !token || authMode === 'guest') return
 
     let isCancelled = false
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
     // 현재 로그인한 사용자 기준으로 온보딩 완료 여부를 확인합니다.
-    fetch(`${apiUrl}/api/v1/auth/me`, {
+    fetch(`${API_URL}/api/v1/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : null))

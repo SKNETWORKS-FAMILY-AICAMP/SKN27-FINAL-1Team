@@ -8,6 +8,7 @@ import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
+import { API_URL } from '../../utils/api.js'
 
 const FILTER_TYPES = [
   { label: '전체', tone: '' },
@@ -146,7 +147,6 @@ function getDdayLabel(item) {
 function Fridge() {
   const navigate = useNavigate()
   const { dialogNode, showAlert } = useAppDialog()
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const [ingredients, setIngredients] = useState([])
   const [summary, setSummary] = useState(buildSummary([]))
   const [activeFilter, setActiveFilter] = useState('전체')
@@ -213,7 +213,7 @@ function Fridge() {
     }
 
     try {
-      const resIngredients = await fetch(`${apiUrl}/api/v1/inventory`, {
+      const resIngredients = await fetch(`${API_URL}/api/v1/inventory`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (resIngredients.status === 401 || resIngredients.status === 403) {
@@ -225,7 +225,7 @@ function Fridge() {
         setIngredients(data.map(normalizeIngredient))
       }
 
-      const resSummary = await fetch(`${apiUrl}/api/v1/inventory/summary`, {
+      const resSummary = await fetch(`${API_URL}/api/v1/inventory/summary`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (resSummary.status === 401 || resSummary.status === 403) {
@@ -395,7 +395,7 @@ function Fridge() {
     setIsSubmitting(true)
     try {
       const isEditing = editingId !== null
-      const url = isEditing ? `${apiUrl}/api/v1/inventory/${editingId}` : `${apiUrl}/api/v1/inventory`
+      const url = isEditing ? `${API_URL}/api/v1/inventory/${editingId}` : `${API_URL}/api/v1/inventory`
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -440,7 +440,7 @@ function Fridge() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/inventory/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/inventory/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -495,7 +495,7 @@ function Fridge() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/inventory/bulk`, {
+      const response = await fetch(`${API_URL}/api/v1/inventory/bulk`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -584,7 +584,7 @@ function Fridge() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/inventory/${item.id}`, {
+      const response = await fetch(`${API_URL}/api/v1/inventory/${item.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),

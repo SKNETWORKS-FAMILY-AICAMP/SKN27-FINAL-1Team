@@ -8,6 +8,7 @@ import OnboardingModal from '../../components/OnboardingModal.jsx'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { userProfile } from '../../mock/userService.js'
 import { readStoredRecipes, removeStoredRecipe, saveStoredRecipe } from '../../utils/savedRecipes.js'
+import { API_URL } from '../../utils/api.js'
 
 const alerts = [
   { label: '소비 임박 알림', checked: true },
@@ -199,8 +200,7 @@ function Mypage() {
     }
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiBaseUrl}/api/v1/recommendations`, {
+      const response = await fetch(`${API_URL}/api/v1/recommendations`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!response.ok) {
@@ -241,9 +241,8 @@ function Mypage() {
     const endDate = toLocalDateKey(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       const response = await fetch(
-        `${apiBaseUrl}/api/v1/calendar/google/events?start_date=${startDate}&end_date=${endDate}`,
+        `${API_URL}/api/v1/calendar/google/events?start_date=${startDate}&end_date=${endDate}`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
       if (!response.ok) {
@@ -270,15 +269,14 @@ function Mypage() {
 
     const fetchUser = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
         const [userDataResponse, summaryResponse, calendarResponse] = await Promise.all([
-          fetch(`${apiUrl}/api/v1/auth/me`, {
+          fetch(`${API_URL}/api/v1/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch(`${apiUrl}/api/v1/inventory/summary`, {
+          fetch(`${API_URL}/api/v1/inventory/summary`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch(`${apiUrl}/api/v1/calendar/google/status`, {
+          fetch(`${API_URL}/api/v1/calendar/google/status`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ])
@@ -366,8 +364,7 @@ function Mypage() {
         return
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      await fetch(`${apiUrl}/api/v1/calendar/google/disconnect`, {
+      await fetch(`${API_URL}/api/v1/calendar/google/disconnect`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -390,8 +387,7 @@ function Mypage() {
   const deleteSavedRecipe = (recipe) => {
     const token = window.localStorage.getItem('bobbeori-token')
     if (token && recipe.recommendationId) {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      fetch(`${apiUrl}/api/v1/recommendations/${recipe.recommendationId}`, {
+      fetch(`${API_URL}/api/v1/recommendations/${recipe.recommendationId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {})
