@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
-from math import isclose, sqrt
+from math import isclose, log1p, sqrt
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 if __package__ is None:
@@ -20,6 +20,8 @@ STAR_AVG_COL = "REVIEW_STAR_NORM_AVG"
 SENTIMENT_AVG_COL = "REVIEW_SENTIMENT_AVG"
 RANK_DISTANCE_COL = "REVIEW_RANK_DISTANCE"
 RANK_SCORE_COL = "REVIEW_RANK_SCORE"
+INQ_CNT_LOG_COL = "INQ_CNT_LOG"
+INQ_CNT_LOG_CENTERED_COL = "INQ_CNT_LOG_CENTERED"
 TARGET_STAR = 1.0
 TARGET_SENTIMENT = 1.0
 MAX_DISTANCE = sqrt((TARGET_STAR - (-1.0)) ** 2 + (TARGET_SENTIMENT - (-1.0)) ** 2)
@@ -82,6 +84,20 @@ def apply_review_averages(
     return merged
 
 
+def apply_inq_cnt_log(df: pd.DataFrame) -> pd.DataFrame:
+    if "INQ_CNT" not in df.columns:
+        raise ValueError("필수 컬럼 누락: INQ_CNT")
+    out = df.copy()
+    out = out.drop(columns=[INQ_CNT_LOG_COL, INQ_CNT_LOG_CENTERED_COL], errors="ignore")
+    inq = pd.to_numeric(out["INQ_CNT"], errors="coerce")
+    valid = inq.notna() & (inq >= 0)
+    out[INQ_CNT_LOG_COL] = pd.NA
+    out.loc[valid, INQ_CNT_LOG_COL] = inq.loc[valid].map(log1p)
+    mean_log = out.loc[valid, INQ_CNT_LOG_COL].mean()
+    out[INQ_CNT_LOG_CENTERED_COL] = out[INQ_CNT_LOG_COL] - mean_log
+    return out
+
+
 def _self_check() -> None:
     review_sample = pd.DataFrame(
         {
@@ -127,15 +143,39 @@ def _self_check() -> None:
     assert isclose(float(overwritten_100[RANK_DISTANCE_COL]), expected_distance_100)
     assert isclose(float(overwritten_100[RANK_SCORE_COL]), expected_score_100)
 
+    inq_sample = pd.DataFrame({"RCP_SNO": [1, 2, 3], "INQ_CNT": [0, 9, 99]})
+    inq_logged = apply_inq_cnt_log(inq_sample)
+    assert isclose(float(inq_logged.loc[inq_logged["RCP_SNO"] == 1, INQ_CNT_LOG_COL].iloc[0]), 0.0)
+    assert isclose(float(inq_logged.loc[inq_logged["RCP_SNO"] == 2, INQ_CNT_LOG_COL].iloc[0]), log1p(9))
+    assert isclose(float(inq_logged.loc[inq_logged["RCP_SNO"] == 3, INQ_CNT_LOG_COL].iloc[0]), log1p(99))
+    centered_mean = inq_logged[INQ_CNT_LOG_CENTERED_COL].astype(float).mean()
+    assert isclose(centered_mean, 0.0, abs_tol=1e-12)
+
+    overwrite_inq = inq_sample.copy()
+    overwrite_inq[INQ_CNT_LOG_COL] = 999.0
+    overwrite_inq[INQ_CNT_LOG_CENTERED_COL] = 999.0
+    inq_overwritten = apply_inq_cnt_log(overwrite_inq)
+    assert isclose(float(inq_overwritten.loc[inq_overwritten["RCP_SNO"] == 2, INQ_CNT_LOG_COL].iloc[0]), log1p(9))
+
+    bad_inq = pd.DataFrame({"RCP_SNO": [1], "INQ_CNT": [-1]})
+    bad_logged = apply_inq_cnt_log(bad_inq)
+    assert pd.isna(bad_logged[INQ_CNT_LOG_COL].iloc[0])
+    assert pd.isna(bad_logged[INQ_CNT_LOG_CENTERED_COL].iloc[0])
+
 
 def main() -> None:
     recipe_fix_df = load_recipe_data(RECIPE_FIX_CSV)
     review_df = load_recipe_data(REVIEW_CSV)
     result = apply_review_averages(recipe_fix_df, review_df)
+    result = apply_inq_cnt_log(result)
     save_recipe_data(result, RECIPE_FIX_CSV)
     mapped = int(result[STAR_AVG_COL].notna().sum())
     ranked = int(result[RANK_SCORE_COL].notna().sum())
-    print(f"리뷰 평균/랭크 컬럼 적재 완료: 평균 {mapped}/{len(result)}행, 랭크 {ranked}/{len(result)}행")
+    log_mapped = int(result[INQ_CNT_LOG_COL].notna().sum())
+    print(
+        f"리뷰 평균/랭크 컬럼 적재 완료: 평균 {mapped}/{len(result)}행, 랭크 {ranked}/{len(result)}행"
+    )
+    print(f"조회수 log1p 컬럼 적재 완료: {log_mapped}/{len(result)}행")
 
 
 if __name__ == "__main__":
