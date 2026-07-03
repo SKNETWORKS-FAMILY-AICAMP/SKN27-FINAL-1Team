@@ -71,13 +71,17 @@ docker compose run --rm recipe_load python -m etl.recipe.load_to_postgres --test
 docker compose logs recipe_load
 ```
 
-**Postgres가 `initdb ... not empty`로 실패할 때** (로컬 DB 초기화 OK인 경우):
+**Postgres 스키마를 다시 맞출 때** (`initdb ... not empty`, `column ... does not exist`, `recipe_load`의 `validate_schema` 실패 등):
+
+`docker compose down -v`만으로는 **bind mount**인 `storage/postgres/data`가 지워지지 않습니다. Postgres는 해당 폴더가 비어 있을 때만 `app/backend/schemas/schema.sql`을 적용합니다.
 
 ```powershell
 docker compose down
 Remove-Item -Recurse -Force .\storage\postgres\data\*
 docker compose up -d
 ```
+
+`recipe_load` 로그에 `스키마 컬럼이 schema.sql과 일치하지 않습니다`가 보이면 위와 동일한 절차로 해결합니다.
 
 ## Docker 없이
 

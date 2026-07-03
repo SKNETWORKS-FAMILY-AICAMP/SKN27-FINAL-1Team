@@ -187,6 +187,7 @@ CREATE TABLE fridge_items (
     storage_location VARCHAR(50),
     purchased_date DATE,
     expiry_date DATE,
+    is_ai_recommended BOOLEAN DEFAULT FALSE,
     status VARCHAR(30) NOT NULL DEFAULT 'normal',
     is_ai_recommended BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -205,6 +206,7 @@ COMMENT ON COLUMN fridge_items.unit IS '단위';
 COMMENT ON COLUMN fridge_items.storage_location IS '보관위치';
 COMMENT ON COLUMN fridge_items.purchased_date IS '구매일';
 COMMENT ON COLUMN fridge_items.expiry_date IS '소비기한';
+COMMENT ON COLUMN fridge_items.is_ai_recommended IS 'AI 소비기한 추천 여부';
 COMMENT ON COLUMN fridge_items.status IS '상태';
 COMMENT ON COLUMN fridge_items.created_at IS '생성일시';
 

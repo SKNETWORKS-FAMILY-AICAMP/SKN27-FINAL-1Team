@@ -740,7 +740,7 @@ function Fridge() {
                     <div className="fridge-item__left">
                       <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
                       {item.is_ai_recommended ? (
-                        <span className="fridge-ai-badge is-bottom-left" title="AI가 추천한 소비기한입니다">✨ AI 추천</span>
+                        <span className="fridge-ai-badge is-bottom-left" title="AI가 추천한 소비기한입니다">AI</span>
                       ) : null}
                     </div>
                     <div className="fridge-item__body">

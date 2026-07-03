@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -17,11 +18,21 @@ if __package__ is None:
 from etl.recipe.preprocessing.recipe_processing import load_recipe_data, save_recipe_data
 
 if __package__ is None:
-    from ai.recommendation.llm_sentiment_model import LLMSentimentAnalyzer, parse_sentiment_response
+    from ai.recommendation.openai_model import OpenAIClient
 else:
-    from .llm_sentiment_model import LLMSentimentAnalyzer, parse_sentiment_response
+    from .openai_model import OpenAIClient
 
 logger = logging.getLogger(__name__)
+
+MODEL_NAME = "gpt-5-mini"
+SCORE_DECIMAL_PLACES = 4
+
+SYSTEM_PROMPT = (
+    "당신은 한국어 레시피 리뷰·댓글 감성 분석기입니다.\n"
+    "입력 텍스트의 긍정·부정 확률을 0~1 사이 실수로 추정하세요.\n"
+    "두 값의 합은 대략 1이 되도록 하세요.\n"
+    '반드시 JSON만 반환: {"positive": float, "negative": float}'
+)
 
 REVIEW_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "review_by_llm.csv"
 COMMENT_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "comment_by_llm.csv"
@@ -29,6 +40,35 @@ COMMENT_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "comment_by_llm
 CONTENT_COL = "content"
 SENTIMENT_COLS = ("positive", "negative")
 CONTENT_EMPTY_PLACEHOLDERS = ("", "-", "N/A")
+
+
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(1.0, value)), SCORE_DECIMAL_PLACES)
+
+
+def parse_sentiment_response(content: str) -> dict[str, float]:
+    """LLM JSON 응답을 positive/negative 점수 dict로 변환한다."""
+    data = json.loads(content)
+    positive = _clamp_score(float(data["positive"]))
+    negative = _clamp_score(float(data["negative"]))
+    return {"positive": positive, "negative": negative}
+
+
+def _predict_sentiment(text: str) -> dict[str, float]:
+    """문장에 대한 긍·부정 추정값 dict를 반환한다."""
+    content = OpenAIClient().chat_json(
+        model=MODEL_NAME,
+        system=SYSTEM_PROMPT,
+        user=text,
+    )
+    if not content:
+        return {"positive": float("nan"), "negative": float("nan")}
+
+    try:
+        return parse_sentiment_response(content)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        logger.warning("LLM 응답 파싱 실패: %s — %s", exc, content[:200])
+        return {"positive": float("nan"), "negative": float("nan")}
 
 
 def _filter_processable_content(df: pd.DataFrame, content_col: str) -> pd.DataFrame:
@@ -50,7 +90,6 @@ def _ensure_sentiment_columns(df: pd.DataFrame) -> None:
 
 def _analyze_csv(
     path: Path,
-    analyzer: LLMSentimentAnalyzer,
     *,
     limit: int | None = None,
     force: bool = False,
@@ -86,7 +125,7 @@ def _analyze_csv(
     processed = 0
     for index, row in tqdm(work.iterrows(), total=len(work), desc=path.name):
         text = "" if pd.isna(row[CONTENT_COL]) else str(row[CONTENT_COL])
-        result = analyzer.predict_sentiment(text)
+        result = _predict_sentiment(text)
         if pd.isna(result["positive"]) or pd.isna(result["negative"]):
             logger.warning("행 스킵 (분석 실패): index=%s", index)
             continue
@@ -101,14 +140,12 @@ def _analyze_csv(
 
 def process_review_by_llm(*, limit: int | None = None, force: bool = False) -> int:
     """review_by_llm.csv 감성분석."""
-    analyzer = LLMSentimentAnalyzer()
-    return _analyze_csv(REVIEW_BY_LLM_CSV, analyzer, limit=limit, force=force)
+    return _analyze_csv(REVIEW_BY_LLM_CSV, limit=limit, force=force)
 
 
 def process_comment_by_llm(*, limit: int | None = None, force: bool = False) -> int:
     """comment_by_llm.csv 감성분석."""
-    analyzer = LLMSentimentAnalyzer()
-    return _analyze_csv(COMMENT_BY_LLM_CSV, analyzer, limit=limit, force=force)
+    return _analyze_csv(COMMENT_BY_LLM_CSV, limit=limit, force=force)
 
 
 def analyze_sentiment_by_llm(
@@ -118,12 +155,12 @@ def analyze_sentiment_by_llm(
     force: bool = False,
 ) -> None:
     """target에 따라 review/comment LLM CSV를 처리한다."""
-    analyzer = LLMSentimentAnalyzer()
+    OpenAIClient()
     total = 0
     if target in ("review", "all"):
-        total += _analyze_csv(REVIEW_BY_LLM_CSV, analyzer, limit=limit, force=force)
+        total += _analyze_csv(REVIEW_BY_LLM_CSV, limit=limit, force=force)
     if target in ("comment", "all"):
-        total += _analyze_csv(COMMENT_BY_LLM_CSV, analyzer, limit=limit, force=force)
+        total += _analyze_csv(COMMENT_BY_LLM_CSV, limit=limit, force=force)
     logger.info("전체 처리 완료: %s건", total)
 
 
@@ -144,6 +181,9 @@ def _self_check() -> None:
 
     parsed = parse_sentiment_response('{"positive": 0.85, "negative": 0.15}')
     assert parsed == {"positive": 0.85, "negative": 0.15}
+
+    clamped = parse_sentiment_response('{"positive": 1.5, "negative": -0.1}')
+    assert clamped == {"positive": 1.0, "negative": 0.0}
 
 
 def _parse_args() -> argparse.Namespace:
