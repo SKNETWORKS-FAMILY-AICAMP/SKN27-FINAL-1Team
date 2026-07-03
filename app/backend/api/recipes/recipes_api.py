@@ -65,10 +65,10 @@ def recommend_recipes(
             category=_normalize_filter(request_data.category),
             difficulty=_normalize_filter(request_data.difficulty),
             cooking_time_label=_normalize_filter(request_data.cooking_time_label),
+            pool_multiplier=request_data.pool_multiplier,
             min_display_match_rate=request_data.min_display_match_rate,
             require_any_owned=request_data.require_any_owned,
             use_expiry_priority=request_data.use_expiry_priority,
-            pool_multiplier=request_data.pool_multiplier,
         )
     else:
         config = RecipeRecommendConfig.for_mode(

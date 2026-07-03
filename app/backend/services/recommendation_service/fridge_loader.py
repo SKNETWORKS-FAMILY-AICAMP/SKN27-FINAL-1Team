@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import FridgeItem, Ingredient
 from app.backend.services.recommendation_service.fridge_ingredient_match import FridgeItemSnapshot
-from app.backend.services.recommendation_service.recommend_config import FridgeExpiryRow
+
+
+@dataclass(frozen=True)
+class FridgeExpiryRow:
+    ingredient_id: int
+    fridge_name: str
+    expiry_date: date | None
+    purchased_date: date | None
 
 
 def _fetch_fridge_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
@@ -31,12 +41,12 @@ def _fetch_fridge_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
     ]
 
 
-def fetch_fridge_items_with_expiry(db: Session, user_id: int) -> list[FridgeExpiryRow]:
-    return _fetch_fridge_rows(db, user_id)
-
-
 def fetch_fridge_snapshots(db: Session, user_id: int) -> list[FridgeItemSnapshot]:
     return [
         FridgeItemSnapshot(ingredient_id=row.ingredient_id, fridge_name=row.fridge_name)
         for row in _fetch_fridge_rows(db, user_id)
     ]
+
+
+def fetch_fridge_expiry_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
+    return _fetch_fridge_rows(db, user_id)

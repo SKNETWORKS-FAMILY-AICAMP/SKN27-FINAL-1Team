@@ -8,11 +8,12 @@ import imageRecommendation from "../../assets/extracted/images/image_recommendat
 
 import imageSearch from "../../assets/extracted/images/image_search.png";
 
+import { API_URL } from "../../utils/api.js";
+
 import { RecipeFilterConfig } from "./recipeFilterConfig.js";
 
 const PAGE_SIZE = 20;
 
-const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const recipeTypeOptions = RecipeFilterConfig.toSelectOptions(
   RecipeFilterConfig.recipeTypes,
@@ -154,7 +155,7 @@ function RecipeList() {
         );
 
         const response = await fetch(
-          `${apiUrl}/api/v1/recipes/search?${params}`,
+          `${API_URL}/api/v1/recipes/search?${params}`,
           {
             signal: controller.signal,
           },

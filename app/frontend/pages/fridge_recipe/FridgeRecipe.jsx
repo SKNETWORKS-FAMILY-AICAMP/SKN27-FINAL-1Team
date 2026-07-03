@@ -6,8 +6,8 @@ import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageMenuRecommendation from '../../assets/extracted/images/image_menu_recommendation.png'
 import { userProfile } from '../../mock/userService.js'
 import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
+import { API_URL } from '../../utils/api.js'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -49,7 +49,7 @@ function FridgeRecipe() {
     setError('')
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/recipes/recommend`, {
+      const response = await fetch(`${API_URL}/api/v1/recipes/recommend`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

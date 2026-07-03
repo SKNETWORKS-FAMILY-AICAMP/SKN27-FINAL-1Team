@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
-
 MAYBE_OWNED_WEIGHT = 0.5
 MAYBE_MATCH_SCORE = 1.0
 
@@ -174,22 +172,3 @@ def classify_fridge_match(
         display_match_rate=rates.display_match_rate,
     )
 
-
-def fridge_match_counts(
-    fridge_match: FridgeMatchResult,
-    config: RecipeRecommendConfig,
-) -> dict[str, int]:
-    maybe_count = len(fridge_match.maybe_owned) if config.include_maybe_owned else 0
-    owned_count = len(fridge_match.owned)
-    missing_count = len(fridge_match.missing)
-    if not config.include_maybe_owned:
-        missing_count += len(fridge_match.maybe_owned)
-
-    total_required = owned_count + maybe_count + missing_count
-    rates = compute_match_rates(owned_count, maybe_count, total_required)
-
-    return {
-        "owned_ingredient_count": owned_count + maybe_count,
-        "missing_ingredient_count": missing_count,
-        "display_match_rate": rates.display_match_rate,
-    }

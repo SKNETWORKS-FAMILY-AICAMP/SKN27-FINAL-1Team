@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { API_URL } from './utils/api.js'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
@@ -36,10 +37,9 @@ function AppLayout() {
     if (isAuthPage || !token || authMode === 'guest') return
 
     let isCancelled = false
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
     // 현재 로그인한 사용자 기준으로 온보딩 완료 여부를 확인합니다.
-    fetch(`${apiUrl}/api/v1/auth/me`, {
+    fetch(`${API_URL}/api/v1/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : null))
@@ -128,7 +128,7 @@ function AppLayout() {
                 items={[
                   '밥벌이는 냉장고 재료 관리, 영수증 OCR 입고, 레시피 추천, 장보기 목록, 캘린더 알림 기능을 제공합니다.',
                   '사용자는 본인이 등록한 식재료, 영수증, 레시피 저장 정보가 정확한지 직접 확인하고 관리해야 합니다.',
-                  '레시피 추천, 보관 가이드, 유통기한 알림은 참고용 정보이며 실제 섭취 가능 여부는 사용자가 최종 판단해야 합니다.',
+                  '레시피 추천, 식재료 가이드, 유통기한 알림은 참고용 정보이며 실제 섭취 가능 여부는 사용자가 최종 판단해야 합니다.',
                   '타인의 계정 또는 정보를 무단으로 사용하거나 서비스 운영을 방해하는 행위는 제한될 수 있습니다.',
                   '서비스 내용은 개선을 위해 변경될 수 있으며, 중요한 변경 사항은 서비스 화면 또는 공지로 안내합니다.',
                   '문의: bobbeori@bobbeori.com',

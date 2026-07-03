@@ -6,7 +6,7 @@ Run this inside the Runpod pod:
 cd /workspace
 git clone <repo-url>
 cd SKN27-FINAL-1Team
-pip install -r ai/calendar/requirements.txt
+pip install -r ai/requirements.txt
 export RUNPOD_INTERNAL_TOKEN="<same-token-as-backend>"
 uvicorn ai.calendar.runpod_server:app --host 0.0.0.0 --port 8000
 ```

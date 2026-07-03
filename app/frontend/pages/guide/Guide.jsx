@@ -4,8 +4,8 @@ import './Guide.css'
 
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageGuide from '../../assets/extracted/images/image_guide_v2.png'
+import { API_URL } from '../../utils/api.js'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 12
 const GUIDE_RECIPE_LIMIT = 12
@@ -75,7 +75,6 @@ function splitTipText(text) {
     .split(/\n{2,}|\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .slice(0, 4)
 }
 
 function normalizeSourceUrl(url) {
@@ -205,7 +204,7 @@ function Guide() {
       setIsFridgeLoading(true)
       setFridgeErrorMessage('')
       try {
-        const response = await fetch(`${apiUrl}/api/v1/inventory`, {
+        const response = await fetch(`${API_URL}/api/v1/inventory`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -248,7 +247,7 @@ function Guide() {
         if (searchTerm.trim()) params.set('keyword', searchTerm.trim())
         if (selectedMajorCategory) params.set('major_category', selectedMajorCategory)
         if (selectedMiddleCategory) params.set('middle_category', selectedMiddleCategory)
-        const response = await fetch(`${apiUrl}/api/v1/guide?${params}`, {
+        const response = await fetch(`${API_URL}/api/v1/guide?${params}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -291,7 +290,7 @@ function Guide() {
         if (searchTerm.trim()) params.set('keyword', searchTerm.trim())
         if (selectedMajorCategory) params.set('major_category', selectedMajorCategory)
         if (selectedMiddleCategory) params.set('middle_category', selectedMiddleCategory)
-        const response = await fetch(`${apiUrl}/api/v1/guide/categories?${params}`, {
+        const response = await fetch(`${API_URL}/api/v1/guide/categories?${params}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -324,7 +323,7 @@ function Guide() {
       setIsDetailLoading(true)
       setErrorMessage('')
       try {
-        const response = await fetch(`${apiUrl}/api/v1/guide/detail/${encodeURIComponent(selectedCode)}`, {
+        const response = await fetch(`${API_URL}/api/v1/guide/detail/${encodeURIComponent(selectedCode)}`, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -366,7 +365,7 @@ function Guide() {
           page: '1',
           page_size: String(GUIDE_RECIPE_LIMIT),
         })
-        const response = await fetch(`${apiUrl}/api/v1/recipes/search?${params}`, {
+        const response = await fetch(`${API_URL}/api/v1/recipes/search?${params}`, {
           signal: controller.signal,
         })
         if (!response.ok) throw new Error('추천 레시피를 불러오지 못했습니다.')
@@ -437,7 +436,7 @@ function Guide() {
         page: '1',
         page_size: String(GUIDE_PAGE_SIZE),
       })
-      const response = await fetch(`${apiUrl}/api/v1/guide?${params}`, { headers: getAuthHeaders() })
+      const response = await fetch(`${API_URL}/api/v1/guide?${params}`, { headers: getAuthHeaders() })
       if (response.ok) {
         const data = await response.json()
         const exactMatch = (data.items || []).find(
@@ -489,7 +488,7 @@ function Guide() {
     setIsSuggestionSubmitting(true)
     setSuggestionMessage('')
     try {
-      const response = await fetch(`${apiUrl}/api/v1/guide/suggestions`, {
+      const response = await fetch(`${API_URL}/api/v1/guide/suggestions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -752,15 +751,20 @@ function Guide() {
             <>
               <div className="guide-content-grid">
                 <article className="guide-panel guide-detail">
-                  <button
-                    className="guide-detail-back"
-                    type="button"
-                    aria-label="전체 식재료 목록으로 돌아가기"
-                    title="전체 목록"
-                    onClick={() => navigate('/guide')}
-                  >
-                    ←
-                  </button>
+                  <div className="guide-detail__top">
+                    <button
+                      className="guide-detail-back"
+                      type="button"
+                      aria-label="전체 식재료 목록으로 돌아가기"
+                      title="전체 목록"
+                      onClick={() => navigate('/guide')}
+                    >
+                      ←
+                    </button>
+                    <span className="guide-detail__path">
+                      {formatCategory(selectedGuide) || selectedGuide.name}
+                    </span>
+                  </div>
                   <div className="guide-detail__header">
                     <ImageSlot
                       alt=""
@@ -770,31 +774,26 @@ function Guide() {
                     />
                     <div>
                       <h2>{selectedGuide.name}</h2>
-                      <p>{formatCategory(selectedGuide) || '분류 정보 없음'}</p>
-                      {normalizeSourceUrl(selectedGuide.seasonal_source_url) ? (
-                        <a
-                          className="guide-owned-badge"
-                          href={normalizeSourceUrl(selectedGuide.seasonal_source_url)}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={selectedGuide.seasonal_source_name || '제철 출처'}
-                        >
-                          {formatMonths(selectedGuide.seasonal_months)}
-                        </a>
-                      ) : (
-                        <span className="guide-owned-badge">{formatMonths(selectedGuide.seasonal_months)}</span>
-                      )}
+                      <span className="guide-owned-badge">{formatMonths(selectedGuide.seasonal_months)}</span>
                     </div>
                   </div>
 
-                  <div className="guide-tip-grid">
+                </article>
+
+                <aside className="guide-panel guide-tip-detail" aria-label="식재료 가이드 상세">
+                  <div
+                    className={`guide-tip-grid ${selectedTip.isMissing ? 'is-missing' : ''}`}
+                    role="tablist"
+                    aria-label="식재료 가이드 종류"
+                  >
                     {guideTips.map((tip) => (
                       <section
                         className={`guide-tip-card ${tip.isMissing ? 'is-missing' : ''} ${
                           selectedTip.title === tip.title ? 'is-active' : ''
                         }`}
                         key={tip.title}
-                        role="button"
+                        role="tab"
+                        aria-selected={selectedTip.title === tip.title}
                         tabIndex={0}
                         onClick={() => setSelectedTipTitle(tip.title)}
                         onKeyDown={(event) => {
@@ -808,136 +807,147 @@ function Guide() {
                           <span aria-hidden="true" />
                           <h3>{tip.title}</h3>
                         </div>
-                        <ul>
-                          {tip.points.map((point) => (
-                            <li key={point}>{point}</li>
-                          ))}
-                        </ul>
                       </section>
                     ))}
                   </div>
-                </article>
+                  <div className={`guide-tip-body ${selectedTip.isMissing ? 'is-missing' : ''}`}>
+                    <div className="guide-tip-copy-stack">
+                      {guideTips.map((tip) => {
+                        const isActive = selectedTip.title === tip.title
+                        const suggestionTitleId = `guide-suggestion-title-${tip.guideType}`
 
-                <aside className="guide-panel guide-tip-detail" aria-labelledby="guide-tip-detail-title">
-                  <span>{selectedGuide.name}</span>
-                  <h2 id="guide-tip-detail-title">{selectedTip.title}</h2>
-                  <ul>
-                    {selectedTip.points.map((point) => (
-                      <li key={point}>{point}</li>
-                    ))}
-                  </ul>
-                  {!selectedTip.isMissing ? (
-                    <div className="guide-tip-source">
-                      {selectedTip.sourceUrl ? (
-                        <a href={selectedTip.sourceUrl} target="_blank" rel="noreferrer">
-                          {selectedTip.source}
-                        </a>
-                      ) : (
-                        <span>{selectedTip.source}</span>
-                      )}
-                    </div>
-                  ) : null}
+                        return (
+                          <div
+                            aria-hidden={!isActive}
+                            className={`guide-tip-copy ${isActive ? 'is-active' : ''}`}
+                            key={tip.title}
+                          >
+                            <ul>
+                              {tip.points.map((point) => (
+                                <li key={point}>{point}</li>
+                              ))}
+                            </ul>
 
-                  {selectedTip.isMissing ? (
-                    <section className="guide-suggestion" aria-labelledby="guide-suggestion-title">
-                      <div className="guide-suggestion__intro">
-                        <h3 id="guide-suggestion-title">나만의 가이드 제보</h3>
-                        <p>직접 알고 있는 방법과 참고 출처를 남겨주세요. 개발자가 확인한 뒤 반영합니다.</p>
-                      </div>
+                            {!tip.isMissing ? (
+                              <div className="guide-tip-source">
+                                {tip.sourceUrl ? (
+                                  <a href={tip.sourceUrl} target="_blank" rel="noreferrer">
+                                    {tip.source}
+                                  </a>
+                                ) : (
+                                  <span>{tip.source}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <section className="guide-suggestion" aria-labelledby={suggestionTitleId}>
+                                <div className="guide-suggestion__intro">
+                                  <h3 id={suggestionTitleId}>나만의 가이드 제보</h3>
+                                  <p>직접 알고 있는 방법과 참고 출처를 남겨주세요. 개발자가 확인한 뒤 반영합니다.</p>
+                                </div>
 
-                      {isSuggestionFormOpen ? (
-                        <form className="guide-suggestion__form" onSubmit={submitSuggestion}>
-                          <label>
-                            <span>가이드 내용</span>
-                            <textarea
-                              maxLength={2000}
-                              minLength={10}
-                              placeholder={`${selectedGuide.name} ${selectedTip.title}을 10자 이상 입력해주세요.`}
-                              required
-                              value={suggestionForm.content}
-                              onChange={(event) =>
-                                setSuggestionForm((current) => ({ ...current, content: event.target.value }))
-                              }
-                            />
-                          </label>
-                          <div className="guide-suggestion__source-fields">
-                            <label>
-                              <span>출처명 (선택)</span>
-                              <input
-                                maxLength={255}
-                                placeholder="예: 농촌진흥청"
-                                value={suggestionForm.sourceName}
-                                onChange={(event) =>
-                                  setSuggestionForm((current) => ({ ...current, sourceName: event.target.value }))
-                                }
-                              />
-                            </label>
-                            <label>
-                              <span>출처 URL (선택)</span>
-                              <input
-                                placeholder="https://example.com"
-                                type="url"
-                                value={suggestionForm.sourceUrl}
-                                onChange={(event) =>
-                                  setSuggestionForm((current) => ({ ...current, sourceUrl: event.target.value }))
-                                }
-                              />
-                            </label>
+                                {isActive && isSuggestionFormOpen ? (
+                                  <form className="guide-suggestion__form" onSubmit={submitSuggestion}>
+                                    <label>
+                                      <span>가이드 내용</span>
+                                      <textarea
+                                        maxLength={2000}
+                                        minLength={10}
+                                        placeholder={`${selectedGuide.name} ${selectedTip.title}을 10자 이상 입력해주세요.`}
+                                        required
+                                        value={suggestionForm.content}
+                                        onChange={(event) =>
+                                          setSuggestionForm((current) => ({ ...current, content: event.target.value }))
+                                        }
+                                      />
+                                    </label>
+                                    <div className="guide-suggestion__source-fields">
+                                      <label>
+                                        <span>출처명 (선택)</span>
+                                        <input
+                                          maxLength={255}
+                                          placeholder="예: 농촌진흥청"
+                                          value={suggestionForm.sourceName}
+                                          onChange={(event) =>
+                                            setSuggestionForm((current) => ({ ...current, sourceName: event.target.value }))
+                                          }
+                                        />
+                                      </label>
+                                      <label>
+                                        <span>출처 URL (선택)</span>
+                                        <input
+                                          placeholder="https://example.com"
+                                          type="url"
+                                          value={suggestionForm.sourceUrl}
+                                          onChange={(event) =>
+                                            setSuggestionForm((current) => ({ ...current, sourceUrl: event.target.value }))
+                                          }
+                                        />
+                                      </label>
+                                    </div>
+                                    <div className="guide-suggestion__actions">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsSuggestionFormOpen(false)
+                                          setSuggestionMessage('')
+                                        }}
+                                      >
+                                        취소
+                                      </button>
+                                      <button disabled={isSuggestionSubmitting} type="submit">
+                                        {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
+                                      </button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <button className="guide-suggestion__open" type="button" onClick={openSuggestionForm}>
+                                    {isLoggedIn ? '가이드 제보하기' : '로그인 후 제보하기'}
+                                  </button>
+                                )}
+
+                                {isActive && suggestionMessage ? (
+                                  <p className="guide-suggestion__message" role="status">{suggestionMessage}</p>
+                                ) : null}
+                              </section>
+                            )}
                           </div>
-                          <div className="guide-suggestion__actions">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsSuggestionFormOpen(false)
-                                setSuggestionMessage('')
-                              }}
-                            >
-                              취소
-                            </button>
-                            <button disabled={isSuggestionSubmitting} type="submit">
-                              {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <button className="guide-suggestion__open" type="button" onClick={openSuggestionForm}>
-                          {isLoggedIn ? '가이드 제보하기' : '로그인 후 제보하기'}
-                        </button>
-                      )}
-
-                      {suggestionMessage ? <p className="guide-suggestion__message" role="status">{suggestionMessage}</p> : null}
-                    </section>
-                  ) : null}
-
-                  <section className="guide-tip-nutrition" aria-labelledby="guide-nutrition-title">
-                    <div className="guide-tip-nutrition__header">
-                      <h3 id="guide-nutrition-title">영양성분</h3>
-                      <div className="guide-tip-nutrition__summary">
-                        <strong className="guide-tip-nutrition__energy">
-                          <small>칼로리</small>
-                          {selectedGuide.energy_kcal ?? '-'} kcal
-                        </strong>
-                        <strong className="guide-tip-nutrition__amount">
-                          <small>기준량</small>
-                          {selectedGuide.nutrition_base_amount || '정보 없음'}
-                        </strong>
-                      </div>
-                      {selectedGuide.nutrition_source_name ? <span className="guide-tip-nutrition__source">출처: {selectedGuide.nutrition_source_name}</span> : null}
+                        )
+                      })}
                     </div>
+                  </div>
 
-                    <div className="guide-nutrition-grid">
-                      <strong><span>탄수화물</span><b>{selectedGuide.carbohydrate_g ?? '-'} g</b></strong>
-                      <strong><span>단백질</span><b>{selectedGuide.protein_g ?? '-'} g</b></strong>
-                      <strong><span>지방</span><b>{selectedGuide.fat_g ?? '-'} g</b></strong>
-                      <strong><span>당류</span><b>{selectedGuide.sugar_g ?? '-'} g</b></strong>
-                      <strong><span>나트륨</span><b>{selectedGuide.sodium_mg ?? '-'} mg</b></strong>
-                      <strong><span>포화지방</span><b>{selectedGuide.saturated_fat_g ?? '-'} g</b></strong>
-                      <strong><span>식이섬유</span><b>{selectedGuide.fiber_g ?? '-'} g</b></strong>
-                      <strong><span>칼륨</span><b>{selectedGuide.potassium_mg ?? '-'} mg</b></strong>
-                    </div>
-                  </section>
                 </aside>
               </div>
+
+              <section className="guide-panel guide-tip-nutrition" aria-labelledby="guide-nutrition-title">
+                <div className="guide-tip-nutrition__header">
+                  <h2 id="guide-nutrition-title">영양성분</h2>
+                  <div className="guide-tip-nutrition__summary">
+                    <strong className="guide-tip-nutrition__energy">
+                      <small>칼로리</small>
+                      {selectedGuide.energy_kcal ?? '-'} kcal
+                    </strong>
+                    <strong className="guide-tip-nutrition__amount">
+                      <small>기준량</small>
+                      {selectedGuide.nutrition_base_amount || '정보 없음'}
+                    </strong>
+                  </div>
+                  {selectedGuide.nutrition_source_name ? <span className="guide-tip-nutrition__source">출처: {selectedGuide.nutrition_source_name}</span> : null}
+                </div>
+
+                <div className="guide-nutrition-grid">
+                  <strong><span>탄수화물</span><b>{selectedGuide.carbohydrate_g ?? '-'} g</b></strong>
+                  <strong><span>단백질</span><b>{selectedGuide.protein_g ?? '-'} g</b></strong>
+                  <strong><span>지방</span><b>{selectedGuide.fat_g ?? '-'} g</b></strong>
+                  <strong><span>포화지방</span><b>{selectedGuide.saturated_fat_g ?? '-'} g</b></strong>
+                  <strong><span>트랜스지방</span><b>{selectedGuide.trans_fat_g ?? '-'} g</b></strong>
+                  <strong><span>당류</span><b>{selectedGuide.sugar_g ?? '-'} g</b></strong>
+                  <strong><span>식이섬유</span><b>{selectedGuide.fiber_g ?? '-'} g</b></strong>
+                  <strong><span>나트륨</span><b>{selectedGuide.sodium_mg ?? '-'} mg</b></strong>
+                  <strong><span>칼륨</span><b>{selectedGuide.potassium_mg ?? '-'} mg</b></strong>
+                  <strong><span>수분</span><b>{selectedGuide.water_g ?? '-'} g</b></strong>
+                </div>
+              </section>
 
               <section className="guide-panel guide-recipes" aria-labelledby="guide-recipes-title">
                 <div className="guide-recipes__header">
