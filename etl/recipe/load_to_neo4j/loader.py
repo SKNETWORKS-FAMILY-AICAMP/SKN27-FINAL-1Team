@@ -37,7 +37,7 @@ MERGE (r:Recipe {recipeId: row.recipeId})
 SET r.name = row.name,
     r.inqCnt = row.inqCnt,
     r.inqCntRate = row.inqCntRate,
-    r.reviewStarIdfAvg = row.reviewStarIdfAvg,
+    r.reviewStarNormAvg = row.reviewStarNormAvg,
     r.reviewSentimentAvg = row.reviewSentimentAvg,
     r.reviewRankDistance = row.reviewRankDistance,
     r.reviewRankScore = row.reviewRankScore
@@ -55,7 +55,7 @@ MERGE (v:Reviewer {reviewerId: row.reviewerId})
 MERGE (v)-[rel:WROTE_REVIEW]->(r)
 SET rel.content = row.content,
     rel.starCount = row.starCount,
-    rel.starIdf = row.starIdf,
+    rel.starNorm = row.starNorm,
     rel.positive = row.positive,
     rel.negative = row.negative
 """
@@ -155,7 +155,7 @@ def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "name": _text(row["CKG_NM"]),
                 "inqCnt": _number(row.get("INQ_CNT")),
                 "inqCntRate": _number(row.get("INQ_CNT_RATE")),
-                "reviewStarIdfAvg": _number(row.get("REVIEW_STAR_IDF_AVG")),
+                "reviewStarNormAvg": _number(row.get("REVIEW_STAR_NORM_AVG")),
                 "reviewSentimentAvg": _number(row.get("REVIEW_SENTIMENT_AVG")),
                 "reviewRankDistance": _number(row.get("REVIEW_RANK_DISTANCE")),
                 "reviewRankScore": _number(row.get("REVIEW_RANK_SCORE")),
@@ -186,7 +186,7 @@ def build_review_rel_rows(review_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "reviewerId": int(reviewer_id),
                 "content": _text(row.get("content")),
                 "starCount": _number(row.get("star_count")),
-                "starIdf": _number(row.get("star_idf")),
+                "starNorm": _number(row.get("star_norm")),
                 "positive": _number(row.get("positive")),
                 "negative": _number(row.get("negative")),
             }
@@ -274,11 +274,11 @@ def _self_check() -> None:
     assert len(recipe_rows) > 3000
     assert recipe_rows[0]["recipeId"] == int(recipe_df.iloc[0]["RCP_SNO"])
     assert isinstance(recipe_rows[0]["inqCntRate"], float)
-    assert "reviewStarIdfAvg" in recipe_rows[0]
+    assert "reviewStarNormAvg" in recipe_rows[0]
     assert "reviewSentimentAvg" in recipe_rows[0]
     assert "reviewRankDistance" in recipe_rows[0]
     assert "reviewRankScore" in recipe_rows[0]
-    assert any(row["reviewStarIdfAvg"] is None for row in recipe_rows)
+    assert any(row["reviewStarNormAvg"] is None for row in recipe_rows)
     assert any(row["reviewSentimentAvg"] is None for row in recipe_rows)
     assert any(row["reviewRankDistance"] is None for row in recipe_rows)
     assert any(row["reviewRankScore"] is None for row in recipe_rows)
@@ -288,7 +288,7 @@ def _self_check() -> None:
     assert reviewer_rows[0]["reviewerId"] > 0
 
     assert review_rel_rows
-    assert "starIdf" in review_rel_rows[0]
+    assert "starNorm" in review_rel_rows[0]
     assert review_rel_rows[0]["starCount"] is not None
 
     assert comment_rel_rows
