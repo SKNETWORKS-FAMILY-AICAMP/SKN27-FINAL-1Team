@@ -409,7 +409,7 @@ function Fridge() {
       }
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
-        await showAlert(`재료 저장에 실패했습니다: ${errData.detail || '알 수 없는 오류'}`, { title: '저장 실패' })
+        await showAlert(errData.detail || '재료 저장에 실패했습니다.')
         return
       }
 

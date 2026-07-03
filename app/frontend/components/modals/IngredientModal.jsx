@@ -99,7 +99,7 @@ export default function IngredientModal({
             handleFormChange({ target: { name: 'storage_method', value: data.storage_method } })
           }
         } else {
-          setPredictError('올바른 식재료 이름을 입력해주세요. (예: 양파, 우유)')
+          setPredictError('올바른 식재료 이름을 입력해주세요.')
         }
       }
     } catch (error) {
@@ -234,7 +234,7 @@ export default function IngredientModal({
                 ))}
               </div>
             ) : null}
-            {predictError && <p style={{ color: 'red', fontSize: '12px', marginTop: '4px' }}>🔴 {predictError}</p>}
+            {predictError && <p style={{ color: 'red', fontSize: '12px', marginTop: '4px', marginLeft: '5px' }}>{predictError}</p>}
           </div>
 
           <div className="fridge-form-row">
