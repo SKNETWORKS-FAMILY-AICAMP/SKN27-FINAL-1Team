@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
-from math import isclose, log1p, sqrt
+from math import isclose, log1p
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 if __package__ is None:
@@ -18,13 +18,9 @@ RECIPE_FIX_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
 REVIEW_CSV = ROOT / "storage" / "processed" / "recipe" / "review_by_llm.csv"
 STAR_AVG_COL = "REVIEW_STAR_NORM_AVG"
 SENTIMENT_AVG_COL = "REVIEW_SENTIMENT_AVG"
-RANK_DISTANCE_COL = "REVIEW_RANK_DISTANCE"
 RANK_SCORE_COL = "REVIEW_RANK_SCORE"
 INQ_CNT_LOG_COL = "INQ_CNT_LOG"
 INQ_CNT_LOG_CENTERED_COL = "INQ_CNT_LOG_CENTERED"
-TARGET_STAR = 1.0
-TARGET_SENTIMENT = 1.0
-MAX_DISTANCE = sqrt((TARGET_STAR - (-1.0)) ** 2 + (TARGET_SENTIMENT - (-1.0)) ** 2)
 
 
 def build_recipe_review_aggregate(review_df: pd.DataFrame) -> pd.DataFrame:
@@ -46,16 +42,6 @@ def build_recipe_review_aggregate(review_df: pd.DataFrame) -> pd.DataFrame:
             }
         )
     )
-    valid_mask = grouped[STAR_AVG_COL].notna() & grouped[SENTIMENT_AVG_COL].notna()
-    grouped[RANK_DISTANCE_COL] = pd.NA
-    grouped[RANK_SCORE_COL] = pd.NA
-    grouped.loc[valid_mask, RANK_DISTANCE_COL] = (
-        (TARGET_STAR - grouped.loc[valid_mask, STAR_AVG_COL]) ** 2
-        + (TARGET_SENTIMENT - grouped.loc[valid_mask, SENTIMENT_AVG_COL]) ** 2
-    ) ** 0.5
-    grouped.loc[valid_mask, RANK_SCORE_COL] = 100 * (
-        1 - (grouped.loc[valid_mask, RANK_DISTANCE_COL] / MAX_DISTANCE)
-    )
     grouped["recipe_id"] = grouped["recipe_id"].astype(int)
     return grouped
 
@@ -73,8 +59,8 @@ def apply_review_averages(
             STAR_AVG_COL,
             "REVIEW_STAR_IDF_AVG",
             SENTIMENT_AVG_COL,
-            RANK_DISTANCE_COL,
             RANK_SCORE_COL,
+            "REVIEW_RANK_DISTANCE",
         ],
         errors="ignore",
     )
@@ -98,6 +84,23 @@ def apply_inq_cnt_log(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def apply_rank_score(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out = out.drop(columns=[RANK_SCORE_COL], errors="ignore")
+    valid = (
+        out[STAR_AVG_COL].notna()
+        & out[SENTIMENT_AVG_COL].notna()
+        & out[INQ_CNT_LOG_CENTERED_COL].notna()
+    )
+    out[RANK_SCORE_COL] = pd.NA
+    out.loc[valid, RANK_SCORE_COL] = (
+        out.loc[valid, STAR_AVG_COL]
+        + out.loc[valid, SENTIMENT_AVG_COL]
+        + out.loc[valid, INQ_CNT_LOG_CENTERED_COL]
+    )
+    return out
+
+
 def _self_check() -> None:
     review_sample = pd.DataFrame(
         {
@@ -111,36 +114,42 @@ def _self_check() -> None:
     row100 = agg.loc[agg["recipe_id"] == 100].iloc[0]
     assert isclose(row100[STAR_AVG_COL], 0.75)
     assert isclose(row100[SENTIMENT_AVG_COL], 0.6)
-    expected_distance_100 = sqrt((TARGET_STAR - 0.75) ** 2 + (TARGET_SENTIMENT - 0.6) ** 2)
-    expected_score_100 = 100 * (1 - expected_distance_100 / MAX_DISTANCE)
-    assert isclose(float(row100[RANK_DISTANCE_COL]), expected_distance_100)
-    assert isclose(float(row100[RANK_SCORE_COL]), expected_score_100)
+    assert RANK_SCORE_COL not in agg.columns
     row101 = agg.loc[agg["recipe_id"] == 101].iloc[0]
     assert isclose(row101[STAR_AVG_COL], -0.5)
     assert isclose(row101[SENTIMENT_AVG_COL], -0.05)
 
-    recipe_fix_sample = pd.DataFrame({"RCP_SNO": [100, 102, 999], "CKG_NM": ["a", "b", "c"]})
-    applied = apply_review_averages(recipe_fix_sample, review_sample)
+    recipe_fix_sample = pd.DataFrame(
+        {"RCP_SNO": [100, 102, 999], "CKG_NM": ["a", "b", "c"], "INQ_CNT": [100, 200, 50]}
+    )
+    applied = apply_rank_score(apply_inq_cnt_log(apply_review_averages(recipe_fix_sample, review_sample)))
     assert STAR_AVG_COL in applied.columns
     assert SENTIMENT_AVG_COL in applied.columns
-    assert RANK_DISTANCE_COL in applied.columns
     assert RANK_SCORE_COL in applied.columns
+    assert "REVIEW_RANK_DISTANCE" not in applied.columns
     val100 = applied.loc[applied["RCP_SNO"] == 100, STAR_AVG_COL].iloc[0]
     assert isclose(val100, 0.75)
     assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, STAR_AVG_COL].iloc[0])
-    assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, RANK_DISTANCE_COL].iloc[0])
     assert pd.isna(applied.loc[applied["RCP_SNO"] == 999, RANK_SCORE_COL].iloc[0])
+
+    row100_full = applied.loc[applied["RCP_SNO"] == 100].iloc[0]
+    expected_score_100 = (
+        float(row100_full[STAR_AVG_COL])
+        + float(row100_full[SENTIMENT_AVG_COL])
+        + float(row100_full[INQ_CNT_LOG_CENTERED_COL])
+    )
+    assert isclose(float(row100_full[RANK_SCORE_COL]), expected_score_100)
 
     overwrite_sample = recipe_fix_sample.copy()
     overwrite_sample[STAR_AVG_COL] = 999.0
     overwrite_sample[SENTIMENT_AVG_COL] = 999.0
-    overwrite_sample[RANK_DISTANCE_COL] = 999.0
     overwrite_sample[RANK_SCORE_COL] = 999.0
-    overwritten = apply_review_averages(overwrite_sample, review_sample)
+    overwritten = apply_rank_score(
+        apply_inq_cnt_log(apply_review_averages(overwrite_sample, review_sample))
+    )
     overwritten_100 = overwritten.loc[overwritten["RCP_SNO"] == 100].iloc[0]
     assert isclose(overwritten_100[STAR_AVG_COL], 0.75)
     assert isclose(overwritten_100[SENTIMENT_AVG_COL], 0.6)
-    assert isclose(float(overwritten_100[RANK_DISTANCE_COL]), expected_distance_100)
     assert isclose(float(overwritten_100[RANK_SCORE_COL]), expected_score_100)
 
     inq_sample = pd.DataFrame({"RCP_SNO": [1, 2, 3], "INQ_CNT": [0, 9, 99]})
@@ -168,6 +177,7 @@ def main() -> None:
     review_df = load_recipe_data(REVIEW_CSV)
     result = apply_review_averages(recipe_fix_df, review_df)
     result = apply_inq_cnt_log(result)
+    result = apply_rank_score(result)
     save_recipe_data(result, RECIPE_FIX_CSV)
     mapped = int(result[STAR_AVG_COL].notna().sum())
     ranked = int(result[RANK_SCORE_COL].notna().sum())

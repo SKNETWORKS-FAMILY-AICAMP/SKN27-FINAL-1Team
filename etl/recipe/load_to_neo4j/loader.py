@@ -40,7 +40,6 @@ SET r.name = row.name,
     r.inqCntLogCentered = row.inqCntLogCentered,
     r.reviewStarNormAvg = row.reviewStarNormAvg,
     r.reviewSentimentAvg = row.reviewSentimentAvg,
-    r.reviewRankDistance = row.reviewRankDistance,
     r.reviewRankScore = row.reviewRankScore
 """
 
@@ -159,7 +158,6 @@ def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "inqCntLogCentered": _number(row.get("INQ_CNT_LOG_CENTERED")),
                 "reviewStarNormAvg": _number(row.get("REVIEW_STAR_NORM_AVG")),
                 "reviewSentimentAvg": _number(row.get("REVIEW_SENTIMENT_AVG")),
-                "reviewRankDistance": _number(row.get("REVIEW_RANK_DISTANCE")),
                 "reviewRankScore": _number(row.get("REVIEW_RANK_SCORE")),
             }
         )
@@ -280,11 +278,9 @@ def _self_check() -> None:
     assert any(row["inqCntLogCentered"] is not None for row in recipe_rows)
     assert "reviewStarNormAvg" in recipe_rows[0]
     assert "reviewSentimentAvg" in recipe_rows[0]
-    assert "reviewRankDistance" in recipe_rows[0]
     assert "reviewRankScore" in recipe_rows[0]
     assert any(row["reviewStarNormAvg"] is None for row in recipe_rows)
     assert any(row["reviewSentimentAvg"] is None for row in recipe_rows)
-    assert any(row["reviewRankDistance"] is None for row in recipe_rows)
     assert any(row["reviewRankScore"] is None for row in recipe_rows)
     assert any(row["reviewRankScore"] is not None for row in recipe_rows)
 
