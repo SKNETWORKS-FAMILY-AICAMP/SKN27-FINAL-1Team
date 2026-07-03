@@ -474,7 +474,6 @@
 
 .login-card__button-ghost {
   width: 24px;
-}
   display: grid;
   place-items: center;
   border-radius: 8px;

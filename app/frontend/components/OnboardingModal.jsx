@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_URL } from '../utils/api.js';
 import './OnboardingModal.css';
 
 const ALLERGY_OPTIONS = ['땅콩', '우유', '계란', '밀', '갑각류', '대두', '견과류', '생선'];
@@ -103,9 +104,8 @@ export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onCl
 
     try {
       const token = localStorage.getItem('bobbeori-token');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       
-      const res = await fetch(`${apiUrl}/api/v1/onboarding`, {
+      const res = await fetch(`${API_URL}/api/v1/onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

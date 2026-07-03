@@ -1,3 +1,5 @@
+import { API_URL } from './api.js'
+
 const SAVED_RECIPE_KEY = 'bobbeori-saved-recipes'
 const TTL_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -69,8 +71,7 @@ export async function saveRecommendationResult(recipe, recommendationType) {
     throw new Error('레시피 정보가 올바르지 않아요.')
   }
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  const response = await fetch(`${apiUrl}/api/v1/recommendations`, {
+  const response = await fetch(`${API_URL}/api/v1/recommendations`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
