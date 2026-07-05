@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RECIPE_FIX_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
 REVIEW_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "review_by_llm.csv"
 COMMENT_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "comment_by_llm.csv"
+RECIPE_INGREDIENT_ALIAS_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_ingredient_alias.csv"
 
 BATCH_SIZE = 100
 
@@ -72,6 +74,20 @@ SET rel.content = row.content,
     rel.negative = row.negative
 """
 
+UPSERT_RECIPE_INGREDIENT_PROPS_QUERY = """
+UNWIND $rows AS row
+MATCH (r:Recipe {recipeId: row.recipeId})
+SET r.ingredientsNormalized = row.ingredientsNormalized,
+    r.othersItems = row.othersItems
+"""
+
+MERGE_USES_ALIAS_QUERY = """
+UNWIND $rows AS row
+MATCH (r:Recipe {recipeId: row.recipeId})
+MATCH (a:Alias {id: row.aliasId})
+MERGE (r)-[:USES_ALIAS]->(a)
+"""
+
 SUMMARY_QUERY = """
 CALL () {
   MATCH (r:Recipe) RETURN "Recipe" AS label, count(r) AS count
@@ -81,6 +97,8 @@ CALL () {
   MATCH ()-[rel:WROTE_REVIEW]->() RETURN "WROTE_REVIEW" AS label, count(rel) AS count
   UNION ALL
   MATCH ()-[rel:WROTE_COMMENT]->() RETURN "WROTE_COMMENT" AS label, count(rel) AS count
+  UNION ALL
+  MATCH ()-[rel:USES_ALIAS]->() RETURN "USES_ALIAS" AS label, count(rel) AS count
 }
 RETURN label, count
 """
@@ -105,6 +123,20 @@ def _text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _parse_json(value: Any) -> list[Any]:
+    if value is None or pd.isna(value):
+        return []
+    if isinstance(value, list):
+        return value
+    text = str(value).strip()
+    if not text:
+        return []
+    parsed = json.loads(text)
+    if not isinstance(parsed, list):
+        raise ValueError(f"expected JSON list, got {type(parsed).__name__}")
+    return parsed
 
 
 def _chunks(rows: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
@@ -219,12 +251,65 @@ def build_comment_rel_rows(comment_df: pd.DataFrame) -> list[dict[str, Any]]:
     return rows
 
 
+def load_recipe_ingredient_alias_table(
+    path: Path = RECIPE_INGREDIENT_ALIAS_CSV,
+) -> pd.DataFrame | None:
+    if not path.is_file():
+        logger.info("Recipe ingredient alias CSV not found, skipping: %s", path)
+        return None
+    alias_df = pd.read_csv(path)
+    logger.info("Recipe ingredient alias CSV loaded: %d rows", len(alias_df))
+    return alias_df
+
+
+def build_recipe_ingredient_props(row: pd.Series) -> dict[str, Any] | None:
+    recipe_id = _number(row.get("RCP_SNO"))
+    if recipe_id is None:
+        return None
+    return {
+        "recipeId": int(recipe_id),
+        "ingredientsNormalized": _text(row.get("ingredients_normalized")) or "[]",
+        "othersItems": _text(row.get("others_items")) or "[]",
+    }
+
+
+def build_uses_alias_rows(row: pd.Series) -> list[dict[str, Any]]:
+    recipe_id = _number(row.get("RCP_SNO"))
+    if recipe_id is None:
+        return []
+    rows: list[dict[str, Any]] = []
+    for alias in _parse_json(row.get("aliases_matched")):
+        if not isinstance(alias, dict):
+            continue
+        alias_id = _text(alias.get("alias_id"))
+        if alias_id:
+            rows.append({"recipeId": int(recipe_id), "aliasId": alias_id})
+    return rows
+
+
+def build_recipe_ingredient_props_rows(alias_df: pd.DataFrame) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for _, row in alias_df.iterrows():
+        props = build_recipe_ingredient_props(row)
+        if props:
+            rows.append(props)
+    return rows
+
+
+def build_all_uses_alias_rows(alias_df: pd.DataFrame) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for _, row in alias_df.iterrows():
+        rows.extend(build_uses_alias_rows(row))
+    return rows
+
+
 def load_recipe_graph_to_neo4j(
     *,
     clear: bool = False,
     recipe_csv: Path = RECIPE_FIX_CSV,
     review_csv: Path = REVIEW_BY_LLM_CSV,
     comment_csv: Path = COMMENT_BY_LLM_CSV,
+    alias_csv: Path = RECIPE_INGREDIENT_ALIAS_CSV,
 ) -> dict[str, int]:
     recipe_df, review_df, comment_df = load_recipe_tables(
         recipe_csv=recipe_csv,
@@ -258,6 +343,23 @@ def load_recipe_graph_to_neo4j(
         _upsert_batches(conn, UPSERT_REVIEWER_QUERY, reviewer_rows, desc="Reviewer upsert")
         _upsert_batches(conn, UPSERT_WROTE_REVIEW_QUERY, review_rel_rows, desc="WROTE_REVIEW upsert")
         _upsert_batches(conn, UPSERT_WROTE_COMMENT_QUERY, comment_rel_rows, desc="WROTE_COMMENT upsert")
+
+        alias_df = load_recipe_ingredient_alias_table(alias_csv)
+        if alias_df is not None:
+            ingredient_props_rows = build_recipe_ingredient_props_rows(alias_df)
+            uses_alias_rows = build_all_uses_alias_rows(alias_df)
+            _upsert_batches(
+                conn,
+                UPSERT_RECIPE_INGREDIENT_PROPS_QUERY,
+                ingredient_props_rows,
+                desc="Recipe ingredient props",
+            )
+            _upsert_batches(conn, MERGE_USES_ALIAS_QUERY, uses_alias_rows, desc="USES_ALIAS merge")
+            logger.info(
+                "Recipe ingredient alias load: props=%d uses_alias=%d",
+                len(ingredient_props_rows),
+                len(uses_alias_rows),
+            )
 
         summary_rows = conn.execute_query(SUMMARY_QUERY)
     finally:
@@ -302,3 +404,16 @@ def _self_check() -> None:
     assert comment_rel_rows
     assert "commentId" in comment_rel_rows[0]
     assert comment_rel_rows[0]["commentId"] > 0
+
+    alias_df = load_recipe_ingredient_alias_table()
+    assert alias_df is not None
+    sample = alias_df.loc[alias_df["RCP_SNO"] == 7016814].iloc[0]
+    props = build_recipe_ingredient_props(sample)
+    assert props is not None
+    assert json.loads(props["ingredientsNormalized"])
+    assert json.loads(props["othersItems"])
+    alias_rows = build_uses_alias_rows(sample)
+    assert any(row["aliasId"] == "alias_0843" for row in alias_rows)
+    assert all("recipeId" in row and "aliasId" in row for row in alias_rows)
+    assert len(build_recipe_ingredient_props_rows(alias_df)) > 3000
+    assert len(build_all_uses_alias_rows(alias_df)) > 3000
