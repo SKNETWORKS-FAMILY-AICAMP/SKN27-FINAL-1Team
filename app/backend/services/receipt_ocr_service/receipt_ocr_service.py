@@ -40,6 +40,8 @@ class ReceiptOcrGraphState(TypedDict, total=False):
     max_retries: int
     quality_score: float
     quality_issues: List[str]
+    ocr_status: str
+    ocr_error_message: Optional[str]
     receipt_validation_issues: List[str]
     stage: str
     response: Dict[str, Any]
@@ -218,6 +220,8 @@ class ReceiptOcrService:
 
     async def _persist_receipt_node(self, state: ReceiptOcrGraphState) -> Dict[str, Any]:
         normalized = state["normalized"]
+        quality_score = state.get("quality_score")
+        quality_issues = state.get("quality_issues", [])
         receipt = Receipt(
             user_id=state["user_id"],
             original_file_name=state.get("original_file_name"),
@@ -225,6 +229,9 @@ class ReceiptOcrService:
             store_name=normalized.get("store_name"),
             purchased_at=self._parse_purchase_datetime(normalized.get("purchase_datetime")),
             total_price=normalized.get("total_amount"),
+            ocr_quality_score=quality_score,
+            ocr_status=self._build_ocr_status(quality_score=quality_score, quality_issues=quality_issues),
+            ocr_error_message=", ".join(quality_issues) if quality_issues else None,
         )
         db = state["db"]
         db.add(receipt)
@@ -249,6 +256,11 @@ class ReceiptOcrService:
             "is_receipt_like": normalized.get("is_receipt_like"),
             "quality_score": state.get("quality_score"),
             "quality_issues": state.get("quality_issues", []),
+            "ocr_status": self._build_ocr_status(
+                quality_score=state.get("quality_score"),
+                quality_issues=state.get("quality_issues", []),
+            ),
+            "ocr_error_message": ", ".join(state.get("quality_issues", [])) if state.get("quality_issues") else None,
             "receipt_validation_issues": state.get("receipt_validation_issues", []),
             "needs_reupload": False,
         }
@@ -279,6 +291,8 @@ class ReceiptOcrService:
             "confidence_note": "OCR quality stayed below the operational threshold after retry.",
             "quality_score": state.get("quality_score"),
             "quality_issues": state.get("quality_issues", []),
+            "ocr_status": "reupload_required",
+            "ocr_error_message": ", ".join(state.get("quality_issues", [])) if state.get("quality_issues") else None,
             "needs_reupload": True,
             "reupload_message": "영수증 이미지 인식 품질이 낮아요. 글자와 금액이 선명하게 보이도록 다시 촬영하거나 다른 이미지를 첨부해주세요.",
         }
@@ -505,6 +519,15 @@ class ReceiptOcrService:
                 pass
 
         return max(0.0, round(score, 2)), issues
+
+    def _build_ocr_status(self, *, quality_score: Optional[float], quality_issues: List[str]) -> str:
+        if quality_score is None:
+            return "unknown"
+        if quality_score < OCR_MIN_QUALITY_SCORE:
+            return "reupload_required"
+        if quality_issues:
+            return "needs_review"
+        return "completed"
 
     def _is_unclear_item_name(self, value: Any) -> bool:
         text = self._nullable_str(value)

@@ -135,6 +135,9 @@ CREATE TABLE receipts (
     store_name TEXT,
     purchased_at TIMESTAMPTZ,
     total_price INTEGER,
+    ocr_quality_score NUMERIC(4, 2),
+    ocr_status VARCHAR(30),
+    ocr_error_message TEXT,
     confirmed_result_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
