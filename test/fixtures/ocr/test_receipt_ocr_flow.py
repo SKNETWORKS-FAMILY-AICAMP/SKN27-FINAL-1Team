@@ -14,6 +14,7 @@ from fastapi import UploadFile
 from sqlalchemy import BigInteger, create_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
+from starlette.datastructures import Headers
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -45,6 +46,20 @@ BANANA_IMPORTED = "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)"
 UNKNOWN_PRODUCT = "\ucc98\uc74c\ubcf4\ub294\uc0c1\ud488ABC"
 COLD_STORAGE = "\ub0c9\uc7a5"
 STORE_NAME = "\ud14c\uc2a4\ud2b8\ub9c8\ud2b8"
+TEST_PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00"
+)
+
+
+def make_upload(filename: str = "receipt.png", content: bytes = TEST_PNG_BYTES) -> UploadFile:
+    return UploadFile(
+        filename=filename,
+        file=io.BytesIO(content),
+        headers=Headers({"content-type": "image/png"}),
+    )
 
 
 @pytest.fixture()
@@ -199,7 +214,7 @@ def test_analyze_upload_retries_low_quality_ocr_result(
 
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
-    upload = UploadFile(filename="receipt.png", file=io.BytesIO(b"fake-image-bytes"))
+    upload = make_upload()
     result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
 
     assert len(calls) == 2
@@ -209,6 +224,8 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     assert result["items"][0]["raw_name"] == BANANA_IMPORTED
     assert result["items"][0]["normalized_name"] == BANANA
     assert result["receipt_id"] is not None
+    assert "receipt" not in Path(result["original_file_path"]).name
+    assert Path(result["original_file_path"]).suffix == ".png"
     assert result["quality_score"] == 1.0
     assert result["ocr_status"] == "completed"
 
@@ -216,6 +233,58 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     assert float(saved_receipt.ocr_quality_score) == 1.0
     assert saved_receipt.ocr_status == "completed"
     assert saved_receipt.ocr_error_message is None
+
+
+def test_validate_upload_rejects_pdf_extension():
+    service = ReceiptOcrService()
+    upload = make_upload(filename="receipt.pdf")
+
+    with pytest.raises(Exception) as exc_info:
+        service._validate_upload(upload, TEST_PNG_BYTES)
+
+    assert exc_info.value.status_code == 400
+    assert "Unsupported image format" in exc_info.value.detail
+
+
+def test_validate_upload_rejects_mismatched_mime_type():
+    service = ReceiptOcrService()
+    upload = UploadFile(
+        filename="receipt.png",
+        file=io.BytesIO(TEST_PNG_BYTES),
+        headers=Headers({"content-type": "image/jpeg"}),
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        service._validate_upload(upload, TEST_PNG_BYTES)
+
+    assert exc_info.value.status_code == 400
+    assert "content type" in exc_info.value.detail
+
+
+def test_validate_upload_rejects_mismatched_file_signature():
+    service = ReceiptOcrService()
+    upload = make_upload(content=b"not-a-real-image")
+
+    with pytest.raises(Exception) as exc_info:
+        service._validate_upload(upload, b"not-a-real-image")
+
+    assert exc_info.value.status_code == 400
+    assert "content does not match" in exc_info.value.detail
+
+
+def test_upload_rate_limit_rejects_more_than_five_requests_per_minute(monkeypatch):
+    service = ReceiptOcrService()
+    monkeypatch.setattr(settings, "RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE", 5)
+    monkeypatch.setattr(settings, "RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY", 50)
+
+    for _ in range(5):
+        service._enforce_upload_rate_limit(user_id=7)
+
+    with pytest.raises(Exception) as exc_info:
+        service._enforce_upload_rate_limit(user_id=7)
+
+    assert exc_info.value.status_code == 429
+    assert "per minute" in exc_info.value.detail
 
 
 # 품목이 없어도 총액만 보이는 영수증/전표는 무조건 저품질 재시도 대상이 되지 않도록 이 테스트가 알려준다.
@@ -257,7 +326,7 @@ def test_analyze_upload_does_not_retry_when_only_total_amount_is_visible(
 
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
-    upload = UploadFile(filename="receipt.png", file=io.BytesIO(b"fake-image-bytes"))
+    upload = make_upload()
     result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
 
     assert len(calls) == 1
@@ -289,7 +358,7 @@ def test_analyze_upload_requests_reupload_when_retry_stays_low_quality(db_sessio
 
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
-    upload = UploadFile(filename="receipt.png", file=io.BytesIO(b"fake-image-bytes"))
+    upload = make_upload()
     result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
 
     assert len(calls) == 2
@@ -326,7 +395,7 @@ def test_analyze_upload_requests_reupload_for_non_receipt_document(db_session, m
 
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
-    upload = UploadFile(filename="table.png", file=io.BytesIO(b"fake-image-bytes"))
+    upload = make_upload(filename="table.png")
     result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
 
     assert len(calls) == 1
