@@ -5,6 +5,7 @@ import './MenuRecommend.css'
 import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageMenuRecommendation from '../../assets/extracted/images/image_menu_recommendation.png'
 import imageSearch from '../../assets/extracted/images/image_search.png'
+import { API_URL } from '../../utils/api.js'
 import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import {
   buildRecommendRequestBody,
@@ -17,7 +18,6 @@ import {
   recommendTemplates,
 } from '../../mock/menuRecommendMock.js'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -115,7 +115,7 @@ function MenuRecommend() {
     startProgressAnimation()
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/recipes/recommend`, {
+      const response = await fetch(`${API_URL}/api/v1/recipes/recommend`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

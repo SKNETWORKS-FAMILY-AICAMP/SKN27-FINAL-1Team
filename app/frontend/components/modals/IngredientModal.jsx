@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { API_URL } from '../../utils/api.js'
 
 const CATEGORY_OPTIONS = ['기타', '채소', '과일', '육류', '수산물', '유제품', '가공식품']
 const STORAGE_OPTIONS = ['냉장', '냉동', '실온']
@@ -85,8 +86,7 @@ export default function IngredientModal({
 
     try {
       const token = window.localStorage.getItem('bobbeori-token')
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/v1/inventory/predict?name=${encodeURIComponent(ingredientName)}`, {
+      const response = await fetch(`${API_URL}/api/v1/inventory/predict?name=${encodeURIComponent(ingredientName)}`, {
         headers: {
           'Authorization': `Bearer ${token || ''}`,
         }
@@ -99,7 +99,7 @@ export default function IngredientModal({
             handleFormChange({ target: { name: 'storage_method', value: data.storage_method } })
           }
         } else {
-          setPredictError('올바른 식재료 이름을 입력해주세요. (예: 양파, 우유)')
+          setPredictError('올바른 식재료 이름을 입력해주세요.')
         }
       }
     } catch (error) {
@@ -234,7 +234,7 @@ export default function IngredientModal({
                 ))}
               </div>
             ) : null}
-            {predictError && <p style={{ color: 'red', fontSize: '12px', marginTop: '4px' }}>🔴 {predictError}</p>}
+            {predictError && <p style={{ color: 'red', fontSize: '12px', marginTop: '4px', marginLeft: '5px' }}>{predictError}</p>}
           </div>
 
           <div className="fridge-form-row">

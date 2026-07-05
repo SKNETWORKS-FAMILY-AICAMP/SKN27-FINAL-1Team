@@ -31,11 +31,9 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
-            neo4j:
-                condition: service_started
             recipe_load:
                 condition: service_completed_successfully
-            food_guide_load:
+            neo4j_load:
                 condition: service_completed_successfully
         healthcheck:
             test:
@@ -76,21 +74,17 @@ services:
             - .env
         environment:
             DB_HOST: postgres
-            NEO4J_URI: bolt://neo4j:7687
         volumes:
             - ./storage:/project/storage:ro
-            - ./.env:/project/.env:ro
         depends_on:
             postgres:
                 condition: service_healthy
-            neo4j:
-                condition: service_started
 
-    food_guide_load:
+    neo4j_load:
         build:
             context: .
             dockerfile: etl/Dockerfile
-        container_name: bobbeori_food_guide_load
+        container_name: bobbeori_neo4j_load
         restart: "no"
         env_file:
             - .env
@@ -98,7 +92,6 @@ services:
             NEO4J_URI: bolt://neo4j:7687
         volumes:
             - ./storage:/project/storage:ro
-            - ./.env:/project/.env:ro
         command:
             - sh
             - -c
@@ -139,8 +132,6 @@ services:
             - "7687:7687"
         environment:
             - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
-            - NEO4J_PLUGINS=["apoc", "graph-data-science"]
-            - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
             - NEO4J_dbms_memory_heap_initial__size=512m
             - NEO4J_dbms_memory_heap_max__size=2G
             - NEO4J_dbms_memory_pagecache_size=1G
@@ -148,7 +139,6 @@ services:
             - ./storage/neo4j/backups/neo4j_data:/data
             - ./storage/neo4j/backups/neo4j_logs:/logs
             - ./storage/neo4j/import:/var/lib/neo4j/import
-            - ./storage/neo4j/backups/neo4j_plugins:/plugins
         healthcheck:
             test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" 'RETURN 1'"]
             interval: 10s
