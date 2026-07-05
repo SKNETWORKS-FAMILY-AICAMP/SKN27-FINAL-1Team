@@ -14,7 +14,7 @@ from typing import Any
 import pandas as pd
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if __package__ is None:
     sys.path.insert(0, str(ROOT))
 
@@ -25,7 +25,7 @@ from etl.recipe.load_to_postgres.loader import (
 )
 
 if __package__ is None:
-    from ai.recommendation.openai_model import OpenAIClient
+    from etl.recipe.preprocessing_by_llm.openai_model import OpenAIClient
 else:
     from .openai_model import OpenAIClient
 
