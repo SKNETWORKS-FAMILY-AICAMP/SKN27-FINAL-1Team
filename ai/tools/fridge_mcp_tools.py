@@ -12,41 +12,41 @@ from app.backend.services.inventory_service.inventory_service import inventory_s
 class FridgeItemsInput(BaseModel):
     """냉장고 재료 목록 조회 MCP 입력 스키마입니다."""
 
-    user_id: int = Field(description="user id")
+    user_id: int = Field(description="사용자 ID")
 
 
 class AddFridgeItemInput(BaseModel):
     """냉장고 재료 추가 MCP 입력 스키마입니다."""
 
-    user_id: int = Field(description="user id")
-    name: str = Field(description="ingredient name")
-    quantity: float = Field(default=1.0, gt=0, description="quantity")
-    unit: str = Field(default='\\uac1c', description="unit")
-    storage: str | None = Field(default=None, description='\\ub0c9\\uc7a5, \\ub0c9\\ub3d9, \\uc2e4\\uc628')
-    purchase_date: date | None = Field(default=None, description="YYYY-MM-DD")
-    expiration_date: date | None = Field(default=None, description="YYYY-MM-DD")
+    user_id: int = Field(description="사용자 ID")
+    name: str = Field(description="식재료명")
+    quantity: float = Field(default=1.0, gt=0, description="수량")
+    unit: str = Field(default="개", description="단위")
+    storage: str | None = Field(default=None, description="냉장, 냉동, 실온")
+    purchase_date: date | None = Field(default=None, description="구매일 YYYY-MM-DD")
+    expiration_date: date | None = Field(default=None, description="소비기한 YYYY-MM-DD")
 
 
 class ConsumeFridgeItemInput(BaseModel):
     """냉장고 재료 소비 MCP 입력 스키마입니다."""
 
-    user_id: int = Field(description="user id")
-    name: str = Field(description="ingredient name")
-    quantity: float = Field(default=1.0, gt=0, description="quantity")
+    user_id: int = Field(description="사용자 ID")
+    name: str = Field(description="식재료명")
+    quantity: float = Field(default=1.0, gt=0, description="수량")
 
 
 class DeleteFridgeItemInput(BaseModel):
     """냉장고 재료 폐기 MCP 입력 스키마입니다."""
 
-    user_id: int = Field(description="user id")
-    name: str = Field(description="ingredient name")
+    user_id: int = Field(description="사용자 ID")
+    name: str = Field(description="식재료명")
 
 
 class ExpiringFridgeItemsInput(BaseModel):
     """소비 임박 재료 조회 MCP 입력 스키마입니다."""
 
-    user_id: int = Field(description="user id")
-    days: int = Field(default=3, ge=0, description="expiring threshold days")
+    user_id: int = Field(description="사용자 ID")
+    days: int = Field(default=3, ge=0, description="소비 임박 기준 일수")
 
 
 def _ok(message: str, data: Any = None) -> dict[str, Any]:
@@ -96,7 +96,7 @@ def add_fridge_item_tool(
     user_id: int,
     name: str,
     quantity: float = 1.0,
-    unit: str = '\\uac1c',
+    unit: str = "개",
     storage: str | None = None,
     purchase_date: date | None = None,
     expiration_date: date | None = None,

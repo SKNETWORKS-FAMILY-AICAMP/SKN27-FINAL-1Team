@@ -1,10 +1,11 @@
 import os
 import sys
+from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.backend.main import app
 from app.backend.api.deps import get_current_user_required
@@ -40,7 +41,7 @@ def test_get_inventory_summary(mock_service):
 
 @patch("app.backend.api.inventory.inventory_api.inventory_service")
 def test_add_ingredient(mock_service):
-    mock_service.add_ingredient.return_value = {"id": 100, "name": "당근", "status": "stored", "quantity": 1.0, "unit": "개", "storage_method": "냉장", "purchase_date": "2026-06-26", "created_at": "2026-06-26T00:00:00Z", "fridge_id": 1}
+    mock_service.add_ingredient.return_value = {"id": 100, "name": "당근", "status": "stored", "quantity": 1.0, "unit": "개", "storage_method": "냉장", "purchase_date": "2026-06-26", "created_at": "2026-06-26T00:00:00Z", "fridge_id": 1, "receipt_item_id": None, "category": "채소", "expiration_date": "2026-07-03", "updated_at": None, "d_day": 3, "is_expiring_soon": True, "is_expired": False, "is_ai_recommended": False}
 
     # 실제 스키마에 맞춰 float 타입 및 storage_method 필드명 사용
     payload = {
@@ -59,7 +60,7 @@ def test_add_ingredient(mock_service):
 
 @patch("app.backend.api.inventory.inventory_api.inventory_service")
 def test_update_ingredient(mock_service):
-    mock_service.update_ingredient.return_value = {"id": 100, "name": "당근(수정)", "status": "stored", "quantity": 2.0, "unit": "개", "storage_method": "냉장", "purchase_date": "2026-06-26", "created_at": "2026-06-26T00:00:00Z", "fridge_id": 1}
+    mock_service.update_ingredient.return_value = {"id": 100, "name": "당근(수정)", "status": "stored", "quantity": 2.0, "unit": "개", "storage_method": "냉장", "purchase_date": "2026-06-26", "created_at": "2026-06-26T00:00:00Z", "fridge_id": 1, "receipt_item_id": None, "category": "채소", "expiration_date": "2026-07-03", "updated_at": None, "d_day": 3, "is_expiring_soon": True, "is_expired": False, "is_ai_recommended": False}
 
     payload = {
         "name": "당근(수정)",

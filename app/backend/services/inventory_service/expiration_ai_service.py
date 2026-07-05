@@ -89,9 +89,35 @@ class ExpirationAIService:
         return DEFAULT_CATEGORY
 
     def is_valid_ingredient_name(self, ingredient_name: str) -> bool:
-        """초성 나열 같은 식재료가 아닌 입력을 최소 규칙으로 걸러냅니다."""
+        """LLM을 활용하여 입력된 단어가 식용 가능한 요리 재료, 가공식품, 식재료인지 판별합니다."""
         name = (ingredient_name or "").strip()
-        return bool(name and re.search(r"[가-힣A-Za-z]", name))
+        if not name or not re.search(r"[가-힣A-Za-z]", name):
+            return False
+
+        if not getattr(self, "openai_client", None):
+            return True
+
+        system_prompt = (
+            "당신은 식품 안전 및 식재료 판별 전문가입니다.\n"
+            "사용자가 입력한 단어가 사람이 먹을 수 있는 요리 재료, 가공식품, 혹은 식재료인지 판단하세요.\n"
+            "예를 들어 '사과', '돼지고기', '두부', '참치캔'은 True, '간디', '립밤', '신발', '세제'는 False입니다.\n"
+            "오직 'True' 또는 'False' 문자열만 답변하세요."
+        )
+
+        try:
+            response = self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"단어: [{name}]"}
+                ],
+                temperature=0.0,
+            )
+            result = response.choices[0].message.content.strip().lower()
+            return result == "true"
+        except Exception as exc:
+            logger.error("식재료 판별 LLM 호출 중 오류 발생: %s", exc)
+            return True
 
     def get_ingredient_override_lifespan(self, ingredient_name: str, storage_method: str = None) -> tuple[str, int] | None:
         """대표 식재료 예외 룰에 해당하면 보관 위치와 소비기한을 반환합니다."""
