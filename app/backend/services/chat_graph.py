@@ -17,7 +17,7 @@ from app.backend.schemas.chat_state import GraphState
 logger = logging.getLogger(__name__)
 # 챗봇 기본 응답 문구
 LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
-GENERAL_REPLY = "요리와 식재료 관련 질문을 물어봐 주세요.\n예: 양파 보관법, 감자튀김 에어프라이기 시간, 두부 레시피"
+GENERAL_REPLY = "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"
 CANCEL_REPLY = "알겠습니다. 작업을 취소하겠습니다."
 
 # 확인/취소 액션 키워드
