@@ -1,5 +1,5 @@
 {
-  "model_version": "recommendation",
+  "model_version": "recommend_model_v1",
   "model_name": "extra_trees",
   "random_state": 42,
   "feature_columns": [

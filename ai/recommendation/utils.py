@@ -11,15 +11,11 @@ import torch
 from .config import RANDOM_STATE
 
 
-def reset_seeds(func, seed: int = RANDOM_STATE):
+def reset_seeds(seed: int = RANDOM_STATE) -> None:
     random.seed(seed)
+    # ponytail: PYTHONHASHSEED only fully applies if set before process start
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
-
-    def wrapper_func(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    return wrapper_func

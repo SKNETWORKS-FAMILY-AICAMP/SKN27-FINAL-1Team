@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 from .config import (
     CATEGORICAL_FEATURES,
@@ -21,18 +21,27 @@ from .config import (
     get_regressor,
 )
 
+_ONEHOT_MODELS = frozenset({"extra_trees", "random_forest", "lightgbm"})
+
+
+def _categorical_encoder(model_name: str) -> OneHotEncoder | OrdinalEncoder:
+    if model_name in _ONEHOT_MODELS:
+        return OneHotEncoder(handle_unknown="ignore")
+    if model_name == "hist_gbm":
+        return OrdinalEncoder(
+            handle_unknown="use_encoded_value",
+            unknown_value=-1,
+        )
+    raise ValueError(
+        f"Unknown MODEL_NAME: {model_name!r}. Choose from {sorted(_ONEHOT_MODELS | {'hist_gbm'})}"
+    )
+
 
 def build_pipeline(model_name: str = MODEL_NAME) -> Pipeline:
     categorical_pipeline = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            (
-                "label_encoder",
-                OrdinalEncoder(
-                    handle_unknown="use_encoded_value",
-                    unknown_value=-1,
-                ),
-            ),
+            ("encoder", _categorical_encoder(model_name)),
         ]
     )
     numeric_pipeline = Pipeline(

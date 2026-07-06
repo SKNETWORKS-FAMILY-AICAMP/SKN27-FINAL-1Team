@@ -1,5 +1,5 @@
 {
-  "model_version": "recommendation",
+  "model_version": "recommend_model_v1",
   "random_state": 42,
   "train_row_count": 450,
   "test_row_count": 113,
@@ -20,12 +20,12 @@
     "commonness_mean"
   ],
   "model_type": "extra_trees",
-  "RMSE": 1.9350538281731473,
-  "MAE": 1.5089525632560608,
-  "R2": -0.10544569423375671,
-  "Spearman": 0.1472652871115843,
-  "created_at": "2026-07-06T07:23:05.687299+00:00",
-  "Hit@10": 0.1,
-  "Hit@20": 0.3,
-  "Hit@50": 0.48
+  "RMSE": 2.02281233707448,
+  "MAE": 1.594334919281191,
+  "R2": -0.2079876630211368,
+  "Spearman": 0.13094683611684077,
+  "created_at": "2026-07-06T08:22:49.657113+00:00",
+  "Hit@10": 0.2,
+  "Hit@20": 0.25,
+  "Hit@50": 0.5
 }

@@ -27,11 +27,11 @@ from ai.recommendation.features import IngredientCommonnessLookup
 from ai.recommendation.utils import reset_seeds
 
 
-@reset_seeds
 def run() -> None:
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
     merged = data_loader.load_and_merge()
+    reset_seeds(RANDOM_STATE)
     labeled, unlabeled = data_loader.split_labeled_unlabeled(merged)
 
     featured_labeled = features.build_all_features(labeled)
@@ -110,7 +110,9 @@ def run() -> None:
 
     print(f"Saved pipeline -> {ARTIFACTS_DIR / 'pipeline.joblib'}")
     print(f"Saved scores -> {OUTPUT_SCORED_CSV}")
-    print(f"RMSE={eval_report['RMSE']:.4f}  Spearman={eval_report['Spearman']:.4f}")
+    sp = eval_report["Spearman"]
+    sp_text = f"{sp:.4f}" if sp is not None else "N/A"
+    print(f"RMSE={eval_report['RMSE']:.4f}  Spearman={sp_text}")
 
 
 if __name__ == "__main__":

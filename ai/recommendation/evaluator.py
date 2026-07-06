@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -29,6 +30,16 @@ def hit_at_k(y_true: np.ndarray, y_pred: np.ndarray, k: int) -> float | None:
     return len(true_top & pred_top) / k
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def evaluate(
     y_true: pd.Series,
     y_pred: np.ndarray,
@@ -42,7 +53,8 @@ def evaluate(
     rmse = float(np.sqrt(mean_squared_error(y, pred)))
     mae = float(mean_absolute_error(y, pred))
     r2 = float(r2_score(y, pred))
-    spearman = float(spearmanr(y, pred).correlation)
+    sp = spearmanr(y, pred).correlation
+    spearman = None if sp is None or np.isnan(sp) else float(sp)
 
     report: dict[str, Any] = {
         "model_version": MODEL_VERSION,
@@ -76,4 +88,4 @@ def build_feature_report(df: pd.DataFrame, cols: list[str]) -> dict[str, Any]:
 
 def save_json(data: dict[str, Any], path: str | Any) -> None:
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(_json_safe(data), f, ensure_ascii=False, indent=2)

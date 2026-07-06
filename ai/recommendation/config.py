@@ -19,7 +19,7 @@ OUTPUT_SCORED_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_recommen
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
-MODEL_VERSION = "recommendation"
+MODEL_VERSION = "recommend_model_v1"
 MODEL_NAME = "extra_trees"
 
 TARGET_COL = "REVIEW_RANK_SCORE"
