@@ -7,39 +7,47 @@ import httpx
 from app.backend.core.config import settings
 
 
-async def _call_calendar_tool(
-    tool_name: str,
-    arguments: dict[str, Any],
-) -> dict | None:
-    if not settings.RUNPOD_CALENDAR_MCP_URL:
-        return None
+def _runsync_url() -> str:
+    base = settings.RUNPOD_CALENDAR_SERVERLESS_URL.rstrip("/")
+    return base if base.endswith("/runsync") else f"{base}/runsync"
 
-    try:
-        from mcp import ClientSession
-        from mcp.client.streamable_http import streamable_http_client
-    except ImportError as exc:
-        print(f"[CalendarMCP] MCP SDK is not installed: {exc}")
+
+def _serverless_output(payload: dict[str, Any]) -> dict | None:
+    if payload.get("status") != "COMPLETED":
+        return None
+    output = payload.get("output")
+    return output if isinstance(output, dict) else None
+
+
+async def _call_calendar_tool(tool_name: str, arguments: dict[str, Any]) -> dict | None:
+    if not settings.RUNPOD_CALENDAR_SERVERLESS_URL:
         return None
 
     headers = {}
+    if settings.RUNPOD_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.RUNPOD_API_KEY}"
     if settings.RUNPOD_INTERNAL_TOKEN:
         headers["X-Internal-Token"] = settings.RUNPOD_INTERNAL_TOKEN
 
     try:
-        timeout = httpx.Timeout(settings.RUNPOD_TIMEOUT_SECONDS, read=settings.RUNPOD_TIMEOUT_SECONDS)
-        async with httpx.AsyncClient(headers=headers, timeout=timeout) as http_client:
-            async with streamable_http_client(
-                settings.RUNPOD_CALENDAR_MCP_URL,
-                http_client=http_client,
-            ) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(tool_name, arguments=arguments)
+        async with httpx.AsyncClient(timeout=settings.RUNPOD_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                _runsync_url(),
+                headers=headers,
+                json={
+                    "input": {
+                        "tool": tool_name,
+                        "arguments": arguments,
+                        "internal_token": settings.RUNPOD_INTERNAL_TOKEN,
+                    }
+                },
+            )
+            response.raise_for_status()
     except Exception as exc:
-        print(f"[CalendarMCP] MCP tool call failed ({tool_name}): {exc}")
+        print(f"[CalendarMCP] RunPod serverless call failed ({tool_name}): {exc}")
         return None
 
-    return _structured_result(result)
+    return _serverless_output(response.json())
 
 
 async def create_calendar_event_with_mcp(
@@ -80,23 +88,3 @@ async def delete_calendar_event_with_mcp(
         },
     )
     return data if isinstance(data, dict) and (data.get("deleted") or data.get("missing")) else None
-
-
-def _structured_result(result: Any) -> dict | None:
-    data = getattr(result, "structuredContent", None)
-    if isinstance(data, dict):
-        return data
-
-    for item in getattr(result, "content", []) or []:
-        text = getattr(item, "text", None)
-        if not text:
-            continue
-        try:
-            import json
-
-            parsed = json.loads(text)
-        except ValueError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-    return None
