@@ -38,7 +38,8 @@ from ai.agents.supervisor_agent.chat_utils import (
     EXPIRING_WORDS, ADD_WORDS, DEFAULT_STORAGE, STORAGE_KEYS, KOREAN_QUANTITIES,
     _normalize_text, _get_josa, _confirm_action, _inventory_refresh_action,
     _quantity_text, _extract_quantity, _extract_delete_name, _extract_consume_name,
-    _extract_storage, _strip_add_name, _extract_add_items
+    _extract_storage, _strip_add_name, _extract_add_items,
+    _requires_login
 )
 
 def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
@@ -339,7 +340,7 @@ def ingredient_guide_node(state: GraphState) -> dict:
 def recipe_recommend_node(state: GraphState) -> dict:
     """냉장고 기반 또는 재료 기반 레시피 추천을 안내합니다."""
     svc = state["service"]
-    if svc._requires_login("recipe.recommend", state["text"]) and not state["user_id"]:
+    if _requires_login("recipe.recommend", state["text"]) and not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
     reply, actions = svc._reply_recipe_recommend(state["db"], state["user_id"], state["text"], state.get("history", []), state.get("settings_obj"))
     return {"response_text": reply, "actions": actions}
