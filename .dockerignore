@@ -8,4 +8,6 @@ test
 ai/*
 !ai/tools
 !ai/tools/**
+!ai/calendar
+!ai/calendar/**
 docs

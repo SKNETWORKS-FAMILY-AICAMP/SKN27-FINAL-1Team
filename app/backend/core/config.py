@@ -58,8 +58,10 @@ class Settings:
     
     # Runpod MCP / AI Server
     RUNPOD_CALENDAR_MCP_URL: str = os.getenv("RUNPOD_CALENDAR_MCP_URL", "")
+    RUNPOD_CALENDAR_SERVERLESS_URL: str = os.getenv("RUNPOD_CALENDAR_SERVERLESS_URL", "")
+    RUNPOD_API_KEY: str = os.getenv("RUNPOD_API_KEY", "")
     RUNPOD_INTERNAL_TOKEN: str = os.getenv("RUNPOD_INTERNAL_TOKEN", "")
-    RUNPOD_TIMEOUT_SECONDS: int = int(os.getenv("RUNPOD_TIMEOUT_SECONDS", 20))
+    RUNPOD_TIMEOUT_SECONDS: int = int(os.getenv("RUNPOD_TIMEOUT_SECONDS", 60))
 
     # Receipt OCR Settings
     OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai_vision")
