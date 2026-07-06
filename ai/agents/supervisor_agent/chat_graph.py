@@ -12,7 +12,7 @@ from langgraph.graph import END, StateGraph
 
 from app.backend.core.config import settings
 from ai.tools.calendar_tools import CALENDAR_TOOLS
-from app.backend.services.chat_service.chat_utils import (
+from ai.agents.supervisor_agent.chat_utils import (
     _pending_calendar_from_history,
     _pending_add_many_from_history,
     _is_quantity_only_list,
@@ -31,7 +31,7 @@ from app.backend.services.chat_service.chat_utils import (
 from app.backend.schemas.chat_state import GraphState
 
 logger = logging.getLogger(__name__)
-from app.backend.services.chat_service.chat_utils import (
+from ai.agents.supervisor_agent.chat_utils import (
     LOGIN_REQUIRED_REPLY, GENERAL_REPLY, CANCEL_REPLY,
     CONFIRM_PREFIX, CANCEL_WORDS, INVENTORY_ACTION_WORDS,
     CALENDAR_WORDS, DELETE_WORDS, CONSUME_WORDS, INVENTORY_LIST_WORDS,

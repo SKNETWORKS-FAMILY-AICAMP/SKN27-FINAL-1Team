@@ -21,7 +21,7 @@ try:
 except ImportError:
     OpenAI = None
 
-from app.backend.services.chat_service.chat_utils import (
+from ai.agents.supervisor_agent.chat_utils import (
     _extract_keyword,
     _extract_recipe_ingredient,
     _normalize_recipe_keyword,
@@ -35,7 +35,7 @@ from app.backend.services.chat_service.chat_utils import (
     _format_guide_tip
 )
 
-from app.backend.services.chat_service.chat_utils import (
+from ai.agents.supervisor_agent.chat_utils import (
     _is_login_status_question,
     _requires_login,
     _is_cooking_time_question,
@@ -70,7 +70,7 @@ class ChatService:
         langchain_messages.append(HumanMessage(content=text))
         
         # 초기 상태(GraphState) 구성
-        from app.backend.services.chat_service.chat_graph import chat_graph
+        from ai.agents.supervisor_agent.chat_graph import chat_graph
         initial_state = {
             "user_id": user_id,
             "text": text,
