@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings as app_settings
 from app.backend.services.guide_service.guide_service import guide_service
+from ai.agents.guide_agent.guide_agent import lookup_ingredient_guide
 from app.backend.services.inventory_service.inventory_service import inventory_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
@@ -253,7 +254,7 @@ class ChatService:
         return "소비기한이 가까운 재료는\n" + ", ".join(summary) + "예요."
 
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
-        """식재료 가이드 검색 결과를 이용해 보관/손질/세척/신선도 정보를 안내합니다."""
+        """식재료 가이드 에이전트를 이용해 보관/손질/세척/신선도 정보를 안내합니다."""
         keyword = _extract_keyword(text)
         
         # 질문 종류 파악
@@ -266,44 +267,46 @@ class ChatService:
         elif "신선" in normalized or "상하는" in normalized or "상한" in normalized:
             category = "freshness"
             
-        try:
-            guides = guide_service.search_guides(keyword=keyword, page=1, page_size=1)
-            if not guides["items"]:
-                return self._reply_external_guide(keyword)
-
-            item = guides["items"][0]
-            if not _is_guide_result_match(keyword, item["name"]):
-                return self._reply_external_guide(keyword)
-                
-            detail = guide_service.get_guide_detail(item["code"]) or {}
+        # Guide Agent 호출
+        agent_result = lookup_ingredient_guide(keyword)
+        if not agent_result.get("ok"):
+            # 에이전트가 결과를 못 찾았을 경우 외부 검색(Fallback)으로 대체
+            return self._reply_external_guide(keyword, category)
             
-            if category == "prep":
-                tip = detail.get("prep_tips")
-                label = "손질방법"
-            elif category == "washing":
-                tip = detail.get("washing_tips")
-                label = "세척방법"
-            elif category == "freshness":
-                tip = detail.get("freshness_tips")
-                label = "신선도 확인법"
-            else:
-                tip = detail.get("storage_tips") or detail.get("horticultural_storage_tips")
-                label = "보관법"
-                
-        except Exception:
-            return self._reply_external_guide(keyword, "보관법")
-
+        # 데이터 파싱
+        data = agent_result.get("data", {})
+        ingredient_info = data.get("ingredient", {})
+        guides_info = data.get("guides", {})
+        item_name = ingredient_info.get("name") or keyword
+        
+        if category == "prep":
+            tip = guides_info.get("prep", {}).get("content")
+            label = "손질방법"
+        elif category == "washing":
+            tip = guides_info.get("washing", {}).get("content")
+            label = "세척방법"
+        elif category == "freshness":
+            tip = guides_info.get("freshness", {}).get("content")
+            label = "신선도 확인법"
+        else:
+            tip = guides_info.get("storage", {}).get("content") or guides_info.get("horticultural_storage", {}).get("content")
+            label = "보관법"
+            
         if not tip:
-            return f"알고 계신 {item['name']} 가이드는 찾았지만, 아쉽게도 {label}에 대한 구체적인 정보가 비어 있어요. 😅", []
+            return f"알고 계신 {item_name} 가이드는 찾았지만, 아쉽게도 {label}에 대한 구체적인 정보가 비어 있어요. 😅", []
 
         formatted_tip = _format_guide_tip(tip)
+        sources = agent_result.get("ui", {}).get("sources", [])
+        
         if len(formatted_tip) < 45:
             extra_reply, extra_sources = self._reply_external_guide(keyword, label)
             extra_tip = extra_reply.split("\n\n", 1)[-1] if "\n\n" in extra_reply else ""
             if extra_tip and "찾지 못했어요" not in extra_reply and "연결이 불안정" not in extra_reply:
-                return f"{item['name']} {label}이에요.\n{formatted_tip}\n\n추가로 참고하면 좋아요.\n{extra_tip}", extra_sources
+                # 내부 소스와 외부 소스 통합
+                combined_sources = {s["title"]: s for s in (sources + extra_sources)}.values()
+                return f"{item_name} {label}이에요.\n{formatted_tip}\n\n추가로 참고하면 좋아요.\n{extra_tip}", list(combined_sources)
 
-        return f"{item['name']} {label}이에요.\n{formatted_tip}", []
+        return f"{item_name} {label}이에요.\n{formatted_tip}", sources
 
     def _reply_external_guide(self, keyword: str, category_label: str = "보관법") -> tuple[str, list[dict[str, str]]]:
         """내부 가이드가 없을 때 Tavily 검색 결과를 짧게 요약합니다."""
