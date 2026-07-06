@@ -59,8 +59,10 @@ class Settings:
     
     # Runpod MCP / AI Server
     RUNPOD_CALENDAR_MCP_URL: str = os.getenv("RUNPOD_CALENDAR_MCP_URL", "")
+    RUNPOD_CALENDAR_SERVERLESS_URL: str = os.getenv("RUNPOD_CALENDAR_SERVERLESS_URL", "")
+    RUNPOD_API_KEY: str = os.getenv("RUNPOD_API_KEY", "")
     RUNPOD_INTERNAL_TOKEN: str = os.getenv("RUNPOD_INTERNAL_TOKEN", "")
-    RUNPOD_TIMEOUT_SECONDS: int = int(os.getenv("RUNPOD_TIMEOUT_SECONDS", 20))
+    RUNPOD_TIMEOUT_SECONDS: int = int(os.getenv("RUNPOD_TIMEOUT_SECONDS", 60))
 
     # Receipt OCR Settings
     OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai_vision")
@@ -69,5 +71,7 @@ class Settings:
     OCR_UPLOAD_DIR: str = os.getenv("OCR_UPLOAD_DIR", "storage/raw/receipts")
     OCR_OUTPUT_DIR: str = os.getenv("OCR_OUTPUT_DIR", "storage/processed/receipts")
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 10))
+    RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE", 5))
+    RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY", 50))
 
 settings = Settings()

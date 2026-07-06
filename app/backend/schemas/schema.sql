@@ -135,6 +135,9 @@ CREATE TABLE receipts (
     store_name TEXT,
     purchased_at TIMESTAMPTZ,
     total_price INTEGER,
+    ocr_quality_score NUMERIC(4, 2),
+    ocr_status VARCHAR(30),
+    ocr_error_message TEXT,
     confirmed_result_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -189,6 +192,7 @@ CREATE TABLE fridge_items (
     expiry_date DATE,
     is_ai_recommended BOOLEAN DEFAULT FALSE,
     status VARCHAR(30) NOT NULL DEFAULT 'normal',
+    is_ai_recommended BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT ck_fridge_items_status
         CHECK (status IN ('normal', 'expiring', 'expired', 'used'))

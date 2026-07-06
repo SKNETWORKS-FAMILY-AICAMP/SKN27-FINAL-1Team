@@ -1916,8 +1916,8 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify
       >
         <p>
           {canUseCamera
-            ? '영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.'
-            : '영수증 사진(PNG, JPG, JPEG)을 드래그하거나 업로드 버튼을 눌러주세요.'}
+            ? '영수증 사진(PNG, JPG, JPEG, WEBP)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.'
+            : '영수증 사진(PNG, JPG, JPEG, WEBP)을 드래그하거나 업로드 버튼을 눌러주세요.'}
         </p>
         <input
           ref={uploadInputRef}
@@ -1931,7 +1931,7 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify
             ref={cameraInputRef}
             className="receipt-file-input"
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             capture="environment"
             onChange={(event) => handleFileChange(event, '카메라 촬영본')}
           />
