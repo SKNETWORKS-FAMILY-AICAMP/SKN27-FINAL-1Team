@@ -1,16 +1,11 @@
-import os
-import sys
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from unittest.mock import patch
 
 from app.backend.main import app
 from app.backend.api.deps import get_current_user_required
 
 client = TestClient(app)
-HEADERS = {"Authorization": "Bearer fake-token"}
 
 # 인증 의존성 Mocking
 @pytest.fixture(autouse=True)
@@ -30,7 +25,7 @@ def test_get_inventory_summary(mock_service):
         "storage": {"냉장": 3, "냉동": 2, "실온": 0, "기타": 0}
     }
 
-    response = client.get("/api/v1/inventory/summary", headers=HEADERS)
+    response = client.get("/api/v1/inventory/summary")
     
     assert response.status_code == 200
     data = response.json()
@@ -51,7 +46,7 @@ def test_add_ingredient(mock_service):
         "unit": "개"
     }
     
-    response = client.post("/api/v1/inventory", json=payload, headers=HEADERS)
+    response = client.post("/api/v1/inventory", json=payload)
     
     assert response.status_code == 201
     data = response.json()
@@ -70,7 +65,7 @@ def test_update_ingredient(mock_service):
     }
     
     ingredient_id = 100
-    response = client.put(f"/api/v1/inventory/{ingredient_id}", json=payload, headers=HEADERS)
+    response = client.put(f"/api/v1/inventory/{ingredient_id}", json=payload)
     
     assert response.status_code == 200
     data = response.json()
@@ -81,7 +76,7 @@ def test_delete_ingredient(mock_service):
     mock_service.delete_ingredient.return_value = None
 
     ingredient_id = 100
-    response = client.delete(f"/api/v1/inventory/{ingredient_id}", headers=HEADERS)
+    response = client.delete(f"/api/v1/inventory/{ingredient_id}")
     
     assert response.status_code == 204
 
@@ -94,6 +89,6 @@ def test_delete_ingredients_bulk(mock_service):
     }
     
     # httpx TestClient는 delete 요청 시 json 인자를 받지 않을 수 있으므로 request() 사용
-    response = client.request("DELETE", "/api/v1/inventory/bulk", json=payload, headers=HEADERS)
+    response = client.request("DELETE", "/api/v1/inventory/bulk", json=payload)
     
     assert response.status_code == 204

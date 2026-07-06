@@ -1,0 +1,4 @@
+httpx
+mcp>=1.27.0,<2.0.0
+runpod>=1.7.0
+uvicorn[standard]>=0.22.0
