@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.backend.db.models import FridgeItem, Ingredient, IngredientStorageStandard
+from app.backend.db.models import FridgeItem, Ingredient, IngredientAlias, IngredientStorageStandard
 from app.backend.schemas.inventory import IngredientCreate
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,23 @@ class InventoryService:
 
         if not expiration_ai_service.is_valid_ingredient_name(name):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="올바른 식재료 이름을 입력해주세요.")
+
+    def _resolve_known_ingredient_name(self, db: Session, name: str) -> Optional[str]:
+        """챗봇 등록 전 마스터/별칭 기준으로 식재료명을 확인합니다."""
+        raw_name = (name or "").strip()
+        normalized = self._normalize_ingredient_name(raw_name)
+        if not normalized:
+            return None
+
+        ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
+        if ingredient:
+            return ingredient.name
+
+        for alias in db.query(IngredientAlias).all():
+            if self._normalize_ingredient_name(alias.alias_name) == normalized:
+                return alias.ingredient.name if alias.ingredient else raw_name
+
+        return None
 
     def _get_status_from_d_day(self, d_day: Optional[int]) -> str:
         """D-day 값을 냉장고 항목 상태값으로 변환합니다."""
@@ -456,16 +473,33 @@ class InventoryService:
         
     def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
         """챗봇(MCP)에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
+        resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
+        if not resolved_name:
+            return "올바른 식재료명을 입력해주세요."
+
         data = IngredientCreate(
-            name=ingredient_name.strip(),
+            name=resolved_name,
             category=None,
             quantity=quantity or 1.0,
-            unit="\uac1c",
+            unit="개",
             storage_method=storage_method,
         )
         item = self.add_ingredient(db, user_id, data)
         display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
-        return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}\uc5d0 \ucd94\uac00\ud588\uc5b4\uc694."
+        return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}에 추가했어요."
+
+    def add_ingredient_unchecked_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
+        """사용자가 확인한 마스터 미등록 식재료를 냉장고에 추가합니다."""
+        data = IngredientCreate(
+            name=ingredient_name.strip(),
+            category=None,
+            quantity=quantity or 1.0,
+            unit="개",
+            storage_method=storage_method,
+        )
+        item = self.add_ingredient(db, user_id, data)
+        display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
+        return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}에 추가했어요."
 
     def _find_item_by_name(self, items, ingredient_name: str):
         """챗봇에서 받은 이름으로 표시명과 마스터명을 함께 비교합니다."""

@@ -24,11 +24,12 @@ def main() -> None:
     args = _parse_args()
     result = load_recipe_graph_to_neo4j(clear=args.clear)
     logger.info(
-        "Loaded Recipe=%d Reviewer=%d WROTE_REVIEW=%d WROTE_COMMENT=%d",
+        "Loaded Recipe=%d Reviewer=%d WROTE_REVIEW=%d WROTE_COMMENT=%d USES_ALIAS=%d",
         result.get("Recipe", 0),
         result.get("Reviewer", 0),
         result.get("WROTE_REVIEW", 0),
         result.get("WROTE_COMMENT", 0),
+        result.get("USES_ALIAS", 0),
     )
 
 

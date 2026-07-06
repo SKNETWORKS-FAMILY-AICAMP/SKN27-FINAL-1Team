@@ -41,6 +41,10 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
             "total_amount": 2000,
             "currency": "KRW",
             "confidence_note": None,
+            "quality_score": 1.0,
+            "quality_issues": [],
+            "ocr_status": "completed",
+            "ocr_error_message": None,
         }
 
     monkeypatch.setattr(receipts_api.receipt_ocr_service, "analyze_upload", fake_analyze_upload)
@@ -57,6 +61,8 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
     assert body["items"][0]["raw_name"] == "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)"
     assert body["items"][0]["normalized_name"] == BANANA
     assert body["items"][0]["unit"] == EA
+    assert body["quality_score"] == 1.0
+    assert body["ocr_status"] == "completed"
 
 
 def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
@@ -79,6 +85,10 @@ def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
                     "total_amount": 2000,
                     "currency": "KRW",
                     "confidence_note": None,
+                    "quality_score": 1.0,
+                    "quality_issues": [],
+                    "ocr_status": "completed",
+                    "ocr_error_message": None,
                     "needs_reupload": False,
                 },
             }
@@ -99,6 +109,7 @@ def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
     assert '"stage": "image_uploaded"' in response.text
     assert "event: result" in response.text
     assert '"receipt_id": 10' in response.text
+    assert '"ocr_status": "completed"' in response.text
 
 
 def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
