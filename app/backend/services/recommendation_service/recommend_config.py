@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+# ponytail: 기본재료 — 냉장고 없이 owned 처리. normalized_name 또는 ingredient_id 직접 지정.
+BASIC_INGREDIENT_NORMALIZED_NAMES: frozenset[str] = frozenset({"물"})
+BASIC_INGREDIENT_IDS: frozenset[int] = frozenset()
+
 
 @dataclass(frozen=True)
 class RecipeRecommendConfig:
