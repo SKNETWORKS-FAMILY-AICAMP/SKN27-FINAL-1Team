@@ -1,0 +1,24 @@
+{
+  "model_version": "recommendation",
+  "model_name": "extra_trees",
+  "random_state": 42,
+  "feature_columns": [
+    "CKG_KND_ACTO_NM",
+    "CKG_MTH_ACTO_NM",
+    "CKG_STA_ACTO_NM",
+    "CKG_MTRL_ACTO_NM",
+    "CKG_DODF_NM",
+    "serving_size",
+    "cooking_time_min",
+    "ingredient_count",
+    "unique_ingredient_count",
+    "others_count",
+    "others_ratio",
+    "alias_match_ratio",
+    "commonness_mean"
+  ],
+  "clip_low": -0.6244280797605617,
+  "clip_high": 8.181275338074883,
+  "labeled_count": 563,
+  "unlabeled_count": 2608
+}
