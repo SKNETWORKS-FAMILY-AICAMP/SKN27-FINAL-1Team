@@ -12,293 +12,35 @@ from langgraph.graph import END, StateGraph
 
 from app.backend.core.config import settings
 from ai.tools.calendar_tools import CALENDAR_TOOLS
+from ai.agents.supervisor_agent.chat_utils import (
+    _pending_calendar_from_history,
+    _pending_add_many_from_history,
+    _is_quantity_only_list,
+    _latest_bot_text,
+    _extract_storage,
+    _pending_add_storage_from_history,
+    _pending_add_from_history,
+    _pending_consume_from_history,
+    _parse_calendar_date,
+    _has_calendar_date_text,
+    _calendar_datetime_from_text,
+    _calendar_display,
+    _storage_choice_response
+)
+
 from app.backend.schemas.chat_state import GraphState
 
 logger = logging.getLogger(__name__)
-# 챗봇 기본 응답 문구
-LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
-GENERAL_REPLY = "요리와 식재료 관련 질문을 물어봐 주세요.\n예: 양파 보관법, 감자튀김 에어프라이기 시간, 두부 레시피"
-CANCEL_REPLY = "알겠습니다. 작업을 취소하겠습니다."
-
-# 확인/취소 액션 키워드
-CONFIRM_PREFIX = "확인:"
-CANCEL_WORDS = ("취소", "아니", "아니요", "취소할게", "안넣어", "넣지마", "추가하지마")
-
-# 의도 분류용 키워드
-INVENTORY_ACTION_WORDS = (
-    "먹었어",
-    "다썼어",
-    "다먹었어",
-    "버렸어",
-    "소비했",
-    "사용했",
-    "썼어",
-    "추가",
-    "추가해줘",
-    "등록",
-    "등록해줘",
-    "넣었어",
-    "넣어줘",
-    "샀어",
-    "삿어",
-    "사왔어",
-    "구매했",
-    "삭제",
-    "폐기",
-    "지워",
+from ai.agents.supervisor_agent.chat_utils import (
+    LOGIN_REQUIRED_REPLY, GENERAL_REPLY, CANCEL_REPLY,
+    CONFIRM_PREFIX, CANCEL_WORDS, INVENTORY_ACTION_WORDS,
+    CALENDAR_WORDS, DELETE_WORDS, CONSUME_WORDS, INVENTORY_LIST_WORDS,
+    EXPIRING_WORDS, ADD_WORDS, DEFAULT_STORAGE, STORAGE_KEYS, KOREAN_QUANTITIES,
+    _normalize_text, _get_josa, _confirm_action, _inventory_refresh_action,
+    _quantity_text, _extract_quantity, _extract_delete_name, _extract_consume_name,
+    _extract_storage, _strip_add_name, _extract_add_items,
+    _requires_login
 )
-CALENDAR_WORDS = ("일정", "캘린더")
-DELETE_WORDS = ("삭제", "폐기", "지워", "버려")
-CONSUME_WORDS = ("먹었어", "다썼어", "다먹었어", "소비했", "사용했", "썼어")
-INVENTORY_LIST_WORDS = ("뭐 있어", "뭐 있지", "뭐있", "뭐잇", "머있", "머잇", "뭐이", "목록", "현재 재료", "현재 냉장고")
-EXPIRING_WORDS = ("임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "d-day", "디데이")
-ADD_WORDS = ("추가", "등록", "넣", "샀", "삿", "사왔", "구매")
-
-# 식재료 입력 파싱용 기본값
-DEFAULT_STORAGE = "냉장"
-STORAGE_KEYS = ("냉장", "냉동", "실온")
-KOREAN_QUANTITIES = {
-    "한": 1,
-    "하나": 1,
-    "두": 2,
-    "둘": 2,
-    "세": 3,
-    "셋": 3,
-    "네": 4,
-    "넷": 4,
-}
-
-
-def _normalize_text(text: str) -> str:
-    """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
-    return text.replace(" ", "").lower()
-
-def _get_josa(word: str, josa_with_jongseong: str, josa_without_jongseong: str) -> str:
-    """단어의 마지막 글자 받침 유무에 따라 적절한 조사를 반환합니다."""
-    if not word: return josa_with_jongseong
-    last_char = word[-1]
-    if '가' <= last_char <= '힣':
-        has_jongseong = (ord(last_char) - ord('가')) % 28 > 0
-        return josa_with_jongseong if has_jongseong else josa_without_jongseong
-    return josa_with_jongseong
-
-
-def _confirm_action(label: str, command: str) -> dict:
-    """쓰기 작업 전 사용자 확인 버튼을 만듭니다."""
-    return {"label": label, "data": {"message": command}}
-
-
-def _inventory_refresh_action() -> dict:
-    """냉장고 목록을 다시 불러오도록 프론트에 전달할 액션을 만듭니다."""
-    return {"label": "냉장고 새로고침", "data": {"refreshInventory": True}}
-
-
-def _quantity_text(quantity: float) -> str:
-    """수량을 사용자가 읽기 좋은 형태로 바꿉니다."""
-    number = float(quantity or 1)
-    return str(int(number)) if number.is_integer() else str(number)
-
-
-
-def _extract_quantity(text: str) -> float | None:
-    """사용자 문장에서 수량만 간단히 추출합니다."""
-    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:개|g|kg|ml|l)?", text, re.IGNORECASE)
-    if match:
-        return float(match.group(1))
-    normalized = text.replace(" ", "")
-    for word, quantity in KOREAN_QUANTITIES.items():
-        if f"{word}개" in normalized:
-            return float(quantity)
-    return None
-
-
-
-
-def _extract_delete_name(text: str) -> str:
-    """삭제/폐기 문장에서 식재료명만 간단히 추출합니다."""
-    target = text
-    for word in DELETE_WORDS:
-        if word in target:
-            target = target.split(word, 1)[0]
-            break
-    for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
-        target = target.replace(token, " ")
-    return target.strip().rstrip("을를은는이가")
-
-
-
-
-def _extract_consume_name(text: str) -> str:
-    """소비 문장에서 식재료명만 간단히 추출합니다."""
-    target = text
-    for word in CONSUME_WORDS:
-        if word in target:
-            target = target.split(word, 1)[0]
-            break
-    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
-    for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
-        target = target.replace(token, " ")
-    return target.strip(" ,/\t\n을를은는이가도")
-
-
-def _strip_add_name(name: str) -> str:
-    """추가 문장에서 식재료명에 붙은 불필요한 단어를 정리합니다."""
-    cleaned = name.strip()
-    cleaned = re.sub(r"^(그러면|그럼|그리고|아니면|아|음|자)\s+", "", cleaned)
-    for token in ('냉장고에서', '냉장고에', '냉장고', '재료', '식재료', '어제', '오늘', '방금'):
-        cleaned = cleaned.replace(token, " ")
-    for storage in STORAGE_KEYS:
-        cleaned = re.sub(rf"(?<![가-힣A-Za-z0-9]){storage}(?![가-힣A-Za-z0-9])", " ", cleaned)
-    cleaned = cleaned.strip(" ,/\t\n").rstrip("을를은는이가")
-    # '양파도 추가해줘'처럼 이어 말한 조사만 제거하되, 포도/아보카도 같은 재료명은 보존합니다.
-    if cleaned.endswith("도") and (" " in cleaned or (len(cleaned) > 2 and not cleaned.endswith(('포도', '아보카도')))):
-        cleaned = cleaned[:-1].rstrip()
-    return cleaned
-
-
-def _extract_add_items(text: str) -> list[dict]:
-    """추가 요청에서 식재료명, 수량, 보관 위치를 간단히 추출합니다."""
-    target = text
-    for word in ADD_WORDS:
-        if word in target:
-            target = target.split(word, 1)[0]
-            break
-    items = []
-    for raw_part in re.split(r"[,/]", target):
-        part = raw_part.strip()
-        if not part:
-            continue
-        storage = _extract_storage(part)
-        quantity = _extract_quantity(part)
-        name = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE)
-        for word in KOREAN_QUANTITIES:
-            name = name.replace(f"{word}개", " ")
-        name = _strip_add_name(name)
-        if name:
-            items.append({"name": name, "quantity": quantity, "storage": storage})
-    return items
-
-
-def _pending_calendar_from_history(history) -> tuple[str, str] | None:
-    """최근 봇의 일정 등록 확인 문구에서 제목과 날짜를 찾습니다."""
-    text = _latest_bot_text(history)
-    match = re.search(r"'(.+?)'\s+일정을\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})에\s+등록할까요", text)
-    return (match.group(1), match.group(2)) if match else None
-
-def _pending_add_many_from_history(history) -> bool:
-    """최근 봇 응답이 여러 식재료 수량을 기다리는지 확인합니다."""
-    return "각 식재료의 수량" in _latest_bot_text(history)
-
-def _is_quantity_only_list(text: str) -> bool:
-    """여러 재료 추가 대기 중 수량만 나열한 응답인지 확인합니다."""
-    parts = [part.strip() for part in re.split(r"[,/]", text) if part.strip()]
-    return len(parts) > 1 and all(
-        _extract_quantity(part) is not None
-        and not _strip_add_name(re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE))
-        for part in parts
-    )
-
-def _latest_bot_text(history) -> str:
-    """가장 최근 봇 응답만 후속 작업 대기 상태로 확인합니다."""
-    for message in reversed(history or []):
-        if getattr(message, "role", "") == "bot":
-            return getattr(message, "text", "")
-    return ""
-
-def _extract_storage(text: str) -> str | None:
-    """사용자 문장에서 보관 위치를 찾습니다."""
-    normalized = text.replace(" ", "")
-    aliases = {"냉장실": "냉장", "냉동실": "냉동", "상온": "실온"}
-    for alias, storage in aliases.items():
-        if alias in normalized:
-            return storage
-    for storage in STORAGE_KEYS:
-        if re.search(rf"(?<![가-힣A-Za-z0-9]){storage}(?![가-힣A-Za-z0-9])", text):
-            return storage
-    return None
-
-
-def _pending_add_storage_from_history(history) -> tuple[str, float] | None:
-    """최근 봇의 보관 위치 질문에서 추가 대기 중인 식재료명과 수량을 찾습니다."""
-    pattern = r"(.+?)\s+(\d+(?:\.\d+)?)개를\s+어디에\s+보관"
-    match = re.search(pattern, _latest_bot_text(history))
-    return (match.group(1).strip(), float(match.group(2))) if match else None
-
-
-def _pending_add_from_history(history) -> str | None:
-    """최근 봇의 수량 질문에서 추가 대기 중인 식재료명을 찾습니다."""
-    patterns = (
-        r"(.+?)(?:을|를)\s*몇\s*개.*추가",
-        r"(.+?)\s*몇\s*개.*추가",
-    )
-    text = _latest_bot_text(history)
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            return match.group(1).strip(" \"'.,!?을를")
-    return None
-
-
-def _pending_consume_from_history(history) -> str | None:
-    """최근 봇의 수량 질문에서 소비 대기 중인 식재료명을 찾습니다."""
-    match = re.search(r"(.+?)(?:을|를) 몇 개 (?:먹|소비)", _latest_bot_text(history))
-    return match.group(1).strip() if match else None
-
-def _parse_calendar_date(date_str: str) -> date:
-    """챗봇이 뽑은 짧은 날짜 표현을 캘린더 날짜로 변환합니다."""
-    text = (date_str or "오늘").strip()
-    today = date.today()
-    if "모레" in text:
-        return today + timedelta(days=2)
-    if "내일" in text:
-        return today + timedelta(days=1)
-    if "오늘" in text:
-        return today
-    month_day = re.search(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일", text)
-    if month_day:
-        month, day = map(int, month_day.groups())
-        return date(today.year, month, day)
-    try:
-        return date.fromisoformat(text[:10])
-    except ValueError:
-        return today
-
-
-def _has_calendar_date_text(text: str) -> bool:
-    """사용자 원문에 날짜 표현이 있는지 확인합니다."""
-    return bool(
-        any(word in text for word in ("오늘", "내일", "모레"))
-        or re.search(r"\d{1,2}\s*월\s*\d{1,2}\s*일", text)
-        or re.search(r"\d{4}-\d{2}-\d{2}", text)
-    )
-
-
-def _calendar_datetime_from_text(text: str, fallback: str) -> datetime:
-    """사용자 원문을 우선해 캘린더 일정 시작 시간을 계산합니다."""
-    base_date = _parse_calendar_date(text if _has_calendar_date_text(text) else fallback)
-    time_match = re.search(r"(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?", text)
-    hour = 9
-    minute = 0
-    if time_match:
-        meridiem, hour_text, minute_text = time_match.groups()
-        hour = int(hour_text)
-        minute = int(minute_text or 0)
-        if meridiem == "오후" and hour < 12:
-            hour += 12
-        if meridiem == "오전" and hour == 12:
-            hour = 0
-    elif "T" in fallback:
-        try:
-            parsed = datetime.fromisoformat(fallback[:19])
-            hour, minute = parsed.hour, parsed.minute
-        except ValueError:
-            pass
-    return datetime.combine(base_date, time(hour, minute), timezone(timedelta(hours=9)))
-
-
-def _calendar_display(value: datetime) -> str:
-    """캘린더 확인 문구에 보여줄 날짜와 시간을 만듭니다."""
-    return value.strftime("%Y-%m-%d %H:%M")
 
 def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
     """Google Calendar 연동 정보를 이용해 실제 캘린더 일정을 생성합니다."""
@@ -331,7 +73,6 @@ def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
     except Exception:
         return "캘린더 등록 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
 
-
 def _execute_confirmed_action(state: GraphState) -> dict:
     """확인 버튼으로 돌아온 내부 명령을 실제 쓰기 작업으로 실행합니다."""
     if not state["user_id"]:
@@ -357,7 +98,6 @@ def _execute_confirmed_action(state: GraphState) -> dict:
             reply = inventory_service.add_ingredient_unchecked_by_name(state["db"], state["user_id"], parts[2], float(parts[3]), parts[4])
             return {"response_text": reply, "actions": [_inventory_refresh_action()]}
 
-
         if action == "add_ingredients" and len(parts) >= 3:
             added = []
             for raw_item in parts[2].split("|"):
@@ -376,7 +116,6 @@ def _execute_confirmed_action(state: GraphState) -> dict:
         logger.exception("챗봇 확인 작업 실행 실패: %s", action)
         return {"response_text": "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."}
     return {"response_text": "확인할 작업을 찾지 못했어요. 다시 요청해주세요."}
-
 
 def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
@@ -418,22 +157,6 @@ def router_node(state: GraphState) -> dict:
 
     return {"intent": state["service"]._route_intent_with_llm(text, history)}
 
-
-def _storage_choice_response(name: str, quantity: float, unchecked: bool = False) -> dict:
-    """보관 위치 선택 버튼을 만듭니다."""
-    text = f"{name} {_quantity_text(quantity)}개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
-    action = "add_ingredient_unchecked" if unchecked else "add_ingredient"
-    return {
-        "response_text": text,
-        "actions": [
-            _confirm_action("냉장", f"확인:{action}:{name}:{quantity}:냉장"),
-            _confirm_action("냉동", f"확인:{action}:{name}:{quantity}:냉동"),
-            _confirm_action("실온", f"확인:{action}:{name}:{quantity}:실온"),
-            _confirm_action("취소", "취소"),
-        ],
-    }
-
-
 def _unknown_add_response(state: GraphState, items: list[dict]) -> dict | None:
     """마스터에 없는 이름은 사용자 확인 후 추가하도록 안내합니다."""
     db = state.get("db")
@@ -458,7 +181,6 @@ def _unknown_add_response(state: GraphState, items: list[dict]) -> dict | None:
         command = f"확인:add_ingredient_unchecked:{item['name']}:{item['quantity']}:{item['storage']}"
         return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
     return None
-
 
 def _handle_inventory_action(state: GraphState) -> dict:
     """식재료 추가/소비는 LLM 대신 규칙 기반으로 처리합니다."""
@@ -506,7 +228,6 @@ def _handle_inventory_action(state: GraphState) -> dict:
         return {"response_text": f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?", "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     return {"response_text": GENERAL_REPLY}
-
 
 def mcp_agent_node(state: GraphState) -> dict:
     """LLM tool call을 받아 쓰기 작업은 확인 버튼을 거친 뒤 실행하도록 안내합니다."""
@@ -599,13 +320,11 @@ def mcp_agent_node(state: GraphState) -> dict:
         return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "messages": messages + [response]}
     return {"response_text": "아직 지원하지 않는 챗봇 작업이에요.", "messages": messages + [response]}
 
-
 def inventory_list_node(state: GraphState) -> dict:
     """로그인 사용자의 냉장고 재료 목록을 안내합니다."""
     if not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
     return {"response_text": state["service"]._reply_inventory_list(state["db"], state["user_id"])}
-
 
 def inventory_expiring_node(state: GraphState) -> dict:
     """로그인 사용자의 소비기한 임박 재료를 안내합니다."""
@@ -613,27 +332,23 @@ def inventory_expiring_node(state: GraphState) -> dict:
         return {"response_text": LOGIN_REQUIRED_REPLY}
     return {"response_text": state["service"]._reply_expiring_items(state["db"], state["user_id"], state["text"])}
 
-
 def ingredient_guide_node(state: GraphState) -> dict:
     """식재료 보관/손질 가이드를 안내합니다."""
     reply, sources = state["service"]._reply_guide(state["text"])
     return {"response_text": reply, "sources": sources}
 
-
 def recipe_recommend_node(state: GraphState) -> dict:
     """냉장고 기반 또는 재료 기반 레시피 추천을 안내합니다."""
     svc = state["service"]
-    if svc._requires_login("recipe.recommend", state["text"]) and not state["user_id"]:
+    if _requires_login("recipe.recommend", state["text"]) and not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
     reply, actions = svc._reply_recipe_recommend(state["db"], state["user_id"], state["text"], state.get("history", []), state.get("settings_obj"))
     return {"response_text": reply, "actions": actions}
-
 
 def recipe_search_node(state: GraphState) -> dict:
     """레시피 검색 결과를 안내합니다."""
     reply, actions, sources = state["service"]._reply_recipe_search(state["db"], state["text"])
     return {"response_text": reply, "actions": actions, "sources": sources}
-
 
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
@@ -642,11 +357,9 @@ def receipt_guide_node(state: GraphState) -> dict:
         "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
 
-
 def general_node(state: GraphState) -> dict:
     """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
     return {"response_text": GENERAL_REPLY}
-
 
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
@@ -662,7 +375,6 @@ def route_intent(state: GraphState) -> str:
         "receipt.guide": "receipt_guide_node",
     }
     return routes.get(intent, "general_node")
-
 
 workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)

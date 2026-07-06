@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.backend.api.deps import get_current_user_optional
 from app.backend.db.session import get_db
 from app.backend.schemas.chat import ChatRequest, ChatResponse
-from app.backend.services.chat_service import chat_service
+from ai.agents.supervisor_agent.chat_service import chat_service
 
 router = APIRouter(prefix="/chat", tags=["Chat (챗봇)"])
 

@@ -179,9 +179,7 @@ function Mypage() {
       return stored
     }
   })
-  const authMode =
-    typeof window === 'undefined' ? null : window.localStorage.getItem('bobbeori-auth-mode')
-  const isGuest = authMode === 'guest'
+
   const recommendedSavedRecipes = useMemo(
     () => savedRecipes.filter((recipe) => recipe.savedType !== 'saved'),
     [savedRecipes],
@@ -194,7 +192,7 @@ function Mypage() {
   const loadSavedRecipes = async () => {
     const localRecipes = readStoredRecipes()
     const token = window.localStorage.getItem('bobbeori-token')
-    if (!token || isGuest) {
+    if (!token) {
       setSavedRecipes(localRecipes)
       return
     }
@@ -258,12 +256,10 @@ function Mypage() {
   }
 
   useEffect(() => {
-    if (isGuest) {
-      return
-    }
-
     const token = window.localStorage.getItem('bobbeori-token')
     if (!token) {
+      window.alert('로그인이 필요한 서비스입니다.')
+      navigate('/login')
       return
     }
 
@@ -310,7 +306,7 @@ function Mypage() {
     }
 
     fetchUser()
-  }, [isGuest, navigate])
+  }, [navigate])
 
   useEffect(() => {
     if (activeTab === 'saved') {
@@ -410,17 +406,16 @@ function Mypage() {
     }
   }
 
-  const profileDisplayName = isGuest ? '게스트님' : profileName
-  const profileDisplayEmail = isGuest ? 'guest@bobbeori.com' : profileEmail
+  const profileDisplayName = profileName
+  const profileDisplayEmail = profileEmail
   const profileCreatedAt = userData?.created_at
     ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}`
     : '가입일 2024. 05. 22'
-  const provider = isGuest ? 'guest' : userData?.provider
+  const provider = userData?.provider
   const providerLabel = {
     kakao: '카카오',
     naver: '네이버',
     google: '구글',
-    guest: '게스트',
   }[provider] || '소셜 로그인'
   const providerClass =
     provider === 'kakao'
@@ -471,7 +466,7 @@ function Mypage() {
                     ) : (
                       <h2>{profileDisplayName}</h2>
                     )}
-                    <span>{isGuest ? '게스트' : '일반 회원'}</span>
+                    <span>일반 회원</span>
                   </div>
                   {isEditingProfile ? (
                     <input
@@ -482,7 +477,7 @@ function Mypage() {
                   ) : (
                     <p>{profileDisplayEmail}</p>
                   )}
-                  <small>{isGuest ? '게스트 모드 이용 중' : profileCreatedAt}</small>
+                  <small>{profileCreatedAt}</small>
                   <div className="mypage-profile__actions">
                     <button
                       className="mypage-primary-button"
@@ -514,7 +509,7 @@ function Mypage() {
                   <dl>
                     <div><dt>이메일</dt><dd>{profileDisplayEmail}</dd></div>
                     <div><dt>로그인 방식</dt><dd>{providerLabel}</dd></div>
-                    <div><dt>회원 유형</dt><dd>{isGuest ? '게스트' : '일반 회원'}</dd></div>
+                    <div><dt>회원 유형</dt><dd>일반 회원</dd></div>
                     <div><dt>가입일</dt><dd>{profileCreatedAt.replace('가입일 ', '')}</dd></div>
                     <div><dt>캘린더 연동</dt><dd>{calendarEnabled ? '연결됨' : '미연결'}</dd></div>
                     <div><dt>보유 재료</dt><dd>{inventorySummary.total}개</dd></div>

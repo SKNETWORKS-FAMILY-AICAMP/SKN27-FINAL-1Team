@@ -286,13 +286,13 @@ class ReceiptOcrService:
         normalized = state.get("normalized") or {}
         receipt_validation_issues = state.get("receipt_validation_issues", [])
         reupload_message = (
-            "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0\uac00 \uc544\ub2cc \uac83 \uac19\uc544\uc694. "
-            "\ub9e4\uc7a5\uba85, \uad6c\ub9e4\uc77c\uc790, \ud488\ubaa9, \uacb0\uc81c \ub0b4\uc5ed \uc911 \ud558\ub098 \uc774\uc0c1\uc774 "
-            "\ubcf4\uc774\ub294 \uc601\uc218\uc99d\uc744 \ub2e4\uc2dc \ucca8\ubd80\ud574\uc8fc\uc138\uc694."
+            "영수증 이미지가 아닌 것 같아요. "
+            "매장명, 구매일자, 품목, 결제 내역 중 하나 이상이 "
+            "보이는 영수증을 다시 첨부해주세요."
             if receipt_validation_issues
-            else "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0 \uc778\uc2dd \ud488\uc9c8\uc774 \ub0ae\uc544\uc694. "
-            "\uae00\uc790\uc640 \uae08\uc561\uc774 \uc120\uba85\ud558\uac8c \ubcf4\uc774\ub3c4\ub85d \ub2e4\uc2dc \ucd2c\uc601\ud558\uac70\ub098 "
-            "\ub2e4\ub978 \uc774\ubbf8\uc9c0\ub97c \ucca8\ubd80\ud574\uc8fc\uc138\uc694."
+            else "영수증 이미지 인식 품질이 낮아요. "
+            "글자와 금액이 선명하게 보이도록 다시 촬영하거나 "
+            "다른 이미지를 첨부해주세요."
         )
         response = {
             "receipt_id": None,
