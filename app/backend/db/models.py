@@ -190,6 +190,9 @@ class Receipt(Base):
     store_name = Column(Text, nullable=True)
     purchased_at = Column(DateTime(timezone=True), nullable=True)
     total_price = Column(Integer, nullable=True)
+    ocr_quality_score = Column(Numeric(4, 2), nullable=True)
+    ocr_status = Column(String(30), nullable=True)
+    ocr_error_message = Column(Text, nullable=True)
     confirmed_result_json = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
