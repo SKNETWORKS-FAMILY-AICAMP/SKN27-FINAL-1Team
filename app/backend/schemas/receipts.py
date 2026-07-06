@@ -26,6 +26,8 @@ class ReceiptUploadResponse(BaseModel):
     is_receipt_like: Optional[bool] = Field(default=None, description="Whether the upload looks like a receipt")
     quality_score: Optional[float] = Field(default=None, description="Internal OCR quality score")
     quality_issues: List[str] = Field(default_factory=list, description="Internal OCR quality issue codes")
+    ocr_status: Optional[str] = Field(default=None, description="Internal OCR processing status")
+    ocr_error_message: Optional[str] = Field(default=None, description="Internal OCR failure or review reason")
     receipt_validation_issues: List[str] = Field(default_factory=list, description="Receipt document validation issue codes")
     needs_reupload: bool = Field(default=False, description="Whether the user should upload a clearer receipt image")
     reupload_message: Optional[str] = Field(default=None, description="User-facing reupload guidance")
