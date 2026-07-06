@@ -79,7 +79,9 @@ def _require_lightgbm() -> Any:
     return lgb.LGBMRegressor(
         n_estimators=300,
         random_state=RANDOM_STATE,
-        n_jobs=-1,
+        n_jobs=1,
+        deterministic=True,
+        force_col_wise=True,
         verbose=-1,
     )
 
@@ -89,12 +91,12 @@ def get_regressor(name: str = MODEL_NAME) -> Any:
         "extra_trees": lambda: ExtraTreesRegressor(
             n_estimators=300,
             random_state=RANDOM_STATE,
-            n_jobs=-1,
+            n_jobs=1,
         ),
         "random_forest": lambda: RandomForestRegressor(
             n_estimators=300,
             random_state=RANDOM_STATE,
-            n_jobs=-1,
+            n_jobs=1,
         ),
         "hist_gbm": lambda: HistGradientBoostingRegressor(random_state=RANDOM_STATE),
         "lightgbm": _require_lightgbm,

@@ -13,6 +13,9 @@ _ALIAS_DEFAULTS = {
     "others_count": 0,
     "others_items": "[]",
 }
+_ALIAS_REQUIRED_COLS = frozenset(
+    {"RCP_SNO", "ingredients_normalized", "others_count", "others_items"}
+)
 
 
 def _normalize_rcp_sno(df: pd.DataFrame) -> pd.DataFrame:
@@ -35,14 +38,21 @@ def _dedupe_alias(alias: pd.DataFrame) -> pd.DataFrame:
 def _load_alias() -> pd.DataFrame | None:
     if not INGREDIENT_ALIAS_CSV.is_file():
         return None
-    try:
-        return _normalize_rcp_sno(pd.read_csv(INGREDIENT_ALIAS_CSV))
-    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
-        return None
+    alias = pd.read_csv(INGREDIENT_ALIAS_CSV)
+    missing = _ALIAS_REQUIRED_COLS - set(alias.columns)
+    if missing:
+        raise ValueError(
+            f"recipe_ingredient_alias.csv is missing required columns: {sorted(missing)}"
+        )
+    return _normalize_rcp_sno(alias)
 
 
 def load_and_merge() -> pd.DataFrame:
     recipe = _normalize_rcp_sno(pd.read_csv(RECIPE_FIX_CSV))
+    if recipe["RCP_SNO"].isna().any():
+        raise ValueError("recipe_fix.csv contains missing or invalid RCP_SNO values")
+    if recipe["RCP_SNO"].duplicated().any():
+        raise ValueError("recipe_fix.csv contains duplicate RCP_SNO values")
     alias = _load_alias()
     if alias is None:
         merged = recipe.copy()

@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 
 from etl.recipe.load_to_postgres.loader import (
     parse_cooking_time_minutes,
@@ -116,6 +117,20 @@ def apply_commonness(df: pd.DataFrame, lookup: IngredientCommonnessLookup) -> pd
     out = df.copy()
     out["commonness_mean"] = lookup.transform(out)
     return out
+
+
+class RecommendationFeatureBuilder(BaseEstimator, TransformerMixin):
+    """Build every model feature and retain train-only ingredient statistics."""
+
+    def fit(self, X: pd.DataFrame, y: Any = None) -> RecommendationFeatureBuilder:
+        featured = build_all_features(X)
+        self.commonness_lookup_ = IngredientCommonnessLookup().fit(featured)
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not hasattr(self, "commonness_lookup_"):
+            raise RuntimeError("RecommendationFeatureBuilder must be fitted before transform")
+        return apply_commonness(build_all_features(X), self.commonness_lookup_)
 
 
 def run_self_check() -> None:

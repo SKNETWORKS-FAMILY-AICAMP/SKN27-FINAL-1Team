@@ -10,28 +10,28 @@ from .config import MODEL_VERSION, TARGET_COL
 from .model import predict
 
 
-def clip_predictions(preds: np.ndarray, y_train: pd.Series) -> np.ndarray:
-    low = float(y_train.quantile(0.01))
-    high = float(y_train.quantile(0.99))
-    return np.clip(preds, low, high)
-
-
 def build_scored_output(
     full_df: pd.DataFrame,
     pipeline: Pipeline,
-    y_train: pd.Series,
     *,
     labeled_mask: pd.Series,
 ) -> pd.DataFrame:
-    raw_pred = predict(pipeline, full_df)
-    clipped = clip_predictions(np.asarray(raw_pred, dtype=float), y_train)
+    if len(full_df) != len(labeled_mask):
+        raise ValueError("labeled_mask must have the same length as full_df")
+    ml_predictions = np.full(len(full_df), np.nan, dtype=float)
+    unlabeled_positions = np.flatnonzero(~labeled_mask.to_numpy())
+    if len(unlabeled_positions):
+        unlabeled = full_df.iloc[unlabeled_positions]
+        ml_predictions[unlabeled_positions] = np.asarray(
+            predict(pipeline, unlabeled), dtype=float
+        )
 
     out = pd.DataFrame(
         {
             "RCP_SNO": full_df["RCP_SNO"],
             "CKG_NM": full_df["CKG_NM"],
             TARGET_COL: full_df[TARGET_COL],
-            "ml_predicted_recommend_score": clipped,
+            "ml_predicted_recommend_score": ml_predictions,
             "recommend_model_version": MODEL_VERSION,
         }
     )
@@ -39,7 +39,7 @@ def build_scored_output(
     out["final_recommend_score"] = np.where(
         has_label,
         full_df[TARGET_COL].to_numpy(dtype=float),
-        clipped,
+        ml_predictions,
     )
     out["recommend_score_source"] = np.where(has_label, "rule", "ml_imputed")
     return out

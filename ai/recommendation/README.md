@@ -33,6 +33,11 @@ python -m ai.recommendation.features
 MODEL_NAME = "extra_trees"  # random_forest | hist_gbm | lightgbm
 ```
 
+`pipeline.joblib` contains raw-data feature generation, train-fitted ingredient
+commonness, preprocessing, the regressor, and clipping bounds. Load it and call
+`ai.recommendation.model.predict(pipeline, raw_merged_dataframe)`; callers do not
+need to build feature columns separately.
+
 ## 입력 / 출력
 
 | 경로 | 설명 |

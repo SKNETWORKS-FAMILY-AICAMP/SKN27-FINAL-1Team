@@ -17,8 +17,10 @@
     "alias_match_ratio",
     "commonness_mean"
   ],
-  "clip_low": -0.6244280797605617,
-  "clip_high": 8.181275338074883,
+  "clip_low": -0.6168204358408698,
+  "clip_high": 8.097109115098176,
   "labeled_count": 563,
-  "unlabeled_count": 2608
+  "unlabeled_count": 2608,
+  "training_row_count": 563,
+  "refit_on_all_labeled": true
 }
