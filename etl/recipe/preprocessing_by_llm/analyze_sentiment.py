@@ -10,14 +10,14 @@ from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if __package__ is None:
     sys.path.insert(0, str(ROOT))
 
 from etl.recipe.preprocessing.recipe_processing import load_recipe_data, save_recipe_data
 
 if __package__ is None:
-    from ai.recommendation.sentiment_model import SentimentClassifier
+    from etl.recipe.preprocessing_by_llm.sentiment_model import SentimentClassifier
 else:
     from .sentiment_model import SentimentClassifier
 

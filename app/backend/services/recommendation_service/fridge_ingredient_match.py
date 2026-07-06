@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from app.backend.services.recommendation_service.recommend_config import (
+    BASIC_INGREDIENT_IDS,
+    BASIC_INGREDIENT_NORMALIZED_NAMES,
+)
+
 MAYBE_OWNED_WEIGHT = 0.5
 MAYBE_MATCH_SCORE = 1.0
+
+# ponytail: 기본재료 판정용 최소 정규화. ETL loader 전체 규칙 아님 — 분량 숫자 제거만.
+_EMBEDDED_QUANTITY = re.compile(r"(?:\s+\d|(?<=[가-힣])\d)")
 
 MatchType = Literal["recipe_in_fridge", "fridge_in_recipe"]
 
@@ -36,6 +45,21 @@ class FridgeMatchResult:
     missing: list[dict[str, Any]]
     match_rate: int
     display_match_rate: int
+
+
+def _basic_ingredient_normalized(raw_name: str) -> str | None:
+    text = str(raw_name).strip()
+    if not text:
+        return None
+    text = re.sub(r"^[\s?]+", "", text)
+    text = re.sub(r"[\s?]+$", "", text)
+    if not text or text == "?":
+        return None
+    text = _EMBEDDED_QUANTITY.split(text, maxsplit=1)[0].strip()
+    if not text:
+        return None
+    normalized = re.sub(r"\s+", "", text.lower())
+    return normalized or None
 
 
 def _clamp_rate(value: float) -> int:
@@ -139,11 +163,27 @@ def classify_fridge_match(
             owned.append(ingredient)
             continue
 
+        recipe_name = ingredient.get("name") or ""
+        if ingredient_id and ingredient_id in BASIC_INGREDIENT_IDS:
+            owned.append(ingredient)
+            continue
+
+        normalized = _basic_ingredient_normalized(recipe_name)
+        if normalized and normalized in BASIC_INGREDIENT_NORMALIZED_NAMES:
+            owned.append(ingredient)
+            continue
+        # ponytail: 수식어+기본재료(뜨거운 물 등) — 오탐·범위 검토 후 재활성화
+        # cleaned = text before normalize in _basic_ingredient_normalized
+        # if any(
+        #     len(parts := cleaned.split()) >= 2 and parts[-1] == basic_name
+        #     for basic_name in BASIC_INGREDIENT_NORMALIZED_NAMES
+        # ):
+        #     owned.append(ingredient)
+        #     continue
         if not ingredient_matches_refs(ingredient, fridge_items):
             missing.append(ingredient)
             continue
 
-        recipe_name = ingredient.get("name") or ""
         maybe = find_maybe_match(recipe_name, fridge_items)
         if maybe:
             maybe_owned.append(
@@ -172,3 +212,37 @@ def classify_fridge_match(
         display_match_rate=rates.display_match_rate,
     )
 
+
+def _self_check() -> None:
+    empty = classify_fridge_match([{"name": "물"}], [])
+    assert len(empty.owned) == 1
+    assert empty.missing == []
+
+    assert len(classify_fridge_match([{"name": "물 1200ml"}], []).owned) == 1
+    assert len(classify_fridge_match([{"name": "? 물"}], []).owned) == 1
+
+    hot_water = classify_fridge_match([{"name": "뜨거운 물"}], [])
+    assert hot_water.owned == []
+    assert len(hot_water.missing) == 1
+
+    missing_onion = classify_fridge_match([{"name": "양파"}], [])
+    assert missing_onion.owned == []
+    assert len(missing_onion.missing) == 1
+
+    egg_water = classify_fridge_match([{"name": "계란물"}], [])
+    assert egg_water.owned == []
+    assert len(egg_water.missing) == 1
+
+    fridge = [FridgeItemSnapshot(ingredient_id=99, fridge_name="양파")]
+    mixed = classify_fridge_match(
+        [{"name": "물"}, {"name": "양파", "ingredient_id": 99}],
+        fridge,
+    )
+    assert len(mixed.owned) == 2
+    assert mixed.missing == []
+    assert mixed.display_match_rate == 100
+
+
+if __name__ == "__main__":
+    _self_check()
+    print("ok")
