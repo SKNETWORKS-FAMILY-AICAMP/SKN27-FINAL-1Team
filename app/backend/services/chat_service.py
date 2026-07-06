@@ -133,7 +133,7 @@ class ChatService:
             return "recipe.search"
 
         normalized = text.replace(" ", "").lower()
-        guide_words = ("\ubcf4\uad00", "\uc138\ucc99", "\uc53b", "\uc190\uc9c8", "\uc2e0\uc120", "\uac00\uc774\ub4dc", "\uc5b4\ub5a1", "\ub0a8\uc740")
+        guide_words = ("보관", "세척", "씻", "손질", "신선", "가이드", "어떡", "남은")
         if any(word in normalized for word in guide_words):
             return "ingredient.guide"
 
