@@ -54,11 +54,6 @@ function Login() {
   const features = isCalendarMode ? calendarFeatures : serviceFeatures
   const visualImage = isCalendarMode ? imageCalender : imageHello
 
-  const startLocalSession = (mode) => {
-    window.localStorage.setItem('bobbeori-auth-mode', mode)
-    window.dispatchEvent(new Event('bobbeori-auth-change'))
-    navigate('/')
-  }
 
   const handleSocialLogin = (method) => {
     const clientId = import.meta.env[method.envKey] || ''
@@ -212,11 +207,6 @@ function Login() {
                 )}
               </div>
 
-              {!isCalendarMode ? (
-                <button className="login-card__guest-button" type="button" onClick={() => startLocalSession('guest')}>
-                  게스트로 사용하기
-                </button>
-              ) : null}
 
               <p className="login-card__terms">
                 {isCalendarMode ? (

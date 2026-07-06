@@ -32,7 +32,7 @@ function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [authMode, setAuthMode] = useState(getAuthMode)
-  const isLoggedIn = authMode === 'user' || authMode === 'guest'
+  const isLoggedIn = authMode === 'user'
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false)
