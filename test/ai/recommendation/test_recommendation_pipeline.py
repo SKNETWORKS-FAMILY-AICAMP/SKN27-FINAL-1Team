@@ -20,6 +20,8 @@ def _rows(targets: list[float | None]) -> pd.DataFrame:
             "ingredients_normalized": repr([[f"ingredient-{i % 3}", "1", "개"]]),
             "others_count": 0,
             "others_items": "[]",
+            "basic_count": 0,
+            "basic_items": "[]",
             TARGET_COL: target,
         }
         row.update({column: categories[i % len(categories)] for column in CATEGORICAL_FEATURES})

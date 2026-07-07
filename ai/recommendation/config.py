@@ -42,6 +42,7 @@ EXCLUDE_COLS = frozenset({
     "aliases_matched",
     "ingredients_normalized",
     "others_items",
+    "basic_items",
 })
 
 CATEGORICAL_FEATURES = [
