@@ -761,7 +761,7 @@ function ReceiptOcr() {
         }
 
         if (event.type === 'error') {
-          throw new Error(event.message || '?곸닔利?OCR 遺꾩꽍???ㅽ뙣?덉뼱??')
+          throw new Error(event.message || '영수증 OCR 분석에 실패했어요.')
         }
 
         if (event.type === 'result') {
@@ -770,7 +770,7 @@ function ReceiptOcr() {
       })
 
       if (!data) {
-        throw new Error('?곸닔利?OCR 遺꾩꽍 寃곌낵瑜?諛쏆? 紐삵뻽?댁슂.')
+        throw new Error('영수증 OCR 분석 결과를 받지 못했어요.')
       }
 
       if (data.needs_reupload) {
