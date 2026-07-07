@@ -1,8 +1,12 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 
+import pytest
+
+pytest.importorskip("langchain_openai")
+
+from ai.agents.supervisor_agent import chat_graph
 from ai.tools.fridge_mcp_tools import FRIDGE_MCP_TOOLS
-from app.backend.services import chat_graph
 from app.backend.services.calendar_mcp_client import _serverless_output
 from app.backend.services.inventory_service.inventory_service import inventory_service
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService

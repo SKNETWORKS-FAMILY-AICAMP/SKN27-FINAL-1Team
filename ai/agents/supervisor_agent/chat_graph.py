@@ -157,6 +157,21 @@ def router_node(state: GraphState) -> dict:
 
     return {"intent": state["service"]._route_intent_with_llm(text, history)}
 
+def _invalid_add_name(name: str) -> str | None:
+    normalized = _normalize_text(name)
+    if normalized in {"안녕", "하이", "hello", "hi"}:
+        return name
+    blocked_tokens = {"안튀김", "안구이", "안볶음", "안삶음", "안찜", "안조림"}
+    return name if any(token in blocked_tokens for token in name.split()) else None
+
+
+def _invalid_add_name_response(name: str) -> dict:
+    if _normalize_text(name) not in {"안녕", "하이", "hello", "hi"}:
+        return {"response_text": "올바른 식재료명을 입력해주세요."}
+    josa = _get_josa(name, "은", "는")
+    return {"response_text": f"'{name}'{josa} 올바른 식재료 이름이 아닙니다. 식용 가능한 재료만 추가할 수 있어요."}
+
+
 def _unknown_add_response(state: GraphState, items: list[dict]) -> dict | None:
     """마스터에 없는 이름은 사용자 확인 후 추가하도록 안내합니다."""
     db = state.get("db")
@@ -171,8 +186,9 @@ def _unknown_add_response(state: GraphState, items: list[dict]) -> dict | None:
             item["name"] = resolved_name
             continue
         # 부정 표현이 섞인 문장은 임의 식재료로 추가하지 않습니다.
-        if _normalize_text(item["name"]) in {"안녕", "하이", "hello", "hi"} or any(token in {"안튀김", "안구이", "안볶음", "안삶음", "안찜", "안조림"} for token in item["name"].split()):
-            return {"response_text": "올바른 식재료명을 입력해주세요."}
+        invalid_name = _invalid_add_name(item["name"])
+        if invalid_name:
+            return _invalid_add_name_response(invalid_name)
         if item.get("quantity") is None:
             item["quantity"] = 1.0
         if not item.get("storage"):
@@ -189,6 +205,9 @@ def _handle_inventory_action(state: GraphState) -> dict:
 
     if any(word in normalized for word in ADD_WORDS):
         items = _extract_add_items(text)
+        invalid_name = next((_invalid_add_name(item["name"]) for item in items), None)
+        if invalid_name:
+            return _invalid_add_name_response(invalid_name)
         
         from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
         invalid_items = [item['name'] for item in items if not expiration_ai_service.is_valid_ingredient_name(item['name'])]

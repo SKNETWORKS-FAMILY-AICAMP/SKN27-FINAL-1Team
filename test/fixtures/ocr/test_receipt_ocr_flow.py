@@ -7,6 +7,7 @@ import io
 import os
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -41,6 +42,7 @@ from app.backend.services.receipt_ocr_service.privacy_masking import (
 )
 from app.backend.services.receipt_ocr_service.receipt_history_service import receipt_history_service
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
+from app.backend.services.receipt_ocr_service.receipt_ocr_service import KST, ReceiptOcrService
 
 
 @compiles(BigInteger, "sqlite")
@@ -330,6 +332,35 @@ def test_validate_upload_rejects_mismatched_file_signature():
 
     assert exc_info.value.status_code == 400
     assert "content does not match" in exc_info.value.detail
+
+
+def test_validate_upload_rejects_oversized_file(monkeypatch):
+    service = ReceiptOcrService()
+    monkeypatch.setattr(settings, "MAX_UPLOAD_SIZE_MB", 1)
+
+    upload = make_upload(content=TEST_PNG_BYTES + (b"x" * 1024 * 1024))
+
+    with pytest.raises(Exception) as exc_info:
+        service._validate_upload(upload, TEST_PNG_BYTES + (b"x" * 1024 * 1024))
+
+    assert exc_info.value.status_code == 413
+    assert "1MB" in exc_info.value.detail
+
+
+def test_save_original_image_uses_uuid_name_and_private_user_path(monkeypatch, workspace_tmp_dir):
+    service = ReceiptOcrService()
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
+
+    stored_path = service._save_original_image(user_id=7, image_bytes=TEST_PNG_BYTES, storage_extension=".png")
+    path = Path(stored_path)
+
+    assert path.parts[-3:] == ("raw", "7", path.name)
+    assert path.name.startswith(datetime.now(KST).strftime("%Y%m%d"))
+    assert "receipt" not in path.name
+    assert path.suffix == ".png"
+    assert "static" not in path.parts
+    assert "public" not in path.parts
+    assert (workspace_tmp_dir / "raw" / "7" / path.name).read_bytes() == TEST_PNG_BYTES
 
 
 def test_upload_rate_limit_rejects_more_than_five_requests_per_minute(monkeypatch):
