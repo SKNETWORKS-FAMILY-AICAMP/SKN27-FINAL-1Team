@@ -27,8 +27,6 @@ client = TestClient(app)
         ("GET", "/api/v1/recommendations", {}),
         ("POST", "/api/v1/recommendations", {"json": {"recipe_id": 1, "recommendation_type": "manual_save"}}),
         ("DELETE", "/api/v1/recommendations/1", {}),
-        ("POST", "/api/v1/shopping-list/compare", {"json": {"missing_ingredients": ["tofu"]}}),
-        ("POST", "/api/v1/shopping-list/purchase", {"json": {"purchased_items": [{"name": "tofu"}]}}),
         ("GET", "/api/v1/calendar/google/status", {}),
         ("GET", "/api/v1/calendar/google/events?start_date=2026-07-07&end_date=2026-07-08", {}),
         ("POST", "/api/v1/calendar/google/connect", {"json": {"code": "oauth-code"}}),

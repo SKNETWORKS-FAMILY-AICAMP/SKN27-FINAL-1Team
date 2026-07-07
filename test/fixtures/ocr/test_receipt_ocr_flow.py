@@ -643,6 +643,7 @@ def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(
 # Neo4j 표준명 매칭이 실패한 확정 품목은 사용자가 확인한 원문명으로 저장되는지 이 테스트가 알려준다.
 def test_confirm_receipt_masks_sensitive_values_before_persisting(
     db_session,
+    neo4j_banana_candidates,
     mock_cold_storage_rule,
 ):
     user, receipt = seed_user_and_receipt(db_session)
@@ -678,8 +679,8 @@ def test_confirm_receipt_masks_sensitive_values_before_persisting(
     assert "010-1234-5678" not in receipt.store_name
     assert MASK_CARD_NUMBER in receipt_item.raw_name
     assert "4111-1111-1111-1111" not in receipt_item.raw_name
-    assert MASK_APPROVAL_NUMBER in receipt_item.normalized_name
     assert "987654" not in receipt_item.normalized_name
+    assert receipt_item.normalized_name == BANANA
     assert MASK_ADDRESS in receipt_item.item_memo
     assert "\uc11c\uc6b8\uc2dc \uac15\ub0a8\uad6c" not in receipt_item.item_memo
     assert MASK_PHONE_NUMBER in receipt.confirmed_result_json["store_name"]
