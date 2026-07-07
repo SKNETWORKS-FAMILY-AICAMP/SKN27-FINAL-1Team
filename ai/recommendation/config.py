@@ -19,10 +19,12 @@ OUTPUT_SCORED_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_recommen
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
-MODEL_VERSION = "recommend_model_v1"
+MODEL_VERSION = "recommend_model_v2"
 MODEL_NAME = "extra_trees"
 
 TARGET_COL = "REVIEW_RANK_SCORE"
+TARGET_FORMULA = "REVIEW_STAR_NORM_AVG + REVIEW_SENTIMENT_AVG"
+POPULARITY_BASE_COLS = ("INQ_CNT_LOG_CENTERED", "SRAP_CNT_LOG_CENTERED")
 
 EXCLUDE_COLS = frozenset({
     "RCP_SNO",
@@ -56,6 +58,8 @@ CATEGORICAL_FEATURES = [
 NUMERIC_FEATURES = [
     "serving_size",
     "cooking_time_min",
+    "INQ_CNT_LOG_CENTERED",
+    "SRAP_CNT_LOG_CENTERED",
 ]
 
 INGREDIENT_FEATURES = [

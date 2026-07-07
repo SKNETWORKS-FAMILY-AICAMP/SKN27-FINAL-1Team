@@ -101,15 +101,8 @@ def run() -> None:
         raise RuntimeError("Scored output did not preserve the input recipe order")
     if scored["RCP_SNO"].duplicated().any():
         raise RuntimeError("Scored output contains duplicate RCP_SNO values")
-    imputed_only = imputer.imputed_rows(scored)
-
     OUTPUT_SCORED_CSV.parent.mkdir(parents=True, exist_ok=True)
     scored.to_csv(OUTPUT_SCORED_CSV, index=False, encoding="utf-8-sig")
-    imputed_only.to_csv(
-        ARTIFACTS_DIR / "imputed_recommend_scores.csv",
-        index=False,
-        encoding="utf-8-sig",
-    )
 
     # 출력 검증 결과 출력
     print(f"Saved pipeline -> {ARTIFACTS_DIR / 'pipeline.joblib'}")

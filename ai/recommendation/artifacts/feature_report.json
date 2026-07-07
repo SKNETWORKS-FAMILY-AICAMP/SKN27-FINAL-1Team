@@ -8,6 +8,8 @@
     "CKG_DODF_NM": 0.0,
     "serving_size": 0.0,
     "cooking_time_min": 0.0,
+    "INQ_CNT_LOG_CENTERED": 0.0,
+    "SRAP_CNT_LOG_CENTERED": 0.0,
     "ingredient_count": 0.0,
     "unique_ingredient_count": 0.0,
     "others_count": 0.0,
@@ -106,6 +108,32 @@
       "50%": 30.0,
       "75%": 60.0,
       "max": 120.0
+    },
+    "INQ_CNT_LOG_CENTERED": {
+      "count": 3171.0,
+      "unique": null,
+      "top": null,
+      "freq": null,
+      "mean": -3.4193888829073255e-15,
+      "std": 0.718716470306571,
+      "min": -0.9519641753428454,
+      "25%": -0.583313040357397,
+      "50%": -0.1261759217049114,
+      "75%": 0.40106080819119505,
+      "max": 3.246283104430532
+    },
+    "SRAP_CNT_LOG_CENTERED": {
+      "count": 3171.0,
+      "unique": null,
+      "top": null,
+      "freq": null,
+      "mean": -2.6189919569738414e-14,
+      "std": 1.2700527867636486,
+      "min": -2.3116714732544525,
+      "25%": -0.925377112134562,
+      "50%": -0.1144468959182329,
+      "75%": 0.6840608002995383,
+      "max": 4.807964164763183
     },
     "ingredient_count": {
       "count": 3171.0,

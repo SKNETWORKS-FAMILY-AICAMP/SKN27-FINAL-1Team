@@ -367,3 +367,49 @@ merge 후 DataFrame에 있으나 **의도적으로 feature에서 제외**된 항
 | 전처리·모델 | `model.py` — `ColumnTransformer`, `OneHotEncoder`, `SimpleImputer` |
 | 데이터 병합 | `data_loader.py` — `load_and_merge` |
 | 인분·시간 파서 | `etl/recipe/load_to_postgres/loader.py` — `parse_serving_size`, `parse_cooking_time_minutes` |
+
+---
+
+# 04. 품질·인기 점수 분리 (프로덕션 반영)
+
+실험 01에서 보류했던 ETL 공식 변경과 잔차+인기 feature 패턴을 **프로덕션 기본값**으로 고정한 작업입니다.
+
+**상태:** 코드 반영 완료. ETL → ML → Neo4j 순 실행으로 CSV·그래프 갱신.
+
+---
+
+## 1. 변경 요약
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| ETL `REVIEW_RANK_SCORE` | 별점+감성+조회+스크랩 4항 | **별점+감성** 2항 (품질만) |
+| ML 타깃 | 4항 합산 | 품질 2항 |
+| ML feature | 13개 | **15개** (+`INQ_CNT_LOG_CENTERED`, `SRAP_CNT_LOG_CENTERED`) |
+| `final_recommend_score` | labeled=규칙, unlabeled=ML | **품질(rule/ML) + 인기** 합산 |
+| Neo4j `reviewRankScore` | `recipe_fix.REVIEW_RANK_SCORE` | `recipe_recommendation_scored.final_recommend_score` |
+| `MODEL_VERSION` | `recommend_model_v1` | `recommend_model_v2` |
+
+## 2. 실행 순서
+
+```bash
+python -m etl.recipe.preprocessing.recipe_review_aggregate_to_fix
+python -m ai.recommendation.main
+python -m etl.recipe.load_to_neo4j
+```
+
+## 3. 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `recipe_review_aggregate_to_fix.py` | `apply_rank_score` 품질 2항만 |
+| `config.py` | 인기 feature, `POPULARITY_BASE_COLS`, `TARGET_FORMULA`, v2 |
+| `imputer.py` | `popularity_base_score`, `quality_score`, final 합산 |
+| `main.py` | `artifacts/imputed_recommend_scores.csv` 출력 제거 |
+| `evaluator.py` | `target_formula` 필드 |
+| `load_to_neo4j/loader.py` | scored CSV merge → `reviewRankScore`, fallback |
+
+## 4. 참고
+
+- labeled 563건의 `final_recommend_score`는 기존 4항 합과 **수치상 동일** (동일 항목 재배치).
+- ML holdout Spearman은 품질 타깃 기준이라 여전히 낮을 수 있음 — 목적은 타깃·feature 역할 분리.
+- CSV 커밋·롤백은 작업자가 git으로 판단 (별도 스냅샷 폴더 없음).

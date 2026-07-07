@@ -22,6 +22,8 @@ def _rows(targets: list[float | None]) -> pd.DataFrame:
             "others_items": "[]",
             "basic_count": 0,
             "basic_items": "[]",
+            "INQ_CNT_LOG_CENTERED": float(i) * 0.1,
+            "SRAP_CNT_LOG_CENTERED": float(i) * 0.05,
             TARGET_COL: target,
         }
         row.update({column: categories[i % len(categories)] for column in CATEGORICAL_FEATURES})
@@ -80,6 +82,23 @@ def test_scored_output_predicts_only_unlabeled_and_preserves_order(monkeypatch) 
     assert scored["RCP_SNO"].tolist() == [1, 2, 3, 4]
     assert scored["recommend_score_source"].tolist() == ["rule", "ml_imputed", "rule", "ml_imputed"]
     assert scored.loc[[0, 2], "ml_predicted_recommend_score"].isna().all()
+    pop = imputer.popularity_base_score(full)
+    quality = np.where(
+        full[TARGET_COL].notna().to_numpy(),
+        full[TARGET_COL].to_numpy(dtype=float),
+        scored["ml_predicted_recommend_score"].to_numpy(dtype=float),
+    )
+    np.testing.assert_allclose(scored["final_recommend_score"], quality + pop)
+
+
+def test_popularity_base_score_sums_centered_columns() -> None:
+    df = pd.DataFrame(
+        {
+            "INQ_CNT_LOG_CENTERED": [1.0, np.nan],
+            "SRAP_CNT_LOG_CENTERED": [0.5, 2.0],
+        }
+    )
+    np.testing.assert_allclose(imputer.popularity_base_score(df), [1.5, 2.0])
 
 # 별칭 파일이 없으면 기본값으로 돌아가지만 잘못된 파일은 예외를 발생시키는지 테스트
 def test_alias_missing_falls_back_but_invalid_file_fails(tmp_path, monkeypatch) -> None:

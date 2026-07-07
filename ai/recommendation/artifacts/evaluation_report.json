@@ -1,9 +1,10 @@
 {
-  "model_version": "recommend_model_v1",
+  "model_version": "recommend_model_v2",
   "random_state": 42,
   "train_row_count": 450,
   "test_row_count": 113,
   "target_column": "REVIEW_RANK_SCORE",
+  "target_formula": "REVIEW_STAR_NORM_AVG + REVIEW_SENTIMENT_AVG",
   "feature_columns": [
     "CKG_KND_ACTO_NM",
     "CKG_MTH_ACTO_NM",
@@ -12,6 +13,8 @@
     "CKG_DODF_NM",
     "serving_size",
     "cooking_time_min",
+    "INQ_CNT_LOG_CENTERED",
+    "SRAP_CNT_LOG_CENTERED",
     "ingredient_count",
     "unique_ingredient_count",
     "others_count",
@@ -20,12 +23,12 @@
     "commonness_mean"
   ],
   "model_type": "extra_trees",
-  "RMSE": 2.0692373522284186,
-  "MAE": 1.6068644103658296,
-  "R2": -0.2640723453517213,
-  "Spearman": 0.145011311464502,
-  "created_at": "2026-07-07T00:32:04.627595+00:00",
+  "RMSE": 0.37747784241763777,
+  "MAE": 0.16680343599288347,
+  "R2": -0.2002702053135592,
+  "Spearman": 0.0958277012277881,
+  "created_at": "2026-07-07T01:31:44.965958+00:00",
   "Hit@10": 0.1,
-  "Hit@20": 0.2,
-  "Hit@50": 0.48
+  "Hit@20": 0.25,
+  "Hit@50": 0.42
 }

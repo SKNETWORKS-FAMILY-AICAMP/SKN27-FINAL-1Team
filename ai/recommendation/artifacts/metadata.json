@@ -1,5 +1,5 @@
 {
-  "model_version": "recommend_model_v1",
+  "model_version": "recommend_model_v2",
   "model_name": "extra_trees",
   "random_state": 42,
   "feature_columns": [
@@ -10,6 +10,8 @@
     "CKG_DODF_NM",
     "serving_size",
     "cooking_time_min",
+    "INQ_CNT_LOG_CENTERED",
+    "SRAP_CNT_LOG_CENTERED",
     "ingredient_count",
     "unique_ingredient_count",
     "others_count",
@@ -17,8 +19,8 @@
     "alias_match_ratio",
     "commonness_mean"
   ],
-  "clip_low": -0.6168204358408698,
-  "clip_high": 8.097109115098176,
+  "clip_low": 0.14479999999999998,
+  "clip_high": 1.98,
   "labeled_count": 563,
   "unlabeled_count": 2608,
   "training_row_count": 563,

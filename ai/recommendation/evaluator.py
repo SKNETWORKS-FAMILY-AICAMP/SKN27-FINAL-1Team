@@ -17,6 +17,7 @@ from .config import (
     MODEL_VERSION,
     RANDOM_STATE,
     TARGET_COL,
+    TARGET_FORMULA,
     feature_columns,
 )
 
@@ -62,6 +63,7 @@ def evaluate(
         "train_row_count": train_row_count,
         "test_row_count": test_row_count,
         "target_column": TARGET_COL,
+        "target_formula": TARGET_FORMULA,
         "feature_columns": feature_columns(),
         "model_type": model_type,
         "RMSE": rmse,
