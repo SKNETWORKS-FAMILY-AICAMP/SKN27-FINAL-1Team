@@ -1,5 +1,9 @@
 from types import SimpleNamespace
 
+import pytest
+
+pytest.importorskip("langchain_openai")
+
 from ai.agents.supervisor_agent import supervisor_agent
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 

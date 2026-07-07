@@ -1,6 +1,10 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 
+import pytest
+
+pytest.importorskip("langchain_openai")
+
 from ai.tools.fridge_mcp_tools import FRIDGE_MCP_TOOLS
 from ai.agents.supervisor_agent import supervisor_agent
 from app.backend.services.calendar_mcp_client import _serverless_output

@@ -5,7 +5,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
+from app.backend.core.config import settings
 from app.backend.db.models import Receipt, ReceiptItem
+from app.backend.services.receipt_ocr_service.privacy_masking import mask_sensitive_text
 
 
 KST = timezone(timedelta(hours=9))
@@ -25,7 +27,7 @@ class ReceiptHistoryService:
         if not receipt:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="영수증을 찾을 수 없습니다.")
 
-        cleaned = store_name.strip()
+        cleaned = (mask_sensitive_text(store_name) or "").strip()
         if not cleaned:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="영수증 제목을 입력해주세요.")
 
@@ -57,13 +59,33 @@ class ReceiptHistoryService:
         if not relative_or_absolute_path:
             return
 
-        path = Path(relative_or_absolute_path)
-        target = path if path.is_absolute() else PROJECT_ROOT / path
+        target = self._resolve_deletable_upload_path(relative_or_absolute_path)
+        if not target:
+            return
+
         try:
             if target.is_file():
                 target.unlink()
         except OSError:
             pass
+
+    def _resolve_deletable_upload_path(self, relative_or_absolute_path: str) -> Optional[Path]:
+        path = Path(relative_or_absolute_path)
+        target = path if path.is_absolute() else PROJECT_ROOT / path
+        upload_root = self._resolve_storage_root(settings.OCR_UPLOAD_DIR)
+
+        try:
+            resolved_target = target.resolve(strict=False)
+            resolved_upload_root = upload_root.resolve(strict=False)
+            resolved_target.relative_to(resolved_upload_root)
+        except (OSError, ValueError):
+            return None
+
+        return resolved_target
+
+    def _resolve_storage_root(self, path_value: str) -> Path:
+        path = Path(path_value)
+        return path if path.is_absolute() else PROJECT_ROOT / path
 
     def get_recent_receipts(self, *, db: Session, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         receipts = (
@@ -80,7 +102,7 @@ class ReceiptHistoryService:
     def _serialize(self, receipt: Receipt) -> Dict[str, Any]:
         return {
             "receipt_id": receipt.id,
-            "store_name": receipt.store_name,
+            "store_name": mask_sensitive_text(receipt.store_name),
             "purchase_datetime": self._format_datetime(receipt.purchased_at),
             "total_amount": receipt.total_price,
             "item_count": len(receipt.items),
@@ -91,8 +113,8 @@ class ReceiptHistoryService:
 
     def _serialize_item(self, item: ReceiptItem) -> Dict[str, Any]:
         return {
-            "raw_name": item.raw_name,
-            "normalized_name": item.normalized_name,
+            "raw_name": mask_sensitive_text(item.raw_name),
+            "normalized_name": mask_sensitive_text(item.normalized_name),
             "quantity": float(item.quantity) if item.quantity is not None else None,
             "unit": item.unit,
             "item_amount": item.item_amount,

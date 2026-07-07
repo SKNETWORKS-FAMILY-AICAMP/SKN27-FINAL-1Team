@@ -15,14 +15,14 @@ KST = timezone(timedelta(hours=9))
 
 def _target_date(value: str | None) -> date:
     today = date.today()
-    if value == "\ub0b4\uc77c":
+    if value == "내일":
         return today + timedelta(days=1)
-    if value == "\ubaa8\ub808":
+    if value == "모레":
         return today + timedelta(days=2)
-    if value in (None, "", "\uc624\ub298"):
+    if value in (None, "", "오늘"):
         return today
-    if "\uc6d4" in value and "\uc77c" in value:
-        month, day = value.replace("\uc77c", "").split("\uc6d4", 1)
+    if "월" in value and "일" in value:
+        month, day = value.replace("일", "").split("월", 1)
         return date(today.year, int(month.strip()), int(day.strip()))
     if "/" in value:
         month, day = value.split("/", 1)
@@ -46,10 +46,10 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
     if not db or not user_id:
         return {
             "ok": False,
-            "error": {"code": "CALENDAR_CONTEXT_REQUIRED", "message": "db\uc640 user_id\uac00 \ud544\uc694\ud574\uc694."},
+            "error": {"code": "CALENDAR_CONTEXT_REQUIRED", "message": "db와 user_id가 필요해요."},
         }
 
-    title = payload.get("title") or payload.get("summary") or "\uce98\ub9b0\ub354 \uc77c\uc815"
+    title = payload.get("title") or payload.get("summary") or "캘린더 일정"
     try:
         integration = calendar_api._get_google_integration(db, user_id)
         access_token = await calendar_api._get_access_token(integration, db)
@@ -61,7 +61,7 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
         )
         event = {
             "summary": title,
-            "description": payload.get("description") or "\ubc25\ubc8c\uc774 \uc54c\ub9bc agent\uac00 \ub4f1\ub85d\ud55c \uc77c\uc815\uc785\ub2c8\ub2e4.",
+            "description": payload.get("description") or "밥벌이 알림 agent가 등록한 일정입니다.",
             "start": {"dateTime": start_at.isoformat()},
             "end": {"dateTime": end_at.isoformat()},
             "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 0}]},
@@ -86,7 +86,7 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
 
     return {
         "ok": True,
-        "message": "\uce98\ub9b0\ub354 \uc77c\uc815\uc744 \ub4f1\ub85d\ud588\uc5b4\uc694.",
+        "message": "캘린더 일정을 등록했어요.",
         "data": {
             **result,
             "event_key": event_key,
@@ -103,10 +103,10 @@ async def delete_calendar_event_tool(payload: dict[str, Any], context: dict[str,
     if not db or not user_id or not event_key:
         return {
             "ok": False,
-            "error": {"code": "CALENDAR_DELETE_CONTEXT_REQUIRED", "message": "db, user_id, event_key\uac00 \ud544\uc694\ud574\uc694."},
+            "error": {"code": "CALENDAR_DELETE_CONTEXT_REQUIRED", "message": "db, user_id, event_key가 필요해요."},
         }
     if not calendar_api._event_key_belongs_to_user(event_key, user_id):
-        return {"ok": False, "error": {"code": "CALENDAR_EVENT_FORBIDDEN", "message": "\uc0ad\uc81c\ud560 \uc218 \uc5c6\ub294 \uc77c\uc815\uc774\uc5d0\uc694."}}
+        return {"ok": False, "error": {"code": "CALENDAR_EVENT_FORBIDDEN", "message": "삭제할 수 없는 일정이에요."}}
 
     try:
         integration = calendar_api._get_google_integration(db, user_id)
@@ -126,7 +126,7 @@ async def delete_calendar_event_tool(payload: dict[str, Any], context: dict[str,
     except Exception as exc:
         return {"ok": False, "error": {"code": "CALENDAR_DELETE_FAILED", "message": str(exc)}}
 
-    return {"ok": True, "message": "\uce98\ub9b0\ub354 \uc77c\uc815\uc744 \uc0ad\uc81c\ud588\uc5b4\uc694.", "data": result}
+    return {"ok": True, "message": "캘린더 일정을 삭제했어요.", "data": result}
 
 
 async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -135,7 +135,7 @@ async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, 
     if not db or not user_id:
         return {
             "ok": False,
-            "error": {"code": "CALENDAR_LIST_CONTEXT_REQUIRED", "message": "db\uc640 user_id\uac00 \ud544\uc694\ud574\uc694."},
+            "error": {"code": "CALENDAR_LIST_CONTEXT_REQUIRED", "message": "db와 user_id가 필요해요."},
         }
 
     start_date = _target_date(payload.get("start_date") or payload.get("date_text") or payload.get("date"))
@@ -147,7 +147,7 @@ async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, 
     except Exception as exc:
         return {"ok": False, "error": {"code": "CALENDAR_LIST_FAILED", "message": str(exc)}}
 
-    return {"ok": True, "message": "\uce98\ub9b0\ub354 \uc77c\uc815\uc744 \uc870\ud68c\ud588\uc5b4\uc694.", "data": result}
+    return {"ok": True, "message": "캘린더 일정을 조회했어요.", "data": result}
 
 
 ALARM_AGENT_TOOLS = {
