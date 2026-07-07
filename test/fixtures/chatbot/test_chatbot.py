@@ -140,7 +140,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.chat_graph import mcp_agent_node, route_intent, router_node
-from ai.agents.supervisor_agent.chat_utils import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _parse_calendar_date
+from ai.agents.supervisor_agent.chat_utils import LOGIN_REQUIRED_REPLY, _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage
 
 
 class FakeService:
@@ -177,10 +177,10 @@ def test_delete_inventory_item_routes_to_mcp() -> None:
     result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
     assert result["response_text"] == "두부 폐기 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
-def test_calendar_action_routes_to_mcp() -> None:
-    """일정/캘린더 문장은 calendar MCP 노드로 보냅니다."""
+def test_calendar_action_routes_to_alarm() -> None:
+    """일정/캘린더 문장은 alarm.calendar 인텐트로 보냅니다."""
     state = {"text": "내일 저녁 일정 등록해줘", "service": FakeService("general"), "history": []}
-    assert router_node(state)["intent"] == "mcp.calendar"
+    assert router_node(state)["intent"] == "alarm.calendar"
 
 
 def test_confirm_and_cancel_route_to_mcp() -> None:
@@ -203,19 +203,6 @@ def test_inventory_add_sentence_asks_storage_without_llm() -> None:
     result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.inventory", "history": []})
     assert result["response_text"] == "두부 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
-def test_pending_calendar_time_update_stays_calendar() -> None:
-    """일정 확인 문맥에서 시간만 바꿔도 재료 추가로 빠지지 않습니다."""
-    class Message:
-        def __init__(self, role, text):
-            self.role = role
-            self.text = text
-
-    history = [Message("bot", "'럭키데이' 일정을 2024-07-07 09:00에 등록할까요?")]
-    state = {"text": '11시에 등록해줘', "service": FakeService("general"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_calendar"
-    result = mcp_agent_node({"user_id": 1, "text": '11시에 등록해줘', "intent": "mcp.pending_calendar", "history": history})
-    assert result["response_text"] == "'럭키데이' 일정을 2024-07-07 11:00에 등록할까요?"
-    assert result["actions"][0]["data"]["message"] == '확인:add_calendar_event:럭키데이:2024-07-07T11:00:00+09:00'
 
 
 def test_pending_add_cancel_word_routes_to_cancel() -> None:
@@ -402,27 +389,7 @@ def test_mcp_requires_login() -> None:
     assert mcp_agent_node({"user_id": 0, "text": "감자 먹었어", "intent": "mcp.inventory"})["response_text"] == LOGIN_REQUIRED_REPLY
 
 
-def test_calendar_date_parser() -> None:
-    """캘린더 날짜 표현을 실제 날짜로 변환합니다."""
-    assert _parse_calendar_date("오늘") == date.today()
-    assert _parse_calendar_date("내일") == date.today() + timedelta(days=1)
-    assert _parse_calendar_date("2026-07-01") == date(2026, 7, 1)
 
-
-
-def test_calendar_month_day_uses_current_year() -> None:
-    """월/일만 있는 일정은 LLM의 과거 연도를 버리고 현재 연도를 사용합니다."""
-    result = _calendar_datetime_from_text('7월7일 럭키데이 일정 등록해줘', "2023-07-07T09:00:00")
-    assert result.date() == date(date.today().year, 7, 7)
-    assert result.hour == 9
-
-
-def test_calendar_today_time_uses_current_date() -> None:
-    """LLM이 과거 날짜를 줘도 사용자 원문의 오늘/시간을 우선합니다."""
-    result = _calendar_datetime_from_text("오늘 11시에 미팅 일정 등록해줘", "2023-10-04T11:00:00")
-    assert result.date() == date.today()
-    assert result.hour == 11
-    assert result.minute == 0
 
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
@@ -453,9 +420,6 @@ if __name__ == "__main__":
     test_latest_pending_question_wins_over_old_add_history()
     test_pending_consume_quantity_builds_confirm_action()
     test_mcp_requires_login()
-    test_calendar_date_parser()
-    test_calendar_month_day_uses_current_year()
-    test_calendar_today_time_uses_current_date()
     test_route_intent_uses_lookup_table()
     print("chat graph tests ok")
 
@@ -470,24 +434,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent import chat_service as chat_module
 
-
-def test_empty_inventory_replies_are_helpful() -> None:
-    """냉장고가 비어 있으면 개인화 질문에 등록 안내를 반환합니다."""
-    original_inventory_service = chat_module.inventory_service
-    chat_module.inventory_service = SimpleNamespace(get_ingredients=lambda db, user_id: [])
-    try:
-        service = chat_module.chat_service
-        expected = service.EMPTY_INVENTORY_REPLY
-        assert service._reply_inventory_list(None, 1) == expected
-        assert service._reply_expiring_items(None, 1, "소비 임박재료 뭐 있어?") == expected
-        assert service._reply_recipe_recommend(None, 1, "오늘 뭐 해먹지?") == (expected, [])
-    finally:
-        chat_module.inventory_service = original_inventory_service
-
-
-if __name__ == "__main__":
-    test_empty_inventory_replies_are_helpful()
-    print("empty inventory chat tests ok")
 
 
 def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> None:

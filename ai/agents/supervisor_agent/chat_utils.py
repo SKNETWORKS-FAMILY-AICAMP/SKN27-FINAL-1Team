@@ -33,7 +33,6 @@ INVENTORY_ACTION_WORDS = (
     "폐기",
     "지워",
 )
-CALENDAR_WORDS = ("일정", "캘린더")
 DELETE_WORDS = ("삭제", "폐기", "지워", "버려")
 CONSUME_WORDS = ("먹었어", "다썼어", "다먹었어", "소비했", "사용했", "썼어")
 INVENTORY_LIST_WORDS = ("뭐 있어", "뭐 있지", "뭐있", "뭐잇", "머있", "머잇", "뭐이", "목록", "현재 재료", "현재 냉장고")
@@ -286,11 +285,6 @@ def _format_guide_tip(tip: str) -> str:
     return "\n".join(f"{index + 1}. {sentence}" for index, sentence in enumerate(sentences[:3]))
 
 
-def _pending_calendar_from_history(history) -> tuple[str, str] | None:
-    """최근 봇의 일정 등록 확인 문구에서 제목과 날짜를 찾습니다."""
-    text = _latest_bot_text(history)
-    match = re.search(r"'(.+?)'\s+일정을\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})에\s+등록할까요", text)
-    return (match.group(1), match.group(2)) if match else None
 
 def _pending_add_many_from_history(history) -> bool:
     """최근 봇 응답이 여러 식재료 수량을 기다리는지 확인합니다."""
@@ -348,58 +342,6 @@ def _pending_consume_from_history(history) -> str | None:
     match = re.search(r"(.+?)(?:을|를) 몇 개 (?:먹|소비)", _latest_bot_text(history))
     return match.group(1).strip() if match else None
 
-def _parse_calendar_date(date_str: str) -> date:
-    """챗봇이 뽑은 짧은 날짜 표현을 캘린더 날짜로 변환합니다."""
-    text = (date_str or "오늘").strip()
-    today = date.today()
-    if "모레" in text:
-        return today + timedelta(days=2)
-    if "내일" in text:
-        return today + timedelta(days=1)
-    if "오늘" in text:
-        return today
-    month_day = re.search(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일", text)
-    if month_day:
-        month, day = map(int, month_day.groups())
-        return date(today.year, month, day)
-    try:
-        return date.fromisoformat(text[:10])
-    except ValueError:
-        return today
-
-def _has_calendar_date_text(text: str) -> bool:
-    """사용자 원문에 날짜 표현이 있는지 확인합니다."""
-    return bool(
-        any(word in text for word in ("오늘", "내일", "모레"))
-        or re.search(r"\d{1,2}\s*월\s*\d{1,2}\s*일", text)
-        or re.search(r"\d{4}-\d{2}-\d{2}", text)
-    )
-
-def _calendar_datetime_from_text(text: str, fallback: str) -> datetime:
-    """사용자 원문을 우선해 캘린더 일정 시작 시간을 계산합니다."""
-    base_date = _parse_calendar_date(text if _has_calendar_date_text(text) else fallback)
-    time_match = re.search(r"(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?", text)
-    hour = 9
-    minute = 0
-    if time_match:
-        meridiem, hour_text, minute_text = time_match.groups()
-        hour = int(hour_text)
-        minute = int(minute_text or 0)
-        if meridiem == "오후" and hour < 12:
-            hour += 12
-        if meridiem == "오전" and hour == 12:
-            hour = 0
-    elif "T" in fallback:
-        try:
-            parsed = datetime.fromisoformat(fallback[:19])
-            hour, minute = parsed.hour, parsed.minute
-        except ValueError:
-            pass
-    return datetime.combine(base_date, time(hour, minute), timezone(timedelta(hours=9)))
-
-def _calendar_display(value: datetime) -> str:
-    """캘린더 확인 문구에 보여줄 날짜와 시간을 만듭니다."""
-    return value.strftime("%Y-%m-%d %H:%M")
 
 def _storage_choice_response(name: str, quantity: float, unchecked: bool = False) -> dict:
     """보관 위치 선택 버튼을 만듭니다."""

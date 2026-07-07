@@ -11,9 +11,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from app.backend.core.config import settings
-from ai.tools.calendar_tools import CALENDAR_TOOLS
 from ai.agents.supervisor_agent.chat_utils import (
-    _pending_calendar_from_history,
     _pending_add_many_from_history,
     _is_quantity_only_list,
     _latest_bot_text,
@@ -21,10 +19,6 @@ from ai.agents.supervisor_agent.chat_utils import (
     _pending_add_storage_from_history,
     _pending_add_from_history,
     _pending_consume_from_history,
-    _parse_calendar_date,
-    _has_calendar_date_text,
-    _calendar_datetime_from_text,
-    _calendar_display,
     _storage_choice_response
 )
 
@@ -34,7 +28,7 @@ logger = logging.getLogger(__name__)
 from ai.agents.supervisor_agent.chat_utils import (
     LOGIN_REQUIRED_REPLY, GENERAL_REPLY, CANCEL_REPLY,
     CONFIRM_PREFIX, CANCEL_WORDS, INVENTORY_ACTION_WORDS,
-    CALENDAR_WORDS, DELETE_WORDS, CONSUME_WORDS, INVENTORY_LIST_WORDS,
+    DELETE_WORDS, CONSUME_WORDS, INVENTORY_LIST_WORDS,
     EXPIRING_WORDS, ADD_WORDS, DEFAULT_STORAGE, STORAGE_KEYS, KOREAN_QUANTITIES,
     _normalize_text, _get_josa, _confirm_action, _inventory_refresh_action,
     _quantity_text, _extract_quantity, _extract_delete_name, _extract_consume_name,
@@ -42,36 +36,7 @@ from ai.agents.supervisor_agent.chat_utils import (
     _requires_login
 )
 
-def _execute_calendar_event(db, user_id: int, title: str, date_str: str) -> str:
-    """Google Calendar 연동 정보를 이용해 실제 캘린더 일정을 생성합니다."""
-    from app.backend.api.calendar.calendar_api import _create_event_once, _get_access_token, _get_google_integration
-
-    async def create_event() -> None:
-        integration = _get_google_integration(db, user_id)
-        access_token = await _get_access_token(integration, db)
-        start_at = _calendar_datetime_from_text(date_str, date_str)
-        end_at = start_at + timedelta(hours=1)
-        target_date = start_at.date()
-        event_key = f"chat-{user_id}-{start_at.isoformat()}-{hashlib.sha1(title.encode()).hexdigest()[:8]}"
-        event = {
-            "summary": title,
-            "description": "밥벌이 챗봇에서 등록한 일정입니다.",
-            "start": {"dateTime": start_at.isoformat()},
-            "end": {"dateTime": end_at.isoformat()},
-            "extendedProperties": {"private": {"bobbeoriKey": event_key}},
-        }
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await _create_event_once(client, integration.calendar_id, access_token, event_key, event, db, user_id, "chatbot")
-
-    try:
-        asyncio.run(create_event())
-        return f"'{title}' 일정을 {_calendar_display(_calendar_datetime_from_text(date_str, date_str))}에 등록했어요."
-    except HTTPException as exc:
-        if exc.status_code == 404:
-            return "Google Calendar 연동이 필요해요. 마이페이지에서 캘린더를 먼저 연결해주세요."
-        return "캘린더 등록 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
-    except Exception:
-        return "캘린더 등록 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
+# 캘린더 실행 로직은 alarm_agent 로 이관되어 제거되었습니다.
 
 def _execute_confirmed_action(state: GraphState) -> dict:
     """확인 버튼으로 돌아온 내부 명령을 실제 쓰기 작업으로 실행합니다."""
@@ -83,13 +48,7 @@ def _execute_confirmed_action(state: GraphState) -> dict:
         return {"response_text": GENERAL_REPLY}
 
     action = parts[1]
-    
     try:
-        # 캘린더 작업
-        if action == "add_calendar_event" and len(parts) >= 4:
-            reply = _execute_calendar_event(state["db"], state["user_id"], parts[2], ":".join(parts[3:]))
-            return {"response_text": reply}
-            
         # 재고 관리 작업 (Inventory Agent로 위임)
         if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
             from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
@@ -111,8 +70,7 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.confirm"}
     if normalized in CANCEL_WORDS:
         return {"intent": "mcp.cancel"}
-    if _pending_calendar_from_history(history) and any(word in normalized for word in CALENDAR_WORDS + ADD_WORDS):
-        return {"intent": "mcp.pending_calendar"}
+
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
             return {"intent": "mcp.pending_add_many"}
@@ -130,8 +88,8 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.delete"}
     if any(word in normalized for word in CONSUME_WORDS):
         return {"intent": "mcp.inventory"}
-    if any(word in normalized for word in CALENDAR_WORDS):
-        return {"intent": "mcp.calendar"}
+    if any(word in normalized for word in ("일정", "캘린더", "알림")):
+        return {"intent": "alarm.calendar"}
     if any(word in normalized for word in ADD_WORDS):
         return {"intent": "mcp.inventory"}
     if any(word in normalized for word in EXPIRING_WORDS):
@@ -227,16 +185,7 @@ def mcp_agent_node(state: GraphState) -> dict:
         command = f"확인:delete_ingredient:{name}"
         return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
-    if state.get("intent") == "mcp.pending_calendar":
-        pending = _pending_calendar_from_history(state.get("history", []))
-        if not pending:
-            return {"response_text": GENERAL_REPLY}
-        title, fallback = pending
-        start_at = _calendar_datetime_from_text(state["text"], fallback)
-        date_value = start_at.isoformat()
-        text = f"'{title}' 일정을 {_calendar_display(start_at)}에 등록할까요?"
-        command = f"확인:add_calendar_event:{title}:{date_value}"
-        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+
 
     if state.get("intent") == "mcp.pending_consume":
         name = _pending_consume_from_history(state.get("history", [])) or ""
@@ -281,28 +230,7 @@ def mcp_agent_node(state: GraphState) -> dict:
     if state.get("intent") == "mcp.inventory":
         return _handle_inventory_action(state)
 
-    messages = state.get("messages") or [HumanMessage(content=state["text"])]
-    if state.get("intent") == "mcp.calendar":
-        sys_msg = SystemMessage(content="당신은 사용자의 일정을 관리하는 비서입니다. 사용자가 캘린더에 일정을 추가해 달라고 요청할 때, 일정의 제목과 날짜 정보가 모두 있다면 반드시 add_calendar_event 도구를 호출하세요.")
-        if not any(getattr(m, "type", "") == "system" for m in messages):
-            messages = [sys_msg] + messages
-    llm = ChatOpenAI(model=settings.OPENAI_MODEL, api_key=settings.OPENAI_API_KEY, temperature=0.0)
-    response = llm.bind_tools(CALENDAR_TOOLS).invoke(messages)
-
-    if not response.tool_calls:
-        return {"response_text": "일정 제목과 날짜를 함께 알려주세요."}
-
-    tool_call = response.tool_calls[0]
-    if tool_call["name"] == "add_calendar_event":
-        args = tool_call["args"]
-        title = args.get("title", "일정")
-        date_str = args.get("date_str", "오늘")
-        start_at = _calendar_datetime_from_text(state["text"], date_str)
-        date_value = start_at.isoformat()
-        text = f"'{title}' 일정을 {_calendar_display(start_at)}에 등록할까요?"
-        command = f"확인:add_calendar_event:{title}:{date_value}"
-        return {"response_text": text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "messages": messages + [response]}
-    return {"response_text": "아직 지원하지 않는 챗봇 작업이에요.", "messages": messages + [response]}
+    return {"response_text": "아직 지원하지 않는 챗봇 작업이에요."}
 
 def inventory_list_node(state: GraphState) -> dict:
     """로그인 사용자의 냉장고 재료 목록을 안내합니다."""
@@ -343,6 +271,70 @@ def receipt_guide_node(state: GraphState) -> dict:
         "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
 
+def alarm_agent_node(state: GraphState) -> dict:
+    """캘린더 및 알림 관리를 Alarm Agent로 위임합니다."""
+    from ai.agents.alarm_agent.alarm_agent import run as run_alarm_agent
+    
+    intent = state.get("intent", "")
+    text = state["text"]
+    confirmed = (intent == "mcp.confirm")
+    
+    # 챗봇 프론트에서 들어온 '확인' 액션일 경우 파싱 (기존 동작 호환)
+    action = None
+    payload = None
+    if confirmed:
+        parts = text.split(":")
+        if len(parts) >= 2:
+            action = parts[1]
+            # mcp_agent_node 로 가야하는 재고 관련 action 이면 여기서 처리 안함
+            if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
+                pass # 이 경우는 사실 mcp_agent_node로 라우팅됨
+            elif len(parts) >= 4 and action == "add_calendar_event":
+                # 기존 레거시 포맷: 확인:add_calendar_event:제목:날짜
+                action = "create_event"
+                payload = {"title": parts[2], "date_text": ":".join(parts[3:])}
+
+    # Alarm Agent 실행
+    res = run_alarm_agent(
+        text_or_intent=text, 
+        payload=payload,
+        action=action,
+        confirmed=confirmed
+    )
+    
+    # Supervisor 규격(response_text, actions)으로 변환 (Adapter)
+    response_text = res.get("message", "요청을 처리했습니다.")
+    actions = []
+    
+    # Alarm agent의 ui 형식을 챗봇 규격으로 변환
+    ui = res.get("ui", {})
+    if ui and "actions" in ui:
+        for a in ui["actions"]:
+            label = a.get("label", "")
+            val = a.get("value", {})
+            if isinstance(val, dict):
+                # 프론트엔드가 요구하는 텍스트 문자열 형태로 직렬화
+                # 취소 버튼
+                if val.get("action") == "cancel":
+                    actions.append({"label": label, "data": "취소"})
+                # 확인 버튼 (create_event)
+                elif val.get("action") == "create_event":
+                    p = val.get("payload", {})
+                    t = p.get("title", "")
+                    d = p.get("date_text", "")
+                    actions.append({"label": label, "data": f"확인:add_calendar_event:{t}:{d}"})
+                else:
+                    # 기타 알람 액션
+                    a_name = val.get("action", "")
+                    actions.append({"label": label, "data": f"확인:{a_name}"})
+            else:
+                actions.append({"label": label, "data": str(val)})
+                
+    result = {"response_text": response_text}
+    if actions:
+        result["actions"] = actions
+    return result
+
 def general_node(state: GraphState) -> dict:
     """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
     return {"response_text": GENERAL_REPLY}
@@ -350,7 +342,14 @@ def general_node(state: GraphState) -> dict:
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
+    if intent.startswith("alarm.") or intent == "mcp.calendar":
+        return "alarm_agent_node"
     if intent.startswith("mcp."):
+        # 확인(mcp.confirm)인 경우, 만약 알람 액션이면 alarm_agent_node로 뺀다.
+        if intent == "mcp.confirm":
+            parts = state["text"].split(":")
+            if len(parts) >= 2 and parts[1] not in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
+                return "alarm_agent_node"
         return "mcp_agent_node"
     routes = {
         "inventory.list": "inventory_list_node",
@@ -365,6 +364,7 @@ def route_intent(state: GraphState) -> str:
 workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)
 workflow.add_node("mcp_agent_node", mcp_agent_node)
+workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("inventory_list_node", inventory_list_node)
 workflow.add_node("inventory_expiring_node", inventory_expiring_node)
 workflow.add_node("ingredient_guide_node", ingredient_guide_node)
@@ -377,6 +377,7 @@ workflow.set_entry_point("router")
 workflow.add_conditional_edges("router", route_intent)
 for node_name in (
     "mcp_agent_node",
+    "alarm_agent_node",
     "inventory_list_node",
     "inventory_expiring_node",
     "ingredient_guide_node",
