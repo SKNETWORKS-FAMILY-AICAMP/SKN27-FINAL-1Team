@@ -20,11 +20,11 @@
     "mtrl_empty_amount_ratio"
   ],
   "model_type": "extra_trees",
-  "RMSE": 0.36746837926093334,
-  "MAE": 0.15946876668071405,
-  "R2": -0.13745976981344943,
-  "Spearman": 0.283728369920194,
-  "created_at": "2026-07-07T06:51:22.216225+00:00",
+  "RMSE": 0.36691978869024994,
+  "MAE": 0.15904726611883738,
+  "R2": -0.13406609592265006,
+  "Spearman": 0.2857718196502061,
+  "created_at": "2026-07-07T08:34:43.706489+00:00",
   "Hit@10": 0.2,
   "Hit@20": 0.3,
   "Hit@50": 0.6,
@@ -35,13 +35,13 @@
     "random_state": 42,
     "stratification": "target_quantile_bins",
     "metrics_mean": {
-      "Spearman": 0.1358819045391538,
+      "Spearman": 0.13610561922386508,
       "Hit@10": 0.1,
       "Hit@20": 0.19,
-      "Hit@50": 0.516,
-      "RMSE": 0.4017832713606787,
-      "MAE": 0.17408904588368748,
-      "R2": -0.18040959224454517
+      "Hit@50": 0.52,
+      "RMSE": 0.4015688655839663,
+      "MAE": 0.17397194625646287,
+      "R2": -0.1790649592803247
     },
     "detail_report": "stratified_kfold_report.json",
     "oof_predictions": "stratified_kfold_predictions.csv"

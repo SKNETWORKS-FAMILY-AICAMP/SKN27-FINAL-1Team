@@ -1096,3 +1096,50 @@ RMSE/MAE/R²는 일부 개선됐지만, 본 실험의 1차 판정 기준인 rank
 - 관련 코드/산출물은 모두 **롤백**
 - 결론: 현재 데이터/모델(ExtraTrees) 기준으로 조회수-스크랩 관계 feature는
   순위 품질 개선 신호로 충분하지 않음
+
+---
+
+# 13. 2026 조회수 비교 실험 (2024 기준 대비)
+
+`recipe_fix.csv`에 추가된 2026 조회수 컬럼을 기존 popularity feature 체계에
+단계적으로 투입해 비교했습니다. 실험 규칙은 **하락 시 즉시 원복 후 다음 후보 진행**입니다.
+
+## 1. baseline (winner 시작점)
+
+| 설정 | Holdout Spearman | Holdout Hit@10 | 5-fold mean Spearman |
+|------|------------------|----------------|----------------------|
+| 기존 production 12 feature | **0.2858** | **0.20** | **0.1361** |
+
+## 2. 후보 실험 결과
+
+| 단계 | 후보 feature 변경 | Holdout Spearman | Hit@10 | CV mean Spearman | 판정 |
+|------|-------------------|------------------|--------|------------------|------|
+| Phase 1 | `INQ_CNT_LOG_CENTERED` → `INQ_CNT_LOG_CENTERED_2026` (치환) | 0.2676 | 0.14 | 0.1469 | **거절** (Spearman 하락) |
+| Phase 2-a | `INQ_CNT_LOG_CENTERED` + `INQ_CNT_LOG_CENTERED_2026` | 0.2346 | 0.06 | 0.1498 | **거절** (Spearman/Hit@10 하락) |
+| Phase 2-b | baseline + `INQ_CNT_RATE_2026` | 0.2752 | 0.08 | 0.1470 | **거절** (Spearman/Hit@10 하락) |
+| Phase 2-c | `INQ_CNT_LOG_CENTERED_2024` + `INQ_CNT_LOG_CENTERED_2026` | 0.2346 | 0.06 | 0.1498 | **거절** (Spearman/Hit@10 하락) |
+| Phase 3-a | baseline + `INQ_CNT_DELTA_2024_2026` | 0.2498 | 0.06 | 0.1339 | **거절** (3개 지표 하락) |
+| Phase 3-b | baseline + `INQ_CNT_GROWTH_RATE_2024_2026` | 0.2674 | 0.08 | 0.1327 | **거절** (3개 지표 하락) |
+
+## 3. 원복/최종 결정
+
+- 모든 후보가 최소 1개 핵심 지표를 악화시켜 **즉시 원복** 처리.
+- 최종 winner는 기존 production과 동일:
+  - `INQ_CNT_LOG_CENTERED`
+  - `SRAP_CNT_LOG_CENTERED`
+- 추가된 2026 조회수 파생(`_2026`, `DELTA`, `GROWTH_RATE`)은 **현재 모델/데이터에서는 미반영**.
+
+## 4. 재검증
+
+- winner(기존 baseline) 상태에서 재실행:
+  - `python -m ai.recommendation.feature_screening`
+  - `python -m ai.recommendation.feature_ablation`
+- 결과:
+  - screening holdout Spearman: **0.2858**
+  - ablation: `beats_baseline=False`, `removed=[]`
+
+## 5. 현재 상태
+
+- `config.py`는 baseline 설정으로 복원됨.
+- `evaluation_report.json` / `pipeline.joblib` / `recipe_recommendation_scored.csv`는
+  baseline(winner) 기준으로 재생성 완료.

@@ -13,16 +13,18 @@
       "ingredient_count",
       "others_ratio",
       "commonness_mean",
-      "commonness_max"
+      "commonness_min",
+      "commonness_max",
+      "mtrl_empty_amount_ratio"
     ],
-    "feature_count": 10,
+    "feature_count": 12,
     "metrics": {
-      "Spearman": 0.21253138580847727,
+      "Spearman": 0.2857718196502061,
       "Hit@10": 0.2,
-      "Hit@20": 0.25,
-      "RMSE": 0.36929264109943327,
-      "MAE": 0.15942932272578364,
-      "R2": -0.14878142467749034
+      "Hit@20": 0.3,
+      "RMSE": 0.36691978869024994,
+      "MAE": 0.15904726611883738,
+      "R2": -0.13406609592265006
     }
   },
   "steps": [
@@ -38,15 +40,15 @@
         "others_count",
         "unique_ingredient_count"
       ],
-      "feature_count": 10,
+      "feature_count": 12,
       "accepted": false,
       "metrics": {
-        "Spearman": 0.21253138580847727,
+        "Spearman": 0.2857718196502061,
         "Hit@10": 0.2,
-        "Hit@20": 0.25,
-        "RMSE": 0.36929264109943327,
-        "MAE": 0.15942932272578364,
-        "R2": -0.14878142467749034
+        "Hit@20": 0.3,
+        "RMSE": 0.36691978869024994,
+        "MAE": 0.15904726611883738,
+        "R2": -0.13406609592265006
       },
       "delta_spearman": 0.0,
       "note": "batch_corr_dedup"
@@ -59,15 +61,15 @@
       "removed": [
         "alias_match_ratio"
       ],
-      "feature_count": 10,
+      "feature_count": 12,
       "accepted": false,
       "metrics": {
-        "Spearman": 0.21253138580847727,
+        "Spearman": 0.2857718196502061,
         "Hit@10": 0.2,
-        "Hit@20": 0.25,
-        "RMSE": 0.36929264109943327,
-        "MAE": 0.15942932272578364,
-        "R2": -0.14878142467749034
+        "Hit@20": 0.3,
+        "RMSE": 0.36691978869024994,
+        "MAE": 0.15904726611883738,
+        "R2": -0.13406609592265006
       },
       "delta_spearman": 0.0,
       "note": "fallback_single"
@@ -80,15 +82,15 @@
       "removed": [
         "others_count"
       ],
-      "feature_count": 10,
+      "feature_count": 12,
       "accepted": false,
       "metrics": {
-        "Spearman": 0.21253138580847727,
+        "Spearman": 0.2857718196502061,
         "Hit@10": 0.2,
-        "Hit@20": 0.25,
-        "RMSE": 0.36929264109943327,
-        "MAE": 0.15942932272578364,
-        "R2": -0.14878142467749034
+        "Hit@20": 0.3,
+        "RMSE": 0.36691978869024994,
+        "MAE": 0.15904726611883738,
+        "R2": -0.13406609592265006
       },
       "delta_spearman": 0.0,
       "note": "fallback_single"
@@ -101,15 +103,15 @@
       "removed": [
         "unique_ingredient_count"
       ],
-      "feature_count": 10,
+      "feature_count": 12,
       "accepted": false,
       "metrics": {
-        "Spearman": 0.21253138580847727,
+        "Spearman": 0.2857718196502061,
         "Hit@10": 0.2,
-        "Hit@20": 0.25,
-        "RMSE": 0.36929264109943327,
-        "MAE": 0.15942932272578364,
-        "R2": -0.14878142467749034
+        "Hit@20": 0.3,
+        "RMSE": 0.36691978869024994,
+        "MAE": 0.15904726611883738,
+        "R2": -0.13406609592265006
       },
       "delta_spearman": 0.0,
       "note": "fallback_single"
@@ -122,17 +124,17 @@
       "removed": [
         "serving_size"
       ],
-      "feature_count": 9,
+      "feature_count": 11,
       "accepted": false,
       "metrics": {
-        "Spearman": 0.18079064092810465,
+        "Spearman": 0.24437724641570235,
         "Hit@10": 0.2,
-        "Hit@20": 0.2,
-        "RMSE": 0.377753597720901,
-        "MAE": 0.15771060516671206,
-        "R2": -0.20202448983792154
+        "Hit@20": 0.25,
+        "RMSE": 0.3735513036095409,
+        "MAE": 0.15752783209252283,
+        "R2": -0.17542956518485386
       },
-      "delta_spearman": -0.03174074488037262,
+      "delta_spearman": -0.04139457323450374,
       "note": ""
     }
   ],
@@ -147,20 +149,22 @@
       "ingredient_count",
       "others_ratio",
       "commonness_mean",
-      "commonness_max"
+      "commonness_min",
+      "commonness_max",
+      "mtrl_empty_amount_ratio"
     ],
-    "feature_count": 10,
+    "feature_count": 12,
     "exclude": [],
     "removed_from_baseline": [],
     "metrics": {
-      "Spearman": 0.21253138580847727,
+      "Spearman": 0.2857718196502061,
       "Hit@10": 0.2,
-      "Hit@20": 0.25,
-      "RMSE": 0.36929264109943327,
-      "MAE": 0.15942932272578364,
-      "R2": -0.14878142467749034
+      "Hit@20": 0.3,
+      "RMSE": 0.36691978869024994,
+      "MAE": 0.15904726611883738,
+      "R2": -0.13406609592265006
     },
     "beats_baseline": false
   },
-  "created_at": "2026-07-07T03:10:46.244171+00:00"
+  "created_at": "2026-07-07T08:34:27.958140+00:00"
 }
