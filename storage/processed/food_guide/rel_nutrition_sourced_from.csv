@@ -1,4 +1,4 @@
-﻿nutrition_id,source_id,relationship
+nutrition_id,source_id,relationship
 nutrition_0001,source_0001,SOURCED_FROM
 nutrition_0002,source_0002,SOURCED_FROM
 nutrition_0003,source_0001,SOURCED_FROM
@@ -340,13 +340,11 @@ nutrition_0338,source_0001,SOURCED_FROM
 nutrition_0339,source_0039,SOURCED_FROM
 nutrition_0340,source_0018,SOURCED_FROM
 nutrition_0341,source_0003,SOURCED_FROM
-nutrition_0342,source_0035,SOURCED_FROM
 nutrition_0343,source_0001,SOURCED_FROM
 nutrition_0344,source_0035,SOURCED_FROM
 nutrition_0345,source_0001,SOURCED_FROM
 nutrition_0346,source_0002,SOURCED_FROM
 nutrition_0347,source_0001,SOURCED_FROM
-nutrition_0348,source_0006,SOURCED_FROM
 nutrition_0349,source_0001,SOURCED_FROM
 nutrition_0350,source_0001,SOURCED_FROM
 nutrition_0351,source_0002,SOURCED_FROM
@@ -403,7 +401,6 @@ nutrition_0401,source_0188,SOURCED_FROM
 nutrition_0402,source_0188,SOURCED_FROM
 nutrition_0403,source_0188,SOURCED_FROM
 nutrition_0404,source_0188,SOURCED_FROM
-nutrition_0405,source_0188,SOURCED_FROM
 nutrition_0406,source_0188,SOURCED_FROM
 nutrition_0407,source_0188,SOURCED_FROM
 nutrition_0408,source_0188,SOURCED_FROM
@@ -492,7 +489,6 @@ nutrition_0490,source_0188,SOURCED_FROM
 nutrition_0491,source_0188,SOURCED_FROM
 nutrition_0492,source_0188,SOURCED_FROM
 nutrition_0493,source_0188,SOURCED_FROM
-nutrition_0494,source_0188,SOURCED_FROM
 nutrition_0495,source_0188,SOURCED_FROM
 nutrition_0496,source_0188,SOURCED_FROM
 nutrition_0497,source_0188,SOURCED_FROM
@@ -511,7 +507,6 @@ nutrition_0509,source_0188,SOURCED_FROM
 nutrition_0510,source_0188,SOURCED_FROM
 nutrition_0511,source_0188,SOURCED_FROM
 nutrition_0512,source_0188,SOURCED_FROM
-nutrition_0513,source_0188,SOURCED_FROM
 nutrition_0514,source_0188,SOURCED_FROM
 nutrition_0515,source_0188,SOURCED_FROM
 nutrition_0516,source_0188,SOURCED_FROM
