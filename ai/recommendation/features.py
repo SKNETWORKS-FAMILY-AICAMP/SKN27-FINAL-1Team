@@ -83,7 +83,7 @@ def build_basic_ingredient_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 class IngredientCommonnessLookup:
-    """train set 기준 재료 등장 레시피 수 → 레시피별 commonness_mean."""
+    """train set 기준 재료 등장 레시피 수 → 레시피별 commonness min/max/mean."""
 
     def __init__(self) -> None:
         self._counts: dict[str, int] = {}
@@ -97,16 +97,23 @@ class IngredientCommonnessLookup:
         self._counts = counts
         return self
 
-    def transform(self, df: pd.DataFrame) -> pd.Series:
-        means: list[float] = []
+    def _row_stats(self, names: list[str]) -> tuple[float, float, float]:
+        if not names:
+            return 0.0, 0.0, 0.0
+        # ponytail: mean과 동일 lookup·동일 루프 — 별도 클래스 없음
+        vals = [float(self._counts.get(n, 0)) for n in names]
+        return min(vals), max(vals), sum(vals) / len(vals)
+
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        rows: list[tuple[float, float, float]] = []
         for _, row in df.iterrows():
             names = _ingredient_names(_parse_normalized_list(row.get("ingredients_normalized")))
-            if not names:
-                means.append(0.0)
-                continue
-            vals = [float(self._counts.get(n, 0)) for n in names]
-            means.append(sum(vals) / len(vals))
-        return pd.Series(means, index=df.index, name="commonness_mean")
+            rows.append(self._row_stats(names))
+        return pd.DataFrame(
+            rows,
+            index=df.index,
+            columns=["commonness_min", "commonness_max", "commonness_mean"],
+        )
 
 
 def build_all_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -115,7 +122,7 @@ def build_all_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def apply_commonness(df: pd.DataFrame, lookup: IngredientCommonnessLookup) -> pd.DataFrame:
     out = df.copy()
-    out["commonness_mean"] = lookup.transform(out)
+    out[["commonness_min", "commonness_max", "commonness_mean"]] = lookup.transform(out)
     return out
 
 
@@ -155,14 +162,18 @@ def run_self_check() -> None:
 
     lookup = IngredientCommonnessLookup().fit(featured)
     common = lookup.transform(featured)
-    assert common.iloc[0] == 1.5
-    assert common.iloc[1] == 1.5
+    assert common.loc[0, "commonness_mean"] == 1.5
+    assert common.loc[1, "commonness_mean"] == 1.5
+    assert common.loc[0, "commonness_min"] == 1.0
+    assert common.loc[0, "commonness_max"] == 2.0
 
     train = featured.iloc[[0]]
     test = featured.iloc[[1]]
     lookup2 = IngredientCommonnessLookup().fit(train)
     test_common = lookup2.transform(test)
-    assert test_common.iloc[0] == 0.5
+    assert test_common.iloc[0]["commonness_mean"] == 0.5
+    assert test_common.iloc[0]["commonness_min"] == 0.0
+    assert test_common.iloc[0]["commonness_max"] == 1.0
 
 
 if __name__ == "__main__":

@@ -45,6 +45,8 @@ _PERMUTE_SOURCE: dict[str, str] = {
     "others_ratio": "others_count",
     "alias_match_ratio": "others_count",
     "commonness_mean": "ingredients_normalized",
+    "commonness_min": "ingredients_normalized",
+    "commonness_max": "ingredients_normalized",
 }
 
 

@@ -12,7 +12,9 @@
     "others_count": 0.0,
     "others_ratio": 0.0,
     "alias_match_ratio": 0.0,
-    "commonness_mean": 0.0
+    "commonness_mean": 0.0,
+    "commonness_min": 0.0,
+    "commonness_max": 0.0
   },
   "describe": {
     "CKG_KND_ACTO_NM": {
@@ -170,6 +172,32 @@
       "50%": 70.7,
       "75%": 88.5,
       "max": 140.33333333333334
+    },
+    "commonness_min": {
+      "count": 3171.0,
+      "unique": null,
+      "top": null,
+      "freq": null,
+      "mean": 3.0835698517817725,
+      "std": 5.953681733144871,
+      "min": 0.0,
+      "25%": 0.0,
+      "50%": 1.0,
+      "75%": 4.0,
+      "max": 79.0
+    },
+    "commonness_max": {
+      "count": 3171.0,
+      "unique": null,
+      "top": null,
+      "freq": null,
+      "mean": 177.97382529170608,
+      "std": 63.66336651327958,
+      "min": 0.0,
+      "25%": 148.0,
+      "50%": 170.0,
+      "75%": 234.0,
+      "max": 234.0
     }
   }
 }

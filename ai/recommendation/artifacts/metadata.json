@@ -14,7 +14,9 @@
     "others_count",
     "others_ratio",
     "alias_match_ratio",
-    "commonness_mean"
+    "commonness_mean",
+    "commonness_min",
+    "commonness_max"
   ],
   "clip_low": 0.14479999999999998,
   "clip_high": 1.98,

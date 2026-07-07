@@ -66,6 +66,8 @@ INGREDIENT_FEATURES = [
     "others_ratio",
     "alias_match_ratio",
     "commonness_mean",
+    "commonness_min",
+    "commonness_max",
 ]
 
 HIT_AT_K_VALUES = (10, 20, 50)

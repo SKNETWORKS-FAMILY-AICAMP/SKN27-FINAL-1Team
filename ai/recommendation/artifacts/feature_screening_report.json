@@ -5,24 +5,23 @@
   "labeled_count": 563,
   "train_row_count": 450,
   "test_row_count": 113,
-  "holdout_spearman_baseline": 0.0958277012277881,
+  "holdout_spearman_baseline": 0.22346342140113443,
   "correlation_threshold": 0.7,
   "univariate_spearman": {
-    "CKG_KND_ACTO_NM"         : -0.019634465829533425,
-    "CKG_MTH_ACTO_NM"         : 0.04990770011290103,
-    "CKG_STA_ACTO_NM"         : -0.026894138589016806,
-    "CKG_MTRL_ACTO_NM"        : -0.011013399410306482,
-    "CKG_DODF_NM"             : 0.10209180908204805,
-    "serving_size"            : 0.0765057516810467,
-    "cooking_time_min"        : 0.09971098936129631,
-    "INQ_CNT_LOG_CENTERED"    : -0.060941553021194556,
-    "SRAP_CNT_LOG_CENTERED"   : -0.06001038151101938,
-    "ingredient_count"        : 0.08933532809153881,
-    "unique_ingredient_count" : 0.07872681597572834,
-    "others_count"            : -0.005440840336578228,
-    "others_ratio"            : -0.006864980077620784,
-    "alias_match_ratio"       : 0.006864980077620784,
-    "commonness_mean"         : -0.0006571739357984572
+    "CKG_KND_ACTO_NM": -0.019634465829533425,
+    "CKG_MTH_ACTO_NM": 0.04990770011290103,
+    "CKG_MTRL_ACTO_NM": -0.011013399410306482,
+    "serving_size": 0.0765057516810467,
+    "INQ_CNT_LOG_CENTERED": -0.060941553021194556,
+    "SRAP_CNT_LOG_CENTERED": -0.06001038151101938,
+    "ingredient_count": 0.08933532809153881,
+    "unique_ingredient_count": 0.07872681597572834,
+    "others_count": -0.005440840336578228,
+    "others_ratio": -0.006864980077620784,
+    "alias_match_ratio": 0.006864980077620784,
+    "commonness_mean": -0.0006571739357984572,
+    "commonness_min": -0.040784184963201416,
+    "commonness_max": 0.05879489866508087
   },
   "high_correlation_pairs": [
     {
@@ -44,24 +43,28 @@
       "a": "others_ratio",
       "b": "alias_match_ratio",
       "pearson": -1.0
+    },
+    {
+      "a": "commonness_mean",
+      "b": "commonness_max",
+      "pearson": 0.7235644436838651
     }
   ],
   "permutation_spearman_drop": {
-    "CKG_KND_ACTO_NM": 0.05998323837109494,
-    "CKG_MTH_ACTO_NM": 0.0024681172664960394,
-    "CKG_STA_ACTO_NM": -0.0574940979592284,
-    "CKG_MTRL_ACTO_NM": 0.0360294665359535,
-    "CKG_DODF_NM": -0.04271903139284487,
-    "serving_size": 0.025076407797925845,
-    "cooking_time_min": -0.073673510636361,
-    "INQ_CNT_LOG_CENTERED": -0.028511589751464686,
-    "SRAP_CNT_LOG_CENTERED": 0.013665044490821426,
-    "ingredient_count": 0.05037566093677895,
-    "unique_ingredient_count": 0.0019803802939005744,
-    "others_count": -0.003998602249468061,
-    "others_ratio": 0.005932731623553539,
-    "alias_match_ratio": 0.0031366532892777715,
-    "commonness_mean": 0.03668118404243883
+    "CKG_KND_ACTO_NM": 0.17015292937063442,
+    "CKG_MTH_ACTO_NM": 0.02176736471661006,
+    "CKG_MTRL_ACTO_NM": 0.13046123091114079,
+    "serving_size": -0.02673303165312077,
+    "INQ_CNT_LOG_CENTERED": 0.08557681554513502,
+    "SRAP_CNT_LOG_CENTERED": 0.05936095326812832,
+    "ingredient_count": 0.018954467866037883,
+    "unique_ingredient_count": -0.06148429095054822,
+    "others_count": 0.002220044151124201,
+    "others_ratio": -0.01136511238728935,
+    "alias_match_ratio": -5.8864807037345424e-05,
+    "commonness_mean": 0.09179966657480135,
+    "commonness_min": 0.057775808107193044,
+    "commonness_max": 0.0010637711557470453
   },
-  "created_at": "2026-07-07T02:07:07.706515+00:00"
+  "created_at": "2026-07-07T02:48:10.170021+00:00"
 }

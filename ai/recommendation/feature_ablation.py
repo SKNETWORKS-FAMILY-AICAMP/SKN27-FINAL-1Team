@@ -35,6 +35,8 @@ _PROTECTED = frozenset({
     "CKG_KND_ACTO_NM",
     "ingredient_count",
     "commonness_mean",
+    "commonness_min",
+    "commonness_max",
     "CKG_MTRL_ACTO_NM",
     "serving_size",
     "SRAP_CNT_LOG_CENTERED",
