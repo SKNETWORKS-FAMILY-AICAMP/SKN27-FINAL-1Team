@@ -3,9 +3,6 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { API_URL } from '../../utils/api.js'
 import './Login.css'
 
-// StrictMode 더블 렌더링에 의한 비동기 Race Condition 방어용 모듈 레벨 변수
-let processingCode = null
-
 function Callback() {
   const { provider } = useParams()
   const [searchParams] = useSearchParams()
@@ -32,13 +29,8 @@ function Callback() {
       window.sessionStorage.removeItem(savedStateKey)
     }
 
-    // 모듈 레벨 변수로 완벽한 Race Condition 1회 호출 보장
-    if (processingCode === code) return
-    processingCode = code
-
     if (isFetching.current) return
     isFetching.current = true
-
 
     const fetchToken = async () => {
       try {

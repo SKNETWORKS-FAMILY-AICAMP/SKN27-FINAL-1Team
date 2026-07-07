@@ -1,10 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import './ShoppingList.css'
 
-import iconBasket from '../../assets/extracted/icons/icon_basket.png'
-import iconCart from '../../assets/extracted/icons/icon_cart.png'
-import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png'
 import imageShop from '../../assets/extracted/images/image_shop.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
@@ -267,29 +264,7 @@ function ShoppingList() {
     }
   }, [shoppingListId])
 
-  const summary = useMemo(
-    () => [
-      {
-        label: '구매 필요',
-        value: `${activeItems.length}개`,
-        note: `${recipeTitle} 기준`,
-        image: iconBasket,
-      },
-      {
-        label: '보유 재료',
-        value: `${ownedItems.length}개`,
-        note: '내 냉장고와 비교',
-        image: iconRefrigerator,
-      },
-      {
-        label: '예상 금액',
-        value: formatPrice(shoppingList?.total_price ?? 0),
-        note: '선택된 상품 기준',
-        image: iconCart,
-      },
-    ],
-    [activeItems.length, ownedItems.length, recipeTitle, shoppingList?.total_price],
-  )
+  const allChecked = activeItems.length > 0 && activeItems.every((item) => item.is_checked)
 
   const continueRecentShopping = () => {
     if (!recentList?.id) return
@@ -313,6 +288,39 @@ function ShoppingList() {
       setShoppingList(updated)
     } catch (shoppingError) {
       await showAlert(shoppingError.message || '재료 선택 상태를 바꾸지 못했어요.', {
+        title: '장보기 수정 실패',
+      })
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
+  const toggleSelectAll = async () => {
+    const nextChecked = !allChecked
+    const targets = activeItems.filter((item) => item.is_checked !== nextChecked)
+    if (targets.length === 0) {
+      return
+    }
+
+    if (isFallbackList) {
+      setShoppingList((prev) => ({
+        ...prev,
+        items: prev.items.map((item) => (
+          item.is_purchased ? item : { ...item, is_checked: nextChecked }
+        )),
+      }))
+      return
+    }
+
+    setIsMutating(true)
+    try {
+      let latest = shoppingList
+      for (const item of targets) {
+        latest = await updateShoppingListItem(item.id, { is_checked: nextChecked })
+      }
+      setShoppingList(latest)
+    } catch (shoppingError) {
+      await showAlert(shoppingError.message || '전체 선택 상태를 바꾸지 못했어요.', {
         title: '장보기 수정 실패',
       })
     } finally {
@@ -446,7 +454,7 @@ function ShoppingList() {
           <span className="shopping-eyebrow">레시피 기준 장보기</span>
           <h1 id="shopping-title">{recipeTitle} 부족 재료</h1>
           <p>
-            내 냉장고에 있는 재료는 제외하고, 이 레시피에 필요한 부족 재료만 구매 링크로 연결해요.
+          냉장고에 있는 재료는 빼고, 부족한 재료만 구매 링크로 연결해요.
           </p>
           <div className="shopping-service-badges" aria-label="장보기 기준">
             <span>{storedContext?.servingLabel ?? '레시피 기준'}</span>
@@ -460,57 +468,31 @@ function ShoppingList() {
         </div>
       </div>
 
-      <div className="shopping-summary shopping-summary--compact" aria-label="장보기 요약">
-        {summary.map((card) => (
-          <article className="shopping-summary-card" key={card.label}>
-            <ImageSlot className="shopping-summary-card__icon" src={card.image} />
-            <div>
-              <span>{card.label}</span>
-              <strong>{card.value}</strong>
-              <p>{card.note}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-
       <div className="shopping-main-grid shopping-main-grid--recipe">
         <section className="shopping-panel shopping-list-panel" aria-labelledby="shopping-list-title">
-          <div className="shopping-panel__header">
-            <div>
+          <div className="shopping-list-toolbar">
+            <div className="shopping-list-toolbar__title">
               <h2 id="shopping-list-title">구매가 필요한 재료</h2>
-              <p>
-                {activeItems.length}가지 재료를 구매하면 바로 조리를 시작할 수 있어요.
-                {isFallbackList ? ' 서버 연결 후 구매 링크가 표시됩니다.' : ''}
-              </p>
+              <span className="shopping-count-badge">{activeItems.length}개</span>
             </div>
-            <div className="shopping-panel__header-actions">
-              <button
-                className="shopping-delete-button"
-                type="button"
-                disabled={isMutating || selectedItems.length === 0}
-                onClick={deleteSelectedItems}
-              >
-                선택 삭제 ({selectedItems.length})
-              </button>
-              <button
-                className="shopping-soft-button"
-                type="button"
-                onClick={() => navigate(shoppingList.recipe_id ? `/recipes/${shoppingList.recipe_id}` : '/recipes')}
-              >
-                레시피로 돌아가기
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`shopping-select-all ${allChecked ? 'is-active' : ''}`}
+              onClick={toggleSelectAll}
+              disabled={isMutating || activeItems.length === 0}
+            >
+              <span className={`shopping-check ${allChecked ? 'is-checked' : ''}`} aria-hidden="true" />
+              전체 선택
+              {selectedItems.length > 0 ? <em>{selectedItems.length}개 선택됨</em> : null}
+            </button>
           </div>
 
-          <div className="shopping-link-list">
+          <div className="shopping-item-rows">
             {activeItems.length === 0 ? (
               <p className="shopping-empty-note">구매가 필요한 재료를 모두 냉장고에 입고했어요.</p>
             ) : (
               activeItems.map((item) => (
-                <article
-                  className="shopping-link-item"
-                  key={item.id}
-                >
+                <div className="shopping-item-row" key={item.id}>
                   <button
                     className={`shopping-check ${item.is_checked ? 'is-checked' : ''}`}
                     type="button"
@@ -518,19 +500,18 @@ function ShoppingList() {
                     disabled={isMutating}
                     onClick={() => updateItemChecked(item)}
                   />
-                  <ImageSlot className="shopping-item__image" src={item.product_image} alt={item.product_name || item.name} />
-                  <div>
-                    <strong>{item.name}</strong>
-                    <p>{formatQuantity(item)}</p>
+                  <ImageSlot className="shopping-item-row__image" src={item.product_image} alt={item.product_name || item.name} />
+                  <div className="shopping-item-row__info">
+                    <strong>{item.name}<span>· {formatQuantity(item)}</span></strong>
                     <small>{item.product_name || '상품 검색 결과 없음'}</small>
                   </div>
-                  <div className="shopping-product-meta">
+                  <div className="shopping-item-row__meta">
                     <span>{item.mall_name || item.provider || 'provider'}</span>
                     <strong>{formatPrice(item.price)}</strong>
                   </div>
                   {item.product_link ? (
                     <a
-                      className="shopping-purchase-link"
+                      className="shopping-item-row__link"
                       href={item.product_link}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -538,61 +519,84 @@ function ShoppingList() {
                       구매 링크
                     </a>
                   ) : (
-                    <span className="shopping-purchase-link is-disabled">링크 없음</span>
+                    <span className="shopping-item-row__link is-disabled">링크 없음</span>
                   )}
-                </article>
+                </div>
               ))
             )}
           </div>
         </section>
 
-        <aside className="shopping-panel shopping-owned-panel" aria-labelledby="owned-title">
-          <div className="shopping-panel__header">
-            <div>
-              <h2 id="owned-title">이미 있는 재료</h2>
-              <p>냉장고에서 확인되어 장보기 목록에서 제외했어요.</p>
-            </div>
+        <aside className="shopping-sidebar" aria-label="장보기 요약 및 액션">
+          <div className="shopping-sidebar__card shopping-summary-box">
+            {isFallbackList ? (
+              <p className="shopping-sidebar__note shopping-sidebar__note--warn">
+                서버 연결 실패로 부족 재료만 임시 표시 중이라 입고 처리가 제한돼요.
+              </p>
+            ) : null}
+            <dl className="shopping-metric-list">
+              <div>
+                <dt>구매 필요</dt>
+                <dd>{activeItems.length}개</dd>
+              </div>
+              <div>
+                <dt>보유 재료</dt>
+                <dd>{ownedItems.length}개</dd>
+              </div>
+              <div className="shopping-metric-list__total">
+                <dt>예상 금액 <span>선택 {selectedItems.length}개</span></dt>
+                <dd>{formatPrice(shoppingList?.total_price ?? 0)}</dd>
+              </div>
+            </dl>
+            <button
+              className="shopping-sidebar__primary"
+              type="button"
+              disabled={isMutating || selectedItems.length === 0}
+              onClick={completePurchase}
+            >
+              선택 {selectedItems.length}개 냉장고 입고
+            </button>
+            <button
+              className="shopping-sidebar__danger"
+              type="button"
+              disabled={isMutating || selectedItems.length === 0}
+              onClick={deleteSelectedItems}
+            >
+              선택 {selectedItems.length}개 삭제
+            </button>
           </div>
 
-          {ownedItems.length > 0 ? (
-            <div className="shopping-owned-list">
-              {ownedItems.map((item, index) => (
-                <span key={`${item.name}-${index}`}>
-                  {item.name}{item.amount ? ` ${item.amount}` : ''}
-                </span>
-              ))}
+          <div className="shopping-sidebar__card">
+            <div className="shopping-sidebar__card-head">
+              <h3>이미 있는 재료</h3>
+              <span>{ownedItems.length}개</span>
             </div>
-          ) : (
-            <p className="shopping-empty-note">보유 재료 정보는 레시피 상세에서 이어온 경우에만 표시돼요.</p>
-          )}
-
-          <div className="shopping-service-note">
-            <strong>구매 링크 안내</strong>
-            <p>
+            {ownedItems.length > 0 ? (
+              <div className="shopping-owned-chips">
+                {ownedItems.map((item, index) => (
+                  <span key={`${item.name}-${index}`}>
+                    {item.name}{item.amount ? ` ${item.amount}` : ''}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="shopping-sidebar__note">보유 재료 정보는 레시피 상세에서 이어온 경우에만 표시돼요.</p>
+            )}
+            <p className="shopping-sidebar__note">
               {isFallbackList
                 ? '지금은 장보기 목록 생성에 실패해 부족 재료만 임시로 보여주고 있어요.'
                 : '재료별로 찾은 상품 링크로 바로 연결돼요. 쇼핑몰 장바구니에 자동으로 담기지는 않아요.'}
             </p>
           </div>
-        </aside>
-      </div>
 
-      <div className="shopping-actions shopping-actions--recipe">
-        <button
-          className="shopping-soft-action"
-          type="button"
-          onClick={() => navigate(shoppingList.recipe_id ? `/recipes/${shoppingList.recipe_id}` : '/recipes')}
-        >
-          레시피 상세 보기
-        </button>
-        <button
-          className="shopping-soft-action"
-          type="button"
-          disabled={isMutating || selectedItems.length === 0}
-          onClick={completePurchase}
-        >
-          선택 재료 ({selectedItems.length}) 구매 완료 후 냉장고 입고
-        </button>
+          <button
+            className="shopping-sidebar__back"
+            type="button"
+            onClick={() => navigate(shoppingList.recipe_id ? `/recipes/${shoppingList.recipe_id}` : '/recipes')}
+          >
+            ← 레시피 상세로 돌아가기
+          </button>
+        </aside>
       </div>
       {dialogNode}
     </section>

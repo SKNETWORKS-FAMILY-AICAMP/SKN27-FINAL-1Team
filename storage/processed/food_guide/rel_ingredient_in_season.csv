@@ -1,4 +1,4 @@
-﻿ingredient_id,month_id,relationship
+ingredient_id,month_id,relationship
 ingredient_0001,month_0001,IN_SEASON
 ingredient_0001,month_0002,IN_SEASON
 ingredient_0002,month_0003,IN_SEASON
@@ -173,7 +173,7 @@ ingredient_0291,month_0008,IN_SEASON
 ingredient_0291,month_0012,IN_SEASON
 ingredient_0292,month_0007,IN_SEASON
 ingredient_0293,month_0006,IN_SEASON
-ingredient_0294,month_0004,IN_SEASON
+ingredient_0697,month_0004,IN_SEASON
 ingredient_0295,month_0008,IN_SEASON
 ingredient_0296,month_0001,IN_SEASON
 ingredient_0296,month_0005,IN_SEASON
@@ -206,13 +206,11 @@ ingredient_0337,month_0003,IN_SEASON
 ingredient_0338,month_0002,IN_SEASON
 ingredient_0340,month_0009,IN_SEASON
 ingredient_0347,month_0008,IN_SEASON
-ingredient_0349,month_0003,IN_SEASON
-ingredient_0349,month_0005,IN_SEASON
 ingredient_0355,month_0011,IN_SEASON
 ingredient_0365,month_0008,IN_SEASON
 ingredient_0366,month_0009,IN_SEASON
 ingredient_0367,month_0009,IN_SEASON
-ingredient_0372,month_0008,IN_SEASON
+ingredient_0368,month_0008,IN_SEASON
 ingredient_0373,month_0008,IN_SEASON
 ingredient_0375,month_0003,IN_SEASON
 ingredient_0376,month_0012,IN_SEASON
@@ -240,10 +238,8 @@ ingredient_0670,month_0004,IN_SEASON
 ingredient_0683,month_0004,IN_SEASON
 ingredient_0684,month_0004,IN_SEASON
 ingredient_0685,month_0004,IN_SEASON
-ingredient_0686,month_0004,IN_SEASON
 ingredient_0687,month_0004,IN_SEASON
 ingredient_0688,month_0004,IN_SEASON
-ingredient_0697,month_0004,IN_SEASON
 ingredient_0720,month_0011,IN_SEASON
 ingredient_0721,month_0003,IN_SEASON
 ingredient_0721,month_0005,IN_SEASON
