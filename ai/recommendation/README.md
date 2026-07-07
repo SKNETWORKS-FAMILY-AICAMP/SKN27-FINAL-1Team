@@ -17,6 +17,7 @@
 ```bash
 python -m ai.recommendation.main
 python ai/recommendation/main.py
+python -m ai.recommendation.feature_screening
 ```
 
 조기 종료 포인트 (feature self-check만):
@@ -47,6 +48,7 @@ need to build feature columns separately.
 | `storage/processed/recipe/recipe_recommendation_scored.csv` | 최종 점수 (Neo4j `reviewRankScore` 적재 기준) |
 | `ai/recommendation/artifacts/pipeline.joblib` | 학습 Pipeline |
 | `ai/recommendation/artifacts/evaluation_report.json` | RMSE, MAE, R², Spearman, Hit@K |
+| `ai/recommendation/artifacts/feature_screening_report.json` | feature 단변량·중복·permutation Spearman drop (실험 03) |
 
 ## 점수 규칙
 

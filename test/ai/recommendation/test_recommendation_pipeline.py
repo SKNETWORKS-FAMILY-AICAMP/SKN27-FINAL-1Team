@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ai.recommendation import data_loader, evaluator, imputer, model
+from ai.recommendation import data_loader, evaluator, feature_screening, imputer, model
 from ai.recommendation.config import CATEGORICAL_FEATURES, TARGET_COL
 
 # 테스트 데이터 생성
@@ -131,3 +131,24 @@ def test_duplicate_recipe_ids_fail(tmp_path, monkeypatch) -> None:
 
     with pytest.raises(ValueError, match="duplicate RCP_SNO"):
         data_loader.load_and_merge()
+
+
+def test_high_correlation_pairs_detects_ratio_duplicate() -> None:
+    df = pd.DataFrame(
+        {
+            "ingredients_normalized": ['[["a","1","t"],["b","1","t"],["c","1","t"],["d","1","t"]]'] * 4,
+            "others_count": [0, 1, 2, 3],
+            "others_items": ["[]"] * 4,
+            "CKG_INBUN_NM": ["2인분"] * 4,
+            "CKG_TIME_NM": ["30분"] * 4,
+            "INQ_CNT_LOG_CENTERED": [0.1, 0.2, 0.3, 0.4],
+            "SRAP_CNT_LOG_CENTERED": [0.0, 0.1, 0.2, 0.3],
+        }
+    )
+    pairs = feature_screening.high_correlation_pairs(df, df.iloc[:2], threshold=0.9)
+    match = next(
+        (p for p in pairs if {p["a"], p["b"]} == {"others_ratio", "alias_match_ratio"}),
+        None,
+    )
+    assert match is not None
+    assert abs(match["pearson"]) > 0.9
