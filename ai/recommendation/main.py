@@ -11,7 +11,7 @@ if __name__ == "__main__" and __package__ is None:
 
 from sklearn.model_selection import train_test_split
 
-from ai.recommendation import data_loader, evaluator, features, imputer, model
+from ai.recommendation import cross_validation, data_loader, evaluator, features, imputer, model
 from ai.recommendation.config import (
     ARTIFACTS_DIR,
     MODEL_NAME,
@@ -62,6 +62,13 @@ def run() -> None:
     evaluation_features = evaluation_pipeline.named_steps["feature_builder"].transform(merged)
     feature_report = evaluator.build_feature_report(evaluation_features, feature_columns())
 
+    # seed 42 holdout과 별도로 동일 labeled 데이터의 5-fold 보조 검증을 수행한다.
+    # fold 모델은 평가 후 폐기되며 아래 production 전체 재학습에는 사용하지 않는다.
+    cv_report = cross_validation.run(labeled)
+    eval_report["cross_validation"] = cross_validation.evaluation_report_section(
+        cv_report
+    )
+
     # 평가가 괜찮다는 전제로 모든 데이터를 가지고 재학습 (평가 데이터 까지 포함해서 예측 최대화 )
     pipeline = model.build_pipeline(MODEL_NAME)
     model.fit_pipeline(pipeline, labeled, labeled[TARGET_COL])
@@ -109,7 +116,19 @@ def run() -> None:
     print(f"Saved scores -> {OUTPUT_SCORED_CSV}")
     sp = eval_report["Spearman"]
     sp_text = f"{sp:.4f}" if sp is not None else "N/A"
-    print(f"RMSE={eval_report['RMSE']:.4f}  Spearman={sp_text}")
+    cv_sp = cv_report["summary"]["Spearman"]
+    cv_hit10 = cv_report["summary"]["Hit@10"]["mean"]
+    cv_hit20 = cv_report["summary"]["Hit@20"]["mean"]
+    cv_hit50 = cv_report["summary"]["Hit@50"]["mean"]
+    print(f"Holdout RMSE={eval_report['RMSE']:.4f}  Spearman={sp_text}")
+    print(
+        "5-Fold Spearman "
+        f"mean={cv_sp['mean']:.4f} std={cv_sp['std']:.4f} min={cv_sp['min']:.4f}"
+    )
+    print(
+        f"5-Fold Hit@10={cv_hit10:.4f}  "
+        f"Hit@20={cv_hit20:.4f}  Hit@50={cv_hit50:.4f}"
+    )
 
 
 if __name__ == "__main__":

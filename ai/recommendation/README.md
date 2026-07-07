@@ -19,6 +19,7 @@ python -m ai.recommendation.main
 python ai/recommendation/main.py
 python -m ai.recommendation.feature_screening
 python -m ai.recommendation.feature_ablation
+python -m ai.recommendation.cross_validation
 ```
 
 조기 종료 포인트 (feature self-check만):
@@ -49,6 +50,8 @@ need to build feature columns separately.
 | `storage/processed/recipe/recipe_recommendation_scored.csv` | 최종 점수 (Neo4j `reviewRankScore` 적재 기준) |
 | `ai/recommendation/artifacts/pipeline.joblib` | 학습 Pipeline |
 | `ai/recommendation/artifacts/evaluation_report.json` | RMSE, MAE, R², Spearman, Hit@K |
+| `ai/recommendation/artifacts/stratified_kfold_report.json` | 5-fold fold별·요약 지표 |
+| `ai/recommendation/artifacts/stratified_kfold_predictions.csv` | labeled 전체 OOF 예측 |
 | `ai/recommendation/artifacts/feature_screening_report.json` | feature 단변량·중복·permutation Spearman drop (실험 03) |
 | `ai/recommendation/artifacts/feature_ablation_report.json` | ablation 단계별 holdout 비교 (실험 03) |
 

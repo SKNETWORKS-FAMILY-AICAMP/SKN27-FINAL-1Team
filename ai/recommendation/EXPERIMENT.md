@@ -926,3 +926,50 @@ python -m ai.recommendation.seed_stability
 
 - self-check: seed 42 Spearman이 `evaluation_report.json`과 ±0.001 이내
 - `pipeline.joblib`·scored CSV **갱신하지 않음** (진단 전용)
+
+---
+
+# 10. Stratified 5-Fold 보조 검증
+
+기존 `random_state=42` holdout을 공식 기준으로 유지하고, target 분위수를
+보존한 5-fold 교차검증을 보조 지표로 추가했습니다. `main` 실행 시 holdout
+평가 직후 자동 실행되며 fold 모델은 production 예측에 사용하지 않습니다.
+
+## 1. 설정
+
+| 항목 | 값 |
+|------|----|
+| split | `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)` |
+| strata | `REVIEW_RANK_SCORE` 5분위 (`qcut`, 동점 보존) |
+| bin count | 115 / 121 / 126 / 169 / 32 |
+| fold validation | 113 / 113 / 113 / 112 / 112 |
+| feature/model | 기존 12 feature / ExtraTrees |
+
+## 2. 결과
+
+| 지표 | mean | std | min | max |
+|------|------|-----|-----|-----|
+| Spearman | **0.136** | 0.124 | -0.014 | 0.279 |
+| Hit@10 | 0.100 | 0.110 | 0.000 | 0.300 |
+| Hit@20 | 0.190 | 0.080 | 0.100 | 0.300 |
+| Hit@50 | 0.516 | 0.056 | 0.440 | 0.580 |
+| RMSE | 0.402 | 0.100 | 0.243 | 0.518 |
+| MAE | 0.174 | 0.023 | 0.134 | 0.200 |
+| R² | -0.180 | 0.081 | -0.341 | -0.118 |
+
+- 공식 holdout(seed 42) Spearman은 기존과 동일한 **0.284**입니다.
+- OOF 전체 Spearman **0.135**는 fold별 모델의 예측을 합친 진단값입니다.
+- `evaluation_report.json`에는 기존 holdout 지표와 함께 `cross_validation.metrics_mean`
+  으로 5-fold 평균을 기록합니다.
+- 상세 결과: `artifacts/stratified_kfold_report.json`
+- OOF 행별 결과: `artifacts/stratified_kfold_predictions.csv`
+
+## 3. 실행
+
+```bash
+# 5-fold 단독 실행
+python -m ai.recommendation.cross_validation
+
+# holdout + 5-fold + production 전체 재학습 + evaluation_report 갱신
+python -m ai.recommendation.main
+```
