@@ -707,3 +707,54 @@ python -m ai.recommendation.main
 | `_PROTECTED` (`serving_size` 해제) | `feature_ablation.py` |
 | 최신 평가 | `artifacts/evaluation_report.json` |
 | ablation step | `artifacts/feature_ablation_report.json` — Phase 3 `serving_size` 거절 |
+
+---
+
+# 07. commonness_max / commonness_min 제거 시험
+
+11 feature baseline(Spearman 0.264)에서 commonness 파생 2종을 순차 제거 시험한 작업입니다.
+
+**상태:** **둘 다 거절** — `commonness_mean` + `min` + `max` **전부 유지** (11 feature 동일).
+
+---
+
+## 1. 실험 일지
+
+| 순서 | 일시 (KST) | 내용 |
+|------|------------|------|
+| 1 | 2026-07-07 12:10 | 1단계: `commonness_max` config 제거 → 10 feature |
+| 2 | 2026-07-07 12:10 | holdout Spearman **0.200** (<0.264) → **거절**, max 복원 |
+| 3 | 2026-07-07 12:11 | 2단계: `commonness_min` 제거 → 10 feature (mean+max) |
+| 4 | 2026-07-07 12:11 | Spearman **0.213** (<0.264) → **거절**, min 복원 |
+| 5 | 2026-07-07 12:12 | 11 feature·0.264 baseline 재학습, artifacts 복구 |
+
+---
+
+## 2. 합격 기준·결과
+
+| 단계 | 채택 조건 | 결과 | Spearman |
+|------|-----------|------|----------|
+| `commonness_max` 제거 | > 0.264 | **거절** | 0.200 |
+| `commonness_min` 제거 | ≥ 1단계 최고(0.264) | **거절** | 0.213 |
+
+---
+
+## 3. 해석
+
+- 실험 06 screening에서 `commonness_max` permutation drop **-0.024**였으나, 실제 제거 시 **대폭 하락** — 트리가 max를 mean/min과 **조합**해 쓰거나, holdout 변동·교란 효과 가능.
+- `commonness_min`은 drop **+0.202**로 핵심 신호 — 제거 시 0.264→0.213 (**-0.051**), 예상대로 거절.
+- commonness 3종(**mean/min/max**)은 **세트로 유지**하는 것이 현재 최적.
+
+---
+
+## 4. 현재 프로덕션 (변경 없음)
+
+- ML feature **11개**, holdout Spearman **0.264**
+- `evaluation_report.json`, `pipeline.joblib`, `recipe_recommendation_scored.csv` — 실험 06과 동일 구성
+
+### 재현
+
+```bash
+python -m ai.recommendation.feature_screening
+python -m ai.recommendation.main
+```
