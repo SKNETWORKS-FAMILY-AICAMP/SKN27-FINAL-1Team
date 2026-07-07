@@ -106,7 +106,8 @@ def _extract_delete_name(text: str) -> str:
             break
     for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
-    return target.strip().rstrip("을를은는이가")
+    target = re.sub(r"\s+(다|전부|모두)$", "", target.rstrip())
+    return target.strip().rstrip("을를은는이가도")
 
 
 def _extract_consume_name(text: str) -> str:
@@ -119,6 +120,7 @@ def _extract_consume_name(text: str) -> str:
     target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
     for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
+    target = re.sub(r"\s+(다|전부|모두)$", "", target.rstrip())
     return target.strip(" ,/\t\n을를은는이가도")
 
 
