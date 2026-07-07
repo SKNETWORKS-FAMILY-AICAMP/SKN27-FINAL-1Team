@@ -839,3 +839,90 @@ python -m ai.recommendation.feature_screening
 python -m ai.recommendation.main
 pytest test/ai/recommendation/test_recommendation_pipeline.py -q
 ```
+
+---
+
+# 09. random_state 안정성 (42 baseline vs 다중 시드)
+
+feature 실험(03~08)이 모두 **단일 holdout(`random_state=42`)** 기준이었으므로, 12 feature config에서 시드 변동에 따른 holdout 지표 분산을 측정한 작업입니다.
+
+**상태:** **완료**
+
+**범위:** `train_test_split` + `reset_seeds` + `ExtraTreesRegressor` **전부 동일 시드** (split 고정 분해 없음).
+
+**프로덕션:** `RANDOM_STATE=42` **유지**. `main` / scored CSV / `evaluation_report.json` **미변경**.
+
+---
+
+## 1. 시드 목록
+
+| 구분 | 시드 |
+|------|------|
+| baseline | `42` |
+| 비교군 | `0`, `1`, `7`, `13`, `99`, `123`, `256`, `512`, `999` |
+
+---
+
+## 2. Spearman (holdout, 12 feature)
+
+| seed | Spearman | Hit@10 | Hit@20 | train/test |
+|------|----------|--------|--------|------------|
+| **42** | **0.284** | 0.20 | 0.30 | 450/113 |
+| 0 | -0.041 | 0.10 | 0.10 | 450/113 |
+| 1 | 0.044 | 0.00 | 0.05 | 450/113 |
+| 7 | 0.008 | 0.10 | 0.10 | 450/113 |
+| 13 | 0.179 | 0.10 | 0.15 | 450/113 |
+| 99 | 0.127 | 0.00 | 0.20 | 450/113 |
+| 123 | 0.169 | 0.30 | 0.20 | 450/113 |
+| 256 | **0.225** | 0.10 | 0.20 | 450/113 |
+| 512 | 0.148 | 0.10 | 0.25 | 450/113 |
+| 999 | 0.150 | 0.10 | 0.25 | 450/113 |
+
+상세: `artifacts/seed_stability_report.json`
+
+---
+
+## 3. 42 vs 비교군(9시드) 요약
+
+| 지표 | seed 42 | others mean | others min | others max | Δ42−mean | Δ42−min |
+|------|---------|-------------|------------|------------|----------|---------|
+| **Spearman** | **0.284** | 0.112 | -0.041 | 0.225 | **+0.172** | **+0.325** |
+| Hit@10 | 0.20 | 0.10 | 0.00 | 0.30 | +0.10 | +0.20 |
+| Hit@20 | 0.30 | 0.17 | 0.05 | 0.25 | +0.13 | +0.25 |
+| Hit@50 | 0.60 | 0.48 | 0.42 | 0.52 | +0.12 | +0.18 |
+
+- **`percentile_42_spearman`:** **95.0** (10시드 중 2위, 최고는 42의 0.284)
+- others **std(Spearman):** 0.083
+
+---
+
+## 4. 해석·안정성 판정
+
+| 기준 (계획) | 결과 |
+|-------------|------|
+| \|Δ42−mean\| < 0.02 → 수용 | **해당 없음** (Δ = **+0.172**) |
+| percentile_42 = 100 → 42 유리 | **95** — 42가 **눈에 띄게 상위** (256=0.225가 2위) |
+| Δ42−min > 0.05 → holdout 취약 | **해당** (+0.325) |
+
+**결론:**
+
+- holdout Spearman **0.284는 42 split·모델 조합에 강하게 의존**하는 값으로 보는 것이 타당합니다.
+- labeled 563건·test 113건 규모에서 **split 변경 시 commonness lookup·train 분포가 바뀌고**, Spearman이 0.04~0.18대로 떨어지는 시드가 다수입니다.
+- **feature 채택/거절(실험 03~08)은 42 holdout 단일값만으로는 과신하기 어렵음** — 이후 개선은 **다중 시드 평균·RepeatedKFold** 또는 **labeled 확대**를 병행하는 것이 안전합니다.
+- 프로덕션 `RANDOM_STATE=42` 유지는 **재현성** 목적에는 맞으나, **일반화 성능 수치로 0.284를 해석하면 과대평가 위험**이 있습니다.
+
+---
+
+## 5. 구현·재현
+
+| 파일 | 역할 |
+|------|------|
+| [`seed_stability.py`](seed_stability.py) | 10시드 holdout + summary JSON |
+| [`config.py`](config.py) / [`model.py`](model.py) | `get_regressor` / `build_pipeline`에 `random_state` 선택 인자 (기본 42) |
+
+```bash
+python -m ai.recommendation.seed_stability
+```
+
+- self-check: seed 42 Spearman이 `evaluation_report.json`과 ±0.001 이내
+- `pipeline.joblib`·scored CSV **갱신하지 않음** (진단 전용)

@@ -17,6 +17,7 @@ from .config import (
     INGREDIENT_FEATURES,
     MODEL_NAME,
     NUMERIC_FEATURES,
+    RANDOM_STATE,
     feature_columns,
     get_regressor,
 )
@@ -42,6 +43,7 @@ def build_pipeline(
     model_name: str = MODEL_NAME,
     *,
     exclude: frozenset[str] = frozenset(),
+    random_state: int = RANDOM_STATE,
 ) -> Pipeline:
     cat_cols = [c for c in CATEGORICAL_FEATURES if c not in exclude]
     numeric_cols = [c for c in NUMERIC_FEATURES + INGREDIENT_FEATURES if c not in exclude]
@@ -68,7 +70,7 @@ def build_pipeline(
         steps=[
             ("feature_builder", RecommendationFeatureBuilder()),
             ("preprocessor", preprocessor),
-            ("model", get_regressor(model_name)),
+            ("model", get_regressor(model_name, random_state=random_state)),
         ]
     )
 

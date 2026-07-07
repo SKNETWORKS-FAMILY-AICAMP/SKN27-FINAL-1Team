@@ -71,7 +71,7 @@ INGREDIENT_FEATURES = [
 HIT_AT_K_VALUES = (10, 20, 50)
 
 
-def _require_lightgbm() -> Any:
+def _require_lightgbm(*, random_state: int = RANDOM_STATE) -> Any:
     try:
         import lightgbm as lgb
     except ImportError as exc:
@@ -80,7 +80,7 @@ def _require_lightgbm() -> Any:
         ) from exc
     return lgb.LGBMRegressor(
         n_estimators=300,
-        random_state=RANDOM_STATE,
+        random_state=random_state,
         n_jobs=1,
         deterministic=True,
         force_col_wise=True,
@@ -88,20 +88,20 @@ def _require_lightgbm() -> Any:
     )
 
 
-def get_regressor(name: str = MODEL_NAME) -> Any:
+def get_regressor(name: str = MODEL_NAME, *, random_state: int = RANDOM_STATE) -> Any:
     registry: dict[str, Callable[[], Any]] = {
         "extra_trees": lambda: ExtraTreesRegressor(
             n_estimators=300,
-            random_state=RANDOM_STATE,
+            random_state=random_state,
             n_jobs=1,
         ),
         "random_forest": lambda: RandomForestRegressor(
             n_estimators=300,
-            random_state=RANDOM_STATE,
+            random_state=random_state,
             n_jobs=1,
         ),
-        "hist_gbm": lambda: HistGradientBoostingRegressor(random_state=RANDOM_STATE),
-        "lightgbm": _require_lightgbm,
+        "hist_gbm": lambda: HistGradientBoostingRegressor(random_state=random_state),
+        "lightgbm": lambda: _require_lightgbm(random_state=random_state),
     }
     if name not in registry:
         raise ValueError(f"Unknown MODEL_NAME: {name!r}. Choose from {list(registry)}")
