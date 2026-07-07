@@ -65,6 +65,7 @@ INGREDIENT_FEATURES = [
     "commonness_mean",
     "commonness_min",
     "commonness_max",
+    "mtrl_empty_amount_ratio",
 ]
 
 HIT_AT_K_VALUES = (10, 20, 50)

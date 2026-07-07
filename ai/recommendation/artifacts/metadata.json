@@ -13,7 +13,8 @@
     "others_ratio",
     "commonness_mean",
     "commonness_min",
-    "commonness_max"
+    "commonness_max",
+    "mtrl_empty_amount_ratio"
   ],
   "clip_low": 0.14479999999999998,
   "clip_high": 1.98,

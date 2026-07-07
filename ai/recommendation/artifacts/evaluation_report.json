@@ -16,15 +16,16 @@
     "others_ratio",
     "commonness_mean",
     "commonness_min",
-    "commonness_max"
+    "commonness_max",
+    "mtrl_empty_amount_ratio"
   ],
   "model_type": "extra_trees",
-  "RMSE": 0.37198085816488297,
-  "MAE": 0.16264798718325338,
-  "R2": -0.16556710336348868,
-  "Spearman": 0.26424411879081966,
-  "created_at": "2026-07-07T03:11:26.621760+00:00",
-  "Hit@10": 0.3,
+  "RMSE": 0.36746837926093334,
+  "MAE": 0.15946876668071405,
+  "R2": -0.13745976981344943,
+  "Spearman": 0.283728369920194,
+  "created_at": "2026-07-07T03:42:53.830121+00:00",
+  "Hit@10": 0.2,
   "Hit@20": 0.3,
   "Hit@50": 0.6
 }

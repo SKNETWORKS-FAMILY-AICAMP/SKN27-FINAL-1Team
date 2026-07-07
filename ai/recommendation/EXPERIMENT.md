@@ -758,3 +758,84 @@ python -m ai.recommendation.main
 python -m ai.recommendation.feature_screening
 python -m ai.recommendation.main
 ```
+
+---
+
+# 08. 재료 feature 확장 (1~3순위 순차)
+
+실험 07 baseline(11 feature, Spearman **0.264**)에서 재료 관련 feature를 1~3순위 후보군 순서로 **한 번에 하나씩** 추가 시험한 작업입니다.
+
+**상태:** **완료** — `mtrl_empty_amount_ratio` **1종 채택** (12 feature, Spearman **0.284**).
+
+**rolling_baseline:** 0.264 → **0.284** (최종)
+
+**스냅샷:** `artifacts/scored_snapshot_pre_exp08_baseline.csv`
+
+---
+
+## 1. 실험 일지
+
+| 순서 | 후보 | Spearman | rolling 대비 | 결과 | 비고 |
+|------|------|----------|--------------|------|------|
+| — | baseline | 0.264 | — | — | 11 feature |
+| 1-1 | `commonness_std` | 0.249 | -0.015 | **거절** | 원복 |
+| 1-2 | `commonness_range` | 0.244 | -0.020 | **거절** | 원복 |
+| 1-3 | `rare_ingredient_ratio_k10` | 0.256 | -0.008 | **거절** | 원복 |
+| 1-4 | `rare_ingredient_ratio_k20` | 0.233 | -0.031 | **거절** | 원복 |
+| 1-5 | `rare_ingredient_ratio_k50` | 0.252 | -0.013 | **거절** | 원복 |
+| 2-1 | `empty_amount_ratio` | 0.264 | -0.0003 | **거절** | 동점 미만, 원복 |
+| 2-2 | `unique_alias_count` | 0.210 | -0.054 | **거절** | 원복 |
+| 2-3 | `canonical_alias_ratio` | 0.226 | -0.039 | **거절** | 원복 |
+| 3-1 | `mtrl_slot_count` | 0.224 | -0.040 | **거절** | 원복 |
+| 3-2 | `mtrl_empty_amount_ratio` | **0.284** | **+0.019** | **채택** | 12 feature |
+| 3-3 | `mtrl_normalized_delta` | 0.267 | -0.017 | **거절** | rolling 0.284 기준, 원복 |
+
+상세 수치: `artifacts/exp08_results.json`
+
+---
+
+## 2. 채택 feature
+
+| feature | 정의 | Spearman 영향 |
+|---------|------|---------------|
+| `mtrl_empty_amount_ratio` | `CKG_MTRL_CN` 항목 중 amount가 빈 비율 | 0.264→**0.284** |
+
+**최종 ML feature 12개:** 카테고리 3 + `serving_size` + 인기 2 + 재료 6 (`ingredient_count`, `others_ratio`, commonness 3, `mtrl_empty_amount_ratio`)
+
+---
+
+## 3. 순위 변동 (`mtrl_empty_amount_ratio` 채택)
+
+`artifacts/rank_delta_exp08_mtrl_empty_amount_ratio.json`
+
+| 지표 | 값 |
+|------|-----|
+| 순위 Spearman (이전 vs 이후) | 0.9995 |
+| 순위 변동 레시피 수 | 2,841 |
+| 최대 \|Δrank\| | 202 |
+| Top-50 겹침 | 49 / 50 |
+
+---
+
+## 4. 스크리닝 (12 feature 최종)
+
+- holdout Spearman: **0.284**
+- `mtrl_empty_amount_ratio` permutation drop: **+0.017** (`_PROTECTED` 미등록 — +0.05 미만)
+- 고상관: `commonness_mean` ↔ `commonness_max` (0.724) — 기존과 동일, 추가 dedup 불필요
+
+---
+
+## 5. 현재 프로덕션
+
+- holdout Spearman **0.284** (`evaluation_report.json`)
+- `pipeline.joblib`, `recipe_recommendation_scored.csv` 갱신 완료
+- Neo4j `reviewRankScore` 적재: scored CSV 준비 완료 — `python -m etl.recipe.load_to_neo4j` (Neo4j 연결 필요, 미실행)
+
+### 재현
+
+```bash
+python -m ai.recommendation.features
+python -m ai.recommendation.feature_screening
+python -m ai.recommendation.main
+pytest test/ai/recommendation/test_recommendation_pipeline.py -q
+```

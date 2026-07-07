@@ -14,6 +14,7 @@ _ALIAS_DEFAULTS = {
     "others_items": "[]",
     "basic_count": 0,
     "basic_items": "[]",
+    "aliases_matched": "[]",
 }
 _ALIAS_REQUIRED_COLS = frozenset(
     {"RCP_SNO", "ingredients_normalized", "others_count", "others_items"}

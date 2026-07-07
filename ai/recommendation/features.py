@@ -14,6 +14,8 @@ from etl.recipe.load_to_postgres.loader import (
     parse_serving_size,
 )
 
+from .config import INGREDIENT_FEATURES
+
 
 def _parse_normalized_list(raw: Any) -> list[list[Any]]:
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
@@ -42,6 +44,13 @@ def _ingredient_names(normalized: list[list[Any]]) -> list[str]:
     return names
 
 
+def _empty_amount_ratio(rows: list[list[Any]]) -> float:
+    if not rows:
+        return 0.0
+    empty = sum(1 for row in rows if len(row) < 2 or not str(row[1]).strip())
+    return empty / len(rows)
+
+
 def build_meta_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["serving_size"] = out["CKG_INBUN_NM"].map(parse_serving_size)
@@ -56,6 +65,9 @@ def build_basic_ingredient_features(df: pd.DataFrame) -> pd.DataFrame:
     others: list[int] = []
     others_ratios: list[float] = []
     alias_ratios: list[float] = []
+    mtrl_empty_amount_ratios: list[float] = []
+
+    need_mtrl_empty = "mtrl_empty_amount_ratio" in INGREDIENT_FEATURES
 
     for _, row in out.iterrows():
         normalized = _parse_normalized_list(row.get("ingredients_normalized"))
@@ -74,11 +86,18 @@ def build_basic_ingredient_features(df: pd.DataFrame) -> pd.DataFrame:
         others_ratios.append(ratio)
         alias_ratios.append(1.0 - ratio)
 
+        if need_mtrl_empty:
+            mtrl_empty_amount_ratios.append(
+                _empty_amount_ratio(_parse_normalized_list(row.get("CKG_MTRL_CN")))
+            )
+
     out["ingredient_count"] = counts
     out["unique_ingredient_count"] = unique_counts
     out["others_count"] = others
     out["others_ratio"] = others_ratios
     out["alias_match_ratio"] = alias_ratios
+    if need_mtrl_empty:
+        out["mtrl_empty_amount_ratio"] = mtrl_empty_amount_ratios
     return out
 
 
@@ -152,6 +171,10 @@ def run_self_check() -> None:
             "others_items": ["[]", '[{"raw": "x"}]'],
             "CKG_INBUN_NM": ["2인분", "1인분"],
             "CKG_TIME_NM": ["30분", "1시간"],
+            "CKG_MTRL_CN": [
+                '[["돼지고기", "500", "g"], [" 된장", "", ""]]',
+                '[["소금", "1", "t"]]',
+            ],
         }
     )
     featured = build_all_features(sample)
@@ -159,6 +182,7 @@ def run_self_check() -> None:
     assert featured.loc[0, "unique_ingredient_count"] == 2
     assert featured.loc[0, "others_ratio"] == 0.0
     assert featured.loc[1, "alias_match_ratio"] == 0.5
+    assert featured.loc[0, "mtrl_empty_amount_ratio"] == 0.5
 
     lookup = IngredientCommonnessLookup().fit(featured)
     common = lookup.transform(featured)

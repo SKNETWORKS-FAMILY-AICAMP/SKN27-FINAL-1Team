@@ -5,7 +5,7 @@
   "labeled_count": 563,
   "train_row_count": 450,
   "test_row_count": 113,
-  "holdout_spearman_baseline": 0.26424411879081966,
+  "holdout_spearman_baseline": 0.283728369920194,
   "correlation_threshold": 0.7,
   "univariate_spearman": {
     "CKG_KND_ACTO_NM": -0.019634465829533425,
@@ -18,7 +18,8 @@
     "others_ratio": -0.006864980077620784,
     "commonness_mean": -0.0006571739357984572,
     "commonness_min": -0.040784184963201416,
-    "commonness_max": 0.05879489866508087
+    "commonness_max": 0.05879489866508087,
+    "mtrl_empty_amount_ratio": -0.024528614196516446
   },
   "high_correlation_pairs": [
     {
@@ -28,17 +29,18 @@
     }
   ],
   "permutation_spearman_drop": {
-    "CKG_KND_ACTO_NM": 0.21483131791200935,
-    "CKG_MTH_ACTO_NM": 0.06044995219831992,
-    "CKG_MTRL_ACTO_NM": 0.1736595900184329,
-    "serving_size": -0.01904696970566805,
-    "INQ_CNT_LOG_CENTERED": 0.10417388993987439,
-    "SRAP_CNT_LOG_CENTERED": 0.09747591582483486,
-    "ingredient_count": 0.06671905414780138,
-    "others_ratio": 0.005562724265032848,
-    "commonness_mean": 0.094974161525746,
-    "commonness_min": 0.20173389834619126,
-    "commonness_max": -0.023512285782361086
+    "CKG_KND_ACTO_NM": 0.2036470045749063,
+    "CKG_MTH_ACTO_NM": 0.07297133758098648,
+    "CKG_MTRL_ACTO_NM": 0.20426928967787294,
+    "serving_size": -0.04591034486008594,
+    "INQ_CNT_LOG_CENTERED": 0.1089713717134213,
+    "SRAP_CNT_LOG_CENTERED": 0.08271766777474773,
+    "ingredient_count": 0.052053307937344445,
+    "others_ratio": 0.004095308718172319,
+    "commonness_mean": 0.12016829893774666,
+    "commonness_min": 0.1925678069646557,
+    "commonness_max": 0.004465316076693093,
+    "mtrl_empty_amount_ratio": 0.016831130183617926
   },
-  "created_at": "2026-07-07T03:11:19.002725+00:00"
+  "created_at": "2026-07-07T03:41:48.289483+00:00"
 }

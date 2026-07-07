@@ -47,6 +47,7 @@ _PERMUTE_SOURCE: dict[str, str] = {
     "commonness_mean": "ingredients_normalized",
     "commonness_min": "ingredients_normalized",
     "commonness_max": "ingredients_normalized",
+    "mtrl_empty_amount_ratio": "CKG_MTRL_CN",
 }
 
 
