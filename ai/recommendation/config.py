@@ -61,10 +61,7 @@ NUMERIC_FEATURES = [
 
 INGREDIENT_FEATURES = [
     "ingredient_count",
-    "unique_ingredient_count",
-    "others_count",
     "others_ratio",
-    "alias_match_ratio",
     "commonness_mean",
     "commonness_min",
     "commonness_max",

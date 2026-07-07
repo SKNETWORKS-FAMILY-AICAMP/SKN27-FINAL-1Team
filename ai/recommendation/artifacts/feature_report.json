@@ -8,10 +8,7 @@
     "INQ_CNT_LOG_CENTERED": 0.0,
     "SRAP_CNT_LOG_CENTERED": 0.0,
     "ingredient_count": 0.0,
-    "unique_ingredient_count": 0.0,
-    "others_count": 0.0,
     "others_ratio": 0.0,
-    "alias_match_ratio": 0.0,
     "commonness_mean": 0.0,
     "commonness_min": 0.0,
     "commonness_max": 0.0
@@ -108,32 +105,6 @@
       "75%": 11.0,
       "max": 32.0
     },
-    "unique_ingredient_count": {
-      "count": 3171.0,
-      "unique": null,
-      "top": null,
-      "freq": null,
-      "mean": 8.579312519709871,
-      "std": 3.5697114774101304,
-      "min": 1.0,
-      "25%": 6.0,
-      "50%": 8.0,
-      "75%": 11.0,
-      "max": 28.0
-    },
-    "others_count": {
-      "count": 3171.0,
-      "unique": null,
-      "top": null,
-      "freq": null,
-      "mean": 0.23872595395774204,
-      "std": 0.626513172122925,
-      "min": 0.0,
-      "25%": 0.0,
-      "50%": 0.0,
-      "75%": 0.0,
-      "max": 8.0
-    },
     "others_ratio": {
       "count": 3171.0,
       "unique": null,
@@ -145,19 +116,6 @@
       "25%": 0.0,
       "50%": 0.0,
       "75%": 0.0,
-      "max": 1.0
-    },
-    "alias_match_ratio": {
-      "count": 3171.0,
-      "unique": null,
-      "top": null,
-      "freq": null,
-      "mean": 0.9648319381335527,
-      "std": 0.09802426124757542,
-      "min": 0.0,
-      "25%": 1.0,
-      "50%": 1.0,
-      "75%": 1.0,
       "max": 1.0
     },
     "commonness_mean": {

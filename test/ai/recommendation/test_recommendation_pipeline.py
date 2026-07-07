@@ -152,7 +152,7 @@ def test_build_pipeline_exclude_drops_features() -> None:
     assert len(pred) == 2
 
 
-def test_high_correlation_pairs_detects_ratio_duplicate() -> None:
+def test_high_correlation_pairs_detects_inq_srap_correlation() -> None:
     df = pd.DataFrame(
         {
             "ingredients_normalized": ['[["a","1","t"],["b","1","t"],["c","1","t"],["d","1","t"]]'] * 4,
@@ -160,14 +160,17 @@ def test_high_correlation_pairs_detects_ratio_duplicate() -> None:
             "others_items": ["[]"] * 4,
             "CKG_INBUN_NM": ["2인분"] * 4,
             "CKG_TIME_NM": ["30분"] * 4,
+            "CKG_KND_ACTO_NM": ["한식"] * 4,
+            "CKG_MTH_ACTO_NM": ["볶기"] * 4,
+            "CKG_MTRL_ACTO_NM": ["채소"] * 4,
             "INQ_CNT_LOG_CENTERED": [0.1, 0.2, 0.3, 0.4],
             "SRAP_CNT_LOG_CENTERED": [0.0, 0.1, 0.2, 0.3],
         }
     )
-    pairs = feature_screening.high_correlation_pairs(df, df.iloc[:2], threshold=0.9)
+    pairs = feature_screening.high_correlation_pairs(df, df.iloc[:2], threshold=0.7)
     match = next(
-        (p for p in pairs if {p["a"], p["b"]} == {"others_ratio", "alias_match_ratio"}),
+        (p for p in pairs if {p["a"], p["b"]} == {"INQ_CNT_LOG_CENTERED", "SRAP_CNT_LOG_CENTERED"}),
         None,
     )
     assert match is not None
-    assert abs(match["pearson"]) > 0.9
+    assert match["pearson"] > 0.7

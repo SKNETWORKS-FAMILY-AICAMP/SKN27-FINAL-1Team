@@ -210,13 +210,13 @@ def _self_check() -> None:
             "SRAP_CNT_LOG_CENTERED": [0.0, 0.1, 0.2, 0.3],
         }
     )
-    pairs = high_correlation_pairs(labeled, labeled.iloc[:2], threshold=0.9)
-    ratio_pair = next(
-        (p for p in pairs if {p["a"], p["b"]} == {"others_ratio", "alias_match_ratio"}),
+    pairs = high_correlation_pairs(labeled, labeled.iloc[:2], threshold=0.7)
+    inq_srap = next(
+        (p for p in pairs if {p["a"], p["b"]} == {"INQ_CNT_LOG_CENTERED", "SRAP_CNT_LOG_CENTERED"}),
         None,
     )
-    assert ratio_pair is not None
-    assert abs(ratio_pair["pearson"]) > 0.9
+    assert inq_srap is not None
+    assert inq_srap["pearson"] > 0.7
 
 
 if __name__ == "__main__":

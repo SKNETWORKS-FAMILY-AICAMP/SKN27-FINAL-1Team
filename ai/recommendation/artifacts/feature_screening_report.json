@@ -5,7 +5,7 @@
   "labeled_count": 563,
   "train_row_count": 450,
   "test_row_count": 113,
-  "holdout_spearman_baseline": 0.22346342140113443,
+  "holdout_spearman_baseline": 0.26424411879081966,
   "correlation_threshold": 0.7,
   "univariate_spearman": {
     "CKG_KND_ACTO_NM": -0.019634465829533425,
@@ -15,35 +15,12 @@
     "INQ_CNT_LOG_CENTERED": -0.060941553021194556,
     "SRAP_CNT_LOG_CENTERED": -0.06001038151101938,
     "ingredient_count": 0.08933532809153881,
-    "unique_ingredient_count": 0.07872681597572834,
-    "others_count": -0.005440840336578228,
     "others_ratio": -0.006864980077620784,
-    "alias_match_ratio": 0.006864980077620784,
     "commonness_mean": -0.0006571739357984572,
     "commonness_min": -0.040784184963201416,
     "commonness_max": 0.05879489866508087
   },
   "high_correlation_pairs": [
-    {
-      "a": "ingredient_count",
-      "b": "unique_ingredient_count",
-      "pearson": 0.9886681014098218
-    },
-    {
-      "a": "others_count",
-      "b": "others_ratio",
-      "pearson": 0.9217039841198313
-    },
-    {
-      "a": "others_count",
-      "b": "alias_match_ratio",
-      "pearson": -0.9217039841198316
-    },
-    {
-      "a": "others_ratio",
-      "b": "alias_match_ratio",
-      "pearson": -1.0
-    },
     {
       "a": "commonness_mean",
       "b": "commonness_max",
@@ -51,20 +28,17 @@
     }
   ],
   "permutation_spearman_drop": {
-    "CKG_KND_ACTO_NM": 0.17015292937063442,
-    "CKG_MTH_ACTO_NM": 0.02176736471661006,
-    "CKG_MTRL_ACTO_NM": 0.13046123091114079,
-    "serving_size": -0.02673303165312077,
-    "INQ_CNT_LOG_CENTERED": 0.08557681554513502,
-    "SRAP_CNT_LOG_CENTERED": 0.05936095326812832,
-    "ingredient_count": 0.018954467866037883,
-    "unique_ingredient_count": -0.06148429095054822,
-    "others_count": 0.002220044151124201,
-    "others_ratio": -0.01136511238728935,
-    "alias_match_ratio": -5.8864807037345424e-05,
-    "commonness_mean": 0.09179966657480135,
-    "commonness_min": 0.057775808107193044,
-    "commonness_max": 0.0010637711557470453
+    "CKG_KND_ACTO_NM": 0.21483131791200935,
+    "CKG_MTH_ACTO_NM": 0.06044995219831992,
+    "CKG_MTRL_ACTO_NM": 0.1736595900184329,
+    "serving_size": -0.01904696970566805,
+    "INQ_CNT_LOG_CENTERED": 0.10417388993987439,
+    "SRAP_CNT_LOG_CENTERED": 0.09747591582483486,
+    "ingredient_count": 0.06671905414780138,
+    "others_ratio": 0.005562724265032848,
+    "commonness_mean": 0.094974161525746,
+    "commonness_min": 0.20173389834619126,
+    "commonness_max": -0.023512285782361086
   },
-  "created_at": "2026-07-07T02:48:10.170021+00:00"
+  "created_at": "2026-07-07T03:00:09.744013+00:00"
 }
