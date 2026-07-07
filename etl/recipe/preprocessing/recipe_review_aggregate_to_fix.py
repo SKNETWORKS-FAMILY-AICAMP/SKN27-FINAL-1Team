@@ -95,18 +95,10 @@ def apply_count_logs(df: pd.DataFrame) -> pd.DataFrame:
 def apply_rank_score(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out = out.drop(columns=[RANK_SCORE_COL], errors="ignore")
-    valid = (
-        out[STAR_AVG_COL].notna()
-        & out[SENTIMENT_AVG_COL].notna()
-        & out[INQ_CNT_LOG_CENTERED_COL].notna()
-        & out[SRAP_CNT_LOG_CENTERED_COL].notna()
-    )
+    valid = out[STAR_AVG_COL].notna() & out[SENTIMENT_AVG_COL].notna()
     out[RANK_SCORE_COL] = pd.NA
     out.loc[valid, RANK_SCORE_COL] = (
-        out.loc[valid, STAR_AVG_COL]
-        + out.loc[valid, SENTIMENT_AVG_COL]
-        + out.loc[valid, INQ_CNT_LOG_CENTERED_COL]
-        + out.loc[valid, SRAP_CNT_LOG_CENTERED_COL]
+        out.loc[valid, STAR_AVG_COL] + out.loc[valid, SENTIMENT_AVG_COL]
     )
     return out
 
@@ -144,10 +136,7 @@ def _self_check() -> None:
 
     row100_full = applied.loc[applied["RCP_SNO"] == 100].iloc[0]
     expected_score_100 = (
-        float(row100_full[STAR_AVG_COL])
-        + float(row100_full[SENTIMENT_AVG_COL])
-        + float(row100_full[INQ_CNT_LOG_CENTERED_COL])
-        + float(row100_full[SRAP_CNT_LOG_CENTERED_COL])
+        float(row100_full[STAR_AVG_COL]) + float(row100_full[SENTIMENT_AVG_COL])
     )
     assert isclose(float(row100_full[RANK_SCORE_COL]), expected_score_100)
 

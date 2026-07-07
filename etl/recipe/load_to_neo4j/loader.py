@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
 RECIPE_FIX_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
+RECIPE_RECOMMENDATION_SCORED_CSV = (
+    ROOT / "storage" / "processed" / "recipe" / "recipe_recommendation_scored.csv"
+)
 REVIEW_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "review_by_llm.csv"
 COMMENT_BY_LLM_CSV = ROOT / "storage" / "processed" / "recipe" / "comment_by_llm.csv"
 RECIPE_INGREDIENT_ALIAS_CSV = ROOT / "storage" / "processed" / "recipe" / "recipe_ingredient_alias.csv"
@@ -178,9 +181,38 @@ def load_recipe_tables(
     return recipe_df, review_df, comment_df
 
 
-def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
+def load_scored_table(path: Path = RECIPE_RECOMMENDATION_SCORED_CSV) -> pd.DataFrame | None:
+    if not path.is_file():
+        logger.info("Recommendation scored CSV not found, using recipe_fix fallback: %s", path)
+        return None
+    scored_df = pd.read_csv(path)
+    logger.info("Recommendation scored CSV loaded: %d rows", len(scored_df))
+    return scored_df
+
+
+def _review_rank_scores(
+    recipe_df: pd.DataFrame,
+    scored_df: pd.DataFrame | None = None,
+) -> pd.Series:
+    fallback = (
+        pd.to_numeric(recipe_df.get("REVIEW_RANK_SCORE"), errors="coerce")
+        + pd.to_numeric(recipe_df.get("INQ_CNT_LOG_CENTERED"), errors="coerce").fillna(0)
+        + pd.to_numeric(recipe_df.get("SRAP_CNT_LOG_CENTERED"), errors="coerce").fillna(0)
+    )
+    if scored_df is None or "final_recommend_score" not in scored_df.columns:
+        return fallback
+    score_map = scored_df.set_index("RCP_SNO")["final_recommend_score"]
+    mapped = recipe_df["RCP_SNO"].map(score_map)
+    return mapped.where(mapped.notna(), fallback)
+
+
+def build_recipe_rows(
+    recipe_df: pd.DataFrame,
+    scored_df: pd.DataFrame | None = None,
+) -> list[dict[str, Any]]:
+    rank_scores = _review_rank_scores(recipe_df, scored_df)
     rows: list[dict[str, Any]] = []
-    for _, row in recipe_df.iterrows():
+    for idx, row in recipe_df.iterrows():
         recipe_id = _number(row["RCP_SNO"])
         if recipe_id is None:
             continue
@@ -195,7 +227,7 @@ def build_recipe_rows(recipe_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "srapCntLogCentered": _number(row.get("SRAP_CNT_LOG_CENTERED")),
                 "reviewStarNormAvg": _number(row.get("REVIEW_STAR_NORM_AVG")),
                 "reviewSentimentAvg": _number(row.get("REVIEW_SENTIMENT_AVG")),
-                "reviewRankScore": _number(row.get("REVIEW_RANK_SCORE")),
+                "reviewRankScore": _number(rank_scores.loc[idx]),
             }
         )
     return rows
@@ -318,7 +350,8 @@ def load_recipe_graph_to_neo4j(
         review_csv=review_csv,
         comment_csv=comment_csv,
     )
-    recipe_rows = build_recipe_rows(recipe_df)
+    scored_df = load_scored_table()
+    recipe_rows = build_recipe_rows(recipe_df, scored_df)
     reviewer_rows = build_reviewer_rows(review_df, comment_df)
     review_rel_rows = build_review_rel_rows(review_df)
     comment_rel_rows = build_comment_rel_rows(comment_df)
@@ -395,6 +428,27 @@ def _self_check() -> None:
     assert any(row["reviewSentimentAvg"] is None for row in recipe_rows)
     assert any(row["reviewRankScore"] is None for row in recipe_rows)
     assert any(row["reviewRankScore"] is not None for row in recipe_rows)
+
+    scored_df = load_scored_table()
+    if scored_df is not None:
+        merged_rows = build_recipe_rows(recipe_df, scored_df)
+        sample_id = int(scored_df.iloc[0]["RCP_SNO"])
+        expected = float(
+            scored_df.loc[scored_df["RCP_SNO"] == sample_id, "final_recommend_score"].iloc[0]
+        )
+        actual = next(row["reviewRankScore"] for row in merged_rows if row["recipeId"] == sample_id)
+        assert actual == expected
+
+    fallback_rows = build_recipe_rows(recipe_df, None)
+    fallback_id = next(row["recipeId"] for row in fallback_rows if row["reviewRankScore"] is not None)
+    source = recipe_df.loc[recipe_df["RCP_SNO"] == fallback_id].iloc[0]
+    expected_fallback = (
+        float(source["REVIEW_RANK_SCORE"])
+        + float(source["INQ_CNT_LOG_CENTERED"])
+        + float(source["SRAP_CNT_LOG_CENTERED"])
+    )
+    actual_fallback = next(row["reviewRankScore"] for row in fallback_rows if row["recipeId"] == fallback_id)
+    assert actual_fallback == expected_fallback
 
     assert len(reviewer_rows) > 900
     assert reviewer_rows[0]["reviewerId"] > 0
