@@ -1855,7 +1855,7 @@
 }
 
 .receipt-quantity-field {
-  grid-template-columns: 116px 54px;
+  grid-template-columns: 128px 54px;
   column-gap: 8px;
 }
 
@@ -1866,7 +1866,7 @@
 .receipt-quantity-control {
   min-width: 0;
   display: grid;
-  grid-template-columns: 24px 56px 24px;
+  grid-template-columns: 24px 68px 24px;
   align-items: center;
   gap: 4px;
 }
@@ -2107,7 +2107,7 @@
 .receipt-stocking-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 1500;
   display: flex;
   align-items: center;
   justify-content: center;
