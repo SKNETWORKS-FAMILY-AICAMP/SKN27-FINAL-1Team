@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.backend.core.config import settings as app_settings
 from app.backend.services.guide_service.guide_service import guide_service
 from ai.agents.guide_agent.guide_agent import lookup_ingredient_guide
-from app.backend.services.inventory_service.inventory_service import inventory_service
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommendation_service import recommendation_service
@@ -218,40 +217,7 @@ class ChatService:
 
         return sorted(items, key=score)
 
-    def _reply_inventory_list(self, db: Session, user_id: int) -> str:
-        """냉장고 보유 재료를 짧게 요약합니다."""
-        items = inventory_service.get_ingredients(db=db, user_id=user_id)
-        if not items:
-            return self.EMPTY_INVENTORY_REPLY
 
-        names = [item["name"] for item in items[:8]]
-        suffix = "" if len(items) <= 8 else f" 외 {len(items) - 8}개"
-        target_word = suffix if suffix else names[-1]
-        return f"현재 냉장고에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{_apply_josa(target_word, '이가')} 있어요."
-
-    def _reply_expiring_items(self, db: Session, user_id: int, text: str = "") -> str:
-        """소비기한이 가까운 재료 또는 특정 재료의 D-day를 안내합니다."""
-        items = inventory_service.get_ingredients(db=db, user_id=user_id)
-        if not items:
-            return self.EMPTY_INVENTORY_REPLY
-
-        keyword = _extract_expiry_keyword(text)
-        if keyword:
-            matched = [item for item in items if keyword in item.get("name", "")]
-            if not matched:
-                return f"냉장고에 등록된 {keyword} 재료를 찾지 못했어요."
-            summary = [f"{item['name']} {_format_d_day(item['d_day'])}" for item in matched if item.get("d_day") is not None]
-            return f"{keyword} 소비기한은 " + ", ".join(summary) + "예요."
-
-        expiring = sorted(
-            [item for item in items if item.get("d_day") is not None and item["d_day"] <= 3],
-            key=lambda item: item["d_day"],
-        )
-        if not expiring:
-            return "D-3 이내로 임박한 재료는 없어요."
-
-        summary = [f"{item['name']} {_format_d_day(item['d_day'])}" for item in expiring[:5]]
-        return "소비기한이 가까운 재료는\n" + ", ".join(summary) + "예요."
 
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
         """식재료 가이드 에이전트를 이용해 보관/손질/세척/신선도 정보를 안내합니다."""
@@ -270,8 +236,7 @@ class ChatService:
         # Guide Agent 호출
         agent_result = lookup_ingredient_guide(keyword)
         if not agent_result.get("ok"):
-            # 에이전트가 결과를 못 찾았을 경우 외부 검색(Fallback)으로 대체
-            return self._reply_external_guide(keyword, category)
+            return f"{keyword}에 대한 가이드 정보는 아직 찾지 못했어요. ", []
             
         # 데이터 파싱
         data = agent_result.get("data", {})
@@ -292,20 +257,18 @@ class ChatService:
             tip = guides_info.get("storage", {}).get("content") or guides_info.get("horticultural_storage", {}).get("content")
             label = "보관법"
             
+        # DB에 해당 정보가 비어있을 경우
         if not tip:
             return f"알고 계신 {item_name} 가이드는 찾았지만, 아쉽게도 {label}에 대한 구체적인 정보가 비어 있어요. 😅", []
 
         formatted_tip = _format_guide_tip(tip)
         sources = agent_result.get("ui", {}).get("sources", [])
         
-        if len(formatted_tip) < 45:
-            extra_reply, extra_sources = self._reply_external_guide(keyword, label)
-            extra_tip = extra_reply.split("\n\n", 1)[-1] if "\n\n" in extra_reply else ""
-            if extra_tip and "찾지 못했어요" not in extra_reply and "연결이 불안정" not in extra_reply:
-                # 내부 소스와 외부 소스 통합
-                combined_sources = {s["title"]: s for s in (sources + extra_sources)}.values()
-                return f"{item_name} {label}이에요.\n{formatted_tip}\n\n추가로 참고하면 좋아요.\n{extra_tip}", list(combined_sources)
-
+        # Pydantic ResponseValidationError 방지: url이 None인 경우 빈 문자열로 치환
+        for source in sources:
+            if source.get("url") is None:
+                source["url"] = ""
+        
         return f"{item_name} {label}이에요.\n{formatted_tip}", sources
 
     def _reply_external_guide(self, keyword: str, category_label: str = "보관법") -> tuple[str, list[dict[str, str]]]:
@@ -472,8 +435,8 @@ class ChatService:
             actions = _recipe_actions(items) + [list_action]
             prefix = f"{_apply_josa(keyword, '이가')} 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{_apply_josa(keyword, '이가')} 주재료인 레시피는 "
             return prefix + "\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), actions
-
-        if not inventory_service.get_ingredients(db=db, user_id=user_id):
+        from ai.agents.inventory_agent.inventory_agent import is_inventory_empty
+        if is_inventory_empty(db=db, user_id=user_id):
             return self.EMPTY_INVENTORY_REPLY, []
 
         try:

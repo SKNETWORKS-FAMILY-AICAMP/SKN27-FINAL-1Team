@@ -83,34 +83,18 @@ def _execute_confirmed_action(state: GraphState) -> dict:
         return {"response_text": GENERAL_REPLY}
 
     action = parts[1]
-    from app.backend.services.inventory_service.inventory_service import inventory_service
-
+    
     try:
-        if action == "consume_ingredient" and len(parts) >= 4:
-            reply = inventory_service.consume_ingredient_by_name(state["db"], state["user_id"], parts[2], float(parts[3]))
-            return {"response_text": reply, "actions": [_inventory_refresh_action()]}
-
-        if action == "add_ingredient" and len(parts) >= 5:
-            reply = inventory_service.add_ingredient_by_name(state["db"], state["user_id"], parts[2], float(parts[3]), parts[4])
-            return {"response_text": reply, "actions": [_inventory_refresh_action()]}
-
-        if action == "add_ingredient_unchecked" and len(parts) >= 5:
-            reply = inventory_service.add_ingredient_unchecked_by_name(state["db"], state["user_id"], parts[2], float(parts[3]), parts[4])
-            return {"response_text": reply, "actions": [_inventory_refresh_action()]}
-
-        if action == "add_ingredients" and len(parts) >= 3:
-            added = []
-            for raw_item in parts[2].split("|"):
-                name, quantity, storage = raw_item.split(",", 2)
-                added.append(inventory_service.add_ingredient_by_name(state["db"], state["user_id"], name, float(quantity), storage))
-            return {"response_text": "\n".join(added), "actions": [_inventory_refresh_action()]}
-
-        if action == "delete_ingredient" and len(parts) >= 3:
-            reply = inventory_service.delete_ingredient_by_name(state["db"], state["user_id"], parts[2])
-            return {"response_text": reply, "actions": [_inventory_refresh_action()]}
+        # 캘린더 작업
         if action == "add_calendar_event" and len(parts) >= 4:
             reply = _execute_calendar_event(state["db"], state["user_id"], parts[2], ":".join(parts[3:]))
             return {"response_text": reply}
+            
+        # 재고 관리 작업 (Inventory Agent로 위임)
+        if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
+            from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+            return execute_inventory_action(action, parts, state["db"], state["user_id"])
+            
     except Exception:
         state["db"].rollback()
         logger.exception("챗봇 확인 작업 실행 실패: %s", action)
@@ -163,10 +147,10 @@ def _unknown_add_response(state: GraphState, items: list[dict]) -> dict | None:
     if not db:
         return None
 
-    from app.backend.services.inventory_service.inventory_service import inventory_service
+    from ai.agents.inventory_agent.inventory_agent import resolve_ingredient_name
 
     for item in items:
-        resolved_name = inventory_service._resolve_known_ingredient_name(db, item["name"])
+        resolved_name = resolve_ingredient_name(db, item["name"])
         if resolved_name:
             item["name"] = resolved_name
             continue
@@ -190,8 +174,8 @@ def _handle_inventory_action(state: GraphState) -> dict:
     if any(word in normalized for word in ADD_WORDS):
         items = _extract_add_items(text)
         
-        from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
-        invalid_items = [item['name'] for item in items if not expiration_ai_service.is_valid_ingredient_name(item['name'])]
+        from ai.agents.inventory_agent.inventory_agent import is_valid_ingredient
+        invalid_items = [item['name'] for item in items if not is_valid_ingredient(item['name'])]
         if invalid_items:
             name = invalid_items[0]
             josa = _get_josa(name, "은", "는")
@@ -324,13 +308,15 @@ def inventory_list_node(state: GraphState) -> dict:
     """로그인 사용자의 냉장고 재료 목록을 안내합니다."""
     if not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
-    return {"response_text": state["service"]._reply_inventory_list(state["db"], state["user_id"])}
+    from ai.agents.inventory_agent.inventory_agent import get_inventory_list
+    return {"response_text": get_inventory_list(state["db"], state["user_id"])}
 
 def inventory_expiring_node(state: GraphState) -> dict:
     """로그인 사용자의 소비기한 임박 재료를 안내합니다."""
     if not state["user_id"]:
         return {"response_text": LOGIN_REQUIRED_REPLY}
-    return {"response_text": state["service"]._reply_expiring_items(state["db"], state["user_id"], state["text"])}
+    from ai.agents.inventory_agent.inventory_agent import get_expiring_inventory
+    return {"response_text": get_expiring_inventory(state["db"], state["user_id"], state["text"])}
 
 def ingredient_guide_node(state: GraphState) -> dict:
     """식재료 보관/손질 가이드를 안내합니다."""
