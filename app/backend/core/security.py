@@ -33,3 +33,36 @@ def verify_access_token(token: str) -> Optional[str]:
         return user_id
     except JWTError:
         return None
+
+def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """
+    유저의 식별자를 담은 긴 수명의 JWT Refresh Token을 발급합니다.
+    """
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode = {
+        "exp": expire,
+        "sub": str(subject),
+        "type": "refresh"
+    }
+    
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_refresh_token(token: str) -> Optional[str]:
+    """
+    JWT Refresh Token의 유효성을 검증합니다.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            return None
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+        return user_id
+    except JWTError:
+        return None

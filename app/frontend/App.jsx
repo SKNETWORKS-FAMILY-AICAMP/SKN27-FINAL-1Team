@@ -33,8 +33,8 @@ function AppLayout() {
     const token = localStorage.getItem('bobbeori-token')
     const authMode = localStorage.getItem('bobbeori-auth-mode')
 
-    // 인증 페이지, 비로그인, 게스트는 온보딩 자동 노출 대상에서 제외합니다.
-    if (isAuthPage || !token || authMode === 'guest') return
+    // 인증 페이지 및 비로그인은 온보딩 자동 노출 대상에서 제외합니다.
+    if (isAuthPage || !token) return
 
     let isCancelled = false
 
