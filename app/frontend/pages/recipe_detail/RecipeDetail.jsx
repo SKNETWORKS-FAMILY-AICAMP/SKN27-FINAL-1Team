@@ -5,6 +5,7 @@ import './RecipeDetail.css'
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrigerator.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import { createRecipeShoppingList, hasShoppingAuth } from '../../services/shoppingApi.js'
 import { API_URL } from '../../utils/api.js'
 import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
@@ -89,6 +90,7 @@ function RecipeDetail() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isCooked, setIsCooked] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isShoppingCreating, setIsShoppingCreating] = useState(false)
 
   const handleSaveRecipe = async () => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -255,9 +257,66 @@ function RecipeDetail() {
     window.localStorage.setItem(SHOPPING_CONTEXT_KEY, JSON.stringify(buildShoppingContext()))
   }
 
-  const goShopping = () => {
+  const createShoppingList = async () => {
+    if (!hasShoppingAuth()) {
+      await showAlert('부족 재료 장보기를 사용하려면 로그인이 필요해요.', {
+        title: '로그인이 필요해요',
+      })
+      navigate('/login')
+      return null
+    }
+
+    if (missingIngredients.length === 0) {
+      await showAlert('장보기로 보낼 부족 재료가 없어요.', {
+        title: '장보기 목록',
+      })
+      return null
+    }
+
     saveShoppingContext()
-    navigate(`/shopping-list?recipeId=${recipe.recipe_id}`)
+    setIsShoppingCreating(true)
+
+    try {
+      return await createRecipeShoppingList({
+        recipeId: recipe.recipe_id,
+        missingIngredients: missingIngredients.map((item) => ({
+          ingredient_id: item.ingredient_id,
+          name: item.name,
+          amount: item.amount,
+        })),
+      })
+    } catch (shoppingError) {
+      if (shoppingError.status === 401) {
+        await showAlert('로그인이 만료되었어요. 다시 로그인해 주세요.', {
+          title: '로그인이 필요해요',
+        })
+        navigate('/login')
+        return null
+      }
+
+      if (shoppingError.status === 0) {
+        const requestInfo = shoppingError.url ? `\n\n요청 주소: ${shoppingError.url}` : ''
+        await showAlert(`백엔드 장보기 목록은 만들지 못했지만, 부족 재료 화면으로 이동할게요. 구매 링크는 서버 연결 후 다시 확인할 수 있어요.${requestInfo}`, {
+          title: '임시 장보기 화면',
+        })
+        navigate(`/shopping-list?source=recipe&fallback=1`)
+        return null
+      }
+
+      await showAlert(shoppingError.message || '장보기 목록을 만들지 못했어요.', {
+        title: '장보기 생성 실패',
+      })
+      return null
+    } finally {
+      setIsShoppingCreating(false)
+    }
+  }
+
+  const goShopping = async () => {
+    const shoppingList = await createShoppingList()
+    if (shoppingList?.id) {
+      navigate(`/shopping-list?shoppingListId=${shoppingList.id}`)
+    }
   }
 
   const moveCookingStep = (direction) => {
@@ -416,18 +475,19 @@ function RecipeDetail() {
           <button
             className="recipe-detail-primary"
             type="button"
-            disabled={missingIngredients.length === 0}
+            disabled={missingIngredients.length === 0 || isShoppingCreating}
             onClick={goShopping}
           >
-            부족 재료 장보기
+            {isShoppingCreating ? '장보기 생성 중' : '부족 재료 장보기'}
           </button>
           <button
             className="recipe-detail-secondary"
             type="button"
-            disabled={missingIngredients.length === 0}
-            onClick={() => {
-              saveShoppingContext()
-              showAlert('부족 재료를 장보기 목록에 담았어요. 장보기 화면에서 구매 링크를 확인할 수 있어요.', {
+            disabled={missingIngredients.length === 0 || isShoppingCreating}
+            onClick={async () => {
+              const shoppingList = await createShoppingList()
+              if (!shoppingList) return
+              await showAlert('부족 재료를 장보기 목록에 담았어요. 장보기 화면에서 구매 링크를 확인할 수 있어요.', {
                 title: '장보기 목록 저장',
               })
             }}

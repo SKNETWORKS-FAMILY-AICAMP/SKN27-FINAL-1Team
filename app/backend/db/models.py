@@ -47,6 +47,7 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     calendar_integrations = relationship("CalendarIntegration", back_populates="user", cascade="all, delete-orphan")
     calendar_event_logs = relationship("CalendarEventLog", back_populates="user", cascade="all, delete-orphan")
+    shopping_lists = relationship("ShoppingList", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def is_onboarded(self) -> bool:
@@ -139,6 +140,7 @@ class Ingredient(Base):
     guide = relationship("IngredientGuide", back_populates="ingredient", uselist=False, cascade="all, delete-orphan")
     recipe_ingredients = relationship("RecipeIngredient", back_populates="ingredient")
     storage_standards = relationship("IngredientStorageStandard", back_populates="ingredient", cascade="all, delete-orphan")
+    shopping_list_items = relationship("ShoppingListItem", back_populates="ingredient")
 
 
 class IngredientAlias(Base):
@@ -345,6 +347,7 @@ class Recipe(Base):
 
     recipe_ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
     recommendation_results = relationship("RecommendationResult", back_populates="recipe", cascade="all, delete-orphan")
+    shopping_lists = relationship("ShoppingList", back_populates="recipe")
 
 
 class RecipeIngredient(Base):
@@ -367,6 +370,68 @@ class RecipeIngredient(Base):
     # 레시피와 식재료 마스터를 연결합니다.
     recipe = relationship("Recipe", back_populates="recipe_ingredients")
     ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
+
+
+class ShoppingList(Base):
+    """사용자 장보기 목록 헤더를 저장합니다."""
+
+    __tablename__ = "shopping_lists"
+    __table_args__ = (
+        CheckConstraint("source IN ('recipe', 'manual')", name="ck_shopping_lists_source"),
+        CheckConstraint("status IN ('active', 'completed')", name="ck_shopping_lists_status"),
+        Index("idx_shopping_lists_user_id", "user_id"),
+        Index("idx_shopping_lists_recipe_id", "recipe_id"),
+        Index("idx_shopping_lists_status", "status"),
+        Index("idx_shopping_lists_created_at", "created_at"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    recipe_id = Column(BigIntPrimaryKey, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True)
+    source = Column(String(30), nullable=False, server_default="recipe")
+    status = Column(String(30), nullable=False, server_default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="shopping_lists")
+    recipe = relationship("Recipe", back_populates="shopping_lists")
+    items = relationship("ShoppingListItem", back_populates="shopping_list", cascade="all, delete-orphan")
+
+
+class ShoppingListItem(Base):
+    """장보기 목록에 담긴 재료와 외부 상품 링크 스냅샷을 저장합니다."""
+
+    __tablename__ = "shopping_list_items"
+    __table_args__ = (
+        Index("idx_shopping_list_items_list_id", "shopping_list_id"),
+        Index("idx_shopping_list_items_ingredient_id", "ingredient_id"),
+        Index("idx_shopping_list_items_provider", "provider"),
+        Index("idx_shopping_list_items_checked", "is_checked"),
+        Index("idx_shopping_list_items_purchased", "is_purchased"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    shopping_list_id = Column(
+        BigIntPrimaryKey,
+        ForeignKey("shopping_lists.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ingredient_id = Column(BigIntPrimaryKey, ForeignKey("ingredients.id", ondelete="SET NULL"), nullable=True)
+    name = Column(String(255), nullable=False)
+    required_quantity = Column(Numeric(10, 2), nullable=True)
+    unit = Column(String(30), nullable=True)
+    provider = Column(String(30), nullable=False, server_default="naver")
+    product_id = Column(String(100), nullable=True)
+    product_name = Column(String(500), nullable=True)
+    product_link = Column(Text, nullable=True)
+    product_image = Column(String(1000), nullable=True)
+    price = Column(Integer, nullable=True)
+    mall_name = Column(String(255), nullable=True)
+    is_checked = Column(Boolean, nullable=False, server_default=true())
+    is_purchased = Column(Boolean, nullable=False, server_default=false())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    shopping_list = relationship("ShoppingList", back_populates="items")
+    ingredient = relationship("Ingredient", back_populates="shopping_list_items")
 
 
 # 사용자가 저장하거나 추천받은 레시피 결과를 저장한다.
