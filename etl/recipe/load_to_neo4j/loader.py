@@ -78,7 +78,8 @@ UPSERT_RECIPE_INGREDIENT_PROPS_QUERY = """
 UNWIND $rows AS row
 MATCH (r:Recipe {recipeId: row.recipeId})
 SET r.ingredientsNormalized = row.ingredientsNormalized,
-    r.othersItems = row.othersItems
+    r.othersItems = row.othersItems,
+    r.basicItems = row.basicItems
 """
 
 MERGE_USES_ALIAS_QUERY = """
@@ -270,6 +271,7 @@ def build_recipe_ingredient_props(row: pd.Series) -> dict[str, Any] | None:
         "recipeId": int(recipe_id),
         "ingredientsNormalized": _text(row.get("ingredients_normalized")) or "[]",
         "othersItems": _text(row.get("others_items")) or "[]",
+        "basicItems": _text(row.get("basic_items")) or "[]",
     }
 
 
@@ -412,10 +414,14 @@ def _self_check() -> None:
     assert props is not None
     assert json.loads(props["ingredientsNormalized"])
     assert isinstance(json.loads(props["othersItems"]), list)
+    assert isinstance(json.loads(props["basicItems"]), list)
     alias_rows = build_uses_alias_rows(sample)
     assert any(row["aliasId"] == "alias_0843" for row in alias_rows)
     water_sample = alias_df.loc[alias_df["RCP_SNO"] == 7016816].iloc[0]
-    assert json.loads(build_recipe_ingredient_props(water_sample)["othersItems"])
+    water_props = build_recipe_ingredient_props(water_sample)
+    water_basic = json.loads(water_props["basicItems"])
+    water_others = json.loads(water_props["othersItems"])
+    assert any(item.get("name") == "물" for item in water_basic) or water_others
     assert all("recipeId" in row and "aliasId" in row for row in alias_rows)
     assert len(build_recipe_ingredient_props_rows(alias_df)) > 3000
     assert len(build_all_uses_alias_rows(alias_df)) > 3000

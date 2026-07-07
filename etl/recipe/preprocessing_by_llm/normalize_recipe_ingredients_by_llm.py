@@ -23,6 +23,7 @@ from etl.recipe.load_to_postgres.loader import (
     normalize_ingredient_name,
     parse_ingredient_rows,
 )
+from app.backend.services.recommendation_service.recommend_config import is_basic_ingredient
 
 if __package__ is None:
     from etl.recipe.preprocessing_by_llm.openai_model import OpenAIClient
@@ -47,6 +48,8 @@ OUTPUT_COLUMNS = (
     "ingredients_normalized",
     "others_count",
     "others_items",
+    "basic_count",
+    "basic_items",
 )
 
 
@@ -196,6 +199,7 @@ def assemble_result(
     normalized: list[list[str]] = []
     aliases_matched: list[dict[str, str]] = []
     others_items: list[dict[str, str]] = []
+    basic_items: list[dict[str, str]] = []
     seen_alias: set[str] = set()
 
     for item in llm_ingredients:
@@ -224,13 +228,19 @@ def assemble_result(
                 seen_alias.add(entry.alias_id)
                 aliases_matched.append({"alias_id": entry.alias_id, "name": entry.name})
         else:
-            others_items.append({"raw": raw, "name": name, "amount": amount, "unit": unit})
+            payload = {"raw": raw, "name": name, "amount": amount, "unit": unit}
+            if is_basic_ingredient(name) or is_basic_ingredient(raw):
+                basic_items.append(payload)
+            else:
+                others_items.append(payload)
 
     return {
         "ingredients_normalized": normalized,
         "aliases_matched": aliases_matched,
         "others_count": len(others_items),
         "others_items": others_items,
+        "basic_count": len(basic_items),
+        "basic_items": basic_items,
     }
 
 
@@ -261,6 +271,8 @@ def process_one_recipe(
             "ingredients_normalized": json.dumps([], ensure_ascii=False),
             "others_count": 0,
             "others_items": json.dumps([], ensure_ascii=False),
+            "basic_count": 0,
+            "basic_items": json.dumps([], ensure_ascii=False),
         }
 
     probe_names = [str(item[0]) for item in ingredients_raw if item]
@@ -294,6 +306,8 @@ def process_one_recipe(
         "ingredients_normalized": json.dumps(assembled["ingredients_normalized"], ensure_ascii=False),
         "others_count": assembled["others_count"],
         "others_items": json.dumps(assembled["others_items"], ensure_ascii=False),
+        "basic_count": assembled["basic_count"],
+        "basic_items": json.dumps(assembled["basic_items"], ensure_ascii=False),
     }
 
 
@@ -472,6 +486,74 @@ def rematch_others_from_alias(
     return stats
 
 
+def _parse_json_list(raw: Any, default: str = "[]") -> list[Any]:
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return json.loads(default)
+    return json.loads(raw)
+
+
+def extract_basic_from_row(row: pd.Series) -> tuple[dict[str, Any], int] | None:
+    """others_items에서 기본재료(물 등)를 basic_items로 이동."""
+    others_items: list[dict[str, str]] = _parse_json_list(row.get("others_items"))
+    if not others_items:
+        return None
+
+    basic_items: list[dict[str, str]] = _parse_json_list(row.get("basic_items"))
+
+    moved = 0
+    remaining: list[dict[str, str]] = []
+    for item in others_items:
+        name = str(item.get("name", "")).strip()
+        raw = str(item.get("raw", "")).strip()
+        if is_basic_ingredient(name) or is_basic_ingredient(raw):
+            basic_items.append(item)
+            moved += 1
+        else:
+            remaining.append(item)
+
+    if moved == 0:
+        return None
+
+    updated = row.to_dict()
+    updated["basic_items"] = json.dumps(basic_items, ensure_ascii=False)
+    updated["basic_count"] = len(basic_items)
+    updated["others_items"] = json.dumps(remaining, ensure_ascii=False)
+    updated["others_count"] = len(remaining)
+    return updated, moved
+
+
+def extract_basic_ingredients(*, output_path: Path | str = OUTPUT_CSV) -> dict[str, int]:
+    """기존 CSV에서 others_items 내 기본재료를 basic_items로 분리."""
+    output_path = Path(output_path)
+    if not output_path.is_file():
+        raise FileNotFoundError(f"CSV 없음: {output_path}")
+
+    df = pd.read_csv(output_path)
+    if "basic_count" not in df.columns:
+        df["basic_count"] = 0
+    if "basic_items" not in df.columns:
+        df["basic_items"] = "[]"
+
+    rows_updated = 0
+    items_moved = 0
+
+    for idx in df.index[df["others_count"] > 0]:
+        result = extract_basic_from_row(df.loc[idx])
+        if result is None:
+            continue
+        updated, moved = result
+        rows_updated += 1
+        items_moved += moved
+        for col in ("basic_items", "basic_count", "others_items", "others_count"):
+            df.at[idx, col] = updated[col]
+
+    df = df[list(OUTPUT_COLUMNS)]
+    df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    stats = {"rows_updated": rows_updated, "items_moved": items_moved}
+    logger.info("extract_basic 완료: %s", stats)
+    return stats
+
+
 def _self_check() -> None:
     sample_raw = parse_ingredient_rows("[['양파', '1', '개'], ['간장', '2', 't']]")
     assert sample_raw == [["양파", "1", "개"], ["간장", "2", "t"]]
@@ -511,8 +593,9 @@ def _self_check() -> None:
         ["물", "1", "컵"],
     ]
     assert len(assembled["aliases_matched"]) == 2
-    assert assembled["others_count"] == 1
-    assert assembled["others_items"][0]["name"] == "물"
+    assert assembled["others_count"] == 0
+    assert assembled["basic_count"] == 1
+    assert assembled["basic_items"][0]["name"] == "물"
     assert "others" not in str(assembled["ingredients_normalized"]).lower()
 
     # resume 집합
@@ -531,6 +614,8 @@ def _self_check() -> None:
                 "ingredients_normalized": "[]",
                 "others_count": 0,
                 "others_items": "[]",
+                "basic_count": 0,
+                "basic_items": "[]",
             },
         )
         assert load_processed_ids(tmp) == {999}
@@ -562,6 +647,26 @@ def _self_check() -> None:
     matched = json.loads(updated["aliases_matched"])
     assert matched == [{"alias_id": "alias_butter", "name": "버터"}]
 
+    # others → basic (물)
+    water_row = pd.Series(
+        {
+            "RCP_SNO": 7016816,
+            "others_count": 1,
+            "others_items": json.dumps(
+                [{"raw": "물", "name": "물", "amount": "1", "unit": "l"}],
+                ensure_ascii=False,
+            ),
+            "basic_count": 0,
+            "basic_items": "[]",
+        }
+    )
+    extracted = extract_basic_from_row(water_row)
+    assert extracted is not None
+    water_updated, water_moved = extracted
+    assert water_moved == 1
+    assert water_updated["others_count"] == 0
+    assert water_updated["basic_count"] == 1
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="레시피 재료 정규화 + alias 매칭 LLM 배치")
@@ -575,6 +680,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="기존 CSV의 others_items를 nodes_alias와 재매칭 (LLM 없음)",
     )
+    parser.add_argument(
+        "--extract-basic",
+        action="store_true",
+        help="기존 CSV의 others_items에서 기본재료를 basic_items로 분리",
+    )
     return parser.parse_args()
 
 
@@ -584,8 +694,14 @@ if __name__ == "__main__":
     args = _parse_args()
     if args.rematch_others and args.force:
         raise SystemExit("--rematch-others와 --force는 동시 사용할 수 없습니다.")
+    if args.extract_basic and args.force:
+        raise SystemExit("--extract-basic와 --force는 동시 사용할 수 없습니다.")
+    if args.rematch_others and args.extract_basic:
+        raise SystemExit("--rematch-others와 --extract-basic는 동시 사용할 수 없습니다.")
     if args.rematch_others:
         rematch_others_from_alias(output_path=args.output, alias_path=args.alias)
+    elif args.extract_basic:
+        extract_basic_ingredients(output_path=args.output)
     else:
         normalize_recipe_ingredients_by_llm(
             input_path=args.input,
