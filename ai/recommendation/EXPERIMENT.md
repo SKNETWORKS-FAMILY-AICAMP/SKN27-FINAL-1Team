@@ -418,12 +418,12 @@ recipe_fix + recipe_ingredient_alias (merge)
 
 **유지:** 고상관 3종(`unique_ingredient_count`, `others_count`, `alias_match_ratio`) — Phase 2에서 제거 시 Spearman 하락.
 
-### 6.4. 후보 feature 추가 (미구현)
+### 6.4. 후보 feature 추가
 
-| 후보 | 산출(안) |
-|------|----------|
-| `commonness_min` / `commonness_max` | 레시피 내 재료 등장 수 min/max |
-| `rare_ingredient_ratio` | train 등장 수 < k 비율 |
+| 후보 | 상태 | 비고 |
+|------|------|------|
+| `commonness_min` / `commonness_max` | **반영** (실험 05) | holdout Spearman 0.211→0.224 |
+| `rare_ingredient_ratio` | **보류** (실험 05) | k=5 시 Spearman 하락, config 미반영 |
 
 ---
 
@@ -482,3 +482,148 @@ python -m etl.recipe.load_to_neo4j
 - labeled 563건의 `final_recommend_score`는 기존 4항 합과 **수치상 동일** (동일 항목 재배치).
 - ML holdout Spearman은 품질 타깃 기준이라 여전히 낮을 수 있음 — 목적은 타깃·feature 역할 분리.
 - CSV 커밋·롤백은 작업자가 git으로 판단 (별도 스냅샷 폴더 없음).
+
+---
+
+# 05. commonness 파생 feature 확장 (`min`/`max`, `rare_ingredient_ratio`)
+
+실험 03 §6.4 후보 중 `commonness_min`/`commonness_max`를 추가하고, 통과 시 `rare_ingredient_ratio`를 이어서 시험한 실험입니다.
+
+**상태:** `commonness_min`/`commonness_max` **config 반영 완료**. `rare_ingredient_ratio`(k=5)는 holdout 하락으로 **미반영**.
+
+---
+
+## 1. 실험 일지
+
+| 순서 | 일시 (KST) | 일시 (UTC) | 내용 |
+|------|------------|------------|------|
+| 1 | 2026-07-07 11:45 | 2026-07-07 02:45 | 1차: `IngredientCommonnessLookup`에 min/max 추가. feature 12→14개 |
+| 2 | 2026-07-07 11:45 | 2026-07-07 02:45 | screening·ablation·main 실행. baseline Spearman **0.224** (>0.211 합격) |
+| 3 | 2026-07-07 11:47 | 2026-07-07 02:47 | 2차: `rare_ingredient_ratio`(k=5) 추가. baseline Spearman **0.205** (1차 대비 하락) |
+| 4 | 2026-07-07 11:48 | 2026-07-07 02:48 | `rare_ingredient_ratio` revert. min/max 유지 상태로 pipeline·artifacts 재생성 |
+
+---
+
+## 2. 배경·설계
+
+### 2.1. 출발점 (실험 03 winner)
+
+- feature 12개, holdout Spearman **0.211**
+- `commonness_mean`만 사용 — 레시피 내 재료별 train 등장 레시피 수의 평균
+
+### 2.2. 1차 추가 feature
+
+`features.py` `IngredientCommonnessLookup._row_stats()` — 동일 lookup·동일 루프에서 산출:
+
+```
+commonness_min  = min(train 등장 레시피 수 per 재료)
+commonness_max  = max(...)
+commonness_mean  = mean(...)  # 기존과 동일
+```
+
+### 2.3. 2차 추가 feature (시험 후 revert)
+
+```
+rare_ingredient_ratio = (등장 수 < k인 재료 수) / (재료 수)    # k=5 고정
+```
+
+### 2.4. 합격 기준
+
+| 단계 | 기준 | 결과 |
+|------|------|------|
+| 1차 | 14 feature baseline Spearman **> 0.211** | **통과** (0.224) |
+| 2차 | 15 feature baseline Spearman **> 1차 baseline** | **실패** (0.205) |
+
+### 2.5. 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `features.py` | `_row_stats()`, `transform()` 3컬럼, `apply_commonness()` |
+| `config.py` | `INGREDIENT_FEATURES` +`commonness_min`, `commonness_max` |
+| `feature_screening.py` | `_PERMUTE_SOURCE` +2 |
+| `feature_ablation.py` | `_PROTECTED` +`commonness_min`, `commonness_max` |
+
+---
+
+## 3. 1차 결과 — `commonness_min` / `commonness_max`
+
+동일 `extra_trees`, `random_state=42`, split 450/113.
+
+| 지표 | 실험 03 winner (12) | 1차 baseline (14) | 변화 |
+|------|---------------------|-------------------|------|
+| Spearman | 0.211 | **0.224** | +0.013 |
+| Hit@10 | 0.20 | **0.30** | +0.10 |
+| Hit@20 | 0.25 | **0.30** | +0.05 |
+| Hit@50 | 0.54 | 0.54 | — |
+| RMSE | 0.374 | 0.373 | 소폭 ↓ |
+
+### 3.1. 스크리닝 (`feature_screening_report.json`)
+
+**단변량 Spearman (commonness 계열):**
+
+| feature | ρ |
+|---------|---|
+| `commonness_max` | 0.059 |
+| `commonness_min` | -0.041 |
+| `commonness_mean` | ~0 |
+
+**고상관:** `commonness_mean` ↔ `commonness_max` Pearson **0.724** (|ρ|>0.7)
+
+**Permutation drop:**
+
+| feature | drop |
+|---------|------|
+| `commonness_mean` | +0.092 |
+| `commonness_min` | +0.058 |
+| `commonness_max` | +0.001 |
+
+→ min/max/mean 모두 양수 drop. `commonness_min`은 `_PROTECTED` 등록.
+
+### 3.2. Ablation (14 feature baseline)
+
+| 단계 | 내용 | Spearman | 결과 |
+|------|------|----------|------|
+| Phase 2 batch | `unique_ingredient_count`, `others_count`, `alias_match_ratio` 제거 | **0.264** | **채택** |
+| Phase 3 | `others_ratio` 제거 | 0.241 | 거절 |
+
+**참고:** 실험 03에서는 Phase 2 batch 제거가 Spearman **하락**이었으나, min/max 추가 후에는 **상승**(0.224→0.264). ablation winner(11 feature)는 `config.py`에 아직 미반영 — 프로덕션은 14 feature baseline.
+
+---
+
+## 4. 2차 결과 — `rare_ingredient_ratio` (k=5, 미반영)
+
+| 지표 | 1차 baseline (14) | 2차 baseline (15) |
+|------|-------------------|-------------------|
+| Spearman | **0.224** | 0.205 |
+
+1차 대비 하락 → `rare_ingredient_ratio` **config에서 제거**. min/max는 유지.
+
+**해석:** k=5 기준으로 대부분 재료가 “희귀”에 해당해 분산이 작거나, mean/min/max와 중복 신호일 수 있음. k 튜닝은 별도 실험으로 분리.
+
+---
+
+## 5. 현재 프로덕션 설정
+
+- ML feature **14개** (실험 03 winner 12 + `commonness_min` + `commonness_max`)
+- holdout Spearman **0.224** (`evaluation_report.json`, 2026-07-07 11:48 KST)
+- `pipeline.joblib`, `recipe_recommendation_scored.csv` 갱신 완료
+
+### 재현
+
+```bash
+python -m ai.recommendation.features
+python -m ai.recommendation.feature_screening
+python -m ai.recommendation.feature_ablation
+python -m ai.recommendation.main
+```
+
+---
+
+## 6. 참고
+
+| 항목 | 위치 |
+|------|------|
+| commonness 파생 | `features.py` — `IngredientCommonnessLookup` |
+| feature 목록 | `config.py` — `INGREDIENT_FEATURES` |
+| 최신 평가 | `artifacts/evaluation_report.json` |
+| ablation winner (11 feature, Spearman 0.264) | `artifacts/feature_ablation_report.json` |
