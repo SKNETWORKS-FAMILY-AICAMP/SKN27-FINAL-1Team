@@ -411,9 +411,11 @@ def _self_check() -> None:
     props = build_recipe_ingredient_props(sample)
     assert props is not None
     assert json.loads(props["ingredientsNormalized"])
-    assert json.loads(props["othersItems"])
+    assert isinstance(json.loads(props["othersItems"]), list)
     alias_rows = build_uses_alias_rows(sample)
     assert any(row["aliasId"] == "alias_0843" for row in alias_rows)
+    water_sample = alias_df.loc[alias_df["RCP_SNO"] == 7016816].iloc[0]
+    assert json.loads(build_recipe_ingredient_props(water_sample)["othersItems"])
     assert all("recipeId" in row and "aliasId" in row for row in alias_rows)
     assert len(build_recipe_ingredient_props_rows(alias_df)) > 3000
     assert len(build_all_uses_alias_rows(alias_df)) > 3000

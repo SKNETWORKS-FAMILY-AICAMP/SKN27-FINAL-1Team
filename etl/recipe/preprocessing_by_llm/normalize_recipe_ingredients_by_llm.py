@@ -383,6 +383,95 @@ def normalize_recipe_ingredients_by_llm(
     return processed
 
 
+def rematch_one_row(row: pd.Series, alias_index: AliasIndex) -> tuple[dict[str, Any], int] | None:
+    """others_items[].name이 alias name key와 exact 일치하면 승격. 변경 없으면 None."""
+    others_count = int(row.get("others_count", 0) or 0)
+    if others_count <= 0:
+        return None
+
+    others_items: list[dict[str, str]] = json.loads(row["others_items"])
+    if not others_items:
+        return None
+
+    aliases_matched: list[dict[str, str]] = json.loads(row["aliases_matched"])
+    ingredients_normalized: list[list[str]] = json.loads(row["ingredients_normalized"])
+    seen_alias = {a["alias_id"] for a in aliases_matched}
+
+    promoted = 0
+    remaining: list[dict[str, str]] = []
+    for item in others_items:
+        name = str(item.get("name", "")).strip()
+        amount = str(item.get("amount", "")).strip()
+        unit = str(item.get("unit", "")).strip()
+        entry = alias_index._by_key.get(_match_key(name))
+        if not entry:
+            remaining.append(item)
+            continue
+
+        promoted += 1
+        if entry.alias_id not in seen_alias:
+            seen_alias.add(entry.alias_id)
+            aliases_matched.append({"alias_id": entry.alias_id, "name": entry.name})
+        for norm in ingredients_normalized:
+            if not norm:
+                continue
+            n_name = str(norm[0]).strip()
+            n_amount = str(norm[1]).strip() if len(norm) > 1 else ""
+            n_unit = str(norm[2]).strip() if len(norm) > 2 else ""
+            if n_name == name and n_amount == amount and n_unit == unit:
+                norm[0] = entry.name
+                break
+
+    if promoted == 0:
+        return None
+
+    updated = row.to_dict()
+    updated["aliases_matched"] = json.dumps(aliases_matched, ensure_ascii=False)
+    updated["ingredients_normalized"] = json.dumps(ingredients_normalized, ensure_ascii=False)
+    updated["others_items"] = json.dumps(remaining, ensure_ascii=False)
+    updated["others_count"] = len(remaining)
+    return updated, promoted
+
+
+def rematch_others_from_alias(
+    *,
+    output_path: Path | str = OUTPUT_CSV,
+    alias_path: Path | str = ALIAS_CSV,
+) -> dict[str, int]:
+    """기존 recipe_ingredient_alias.csv에서 others → alias 승격 (LLM 없음)."""
+    output_path = Path(output_path)
+    if not output_path.is_file():
+        raise FileNotFoundError(f"CSV 없음: {output_path}")
+
+    alias_index = AliasIndex.from_csv(alias_path)
+    df = pd.read_csv(output_path)
+
+    rows_updated = 0
+    items_promoted = 0
+    recipes_zeroed = 0
+
+    for idx in df.index[df["others_count"] > 0]:
+        result = rematch_one_row(df.loc[idx], alias_index)
+        if result is None:
+            continue
+        updated, promoted = result
+        rows_updated += 1
+        items_promoted += promoted
+        if int(updated["others_count"]) == 0:
+            recipes_zeroed += 1
+        for col in ("aliases_matched", "ingredients_normalized", "others_items", "others_count"):
+            df.at[idx, col] = updated[col]
+
+    df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    stats = {
+        "rows_updated": rows_updated,
+        "items_promoted": items_promoted,
+        "recipes_zeroed_others": recipes_zeroed,
+    }
+    logger.info("rematch 완료: %s", stats)
+    return stats
+
+
 def _self_check() -> None:
     sample_raw = parse_ingredient_rows("[['양파', '1', '개'], ['간장', '2', 't']]")
     assert sample_raw == [["양파", "1", "개"], ["간장", "2", "t"]]
@@ -449,6 +538,30 @@ def _self_check() -> None:
         if tmp.exists():
             tmp.unlink()
 
+    # others → alias 승격 (exact key)
+    butter_index = AliasIndex([AliasEntry("alias_butter", "버터", _match_key("버터"))])
+    rematch_row = pd.Series(
+        {
+            "RCP_SNO": 7016890,
+            "CKG_NM": "버터구이오징어",
+            "ingredients_raw": "[]",
+            "aliases_matched": "[]",
+            "ingredients_normalized": json.dumps([["오징어", "1", "마리"], ["버터", "20", "g"]], ensure_ascii=False),
+            "others_count": 1,
+            "others_items": json.dumps(
+                [{"raw": "버터", "name": "버터", "amount": "20", "unit": "g"}],
+                ensure_ascii=False,
+            ),
+        }
+    )
+    rematched = rematch_one_row(rematch_row, butter_index)
+    assert rematched is not None
+    updated, promoted = rematched
+    assert promoted == 1
+    assert updated["others_count"] == 0
+    matched = json.loads(updated["aliases_matched"])
+    assert matched == [{"alias_id": "alias_butter", "name": "버터"}]
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="레시피 재료 정규화 + alias 매칭 LLM 배치")
@@ -457,6 +570,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--alias", default=str(ALIAS_CSV), help="nodes_alias.csv 경로")
     parser.add_argument("--limit", type=int, default=None, help="처리 행 상한 (스모크·개발용)")
     parser.add_argument("--force", action="store_true", help="기존 출력 삭제 후 전체 재처리")
+    parser.add_argument(
+        "--rematch-others",
+        action="store_true",
+        help="기존 CSV의 others_items를 nodes_alias와 재매칭 (LLM 없음)",
+    )
     return parser.parse_args()
 
 
@@ -464,10 +582,15 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     _self_check()
     args = _parse_args()
-    normalize_recipe_ingredients_by_llm(
-        input_path=args.input,
-        output_path=args.output,
-        alias_path=args.alias,
-        limit=args.limit,
-        force=args.force,
-    )
+    if args.rematch_others and args.force:
+        raise SystemExit("--rematch-others와 --force는 동시 사용할 수 없습니다.")
+    if args.rematch_others:
+        rematch_others_from_alias(output_path=args.output, alias_path=args.alias)
+    else:
+        normalize_recipe_ingredients_by_llm(
+            input_path=args.input,
+            output_path=args.output,
+            alias_path=args.alias,
+            limit=args.limit,
+            force=args.force,
+        )
