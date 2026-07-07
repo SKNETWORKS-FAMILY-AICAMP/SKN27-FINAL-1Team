@@ -133,6 +133,25 @@ def test_duplicate_recipe_ids_fail(tmp_path, monkeypatch) -> None:
         data_loader.load_and_merge()
 
 
+def test_build_pipeline_exclude_drops_features() -> None:
+    from ai.recommendation.config import feature_columns
+
+    exclude = frozenset({"unique_ingredient_count", "alias_match_ratio"})
+    train = _rows([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    pipeline = model.build_pipeline(exclude=exclude)
+    preprocessor = pipeline.named_steps["preprocessor"]
+    used: set[str] = set()
+    for _, _, cols in preprocessor.transformers:
+        used.update(cols)
+    expected = set(feature_columns(exclude))
+    assert used == expected
+    assert "unique_ingredient_count" not in used
+    assert "alias_match_ratio" not in used
+    fitted = model.fit_pipeline(pipeline, train, train[TARGET_COL])
+    pred = model.predict(fitted, train.iloc[:2])
+    assert len(pred) == 2
+
+
 def test_high_correlation_pairs_detects_ratio_duplicate() -> None:
     df = pd.DataFrame(
         {

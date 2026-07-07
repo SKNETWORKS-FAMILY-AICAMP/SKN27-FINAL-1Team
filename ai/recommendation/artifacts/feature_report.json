@@ -3,11 +3,8 @@
   "missing_rate": {
     "CKG_KND_ACTO_NM": 0.0,
     "CKG_MTH_ACTO_NM": 0.0,
-    "CKG_STA_ACTO_NM": 0.0,
     "CKG_MTRL_ACTO_NM": 0.0,
-    "CKG_DODF_NM": 0.0,
     "serving_size": 0.0,
-    "cooking_time_min": 0.0,
     "INQ_CNT_LOG_CENTERED": 0.0,
     "SRAP_CNT_LOG_CENTERED": 0.0,
     "ingredient_count": 0.0,
@@ -44,37 +41,11 @@
       "75%": null,
       "max": null
     },
-    "CKG_STA_ACTO_NM": {
-      "count": 3171,
-      "unique": 12,
-      "top": "일상",
-      "freq": 1953,
-      "mean": null,
-      "std": null,
-      "min": null,
-      "25%": null,
-      "50%": null,
-      "75%": null,
-      "max": null
-    },
     "CKG_MTRL_ACTO_NM": {
       "count": 3171,
       "unique": 16,
       "top": "채소류",
       "freq": 911,
-      "mean": null,
-      "std": null,
-      "min": null,
-      "25%": null,
-      "50%": null,
-      "75%": null,
-      "max": null
-    },
-    "CKG_DODF_NM": {
-      "count": 3171,
-      "unique": 3,
-      "top": "고급",
-      "freq": 1534,
       "mean": null,
       "std": null,
       "min": null,
@@ -95,19 +66,6 @@
       "50%": 2.0,
       "75%": 4.0,
       "max": 6.0
-    },
-    "cooking_time_min": {
-      "count": 3171.0,
-      "unique": null,
-      "top": null,
-      "freq": null,
-      "mean": 38.301797540208135,
-      "std": 29.15357021144792,
-      "min": 5.0,
-      "25%": 15.0,
-      "50%": 30.0,
-      "75%": 60.0,
-      "max": 120.0
     },
     "INQ_CNT_LOG_CENTERED": {
       "count": 3171.0,

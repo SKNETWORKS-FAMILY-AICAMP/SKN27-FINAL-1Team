@@ -18,6 +18,7 @@
 python -m ai.recommendation.main
 python ai/recommendation/main.py
 python -m ai.recommendation.feature_screening
+python -m ai.recommendation.feature_ablation
 ```
 
 조기 종료 포인트 (feature self-check만):
@@ -49,6 +50,7 @@ need to build feature columns separately.
 | `ai/recommendation/artifacts/pipeline.joblib` | 학습 Pipeline |
 | `ai/recommendation/artifacts/evaluation_report.json` | RMSE, MAE, R², Spearman, Hit@K |
 | `ai/recommendation/artifacts/feature_screening_report.json` | feature 단변량·중복·permutation Spearman drop (실험 03) |
+| `ai/recommendation/artifacts/feature_ablation_report.json` | ablation 단계별 holdout 비교 (실험 03) |
 
 ## 점수 규칙
 

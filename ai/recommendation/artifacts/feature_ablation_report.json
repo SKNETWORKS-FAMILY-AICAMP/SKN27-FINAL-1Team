@@ -1,0 +1,274 @@
+{
+  "model_version": "recommend_model_v2",
+  "target_column": "REVIEW_RANK_SCORE",
+  "labeled_count": 563,
+  "baseline": {
+    "features": [
+      "CKG_KND_ACTO_NM",
+      "CKG_MTH_ACTO_NM",
+      "CKG_STA_ACTO_NM",
+      "CKG_MTRL_ACTO_NM",
+      "CKG_DODF_NM",
+      "serving_size",
+      "cooking_time_min",
+      "INQ_CNT_LOG_CENTERED",
+      "SRAP_CNT_LOG_CENTERED",
+      "ingredient_count",
+      "unique_ingredient_count",
+      "others_count",
+      "others_ratio",
+      "alias_match_ratio",
+      "commonness_mean"
+    ],
+    "feature_count": 15,
+    "metrics": {
+      "Spearman": 0.0958277012277881,
+      "Hit@10": 0.1,
+      "Hit@20": 0.25,
+      "RMSE": 0.37747784241763777,
+      "MAE": 0.16680343599288347,
+      "R2": -0.2002702053135592
+    }
+  },
+  "steps": [
+    {
+      "phase": 2,
+      "exclude": [
+        "alias_match_ratio",
+        "others_count",
+        "unique_ingredient_count"
+      ],
+      "removed": [
+        "alias_match_ratio",
+        "others_count",
+        "unique_ingredient_count"
+      ],
+      "feature_count": 12,
+      "accepted": false,
+      "metrics": {
+        "Spearman": 0.08235186504530112,
+        "Hit@10": 0.2,
+        "Hit@20": 0.25,
+        "RMSE": 0.3841089635551044,
+        "MAE": 0.17160112444504083,
+        "R2": -0.2428106936243284
+      },
+      "delta_spearman": -0.013475836182486975,
+      "note": "batch_corr_dedup"
+    },
+    {
+      "phase": 2,
+      "exclude": [
+        "alias_match_ratio"
+      ],
+      "removed": [
+        "alias_match_ratio"
+      ],
+      "feature_count": 14,
+      "accepted": false,
+      "metrics": {
+        "Spearman": 0.08783890598700018,
+        "Hit@10": 0.1,
+        "Hit@20": 0.25,
+        "RMSE": 0.38218054452041006,
+        "MAE": 0.17051897401107632,
+        "R2": -0.23036295712385946
+      },
+      "delta_spearman": -0.00798879524078791,
+      "note": "fallback_single"
+    },
+    {
+      "phase": 2,
+      "exclude": [
+        "others_count"
+      ],
+      "removed": [
+        "others_count"
+      ],
+      "feature_count": 14,
+      "accepted": false,
+      "metrics": {
+        "Spearman": 0.07928248582120892,
+        "Hit@10": 0.1,
+        "Hit@20": 0.2,
+        "RMSE": 0.3740149586654187,
+        "MAE": 0.16568043290043324,
+        "R2": -0.17834928240155135
+      },
+      "delta_spearman": -0.016545215406579175,
+      "note": "fallback_single"
+    },
+    {
+      "phase": 2,
+      "exclude": [
+        "unique_ingredient_count"
+      ],
+      "removed": [
+        "unique_ingredient_count"
+      ],
+      "feature_count": 14,
+      "accepted": false,
+      "metrics": {
+        "Spearman": 0.06312830091852092,
+        "Hit@10": 0.1,
+        "Hit@20": 0.2,
+        "RMSE": 0.3802019640378535,
+        "MAE": 0.16949673677355137,
+        "R2": -0.21765655071630174
+      },
+      "delta_spearman": -0.03269940030926717,
+      "note": "fallback_single"
+    },
+    {
+      "phase": 3,
+      "exclude": [
+        "cooking_time_min"
+      ],
+      "removed": [
+        "cooking_time_min"
+      ],
+      "feature_count": 14,
+      "accepted": true,
+      "metrics": {
+        "Spearman": 0.12847664598816608,
+        "Hit@10": 0.2,
+        "Hit@20": 0.25,
+        "RMSE": 0.37885386955286016,
+        "MAE": 0.16365570701749968,
+        "R2": -0.20903689039301976
+      },
+      "delta_spearman": 0.03264894476037798,
+      "note": ""
+    },
+    {
+      "phase": 3,
+      "exclude": [
+        "CKG_STA_ACTO_NM",
+        "cooking_time_min"
+      ],
+      "removed": [
+        "CKG_STA_ACTO_NM"
+      ],
+      "feature_count": 13,
+      "accepted": true,
+      "metrics": {
+        "Spearman": 0.15953203632946059,
+        "Hit@10": 0.1,
+        "Hit@20": 0.25,
+        "RMSE": 0.3793019057112394,
+        "MAE": 0.16960642364436665,
+        "R2": -0.21189821816315835
+      },
+      "delta_spearman": 0.03105539034129451,
+      "note": ""
+    },
+    {
+      "phase": 3,
+      "exclude": [
+        "CKG_DODF_NM",
+        "CKG_STA_ACTO_NM",
+        "cooking_time_min"
+      ],
+      "removed": [
+        "CKG_DODF_NM"
+      ],
+      "feature_count": 12,
+      "accepted": true,
+      "metrics": {
+        "Spearman": 0.2108579434369859,
+        "Hit@10": 0.2,
+        "Hit@20": 0.25,
+        "RMSE": 0.3741817977079923,
+        "MAE": 0.1610929112660535,
+        "R2": -0.17940078320174258
+      },
+      "delta_spearman": 0.051325907107525326,
+      "note": ""
+    },
+    {
+      "phase": 3,
+      "exclude": [
+        "CKG_DODF_NM",
+        "CKG_STA_ACTO_NM",
+        "INQ_CNT_LOG_CENTERED",
+        "cooking_time_min"
+      ],
+      "removed": [
+        "INQ_CNT_LOG_CENTERED"
+      ],
+      "feature_count": 11,
+      "accepted": false,
+      "metrics": {
+        "Spearman": 0.1836203562949732,
+        "Hit@10": 0.2,
+        "Hit@20": 0.2,
+        "RMSE": 0.3757697331702672,
+        "MAE": 0.15919710282343094,
+        "R2": -0.18943219689788915
+      },
+      "delta_spearman": -0.027237587142012715,
+      "note": ""
+    },
+    {
+      "phase": 3,
+      "exclude": [
+        "CKG_DODF_NM",
+        "CKG_STA_ACTO_NM",
+        "cooking_time_min",
+        "others_count"
+      ],
+      "removed": [
+        "others_count"
+      ],
+      "feature_count": 11,
+      "accepted": false,
+      "metrics": {
+        "Spearman": 0.1863155235314706,
+        "Hit@10": 0.2,
+        "Hit@20": 0.3,
+        "RMSE": 0.3721490404994274,
+        "MAE": 0.1616856017294739,
+        "R2": -0.1666213087446029
+      },
+      "delta_spearman": -0.02454241990551531,
+      "note": ""
+    }
+  ],
+  "winner": {
+    "features": [
+      "CKG_KND_ACTO_NM",
+      "CKG_MTH_ACTO_NM",
+      "CKG_MTRL_ACTO_NM",
+      "serving_size",
+      "INQ_CNT_LOG_CENTERED",
+      "SRAP_CNT_LOG_CENTERED",
+      "ingredient_count",
+      "unique_ingredient_count",
+      "others_count",
+      "others_ratio",
+      "alias_match_ratio",
+      "commonness_mean"
+    ],
+    "feature_count": 12,
+    "exclude": [
+      "CKG_DODF_NM",
+      "CKG_STA_ACTO_NM",
+      "cooking_time_min"
+    ],
+    "removed_from_baseline": [
+      "CKG_DODF_NM",
+      "CKG_STA_ACTO_NM",
+      "cooking_time_min"
+    ],
+    "metrics": {
+      "Spearman": 0.2108579434369859,
+      "Hit@10": 0.2,
+      "Hit@20": 0.25,
+      "RMSE": 0.3741817977079923,
+      "MAE": 0.1610929112660535,
+      "R2": -0.17940078320174258
+    },
+    "beats_baseline": true
+  },
+  "created_at": "2026-07-07T02:24:11.928128+00:00"
+}

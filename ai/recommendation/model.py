@@ -38,7 +38,15 @@ def _categorical_encoder(model_name: str) -> OneHotEncoder | OrdinalEncoder:
     )
 
 
-def build_pipeline(model_name: str = MODEL_NAME) -> Pipeline:
+def build_pipeline(
+    model_name: str = MODEL_NAME,
+    *,
+    exclude: frozenset[str] = frozenset(),
+) -> Pipeline:
+    cat_cols = [c for c in CATEGORICAL_FEATURES if c not in exclude]
+    numeric_cols = [c for c in NUMERIC_FEATURES + INGREDIENT_FEATURES if c not in exclude]
+    if not cat_cols and not numeric_cols:
+        raise ValueError("build_pipeline: exclude leaves no feature columns")
     categorical_pipeline = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -50,13 +58,12 @@ def build_pipeline(model_name: str = MODEL_NAME) -> Pipeline:
             ("imputer", SimpleImputer(strategy="median")),
         ]
     )
-    numeric_cols = NUMERIC_FEATURES + INGREDIENT_FEATURES
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("cat", categorical_pipeline, CATEGORICAL_FEATURES),
-            ("num", numeric_pipeline, numeric_cols),
-        ]
-    )
+    transformers: list[tuple[str, Pipeline, list[str]]] = []
+    if cat_cols:
+        transformers.append(("cat", categorical_pipeline, cat_cols))
+    if numeric_cols:
+        transformers.append(("num", numeric_pipeline, numeric_cols))
+    preprocessor = ColumnTransformer(transformers=transformers)
     return Pipeline(
         steps=[
             ("feature_builder", RecommendationFeatureBuilder()),

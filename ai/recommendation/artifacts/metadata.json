@@ -5,11 +5,8 @@
   "feature_columns": [
     "CKG_KND_ACTO_NM",
     "CKG_MTH_ACTO_NM",
-    "CKG_STA_ACTO_NM",
     "CKG_MTRL_ACTO_NM",
-    "CKG_DODF_NM",
     "serving_size",
-    "cooking_time_min",
     "INQ_CNT_LOG_CENTERED",
     "SRAP_CNT_LOG_CENTERED",
     "ingredient_count",

@@ -48,6 +48,7 @@ def evaluate(
     train_row_count: int,
     test_row_count: int,
     model_type: str,
+    feature_columns_override: list[str] | None = None,
 ) -> dict[str, Any]:
     y = y_true.to_numpy(dtype=float)
     pred = np.asarray(y_pred, dtype=float)
@@ -64,7 +65,7 @@ def evaluate(
         "test_row_count": test_row_count,
         "target_column": TARGET_COL,
         "target_formula": TARGET_FORMULA,
-        "feature_columns": feature_columns(),
+        "feature_columns": feature_columns_override or feature_columns(),
         "model_type": model_type,
         "RMSE": rmse,
         "MAE": mae,

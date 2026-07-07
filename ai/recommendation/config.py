@@ -50,14 +50,11 @@ EXCLUDE_COLS = frozenset({
 CATEGORICAL_FEATURES = [
     "CKG_KND_ACTO_NM",
     "CKG_MTH_ACTO_NM",
-    "CKG_STA_ACTO_NM",
     "CKG_MTRL_ACTO_NM",
-    "CKG_DODF_NM",
 ]
 
 NUMERIC_FEATURES = [
     "serving_size",
-    "cooking_time_min",
     "INQ_CNT_LOG_CENTERED",
     "SRAP_CNT_LOG_CENTERED",
 ]
@@ -111,5 +108,8 @@ def get_regressor(name: str = MODEL_NAME) -> Any:
     return registry[name]()
 
 
-def feature_columns() -> list[str]:
-    return CATEGORICAL_FEATURES + NUMERIC_FEATURES + INGREDIENT_FEATURES
+def feature_columns(exclude: frozenset[str] = frozenset()) -> list[str]:
+    cols = CATEGORICAL_FEATURES + NUMERIC_FEATURES + INGREDIENT_FEATURES
+    if not exclude:
+        return cols
+    return [c for c in cols if c not in exclude]
