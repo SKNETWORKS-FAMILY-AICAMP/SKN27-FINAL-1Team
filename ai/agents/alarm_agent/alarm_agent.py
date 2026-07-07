@@ -11,24 +11,24 @@ AGENT_NAME = "alarm"
 ToolMap = dict[str, Callable[[dict[str, Any], dict[str, Any]], Any]]
 REMINDER_TYPES = {"consume_reminder", "shopping_reminder", "calendar_event"}
 
-MSG_CALENDAR_LIST = "\uce98\ub9b0\ub354 \uc77c\uc815\uc744 \uc870\ud68c\ud588\uc5b4\uc694."
-MSG_CALENDAR_CREATE = "\uce98\ub9b0\ub354 \uc77c\uc815\uc744 \ub4f1\ub85d\ud588\uc5b4\uc694."
-MSG_CALENDAR_DELETE = "\uce98\ub9b0\ub354 \uc77c\uc815\uc744 \uc0ad\uc81c\ud588\uc5b4\uc694."
-MSG_CALENDAR_SYNC = "\uc624\ub298 \uc54c\ub9bc \uc77c\uc815\uc744 \ub3d9\uae30\ud654\ud588\uc5b4\uc694."
-MSG_ALARM_LIST = "\uc54c\ub9bc \ubaa9\ub85d\uc744 \uc870\ud68c\ud588\uc5b4\uc694."
-MSG_ALARM_READ = "\uc54c\ub9bc\uc744 \uc77d\uc74c \ucc98\ub9ac\ud588\uc5b4\uc694."
-MSG_ALARM_DEVICE = "\uc54c\ub9bc \uc218\uc2e0 \uae30\uae30\ub97c \ub4f1\ub85d\ud588\uc5b4\uc694."
-MSG_CLARIFY = "\uc5b4\ub5a4 \uc54c\ub9bc\uc778\uc9c0 \uc54c\ub824\uc8fc\uc138\uc694. \uba39\uae30/\uad6c\ub9e4/\uc77c\ubc18 \uc77c\uc815 \uc911 \ud558\ub098\ub85c \ub4f1\ub85d\ud560 \uc218 \uc788\uc5b4\uc694."
-MSG_HANDLED = "\uc694\uccad\uc744 \ucc98\ub9ac\ud588\uc5b4\uc694."
-MSG_UNKNOWN = "\uc54c\ub9bc/\uce98\ub9b0\ub354 agent\uac00 \ucc98\ub9ac\ud560 \uc218 \uc5c6\ub294 \uc694\uccad\uc774\uc5d0\uc694."
-MSG_TOOL_MISSING = "\uc2e4\ud589\ud560 \ub3c4\uad6c\uac00 \uc5f0\uacb0\ub418\uc9c0 \uc54a\uc558\uc5b4\uc694."
-MSG_TOOL_FAILED = "\ub3c4\uad6c \uc2e4\ud589\uc5d0 \uc2e4\ud328\ud588\uc5b4\uc694."
-MSG_ASYNC_REQUIRED = "\ube44\ub3d9\uae30 \ud658\uacbd\uc5d0\uc11c\ub294 arun()\uc744 \ud638\ucd9c\ud574\uc8fc\uc138\uc694."
-TITLE_CALENDAR_EVENT = "\uce98\ub9b0\ub354 \uc77c\uc815"
-LABEL_CREATE = "\ub4f1\ub85d"
-LABEL_DELETE = "\uc0ad\uc81c"
-LABEL_SYNC = "\ub3d9\uae30\ud654"
-LABEL_CANCEL = "\ucde8\uc18c"
+MSG_CALENDAR_LIST = "캘린더 일정을 조회했어요."
+MSG_CALENDAR_CREATE = "캘린더 일정을 등록했어요."
+MSG_CALENDAR_DELETE = "캘린더 일정을 삭제했어요."
+MSG_CALENDAR_SYNC = "오늘 알림 일정을 동기화했어요."
+MSG_ALARM_LIST = "알림 목록을 조회했어요."
+MSG_ALARM_READ = "알림을 읽음 처리했어요."
+MSG_ALARM_DEVICE = "알림 수신 기기를 등록했어요."
+MSG_CLARIFY = "어떤 알림인지 알려주세요. 먹기/구매/일반 일정 중 하나로 등록할 수 있어요."
+MSG_HANDLED = "요청을 처리했어요."
+MSG_UNKNOWN = "알림/캘린더 agent가 처리할 수 없는 요청이에요."
+MSG_TOOL_MISSING = "실행할 도구가 연결되지 않았어요."
+MSG_TOOL_FAILED = "도구 실행에 실패했어요."
+MSG_ASYNC_REQUIRED = "비동기 환경에서는 arun()을 호출해주세요."
+TITLE_CALENDAR_EVENT = "캘린더 일정"
+LABEL_CREATE = "등록"
+LABEL_DELETE = "삭제"
+LABEL_SYNC = "동기화"
+LABEL_CANCEL = "취소"
 
 _INTENT_ACTIONS = {
     "calendar.list": ("list_events", MSG_CALENDAR_LIST),
@@ -46,15 +46,15 @@ _ALLOWED_INTENTS = set(_INTENT_ACTIONS)
 
 _CONFIRM_ACTIONS = {"create_event", "delete_event", "sync_daily_events", "mark_notification_read", "register_device_token"}
 
-_CREATE_WORDS = ("\ub4f1\ub85d", "\ucd94\uac00", "\uc0dd\uc131", "\uc608\uc57d", "\uc7a1\uc544", "\ub9cc\ub4e4", "\uc124\uc815")
-_DELETE_WORDS = ("\uc0ad\uc81c", "\uc9c0\uc6cc", "\ucde8\uc18c", "\uc5c6\uc560")
-_LIST_WORDS = ("\uc870\ud68c", "\ubaa9\ub85d", "\ubcf4\uc5ec", "\ud655\uc778", "\uc54c\ub824")
-_SYNC_WORDS = ("\ub3d9\uae30\ud654", "\uc790\ub3d9", "\uc77c\uc77c", "\uc624\ub298\uc54c\ub9bc", "\uc544\uce68")
-_CALENDAR_WORDS = ("\uce98\ub9b0\ub354", "\uc77c\uc815", "\uc54c\ub9bc", "\uc54c\ub78c", "\ub9ac\ub9c8\uc778\ub354")
-_DATE_WORDS = ("\uc624\ub298", "\ub0b4\uc77c", "\ubaa8\ub808")
-_CONSUME_WORDS = ("\uba39", "\uc0ac\uc6a9", "\uc18c\ube44", "\ucc98\ub9ac", "\uc694\ub9ac")
-_SHOPPING_WORDS = ("\uc0ac", "\uad6c\ub9e4", "\uc7a5\ubcf4", "\uc7a5\ubcfc")
-_GENERAL_EVENT_WORDS = ("\uc77c\uc815", "\ubbf8\ud305", "\uc57d\uc18d", "\uc608\uc57d")
+_CREATE_WORDS = ("등록", "추가", "생성", "예약", "잡아", "만들", "설정")
+_DELETE_WORDS = ("삭제", "지워", "취소", "없애")
+_LIST_WORDS = ("조회", "목록", "보여", "확인", "알려")
+_SYNC_WORDS = ("동기화", "자동", "일일", "오늘알림", "아침")
+_CALENDAR_WORDS = ("캘린더", "일정", "알림", "알람", "리마인더")
+_DATE_WORDS = ("오늘", "내일", "모레")
+_CONSUME_WORDS = ("먹", "사용", "소비", "처리", "요리")
+_SHOPPING_WORDS = ("사", "구매", "장보", "장볼")
+_GENERAL_EVENT_WORDS = ("일정", "미팅", "약속", "예약")
 
 
 def _ui(ui: dict[str, Any] | None = None) -> dict[str, list[Any]]:
@@ -111,7 +111,7 @@ def _confirmation(intent: str, action: str, payload: dict[str, Any]) -> dict[str
         ok=True,
         action=action,
         intent=intent,
-        message=f"{title} {label}\ud560\uae4c\uc694?",
+        message=f"{title} {label}할까요?",
         data={"payload": deepcopy(payload)},
         requires_confirmation=True,
         ui={
@@ -143,9 +143,9 @@ def _clarification(payload: dict[str, Any]) -> dict[str, Any]:
         requires_confirmation=True,
         ui={
             "actions": [
-                {"type": "select", "label": "\uba39\uae30 \uc54c\ub9bc", "value": "consume_reminder"},
-                {"type": "select", "label": "\uad6c\ub9e4 \uc54c\ub9bc", "value": "shopping_reminder"},
-                {"type": "select", "label": "\uc77c\ubc18 \uc77c\uc815", "value": "calendar_event"},
+                {"type": "select", "label": "먹기 알림", "value": "consume_reminder"},
+                {"type": "select", "label": "구매 알림", "value": "shopping_reminder"},
+                {"type": "select", "label": "일반 일정", "value": "calendar_event"},
             ]
         },
         meta={
@@ -194,7 +194,7 @@ def _contains_any(text: str, words: tuple[str, ...]) -> bool:
 
 
 def _extract_date_text(text: str) -> str | None:
-    for pattern in (r"\d{4}-\d{1,2}-\d{1,2}", r"\d{1,2}/\d{1,2}", r"\d{1,2}\uc6d4\s*\d{1,2}\uc77c"):
+    for pattern in (r"\d{4}-\d{1,2}-\d{1,2}", r"\d{1,2}/\d{1,2}", r"\d{1,2}월\s*\d{1,2}일"):
         match = re.search(pattern, text)
         if match:
             return match.group(0)
@@ -202,9 +202,9 @@ def _extract_date_text(text: str) -> str | None:
 
 
 def _extract_title(text: str) -> str:
-    title = re.sub(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}|\d{1,2}\uc6d4\s*\d{1,2}\uc77c", " ", text)
+    title = re.sub(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}|\d{1,2}월\s*\d{1,2}일", " ", text)
     for word in (
-        ("\uba39\uc73c\ub77c\uace0", "\uc0ac\uc57c\ud55c\ub2e4\uace0")
+        ("먹으라고", "사야한다고")
         + _CALENDAR_WORDS
         + _CREATE_WORDS
         + _DELETE_WORDS
@@ -213,10 +213,10 @@ def _extract_title(text: str) -> str:
         + _DATE_WORDS
         + _CONSUME_WORDS
         + _SHOPPING_WORDS
-        + ("\ub77c\uace0", "\uc57c\ud55c\ub2e4\uace0", "\ud558\ub77c\uace0")
+        + ("라고", "야한다고", "하라고")
     ):
         title = title.replace(word, " ")
-    title = re.sub(r"(\ud574\uc918|\ud574\uc8fc\uc138\uc694|\ud560\ub798|\ud560\uac8c|\uc880)$", " ", title.strip())
+    title = re.sub(r"(해줘|해주세요|할래|할게|좀)$", " ", title.strip())
     title = re.sub(r"\s+", " ", title).strip()
     return title or TITLE_CALENDAR_EVENT
 
@@ -226,11 +226,11 @@ def analyze_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str
     compact = re.sub(r"\s+", "", text or "")
 
     # ponytail: keyword routing is enough until the supervisor needs model-based intent ranking.
-    if "\ub514\ubc14\uc774\uc2a4" in compact or "\uae30\uae30" in compact or "\ud478\uc2dc\ud1a0\ud070" in compact:
+    if "디바이스" in compact or "기기" in compact or "푸시토큰" in compact:
         intent = "alarm.register_device" if _contains_any(compact, _CREATE_WORDS) else "alarm.list"
-    elif "\uc77d\uc74c" in compact or "\uc77d\uc5c8" in compact:
+    elif "읽음" in compact or "읽었" in compact:
         intent = "alarm.read"
-    elif ("\uc54c\ub9bc" in compact or "\uc54c\ub78c" in compact) and _contains_any(compact, _LIST_WORDS) and not ("\uce98\ub9b0\ub354" in compact or "\uc77c\uc815" in compact):
+    elif ("알림" in compact or "알람" in compact) and _contains_any(compact, _LIST_WORDS) and not ("캘린더" in compact or "일정" in compact):
         intent = "alarm.list"
     elif _contains_any(compact, _CALENDAR_WORDS):
         if _contains_any(compact, _DELETE_WORDS):
@@ -257,7 +257,7 @@ def analyze_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str
                 payload.setdefault("reminder_type", "consume_reminder")
             elif _contains_any(compact, _SHOPPING_WORDS):
                 payload.setdefault("reminder_type", "shopping_reminder")
-            elif _contains_any(compact, _GENERAL_EVENT_WORDS) or "\uce98\ub9b0\ub354" in compact:
+            elif _contains_any(compact, _GENERAL_EVENT_WORDS) or "캘린더" in compact:
                 payload.setdefault("reminder_type", "calendar_event")
             elif not payload.get("reminder_type"):
                 intent, action = "alarm.clarify", "clarify"
