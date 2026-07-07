@@ -222,10 +222,321 @@
   display: grid;
   grid-template-columns: minmax(430px, 0.86fr) minmax(500px, 1fr);
   gap: 16px;
+  align-items: start;
 }
 
 .shopping-main-grid--recipe {
-  grid-template-columns: minmax(520px, 1.1fr) minmax(360px, 0.9fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
+}
+
+.shopping-list-panel {
+  padding: 14px 16px;
+}
+
+.shopping-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1.4px solid var(--figma-line);
+}
+
+.shopping-list-toolbar__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shopping-list-toolbar__title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--figma-text);
+}
+
+.shopping-count-badge {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--figma-sub);
+  background: #fbeeda;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.shopping-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border: 1.4px solid var(--figma-card-stroke);
+  border-radius: 999px;
+  background: #fffdf8;
+  color: var(--figma-sub);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shopping-select-all.is-active {
+  border-color: var(--figma-coral-stroke);
+  color: var(--figma-coral-stroke);
+}
+
+.shopping-select-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shopping-select-all em {
+  font-style: normal;
+  color: var(--figma-coral-stroke);
+}
+
+.shopping-item-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.shopping-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--figma-line);
+}
+
+.shopping-item-row:last-child {
+  border-bottom: none;
+}
+
+.shopping-item-row__image {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+}
+
+.shopping-item-row__info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shopping-item-row__info strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--figma-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shopping-item-row__info strong span {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #a98a6f;
+}
+
+.shopping-item-row__info small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--figma-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shopping-item-row__meta {
+  flex: 0 0 auto;
+  min-width: 78px;
+  text-align: right;
+}
+
+.shopping-item-row__meta span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #a98a6f;
+}
+
+.shopping-item-row__meta strong {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--figma-text);
+}
+
+.shopping-item-row__link {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 1.4px solid var(--figma-card-stroke);
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #7b5437;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shopping-item-row__link.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.shopping-sidebar {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shopping-sidebar__card {
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.shopping-metric-list {
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.shopping-metric-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--figma-line);
+}
+
+.shopping-metric-list dt {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--figma-sub);
+}
+
+.shopping-metric-list dt span {
+  font-size: 11px;
+  color: #a98a6f;
+}
+
+.shopping-metric-list dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--figma-text);
+}
+
+.shopping-metric-list__total {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.shopping-metric-list__total dd {
+  font-size: 20px;
+  color: var(--figma-coral-stroke);
+}
+
+.shopping-sidebar__primary,
+.shopping-sidebar__danger {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.shopping-sidebar__primary {
+  margin-bottom: 8px;
+  border: 1.5px solid var(--figma-coral-stroke);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.shopping-sidebar__danger {
+  border: 1.4px solid var(--figma-coral-stroke);
+  background: #fffdf8;
+  color: var(--figma-coral-stroke);
+}
+
+.shopping-sidebar__primary:disabled,
+.shopping-sidebar__danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shopping-sidebar__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.shopping-sidebar__card-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--figma-text);
+}
+
+.shopping-sidebar__card-head span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #a98a6f;
+}
+
+.shopping-owned-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shopping-owned-chips span {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e5f4ea;
+  color: #2f7a52;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.shopping-sidebar__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #a98a6f;
+}
+
+.shopping-sidebar__note--warn {
+  margin: 0 0 12px;
+  color: var(--figma-coral-stroke);
+}
+
+.shopping-sidebar__back {
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--figma-sub);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  cursor: pointer;
 }
 
 .shopping-panel {
@@ -957,6 +1268,10 @@
   .shopping-start-grid,
   .shopping-main-grid--recipe {
     grid-template-columns: 1fr;
+  }
+
+  .shopping-sidebar {
+    position: static;
   }
 
   .shopping-actions {
