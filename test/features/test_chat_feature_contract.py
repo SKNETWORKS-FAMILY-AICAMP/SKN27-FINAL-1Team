@@ -1,7 +1,11 @@
 from types import SimpleNamespace
 
-from app.backend.services import chat_graph
-from app.backend.services.chat_service import chat_service
+import pytest
+
+pytest.importorskip("langchain_openai")
+
+from ai.agents.supervisor_agent import chat_graph
+from ai.agents.supervisor_agent.chat_service import chat_service
 
 
 def test_chat_service_maps_graph_state_to_chat_response(monkeypatch):
