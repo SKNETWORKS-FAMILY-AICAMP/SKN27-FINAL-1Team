@@ -400,30 +400,9 @@
   transform: translateY(-1px);
 }
 
-.login-card__guest-button {
-  width: 100%;
-  height: 54px;
-  margin-top: 14px;
-  border: 1.4px solid #d9b991;
-  border-radius: 12px;
-  background: #fffdf8;
-  color: #7b5437;
-  cursor: pointer;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 900;
-  transition:
-    border-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
-}
 
-.login-card__guest-button:hover {
-  border-color: rgba(255, 107, 116, 0.65);
-  box-shadow: 0 10px 22px rgba(103, 64, 35, 0.08);
-  transform: translateY(-1px);
-}
+
+
 
 .login-card__button.kakao {
   background-color: #FEE500;
@@ -603,10 +582,7 @@
     font-size: 16px;
   }
 
-  .login-card__guest-button {
-    height: 50px;
-    font-size: 15px;
-  }
+  
 
   .login-card__terms {
     font-size: 12px;
@@ -741,11 +717,7 @@
     font-size: 15px;
   }
 
-  .login-card__guest-button {
-    height: 48px;
-    margin-top: 10px;
-    font-size: 14px;
-  }
+  
 }
 
 @media (max-width: 430px) {
@@ -783,9 +755,7 @@
     font-size: 14px;
   }
 
-  .login-card__guest-button {
-    font-size: 14px;
-  }
+  
 
   .login-card__terms {
     font-size: 12px;
@@ -884,11 +854,7 @@
     font-size: 13px;
   }
 
-  .login-card__guest-button {
-    height: 40px;
-    margin-top: 7px;
-    font-size: 12px;
-  }
+  
 
   .login-card__provider {
     width: 26px;

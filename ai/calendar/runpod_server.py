@@ -150,6 +150,5 @@ async def health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
-_require_internal_token()
 app = mcp.streamable_http_app()
 app.add_middleware(InternalTokenMiddleware)

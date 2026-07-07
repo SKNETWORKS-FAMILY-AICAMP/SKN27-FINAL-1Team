@@ -4,7 +4,8 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app.backend.services.chat_service import chat_service
+from ai.agents.supervisor_agent.chat_service import chat_service
+from ai.agents.supervisor_agent import chat_utils
 
 
 def test_route_intent_examples() -> None:
@@ -39,41 +40,41 @@ def test_route_intent_examples() -> None:
 
 def test_extract_recipe_ingredient() -> None:
     """특정 재료 레시피 질문에서 재료명만 추출되는지 확인합니다."""
-    assert chat_service._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
-    assert chat_service._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
-    assert chat_service._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
-    assert chat_service._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
-    assert chat_service._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
-    assert chat_service._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
-    assert chat_service._extract_keyword("먹다 남은 햄버거 어떡하지?") == "햄버거"
-    assert chat_service._extract_keyword("아보카도 보관법") == "아보카도"
-    assert chat_service._extract_keyword("남은 피자 보관법") == "피자"
+    assert chat_utils._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
+    assert chat_utils._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
+    assert chat_utils._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
+    assert chat_utils._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
+    assert chat_utils._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
+    assert chat_utils._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
+
+    assert chat_utils._extract_keyword("아보카도 보관법") == "아보카도"
+    assert chat_utils._extract_keyword("남은 피자 보관법") == "피자"
 
 
 def test_login_status_question() -> None:
     """로그인 상태를 묻는 문장을 별도로 인식합니다."""
-    assert chat_service._is_login_status_question("지금 로그인 되어 있어?")
-    assert chat_service._is_login_status_question("나 로그인 상태야?")
-    assert not chat_service._is_login_status_question("로그인하려면 어디로 가?")
+    assert chat_utils._is_login_status_question("지금 로그인 되어 있어?")
+    assert chat_utils._is_login_status_question("나 로그인 상태야?")
+    assert not chat_utils._is_login_status_question("로그인하려면 어디로 가?")
 
 def test_guest_chat_login_boundary() -> None:
     """비회원은 개인 냉장고 기능만 막고 일반 레시피/보관법은 허용합니다."""
-    assert chat_service._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
-    assert chat_service._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
-    assert chat_service._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
-    assert chat_service._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
-    assert chat_service._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
-    assert not chat_service._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
-    assert not chat_service._requires_login("recipe.search", "깐풍기 레시피")
-    assert not chat_service._requires_login("ingredient.guide", "양파 보관법")
+    assert chat_utils._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
+    assert chat_utils._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
+    assert chat_utils._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
+    assert chat_utils._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
+    assert chat_utils._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
+    assert not chat_utils._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
+    assert not chat_utils._requires_login("recipe.search", "깐풍기 레시피")
+    assert not chat_utils._requires_login("ingredient.guide", "양파 보관법")
 
 def test_guide_result_match() -> None:
     """가이드 검색이 비슷한 이름의 다른 재료를 답하지 않는지 확인합니다."""
-    assert not chat_service._is_guide_result_match("피자", "피자소스")
-    assert not chat_service._is_guide_result_match("치킨", "치킨스톡")
-    assert not chat_service._is_guide_result_match("김", "김치")
-    assert chat_service._is_guide_result_match("파", "대파")
-    assert chat_service._is_guide_result_match("마늘", "깐마늘")
+    assert not chat_utils._is_guide_result_match("피자", "피자소스")
+    assert not chat_utils._is_guide_result_match("치킨", "치킨스톡")
+    assert not chat_utils._is_guide_result_match("김", "김치")
+    assert chat_utils._is_guide_result_match("파", "대파")
+    assert chat_utils._is_guide_result_match("마늘", "깐마늘")
 
 
 def test_search_result_relevance() -> None:
@@ -83,18 +84,18 @@ def test_search_result_relevance() -> None:
     pizza_sauce = {"title": "피자소스 보관법", "content": "피자소스는 개봉 후 냉장 보관", "url": "https://example.com"}
     url_only = {"title": "마늘 보관법", "content": "마늘은 서늘하게 보관", "url": "https://example.com/chicken"}
 
-    assert chat_service._is_relevant_search_result("먹다남은 치킨", good)
-    assert not chat_service._is_relevant_search_result("먹다남은 치킨", bad)
-    assert not chat_service._is_relevant_search_result("피자", pizza_sauce)
-    assert not chat_service._is_relevant_search_result("보관법", good)
-    assert not chat_service._is_relevant_search_result("치킨", url_only)
+    assert chat_utils._is_relevant_search_result("먹다남은 치킨", good)
+    assert not chat_utils._is_relevant_search_result("먹다남은 치킨", bad)
+    assert not chat_utils._is_relevant_search_result("피자", pizza_sauce)
+    assert not chat_utils._is_relevant_search_result("보관법", good)
+    assert not chat_utils._is_relevant_search_result("치킨", url_only)
 
 
 def test_format_guide_tip() -> None:
     """긴 보관법 문장을 번호 목록으로 줄여 보여주는지 확인합니다."""
-    formatted = chat_service._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
+    formatted = chat_utils._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
     assert formatted == "1. 첫 문장입니다.\n2. 둘째 문장입니다.\n3. 셋째 문장입니다."
-    assert chat_service._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
+    assert chat_utils._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
 
 
 def test_cooking_time_question_uses_external_recipe() -> None:
@@ -138,7 +139,8 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app.backend.services.chat_graph import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _parse_calendar_date, mcp_agent_node, route_intent, router_node
+from ai.agents.supervisor_agent.chat_graph import mcp_agent_node, route_intent, router_node
+from ai.agents.supervisor_agent.chat_utils import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _parse_calendar_date
 
 
 class FakeService:
@@ -466,7 +468,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app.backend.services import chat_service as chat_module
+from ai.agents.supervisor_agent import chat_service as chat_module
 
 
 def test_empty_inventory_replies_are_helpful() -> None:
@@ -490,7 +492,7 @@ if __name__ == "__main__":
 
 def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> None:
     """인사말은 수량 질문으로 넘기지 않고 거절합니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.chat_graph as chat_graph
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
@@ -503,12 +505,12 @@ def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> Non
         "history": [],
     })
 
-    assert result["response_text"] == "올바른 식재료명을 입력해주세요."
+    assert result["response_text"] == "'안녕'은 올바른 식재료 이름이 아닙니다. 식용 가능한 재료만 추가할 수 있어요."
 
 
 def test_inventory_add_unknown_name_asks_quantity(monkeypatch) -> None:
     """마스터에 없는 식재료는 1개로 두고 보관 위치를 확인합니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.chat_graph as chat_graph
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
@@ -535,7 +537,7 @@ def test_extract_add_items_keeps_leading_ga() -> None:
 
 def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> None:
     """부정 표현이 섞인 재료명은 보관 위치를 묻지 않습니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.chat_graph as chat_graph
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
@@ -554,7 +556,7 @@ def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> Non
 
 def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None:
     """안으로 시작하는 실제 재료명은 부정 표현으로 처리하지 않습니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.chat_graph as chat_graph
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)

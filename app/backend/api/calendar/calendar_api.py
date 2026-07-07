@@ -112,8 +112,13 @@ def _daily_event_keys(user_id: int, target_date: date) -> set[str]:
 def _event_key_belongs_to_user(event_key: str, user_id: int) -> bool:
     return any(
         event_key.startswith(f"{prefix}-{user_id}-")
-        for prefix in ("ingredient-expiry", "today-menu", "recipe-delete", "receipt-cost")
+        for prefix in ("ingredient-expiry", "today-menu", "recipe-delete", "receipt-cost", "calendar-agent")
     )
+
+
+def _bobbeori_event_key(item: dict) -> str | None:
+    value = item.get("extendedProperties", {}).get("private", {}).get("bobbeoriKey")
+    return value if isinstance(value, str) else None
 
 
 def _log_calendar_event(
@@ -445,6 +450,9 @@ async def list_google_calendar_events(
     for item in response.json().get("items", []):
         if item.get("status") == "cancelled":
             continue
+        event_key = _bobbeori_event_key(item)
+        if not event_key or not _event_key_belongs_to_user(event_key, current_user_id):
+            continue
         start = item.get("start", {})
         date_key = start.get("date") or start.get("dateTime", "")[:10]
         if date_key:
@@ -455,6 +463,7 @@ async def list_google_calendar_events(
                     "title": item.get("summary") or "제목 없는 일정",
                     "colorId": item.get("colorId"),
                     "htmlLink": item.get("htmlLink"),
+                    "eventKey": event_key,
                 }
             )
 
