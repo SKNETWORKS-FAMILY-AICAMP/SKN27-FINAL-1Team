@@ -28,6 +28,8 @@ services:
                 "--reload",
                 "--reload-dir",
                 "/project/app/backend",
+                "--reload-dir",
+                "/project/ai",
             ]
         depends_on:
             postgres:

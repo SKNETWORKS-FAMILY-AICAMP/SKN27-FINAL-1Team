@@ -18,7 +18,7 @@ def test_chat_api_returns_legacy_chat_contract(monkeypatch):
             "sources": [],
         }
 
-    monkeypatch.setattr(chat_api.chat_service, "handle_message", fake_handle_message)
+    monkeypatch.setattr(chat_api.supervisor_service, "handle_message", fake_handle_message)
 
     response = client.post(
         "/api/v1/chat",
