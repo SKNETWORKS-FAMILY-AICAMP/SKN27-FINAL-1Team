@@ -185,6 +185,80 @@ def test_calendar_action_routes_to_alarm() -> None:
     assert router_node(state)["intent"] == "alarm.calendar"
 
 
+def test_calendar_delete_routes_to_alarm() -> None:
+    """일정 삭제 요청은 냉장고 삭제가 아니라 알람 에이전트로 보냅니다."""
+    state = {"text": "장보기 일정 삭제해줘", "service": FakeService("general"), "history": []}
+
+    assert router_node(state)["intent"] == "alarm.calendar"
+
+
+def test_supervisor_calendar_lookup_stays_lookup(monkeypatch) -> None:
+    """등록된 일정 조회 문장은 생성이 아니라 조회 의도로 넘깁니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "캘린더 일정을 조회했어요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    for text in ("내일 등록된 일정 있어?", "등록된 일정 조회"):
+        supervisor_agent.alarm_agent_node({
+            "db": MagicMock(),
+            "user_id": 1,
+            "text": text,
+            "intent": "alarm.calendar",
+        })
+        assert captured["intent"] == "calendar.list"
+
+
+
+
+def test_supervisor_calendar_list_shows_events(monkeypatch) -> None:
+    """캘린더 조회 결과가 있으면 일정 목록을 말풍선에 보여줍니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    def fake_run_alarm_agent(**kwargs):
+        return {
+            "intent": "calendar.list",
+            "message": "캘린더 일정을 조회했어요.",
+            "data": {"events": [{"dateKey": "2026-07-08", "title": "장보기"}]},
+        }
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 등록된 일정 있어?",
+        "intent": "alarm.calendar",
+    })
+
+    assert result["response_text"] == "등록된 일정이에요.\n2026-07-08 - 장보기"
+
+
+def test_supervisor_calendar_delete_is_not_executed(monkeypatch) -> None:
+    """자연어 일정 삭제는 event_key 없이 실행하지 않습니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    def fail_run_alarm_agent(**kwargs):
+        raise AssertionError("일정 삭제는 알람 도구를 바로 호출하면 안 됩니다.")
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fail_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 장보기 일정 삭제해줘",
+        "intent": "alarm.calendar",
+    })
+
+    assert result["response_text"] == "일정 삭제는 정확한 일정 선택이 필요해요. 등록된 일정을 확인한 뒤 캘린더 화면에서 삭제해주세요."
+    assert result["actions"] == [{"label": "캘린더 확인하기", "url": "/mypage"}]
+
+
 def test_confirm_and_cancel_route_to_mcp() -> None:
     """확인/취소 버튼으로 돌아온 내부 메시지는 MCP 노드에서 처리합니다."""
     assert router_node({"text": "확인:add_ingredient:감자:1.0:냉장", "service": FakeService("general"), "history": []})["intent"] == "mcp.confirm"

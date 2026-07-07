@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.backend.services.inventory_service.inventory_service import inventory_service
-from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text, _get_josa
+from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text
 from ai.agents.inventory_agent.inventory_utils import (
     _inventory_refresh_action,
     _extract_expiry_keyword,
@@ -118,7 +118,10 @@ def is_inventory_empty(db: Session, user_id: int) -> bool:
     return len(items) == 0
 
 def _unknown_add_response(items: list[dict], db: Session) -> dict | None:
+    """마스터에 없는 식재료명을 추가 플로우로 넘길지 판단합니다."""
     for item in items:
+        if _normalize_text(item["name"]) in {"안녕", "하이", "hello", "hi"}:
+            return {"response_text": "올바른 식재료명을 입력해주세요."}
         if not resolve_ingredient_name(db, item["name"]):
             return {"response_text": f"'{item['name']}'의 수량을 알려주시겠어요? (예: {item['name']} 1개)"}
     return None

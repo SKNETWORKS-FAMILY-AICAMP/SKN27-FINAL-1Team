@@ -28,8 +28,6 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _recipe_actions,
     _rank_recipe_items,
     _apply_josa,
-    _extract_expiry_keyword,
-    _format_d_day,
     _is_guide_result_match,
     _keyword_tokens,
     _format_guide_tip
@@ -57,18 +55,6 @@ class ChatService:
             reply = "현재 로그인된 상태예요." if user_id else "현재 비로그인 상태예요. 보관법이나 일반 레시피 검색은 이용할 수 있어요."
             return {"intent": "auth.status", "reply": reply, "actions": [], "sources": []}
             
-        from langchain_core.messages import HumanMessage, AIMessage
-        
-        # 멀티턴 대응: 이전 대화 기록을 LangChain Messages 형식으로 변환
-        langchain_messages = []
-        if history:
-            for msg in history[-4:]: # 최근 4개 메시지
-                if msg.role == 'user':
-                    langchain_messages.append(HumanMessage(content=msg.text))
-                elif msg.role == 'bot':
-                    langchain_messages.append(AIMessage(content=msg.text))
-        langchain_messages.append(HumanMessage(content=text))
-        
         # 초기 상태(GraphState) 구성
         from ai.agents.supervisor_agent.supervisor_agent import supervisor_agent
         initial_state = {
@@ -80,7 +66,6 @@ class ChatService:
             "service": self,
             "intent": None,
             "keyword": None,
-            "messages": langchain_messages,
             "response_text": None,
             "actions": [],
             "sources": []
