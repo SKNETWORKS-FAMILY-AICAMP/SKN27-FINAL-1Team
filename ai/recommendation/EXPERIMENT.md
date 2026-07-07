@@ -143,11 +143,101 @@ python ai/recommendation/main.py
 
 ---
 
-# 02. 재료 feature 확장 실험
+# 02. 재료 전처리 수정 — others 재매칭·기본재료 분리
+
+`recipe_ingredient_alias.csv`의 `others_count` / `others_ratio` feature가 왜곡되지 않도록, alias 카탈로그 갱신분 반영과 기본재료(물) 분리를 **LLM 재실행 없이** 오프라인 보정한 작업입니다.
+
+**상태:** 전처리·CSV·Neo4j·ML 배치 **반영 완료**. 본 수정은 feature 스케일만 바꾸며 모델·split·feature 개수는 동일(13개).
+
+---
+
+## 1. 작업 일지
+
+| 순서 | 일시 (KST) | 내용 |
+|------|------------|------|
+| 1 | 2026-07-07 — | `nodes_alias.csv` 확장분(버터·피망·양송이버섯 등) 대비 `--rematch-others` 실행. 1,460행·2,078건 승격 |
+| 2 | 2026-07-07 — | 기본재료 `물`을 `others_items` → `basic_items` 분리 (`--extract-basic`). 981행·1,050건 이동 |
+| 3 | 2026-07-07 — | Neo4j `basicItems` 속성 적재, `python -m ai.recommendation.main` 재실행 |
+
+---
+
+## 2. 배경
+
+- **others 재매칭:** 초기 LLM 배치 시 `nodes_alias.csv`에 없던 재료가 `others_items`에 남음. 이후 alias 추가 후에도 CSV는 갱신되지 않은 상태.
+- **기본재료 분리:** 런타임은 `recommend_config` + `basic_ingredient_normalized()`로 `물`을 항상 보유 처리(`52`). ETL 산출물에는 물이 others에 ~1,050건 포함되어 `others_count` feature가 과대 계상됨.
+
+---
+
+## 3. 전처리 변경 요약
+
+| 단계 | CLI | 입력·규칙 | 결과 |
+|------|-----|-----------|------|
+| alias 승격 | `--rematch-others` | `others_items[].name` ↔ `nodes_alias.name` **exact key** (`_match_key`) | `aliases_matched` 추가, others 감소 |
+| 기본재료 분리 | `--extract-basic` | `is_basic_ingredient(name\|raw)` — `recommend_config`와 동일 | `basic_items` / `basic_count` 신설, others에서 제거 |
+
+**스키마 추가:** `basic_items` (JSON), `basic_count` (int). `ingredients_normalized`에는 물 유지.
+
+**판정 예 (물):** `물`, `물 1200ml` → basic · `뜨거운 물`, `계란물` → others 유지 (suffix 규칙 비활성).
+
+**구현:** `etl/recipe/preprocessing_by_llm/normalize_recipe_ingredients_by_llm.py` — `assemble_result()` 생성 시 분기 + 기존 CSV 마이그레이션 CLI.
+
+---
+
+## 4. CSV 집계 변화
+
+| 지표 | LLM 초기 (대략) | rematch 후 | basic 분리 후 |
+|------|-----------------|------------|---------------|
+| others 항목 합계 | 3,885 | ~1,807 | **757** |
+| basic 항목 합계 | — | — | **1,050** |
+| `others_count > 0` 레시피 | 2,179 | 1,380 | (동일) |
+
+검증 샘플 `RCP_SNO=7016816`: 물 → `basic_items`, `others_count=0`.
+
+---
+
+## 5. ML holdout 지표 변화 (`extra_trees`, feature 13개, split 동일)
+
+동일 `random_state=42`, 타깃·모델 변경 없음. **재료 파생 4개(`others_count`, `others_ratio`, `alias_match_ratio`, 간접 `commonness`) 입력값만 변화.**
+
+| 시점 | RMSE | Spearman | Hit@10 | Hit@20 | Hit@50 |
+|------|------|----------|--------|--------|--------|
+| 베이스라인 (2026-07-06, 전처리 전) | 2.02 | 0.131 | 0.20 | 0.25 | 0.50 |
+| alias rematch 후 | 2.04 | 0.140 | — | — | — |
+| basic 분리 후 (2026-07-07) | **2.07** | **0.145** | 0.10 | 0.20 | 0.48 |
+
+- RMSE는 소폭 상승, Spearman은 소폭 상승 — 절대 오차·순위 지표가 동시에 좋아지는 패턴은 아님.
+- Hit@K는 holdout 113건 기준 변동 폭이 큼 — 전처리 효과 판단은 **Spearman + others 분포 정상화**를 우선 봄.
+- **해석:** `others_count`가 “진짜 미매칭”에 가깝게 정리됨 → 실험 03(재료 feature 확장)의 사전 전제 충족. ETL 공식·모델 교체는 아직 없음.
+
+---
+
+## 6. 재현
+
+```bash
+python -m etl.recipe.preprocessing_by_llm.normalize_recipe_ingredients_by_llm --rematch-others
+python -m etl.recipe.preprocessing_by_llm.normalize_recipe_ingredients_by_llm --extract-basic
+python -m etl.recipe.load_to_neo4j
+python -m ai.recommendation.main
+```
+
+---
+
+## 7. 참고 (코드·문서)
+
+| 항목 | 위치 |
+|------|------|
+| 기본재료 판정 (공유) | `recommend_config.py` — `basic_ingredient_normalized`, `is_basic_ingredient` |
+| ETL·CLI | `normalize_recipe_ingredients_by_llm.py` |
+| Neo4j | `load_to_neo4j/loader.py` — `basicItems` |
+| ideaVault | `54_recipe_ingredient_alias_rematch_basic.md`, `52_basic_ingredient.md` (ETL 확장) |
+
+---
+
+# 03. 재료 feature 확장 실험
 
 베이스라인(실험 01 이후 코드 복원 상태)의 **현재 ML feature 13개**를 점검하고, 재료 파생 feature를 단계적으로 추가·스크리닝하는 실험입니다.
 
-**상태:** 준비 중 — 본 섹션은 feature 재점검 및 사전 분석용. 코드 변경·지표 비교는 이후 단계.
+**상태:** 진행 중 — **실험 02(재료 전처리 보정) 완료 후** `others_count` 분포가 정리된 상태에서 feature 스크리닝·ablation 예정.
 
 ---
 
@@ -155,9 +245,10 @@ python ai/recommendation/main.py
 
 | 순서 | 일시 (KST) | 내용 |
 |------|------------|------|
-| 1 | 2026-07-07 — | 실험 02 착수. 베이스라인 feature 13개 목록·산출·전처리 정리 (본 문서 §2~§4) |
-| 2 | (예정) | labeled 563건 기준 feature별 Spearman·중복 상관 스크리닝 |
-| 3 | (예정) | 후보 재료 feature 2~3개씩 ablation 후 `evaluation_report.json` 비교 |
+| 1 | 2026-07-07 — | 실험 03 착수. 베이스라인 feature 13개 목록·산출·전처리 정리 (본 문서 §2~§4) |
+| 2 | 2026-07-07 — | **선행 완료:** 실험 02 — alias rematch + 기본재료 분리 → `others_count` 합계 757, Spearman 0.145 |
+| 3 | (예정) | labeled 563건 기준 feature별 Spearman·중복 상관 스크리닝 |
+| 4 | (예정) | 후보 재료 feature 2~3개씩 ablation 후 `evaluation_report.json` 비교 |
 
 ---
 
@@ -170,7 +261,7 @@ python ai/recommendation/main.py
 | split | `train_test_split` 0.2 → train 450 / test 113 |
 | feature 수 | **13** (카테고리 5 + 수치 2 + 재료 6) |
 | 입력 CSV | `recipe_fix.csv` + `recipe_ingredient_alias.csv` (`data_loader.load_and_merge`) |
-| 베이스라인 지표 | RMSE 2.02, Spearman 0.131, Hit@10 0.20, Hit@20 0.25, Hit@50 0.50 (2026-07-06 17:37 KST) |
+| 베이스라인 지표 | RMSE 2.02, Spearman 0.131 (2026-07-06) → **전처리 후** RMSE 2.07, Spearman 0.145 (2026-07-07, 실험 02) |
 
 ### 2.1. 파이프라인 흐름
 
@@ -216,7 +307,7 @@ recipe_fix + recipe_ingredient_alias (merge)
 
 ### 3.3. 재료 파생 (6)
 
-`recipe_ingredient_alias.csv`의 `ingredients_normalized`, `others_count`, `others_items` 사용.  
+`recipe_ingredient_alias.csv`의 `ingredients_normalized`, `others_count`, `others_items`, **`basic_count`**, **`basic_items`** 사용.  
 `ingredients_normalized` 형식: `[[이름, 양, 단위], ...]` (JSON/리터럴 문자열).
 
 | # | feature | 원본·입력 | 산출 방법 | 의미 | ML 전처리 | impute |
@@ -243,13 +334,13 @@ merge 후 DataFrame에 있으나 **의도적으로 feature에서 제외**된 항
 | `REVIEW_STAR_NORM_AVG`, `REVIEW_SENTIMENT_AVG` | 리뷰 품질 — 라벨 없는 행에 없음 | △ 라벨 있는 행만 |
 | `INQ_CNT`, `SRAP_CNT`, `INQ_CNT_RATE`, `INQ_CNT_LOG`, `SRAP_CNT_LOG` | 인기·트래픽 (실험 01에서 타깃과 겹침 이슈) | ○ |
 | `INQ_CNT_LOG_CENTERED`, `SRAP_CNT_LOG_CENTERED` | 타깃 구성 요소 (현재 베이스라인 feature 아님) | ○ |
-| `ingredients_normalized`, `others_items`, `ingredients_raw`, `aliases_matched` | 재료 **원문** — 파생 feature로만 사용 | ○ |
+| `ingredients_normalized`, `others_items`, `basic_items`, `ingredients_raw`, `aliases_matched` | 재료 **원문** — 파생 feature로만 사용 | ○ |
 | `CKG_MTRL_CN` | 재료 원문 텍스트 (파싱 전) | ○ |
 | `RCP_SNO`, `CKG_NM` | ID·이름 (식별자) | ○ |
 
 ---
 
-## 5. 실험 02 예정 절차
+## 5. 실험 03 예정 절차
 
 1. **사전 스크리닝** (코드 변경 없음): labeled 563건에서 수치·재료 7개 ↔ `REVIEW_RANK_SCORE` Spearman, feature 간 상관(|ρ|>0.7) 표 작성.
 2. **후보 추가** (2~3개씩): 예) `commonness_min`, `commonness_max`, `rare_ingredient_ratio` — `features.py` + `config.py` 최소 수정.
