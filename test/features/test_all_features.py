@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 from ai.tools.fridge_mcp_tools import FRIDGE_MCP_TOOLS
-from app.backend.services import chat_graph
+from ai.agents.supervisor_agent import supervisor_agent
 from app.backend.services.calendar_mcp_client import _serverless_output
 from app.backend.services.inventory_service.inventory_service import inventory_service
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
@@ -10,8 +10,8 @@ from app.backend.services.receipt_ocr_service.receipt_ocr_service import Receipt
 
 def test_overall_feature_smoke_contracts():
     # Chatbot / supervisor-style routing
-    assert chat_graph.route_intent({"intent": "recipe.recommend"}) == "recipe_recommend_node"
-    assert chat_graph.route_intent({"intent": "mcp.calendar"}) == "mcp_agent_node"
+    assert supervisor_agent.route_intent({"intent": "recipe.recommend"}) == "recipe_recommend_node"
+    assert supervisor_agent.route_intent({"intent": "mcp.calendar"}) == "alarm_agent_node"
 
     # Fridge tool surface
     assert {"get_fridge_items", "add_fridge_item", "consume_fridge_item", "delete_fridge_item"}.issubset(

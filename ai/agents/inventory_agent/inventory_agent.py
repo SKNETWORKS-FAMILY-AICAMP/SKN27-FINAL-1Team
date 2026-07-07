@@ -2,11 +2,26 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.backend.services.inventory_service.inventory_service import inventory_service
-from ai.agents.supervisor_agent.chat_utils import (
+from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text, _get_josa
+from ai.agents.inventory_agent.inventory_utils import (
     _inventory_refresh_action,
-    _apply_josa,
     _extract_expiry_keyword,
-    _format_d_day
+    _format_d_day,
+    ADD_WORDS,
+    CONSUME_WORDS,
+    DEFAULT_STORAGE,
+    _extract_add_items,
+    _extract_delete_name,
+    _extract_consume_name,
+    _extract_storage,
+    _extract_quantity,
+    _quantity_text,
+    _confirm_action,
+    _pending_add_from_history,
+    _pending_add_many_from_history,
+    _pending_add_storage_from_history,
+    _pending_consume_from_history,
+    _storage_choice_response
 )
 
 logger = logging.getLogger(__name__)
@@ -101,3 +116,119 @@ def is_inventory_empty(db: Session, user_id: int) -> bool:
     """냉장고가 비어있는지 여부를 반환합니다."""
     items = inventory_service.get_ingredients(db=db, user_id=user_id)
     return len(items) == 0
+
+def _unknown_add_response(items: list[dict], db: Session) -> dict | None:
+    for item in items:
+        if not resolve_ingredient_name(db, item["name"]):
+            return {"response_text": f"'{item['name']}'의 수량을 알려주시겠어요? (예: {item['name']} 1개)"}
+    return None
+
+def _handle_inventory_action(text: str, db: Session, user_id: int) -> dict:
+    """식재료 추가/소비를 규칙 기반으로 처리합니다."""
+    normalized = _normalize_text(text)
+
+    if any(word in normalized for word in ADD_WORDS):
+        items = _extract_add_items(text)
+        
+        invalid_items = [item['name'] for item in items if not is_valid_ingredient(item['name'])]
+        if invalid_items:
+            return {"response_text": "올바른 식재료명을 입력해주세요."}
+
+        unknown_response = _unknown_add_response(items, db)
+        if unknown_response:
+            return unknown_response
+        if len(items) > 1:
+            if any(item["quantity"] is None for item in items):
+                return {"response_text": "각 식재료의 수량을 알려주시면 추가해드릴게요."}
+            payload = "|".join(f"{item['name']},{item['quantity']},{item['storage'] or DEFAULT_STORAGE}" for item in items)
+            summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'])}개" for item in items)
+            return {"response_text": f"{summary}를 냉장고에 추가할까요?", "actions": [_confirm_action("확인", f"확인:add_ingredients:{payload}"), _confirm_action("취소", "취소")]}
+        if len(items) == 1:
+            item = items[0]
+            if item["quantity"] is None:
+                return {"response_text": f"{item['name']}를 몇 개 추가하시겠어요?"}
+            if not item["storage"]:
+                return _storage_choice_response(item["name"], item["quantity"])
+            reply_text = f"{item['name']} {_quantity_text(item['quantity'])}개를 {item['storage']}에 추가할까요?"
+            command = f"확인:add_ingredient:{item['name']}:{item['quantity']}:{item['storage']}"
+            return {"response_text": reply_text, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+        return {"response_text": "어떤 식재료를 추가할까요? 식재료명과 수량을 함께 알려주세요."}
+
+    if any(word in normalized for word in CONSUME_WORDS):
+        name = _extract_consume_name(text)
+        if not name:
+            return {"response_text": "어떤 식재료를 소비 처리할까요?"}
+        quantity = _extract_quantity(text)
+        if quantity is None:
+            return {"response_text": f"{name}를 몇 개 소비할까요?"}
+        command = f"확인:consume_ingredient:{name}:{quantity}"
+        return {"response_text": f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?", "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+
+    return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
+
+def run_inventory_agent(intent: str, text: str, history: list, db: Session, user_id: int) -> dict:
+    """냉장고 에이전트의 단일 진입점입니다."""
+    if intent == "mcp.confirm":
+        parts = text.split(":")
+        if len(parts) >= 2:
+            return execute_inventory_action(parts[1], parts, db, user_id)
+        return {"response_text": "확인할 작업을 찾지 못했어요. 다시 요청해주세요."}
+
+    if intent == "inventory.list":
+        return {"response_text": get_inventory_list(db, user_id)}
+    
+    if intent == "inventory.expiring":
+        return {"response_text": get_expiring_inventory(db, user_id, text)}
+
+    if intent == "inventory.cancel" or intent == "mcp.cancel":
+        return {"response_text": "알겠습니다. 작업을 취소하겠습니다."}
+        
+    if intent == "inventory.delete" or intent == "mcp.delete":
+        name = _extract_delete_name(text)
+        if not name:
+            return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
+        reply = f"{name} 폐기 처리할까요?"
+        command = f"확인:delete_ingredient:{name}"
+        return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+
+    if intent == "inventory.pending_consume" or intent == "mcp.pending_consume":
+        name = _pending_consume_from_history(history) or ""
+        quantity = _extract_quantity(text) or 1
+        reply = f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?"
+        command = f"확인:consume_ingredient:{name}:{quantity}"
+        return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+
+    if intent == "inventory.pending_add_storage" or intent == "mcp.pending_add_storage":
+        pending = _pending_add_storage_from_history(history)
+        storage = _extract_storage(text) or DEFAULT_STORAGE
+        if not pending:
+            return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
+        name, quantity = pending
+        reply = f"{name} {_quantity_text(quantity)}개를 {storage}에 추가할까요?"
+        command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
+        return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+
+    if intent == "inventory.pending_add" or intent == "mcp.pending_add":
+        name = _pending_add_from_history(history) or ""
+        quantity = _extract_quantity(text) or 1
+        storage = _extract_storage(text)
+        if not storage:
+            return _storage_choice_response(name, quantity)
+        reply = f"{name} {_quantity_text(quantity)}개를 {storage}에 추가할까요?"
+        command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
+        return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
+
+    if intent == "inventory.pending_add_many_retry" or intent == "mcp.pending_add_many_retry":
+        return {"response_text": "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"}
+
+    if intent == "inventory.pending_add_many" or intent == "mcp.pending_add_many":
+        items = _extract_add_items(text)
+        payload = "|".join(f"{item['name']},{item['quantity'] or 1},{item['storage'] or DEFAULT_STORAGE}" for item in items)
+        summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'] or 1)}개" for item in items)
+        reply = f"{summary}를 냉장고에 추가할까요?"
+        return {"response_text": reply, "actions": [_confirm_action("확인", f"확인:add_ingredients:{payload}"), _confirm_action("취소", "취소")]}
+
+    if intent == "inventory.action" or intent == "mcp.inventory":
+        return _handle_inventory_action(text, db, user_id)
+
+    return {"response_text": "아직 지원하지 않는 냉장고 작업이에요."}

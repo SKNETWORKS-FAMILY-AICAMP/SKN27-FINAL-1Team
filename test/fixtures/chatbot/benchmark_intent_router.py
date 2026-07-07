@@ -14,11 +14,11 @@ load_dotenv(os.path.join(project_root, ".env"))
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from ai.agents.supervisor_agent.chat_graph import (
+from ai.agents.supervisor_agent.supervisor_agent import (
     CONFIRM_PREFIX, CANCEL_WORDS, CALENDAR_WORDS, ADD_WORDS, DELETE_WORDS, 
     CONSUME_WORDS, EXPIRING_WORDS, INVENTORY_LIST_WORDS
 )
-from ai.agents.supervisor_agent.chat_utils import _normalize_text
+from ai.agents.supervisor_agent.supervisor_utils import _normalize_text
 from app.backend.core.config import settings
 
 # -----------------------------------------------------------------------------

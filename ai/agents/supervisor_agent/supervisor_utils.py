@@ -1,0 +1,198 @@
+from datetime import date, datetime, timedelta, time, timezone
+import re
+
+# 챗봇 기본 응답 문구
+LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
+GENERAL_REPLY = "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"
+CANCEL_REPLY = "알겠습니다. 작업을 취소하겠습니다."
+
+# 확인/취소 액션 키워드
+CONFIRM_PREFIX = "확인:"
+CANCEL_WORDS = ("취소", "아니", "아니요", "취소할게", "안넣어", "넣지마", "추가하지마")
+
+# 의도 분류용 키워드
+
+
+# 식재료 입력 파싱용 기본값
+
+
+
+def _normalize_text(text: str) -> str:
+    """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
+    return text.replace(" ", "").lower()
+
+def _get_josa(word: str, josa_with_jongseong: str, josa_without_jongseong: str) -> str:
+    """단어의 마지막 글자 받침 유무에 따라 적절한 조사를 반환합니다."""
+    if not word: return josa_with_jongseong
+    last_char = word[-1]
+    if '가' <= last_char <= '힣':
+        has_jongseong = (ord(last_char) - ord('가')) % 28 > 0
+        return josa_with_jongseong if has_jongseong else josa_without_jongseong
+    return josa_with_jongseong
+
+
+def _confirm_action(label: str, command: str) -> dict:
+    """쓰기 작업 전 사용자 확인 버튼을 만듭니다."""
+    return {"label": label, "data": {"message": command}}
+
+
+
+
+from typing import Any
+
+def _extract_keyword(text: str) -> str:
+    cleaned = re.sub(
+        r"(먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|세척법|세척방법|세척|씻|손질법|손질방법|손질|신선도|확인법|확인|어떻게|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|좀|해먹을|만들)",
+        " ",
+        text,
+    )
+    words = [word.strip() for word in cleaned.split() if word.strip() and word.strip() not in ("내", "제", "나", "어떤", "무슨", "이", "그", "저", "이런", "그런", "저런", "수", "있어", "있어?", "있나요", "있나요?")]
+    return words[0] if words else text.strip()
+
+def _extract_recipe_ingredient(text: str) -> str:
+    match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+?)(?:으로|로).*(?:뭐|뭘|무엇|메뉴|레시피|요리|만들|추천)", text)
+    if not match:
+        match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+?)\s*(?:빨리|먼저|써야|처리).*(?:뭐|뭘|무엇|메뉴|레시피|요리|추천|하지)", text)
+    if not match:
+        match = re.search(r"^\s*(?:먹다\s*남은|먹다남은|남은)?\s*([가-힣A-Za-z0-9]+?)\s*(?:어디에\s*)?(?:쓸\s*수|쓸수|활용|처리)", text)
+    if not match:
+        return ""
+    keyword = match.group(1).strip()
+    if keyword in ("걸", "있는", "이걸", "이것", "그걸", "그것", "재료", "식재료", "보유재료", "냉장고", "내", "제", "나", "내식재료", "제식재료", "남은거"):
+        return ""
+    return _normalize_recipe_keyword(keyword)
+
+def _normalize_recipe_keyword(keyword: str) -> str:
+    aliases = {"파": "대파"}
+    return aliases.get(keyword, keyword)
+
+def _recipe_actions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for item in items[:3]:
+        recipe_id = item.get("recipe_id")
+        title = item.get("title")
+        if not recipe_id or not title:
+            continue
+        actions.append({"label": title, "url": f"/recipes/{recipe_id}", "data": {"recipe_id": recipe_id, "title": title}})
+    return actions
+
+def _rank_recipe_items(keyword: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_keyword = keyword.replace(" ", "")
+    def score(item: dict[str, Any]) -> tuple[int, int, int]:
+        title = (item.get("title") or "").replace(" ", "")
+        difficulty = item.get("difficulty") or ""
+        cooking_time = item.get("cooking_time_min") or 9999
+        return (
+            0 if normalized_keyword and normalized_keyword in title else 1,
+            0 if difficulty == "초급" else 1,
+            int(cooking_time),
+        )
+    return sorted(items, key=score)
+
+def _apply_josa(word: str, josa_type: str) -> str:
+    if not word: return ""
+    last_char = word[-1]
+    if not ('가' <= last_char <= '힣'):
+        return word + ("가" if josa_type == "이가" else "는" if josa_type == "은는" else "를")
+    has_jongseong = (ord(last_char) - 44032) % 28 > 0
+    if josa_type == "이가":
+        return word + ("이" if has_jongseong else "가")
+    elif josa_type == "은는":
+        return word + ("은" if has_jongseong else "는")
+    elif josa_type == "을를":
+        return word + ("을" if has_jongseong else "를")
+    elif josa_type == "과와":
+        return word + ("과" if has_jongseong else "와")
+    return word
+
+def _extract_expiry_keyword(text: str) -> str:
+    match = re.search(r"([가-힣A-Za-z0-9]+)\s*(?:유통기한|소비기한|기한)", text)
+    if not match:
+        match = re.search(r"^\s*(?:먹다\s*남은|먹다남은|남은)?\s*([가-힣A-Za-z0-9]+?)\s*(?:어디에\s*)?(?:쓸\s*수|쓸수|활용|처리)", text)
+    if not match:
+        return ""
+    keyword = match.group(1).strip()
+    if keyword in ("재료", "냉장고", "오늘"):
+        return ""
+    return keyword
+
+def _format_d_day(d_day: int) -> str:
+    if d_day > 0:
+        return f"D-{d_day}"
+    if d_day == 0:
+        return "D-Day"
+    return f"D+{abs(d_day)} 지남"
+
+
+
+
+
+
+
+def _is_login_status_question(text: str) -> bool:
+    """사용자가 현재 로그인 상태를 묻는 문장인지 확인합니다."""
+    normalized = text.replace(" ", "").lower()
+    return "로그인" in normalized and any(word in normalized for word in ("되어", "됐", "되있", "상태", "했", "했어"))
+
+def _requires_login(intent: str, text: str) -> bool:
+    """개인 냉장고 데이터가 필요한 챗봇 의도인지 확인합니다."""
+    normalized = text.replace(" ", "").lower()
+    personal_recipe_words = ("내식재료", "내재료", "보유식재료", "보유재료", "냉장고재료", "있는걸로", "이걸로")
+    if intent in ("inventory.list", "inventory.expiring"):
+        return True
+    if intent == "recipe.recommend" and any(word in normalized for word in personal_recipe_words):
+        return True
+    if intent == "recipe.recommend" and not _extract_recipe_ingredient(text):
+        return True
+    return False
+
+def _is_cooking_time_question(text: str) -> bool:
+    """조리 시간이나 온도를 묻는 질문인지 확인합니다."""
+    normalized = text.replace(" ", "").lower()
+    return any(word in normalized for word in ("에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간"))
+
+def _is_expiring_question(text: str) -> bool:
+    """소비기한 임박 재료를 묻는 질문인지 먼저 확인합니다."""
+    normalized = text.replace(" ", "").lower()
+    return any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이"))
+
+def _is_guide_result_match(keyword: str, guide_name: str) -> bool:
+    normalized_keyword = keyword.replace(" ", "").lower()
+    normalized_name = guide_name.replace(" ", "").lower()
+    aliases = {"파": {"대파", "쪽파", "실파"}, "계란": {"달걀"}, "달걀": {"계란"}}
+    if normalized_keyword == normalized_name or normalized_name in aliases.get(normalized_keyword, set()):
+        return True
+    if len(normalized_keyword) <= 1:
+        return False
+    misleading_suffixes = ("소스", "가루", "분말", "즙", "청", "오일", "잼", "스톡")
+    if normalized_name.startswith(normalized_keyword) and normalized_name.endswith(misleading_suffixes):
+        return False
+    if normalized_name.startswith(normalized_keyword) and any(suffix in normalized_name for suffix in misleading_suffixes):
+        return False
+    return normalized_keyword in normalized_name or normalized_name in normalized_keyword
+
+def _keyword_tokens(keyword: str) -> list[str]:
+    stopwords = {"먹다남은", "남은", "먹다", "보관", "보관법", "보관방법", "세척", "세척법", "세척방법", "손질", "손질법", "손질방법", "신선도", "확인법", "알려줘", "식재료", "레시피", "어떡하지", "어떡해"}
+    return [
+        token
+        for token in re.findall(r"[가-힣A-Za-z0-9]+", keyword.lower())
+        if len(token) > 1 and token not in stopwords
+    ]
+
+def _format_guide_tip(tip: str) -> str:
+    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?。])\s+", tip) if sentence.strip()]
+    if len(sentences) <= 1:
+        sentences = [sentence.strip() for sentence in re.split(r"[;；]\s*", tip) if sentence.strip()]
+    if len(sentences) <= 1:
+        return sentences[0] if sentences else tip.strip()
+    return "\n".join(f"{index + 1}. {sentence}" for index, sentence in enumerate(sentences[:3]))
+
+def _is_relevant_search_result(keyword: str, item: dict[str, Any]) -> bool:
+    """검색 결과 제목/본문이 질문 핵심어와 맞는지 확인합니다."""
+    tokens = _keyword_tokens(keyword)
+    if not tokens:
+        return False
+    haystack = f"{item.get('title', '')} {item.get('content', '')}".lower()
+    words = _keyword_tokens(haystack)
+    primary = tokens[0]
+    return any(_is_guide_result_match(primary, word) for word in words)

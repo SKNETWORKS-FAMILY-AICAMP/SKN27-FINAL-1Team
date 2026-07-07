@@ -21,7 +21,7 @@ try:
 except ImportError:
     OpenAI = None
 
-from ai.agents.supervisor_agent.chat_utils import (
+from ai.agents.supervisor_agent.supervisor_utils import (
     _extract_keyword,
     _extract_recipe_ingredient,
     _normalize_recipe_keyword,
@@ -35,7 +35,7 @@ from ai.agents.supervisor_agent.chat_utils import (
     _format_guide_tip
 )
 
-from ai.agents.supervisor_agent.chat_utils import (
+from ai.agents.supervisor_agent.supervisor_utils import (
     _is_login_status_question,
     _requires_login,
     _is_cooking_time_question,
@@ -70,7 +70,7 @@ class ChatService:
         langchain_messages.append(HumanMessage(content=text))
         
         # 초기 상태(GraphState) 구성
-        from ai.agents.supervisor_agent.chat_graph import chat_graph
+        from ai.agents.supervisor_agent.supervisor_agent import supervisor_agent
         initial_state = {
             "user_id": user_id,
             "text": text,
@@ -88,7 +88,7 @@ class ChatService:
         
         # 그래프 실행
         try:
-            final_state = chat_graph.invoke(initial_state)
+            final_state = supervisor_agent.invoke(initial_state)
             intent = final_state.get("intent", "general")
             reply = final_state.get("response_text", "")
             actions = final_state.get("actions") or []
@@ -474,4 +474,4 @@ class ChatService:
         titles = [item["title"] for item in items]
         return prefix + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), _recipe_actions(items)
 
-chat_service = ChatService()
+supervisor_service = ChatService()
