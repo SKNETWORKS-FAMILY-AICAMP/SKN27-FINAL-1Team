@@ -1,6 +1,7 @@
 # 영수증 OCR 흐름의 핵심 동작(Neo4j 표준명 매칭, LangGraph 재분석, 확정 저장)을 검증하는 테스트 파일이다.
 # 실제 PostgreSQL/Neo4j/OpenAI 호출 없이 격리된 DB와 mock으로 서비스 계약만 확인한다.
 import asyncio
+import base64
 import importlib
 import io
 import os
@@ -33,6 +34,14 @@ from app.backend.schemas.receipts import ReceiptConfirmRequest
 from app.backend.core.config import settings
 from app.backend.services.ingredient_match_service import ingredient_name_matcher
 from app.backend.services.receipt_ocr_service.receipt_confirm_service import receipt_confirm_service
+from app.backend.services.receipt_ocr_service.privacy_masking import (
+    MASK_ADDRESS,
+    MASK_APPROVAL_NUMBER,
+    MASK_CARD_NUMBER,
+    MASK_PHONE_NUMBER,
+)
+from app.backend.services.receipt_ocr_service.receipt_history_service import receipt_history_service
+from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import KST, ReceiptOcrService
 
 
@@ -48,10 +57,9 @@ UNKNOWN_PRODUCT = "\ucc98\uc74c\ubcf4\ub294\uc0c1\ud488ABC"
 COLD_STORAGE = "\ub0c9\uc7a5"
 STORE_NAME = "\ud14c\uc2a4\ud2b8\ub9c8\ud2b8"
 TEST_PNG_BYTES = (
-    b"\x89PNG\r\n\x1a\n"
-    b"\x00\x00\x00\rIHDR"
-    b"\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x02\x00\x00\x00"
+    base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+    )
 )
 
 
@@ -177,6 +185,51 @@ def test_ocr_normalize_result_uses_neo4j_standard_name_or_raw_name_fallback(db_s
 
 
 # LangGraph OCR 품질 기준 미달 시 재분석을 1회 수행하고 개선된 결과를 저장하는지 이 테스트가 알려준다.
+def test_ocr_prompt_tells_model_not_to_extract_sensitive_values():
+    service = ReceiptOcrService()
+
+    prompt = service._build_prompt("receipt-test")
+
+    assert "Do not extract or include card numbers, approval numbers, phone numbers, or addresses" in prompt
+    assert "Do not copy them into store_name, raw_name, confidence_note" in prompt
+
+
+def test_ocr_normalize_result_masks_sensitive_values_before_response_or_db(db_session, neo4j_banana_candidates):
+    service = ReceiptOcrService()
+
+    normalized = service._normalize_ocr_result(
+        {
+            "image_id": "receipt-test",
+            "document_type": "receipt",
+            "is_receipt_like": True,
+            "store_name": "\ud14c\uc2a4\ud2b8\ub9c8\ud2b8 010-1234-5678",
+            "purchase_datetime": "2026-06-29 12:30:00",
+            "items": [
+                {
+                    "raw_name": "\ubc14\ub098\ub098 \uc2b9\uc778\ubc88\ud638 12345678",
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 2000,
+                }
+            ],
+            "total_item_count": 1,
+            "total_amount": 2000,
+            "currency": "KRW",
+            "confidence_note": "\uc8fc\uc18c: \uc11c\uc6b8\uc2dc \uac15\ub0a8\uad6c \ud14c\ud5e4\ub780\ub85c 123, card 4111-1111-1111-1111",
+        },
+        image_id="receipt-test",
+        db=db_session,
+    )
+
+    assert MASK_PHONE_NUMBER in normalized["store_name"]
+    assert "010-1234-5678" not in normalized["store_name"]
+    assert MASK_APPROVAL_NUMBER in normalized["items"][0]["raw_name"]
+    assert "12345678" not in normalized["items"][0]["raw_name"]
+    assert MASK_ADDRESS in normalized["confidence_note"]
+    assert MASK_CARD_NUMBER in normalized["confidence_note"]
+    assert "4111-1111-1111-1111" not in normalized["confidence_note"]
+
+
 def test_analyze_upload_retries_low_quality_ocr_result(
     db_session,
     monkeypatch,
@@ -188,9 +241,11 @@ def test_analyze_upload_retries_low_quality_ocr_result(
 
     service = ReceiptOcrService()
     calls = []
+    image_ids = []
 
     def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
         calls.append(retry_note)
+        image_ids.append(image_id)
         if len(calls) == 1:
             return {
                 "image_id": image_id,
@@ -215,10 +270,13 @@ def test_analyze_upload_retries_low_quality_ocr_result(
 
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
-    upload = make_upload()
+    upload = make_upload(filename="receipt_010-1234-5678.png")
     result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
 
     assert len(calls) == 2
+    assert "010-1234-5678" not in image_ids[0]
+    assert MASK_PHONE_NUMBER in result["original_file_name"]
+    assert "010-1234-5678" not in result["original_file_name"]
     assert calls[0] is None
     assert "item_names_unclear" in calls[1]
     assert "many_item_amounts_missing" in calls[1]
@@ -227,6 +285,9 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     assert result["receipt_id"] is not None
     assert "receipt" not in Path(result["original_file_path"]).name
     assert Path(result["original_file_path"]).suffix == ".png"
+    saved_files = list((workspace_tmp_dir / "raw").rglob("*.png"))
+    assert len(saved_files) == 1
+    assert saved_files[0].name == Path(result["original_file_path"]).name
     assert result["quality_score"] == 1.0
     assert result["ocr_status"] == "completed"
 
@@ -398,6 +459,7 @@ def test_analyze_upload_requests_reupload_when_retry_stays_low_quality(db_sessio
     assert "item_names_unclear" in result["ocr_error_message"]
     assert "\uc601\uc218\uc99d" in result["reupload_message"]
     assert db_session.query(Receipt).count() == 0
+    assert list((workspace_tmp_dir / "raw").rglob("*.png")) == []
 
 
 # 영수증이 아닌 문서 이미지가 들어오면 OCR 저장 없이 재업로드 안내를 반환하는지 이 테스트가 알려준다.
@@ -436,9 +498,100 @@ def test_analyze_upload_requests_reupload_for_non_receipt_document(db_session, m
     assert "non_receipt_document" in result["receipt_validation_issues"]
     assert "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0\uac00 \uc544\ub2cc \uac83" in result["reupload_message"]
     assert db_session.query(Receipt).count() == 0
+    assert list((workspace_tmp_dir / "raw").rglob("*.png")) == []
+
+
+def test_analyze_upload_deletes_saved_file_when_ocr_raises(db_session, monkeypatch, workspace_tmp_dir):
+    user = seed_user(db_session, email="receipt-error@example.com", nickname="receipt error tester")
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
+
+    service = ReceiptOcrService()
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        raise RuntimeError("OCR provider unavailable")
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = make_upload()
+    with pytest.raises(RuntimeError):
+        asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+
+    assert db_session.query(Receipt).count() == 0
+    assert list((workspace_tmp_dir / "raw").rglob("*.png")) == []
 
 
 # 사용자가 확정한 품목이 Neo4j 표준명 기준으로 receipt_items, fridge_items, 확정 JSON에 저장되는지 이 테스트가 알려준다.
+def test_receipt_history_update_and_delete_reject_another_users_receipt(
+    db_session,
+    monkeypatch,
+    workspace_tmp_dir,
+):
+    owner = seed_user(db_session, email="receipt-owner@example.com", nickname="receipt owner")
+    other_user = seed_user(db_session, email="receipt-history-other@example.com", nickname="receipt history other")
+    upload_root = workspace_tmp_dir / "raw"
+    owner_dir = upload_root / str(owner.id)
+    owner_dir.mkdir(parents=True, exist_ok=True)
+    saved_file = owner_dir / "20260706_owner.png"
+    saved_file.write_bytes(TEST_PNG_BYTES)
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(upload_root))
+
+    receipt = Receipt(
+        user_id=owner.id,
+        original_file_name="owner-receipt.png",
+        original_file_path=str(saved_file),
+        store_name=STORE_NAME,
+    )
+    db_session.add(receipt)
+    db_session.flush()
+
+    assert receipt_history_service.get_recent_receipts(db=db_session, user_id=other_user.id) == []
+
+    with pytest.raises(Exception) as update_exc:
+        receipt_history_service.update_store_name(
+            db=db_session,
+            user_id=other_user.id,
+            receipt_id=receipt.id,
+            store_name="other user update",
+        )
+
+    with pytest.raises(Exception) as delete_exc:
+        receipt_history_service.delete_receipt(
+            db=db_session,
+            user_id=other_user.id,
+            receipt_id=receipt.id,
+        )
+
+    assert update_exc.value.status_code == 404
+    assert delete_exc.value.status_code == 404
+    db_session.refresh(receipt)
+    assert receipt.store_name == STORE_NAME
+    assert db_session.query(Receipt).filter(Receipt.id == receipt.id).one()
+    assert saved_file.exists()
+
+
+def test_receipt_file_delete_ignores_paths_outside_upload_storage(db_session, monkeypatch, workspace_tmp_dir):
+    user = seed_user(db_session, email="receipt-safe-delete@example.com", nickname="receipt safe delete")
+    upload_root = workspace_tmp_dir / "raw"
+    upload_root.mkdir(parents=True, exist_ok=True)
+    outside_file = workspace_tmp_dir / "outside-receipt.png"
+    outside_file.write_bytes(TEST_PNG_BYTES)
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(upload_root))
+
+    receipt = Receipt(
+        user_id=user.id,
+        original_file_name="outside-receipt.png",
+        original_file_path=str(outside_file),
+        store_name=STORE_NAME,
+    )
+    db_session.add(receipt)
+    db_session.flush()
+
+    receipt_history_service.delete_receipt(db=db_session, user_id=user.id, receipt_id=receipt.id)
+
+    assert db_session.query(Receipt).filter(Receipt.id == receipt.id).first() is None
+    assert outside_file.exists()
+
+
 def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(
     db_session,
     neo4j_banana_candidates,
@@ -488,6 +641,92 @@ def test_confirm_receipt_saves_neo4j_standard_name_to_receipt_and_fridge_items(
 
 
 # Neo4j 표준명 매칭이 실패한 확정 품목은 사용자가 확인한 원문명으로 저장되는지 이 테스트가 알려준다.
+def test_confirm_receipt_masks_sensitive_values_before_persisting(
+    db_session,
+    neo4j_banana_candidates,
+    mock_cold_storage_rule,
+):
+    user, receipt = seed_user_and_receipt(db_session)
+    request_data = ReceiptConfirmRequest(
+        receipt_id=receipt.id,
+        store_name=f"{STORE_NAME} 010-1234-5678",
+        purchase_datetime=None,
+        total_amount=3000,
+        calendar_cost_enabled=False,
+        items=[
+            {
+                "raw_name": f"{BANANA} 4111-1111-1111-1111",
+                "normalized_name": f"{BANANA} approval no 987654",
+                "quantity": 1,
+                "unit": EA,
+                "item_amount": 3000,
+                "storage_method": COLD_STORAGE,
+                "item_memo": "\uc8fc\uc18c: \uc11c\uc6b8\uc2dc \uac15\ub0a8\uad6c \ud14c\ud5e4\ub780\ub85c 123",
+            }
+        ],
+    )
+
+    receipt_confirm_service.save_confirmed_items(
+        db=db_session,
+        user_id=user.id,
+        request_data=request_data,
+    )
+
+    db_session.refresh(receipt)
+    receipt_item = db_session.query(ReceiptItem).one()
+
+    assert MASK_PHONE_NUMBER in receipt.store_name
+    assert "010-1234-5678" not in receipt.store_name
+    assert MASK_CARD_NUMBER in receipt_item.raw_name
+    assert "4111-1111-1111-1111" not in receipt_item.raw_name
+    assert "987654" not in receipt_item.normalized_name
+    assert receipt_item.normalized_name == BANANA
+    assert MASK_ADDRESS in receipt_item.item_memo
+    assert "\uc11c\uc6b8\uc2dc \uac15\ub0a8\uad6c" not in receipt_item.item_memo
+    assert MASK_PHONE_NUMBER in receipt.confirmed_result_json["store_name"]
+    assert MASK_CARD_NUMBER in receipt.confirmed_result_json["items"][0]["raw_name"]
+
+
+def test_confirm_receipt_rejects_receipt_owned_by_another_user(
+    db_session,
+    mock_cold_storage_rule,
+):
+    owner, receipt = seed_user_and_receipt(db_session)
+    other_user = seed_user(db_session, email="receipt-other@example.com", nickname="receipt other")
+    request_data = ReceiptConfirmRequest(
+        receipt_id=receipt.id,
+        store_name=STORE_NAME,
+        purchase_datetime=None,
+        total_amount=2000,
+        calendar_cost_enabled=False,
+        items=[
+            {
+                "raw_name": BANANA,
+                "normalized_name": BANANA,
+                "quantity": 1,
+                "unit": EA,
+                "item_amount": 2000,
+                "storage_method": COLD_STORAGE,
+                "item_memo": None,
+            }
+        ],
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        receipt_confirm_service.save_confirmed_items(
+            db=db_session,
+            user_id=other_user.id,
+            request_data=request_data,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert db_session.query(ReceiptItem).count() == 0
+    assert db_session.query(FridgeItem).count() == 0
+    db_session.refresh(receipt)
+    assert receipt.user_id == owner.id
+    assert receipt.confirmed_result_json is None
+
+
 def test_confirm_receipt_keeps_raw_name_when_no_neo4j_standard_name_matches(
     db_session,
     neo4j_banana_candidates,

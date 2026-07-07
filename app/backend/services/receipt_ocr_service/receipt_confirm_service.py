@@ -10,6 +10,7 @@ from app.backend.db.models import FridgeItem, Ingredient, IngredientAlias, Recei
 from app.backend.schemas.receipts import ReceiptConfirmRequest
 from app.backend.services.ingredient_match_service import ingredient_name_matcher
 from app.backend.services.inventory_service.inventory_service import inventory_service
+from app.backend.services.receipt_ocr_service.privacy_masking import mask_sensitive_text
 
 
 KST = timezone(timedelta(hours=9))
@@ -30,7 +31,7 @@ class ReceiptConfirmService:
         if not receipt:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found.")
 
-        receipt.store_name = request_data.store_name
+        receipt.store_name = mask_sensitive_text(request_data.store_name)
         receipt.purchased_at = self._parse_purchase_datetime(request_data.purchase_datetime)
         receipt.total_price = request_data.total_amount
 
@@ -41,16 +42,17 @@ class ReceiptConfirmService:
             .all()
         ]
         if existing_item_ids:
-            db.query(FridgeItem).filter(FridgeItem.receipt_item_id.in_(existing_item_ids)).delete(
-                synchronize_session=False
-            )
+            db.query(FridgeItem).filter(
+                FridgeItem.user_id == user_id,
+                FridgeItem.receipt_item_id.in_(existing_item_ids),
+            ).delete(synchronize_session=False)
             db.query(ReceiptItem).filter(ReceiptItem.id.in_(existing_item_ids)).delete(synchronize_session=False)
 
         saved_count = 0
         confirmed_items: List[Dict[str, Any]] = []
         for item in request_data.items:
-            raw_name = (item.raw_name or "").strip()
-            normalized_name = (item.normalized_name or raw_name).strip()
+            raw_name = (mask_sensitive_text(item.raw_name) or "").strip()
+            normalized_name = (mask_sensitive_text(item.normalized_name) or raw_name).strip()
             if not raw_name and not normalized_name:
                 continue
 
@@ -71,7 +73,7 @@ class ReceiptConfirmService:
                 unit=item.unit if item.unit in ALLOWED_UNITS else DEFAULT_UNIT,
                 item_amount=item.item_amount,
                 storage_method=item.storage_method,
-                item_memo=item.item_memo,
+                item_memo=mask_sensitive_text(item.item_memo),
             )
             db.add(receipt_item)
             db.flush()

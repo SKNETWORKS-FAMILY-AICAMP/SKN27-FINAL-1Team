@@ -42,7 +42,8 @@ root/
 │  │  │  ├─ inventory_service/      (김재묵 담당 / 냉장고 재고 처리 로직)
 │  │  │  ├─ receipt_ocr_service/    (박준희 담당 / OCR 결과 처리 로직)
 │  │  │  ├─ guide_service/          (김주영 담당 / 가이드 조회 로직)
-│  │  │  └─ recommendation_service/ (김경수 담당 / 추천 계산 로직)
+│  │  │  ├─ recommendation_service/ (김경수 담당 / 추천 계산 로직)
+│  │  │  └─ shopping_service/       (박준희 담당 / 부족 재료 가격 비교·구매 처리 로직)
 │  │  ├─ requirements.txt           (백엔드 Web용 의존성)
 │  │  └─ Dockerfile                 (백엔드 전용 빌드 명세서)
 │  │

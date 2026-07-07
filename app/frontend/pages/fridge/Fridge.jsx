@@ -4,6 +4,7 @@ import './Fridge.css'
 
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
+import imageDefaultIngredient from '../../assets/extracted/images/image_default_ingredient.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
@@ -75,7 +76,7 @@ const ingredientImages = Object.entries(
 function getIngredientIcon(name = '') {
   const key = normalizeIngredientImageKey(name)
   const image = ingredientImages.find((item) => item.key === key)
-  return image?.src || null
+  return image?.src || imageDefaultIngredient
 }
 
 // 날짜 문자열을 로컬 Date 객체로 변환합니다.

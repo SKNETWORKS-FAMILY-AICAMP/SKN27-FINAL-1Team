@@ -552,6 +552,9 @@ class InventoryService:
         if new_qty <= 0:
             target_item.status = "used"
             db.commit()
+            if current_qty < consume_qty:
+                display_current = int(current_qty) if current_qty == current_qty.to_integral() else current_qty
+                return f"냉장고에 {ingredient_name}{_object_particle(ingredient_name)} {display_current}개 남아있었지만, 요청하신 대로 전부 소비 완료(삭제) 처리했습니다."
             return f"{ingredient_name}{_object_particle(ingredient_name)} 전부 소비하여 냉장고에서 삭제(소비 완료) 처리했습니다."
         else:
             target_item.quantity = new_qty
