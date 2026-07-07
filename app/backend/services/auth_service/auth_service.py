@@ -34,13 +34,13 @@ class AuthService:
             # 소셜 제공자가 닉네임을 주지 않아도 users.nickname NOT NULL 제약을 만족하도록 기본값을 만듭니다.
             safe_nickname = nickname or (email.split("@")[0] if email else f"{provider}_user")
 
-            # 1. 기존 가입된 사용자인지 데이터베이스에서 조회 (provider와 provider_id 기준)
+            # 기존 가입된 사용자인지 데이터베이스에서 조회 (provider와 provider_id 기준)
             user = db.query(User).filter(
                 User.provider == provider, 
                 User.provider_id == provider_id
             ).first()
             
-            # 1-1. provider_id로는 못 찾았으나 동일한 이메일을 가진 계정이 있는지 조회 (이메일 통합 정책)
+            # provider_id로는 못 찾았으나 동일한 이메일을 가진 계정이 있는지 조회 (이메일 통합 정책)
             if not user and email:
                 user = db.query(User).filter(User.email == email).first()
                 if user:
@@ -52,9 +52,9 @@ class AuthService:
                     db.commit()
                     db.refresh(user)
 
-            # 2. 신규 사용자일 경우 (DB에 유저 정보가 없으면) 회원가입 처리 진행
+            #  신규 사용자일 경우 (DB에 유저 정보가 없으면) 회원가입 처리 진행
             if not user:
-                # 2-1. User 테이블에 신규 회원 레코드 추가
+                #  User 테이블에 신규 회원 레코드 추가
                 user = User(
                     provider=provider,
                     provider_id=provider_id,
@@ -70,7 +70,7 @@ class AuthService:
                 # 새롭게 생성된 DB의 최신 상태를 객체에 동기화(refresh)
                 db.refresh(user)
                 
-            # 3. 자체 JWT Access Token 생성 (유저 ID를 subject로 담음)
+            # 자체 JWT Access Token 생성 (유저 ID를 subject로 담음)
             access_token = create_access_token(subject=str(user.id))
             return access_token
 
