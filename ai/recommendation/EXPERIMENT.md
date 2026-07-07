@@ -1058,3 +1058,41 @@ Hit@10·50도 낮아져 채택하지 않았습니다. 명시적 결합 카테고
 표본과 ExtraTrees에서는 재료·카테고리·인기 신호 이후의 추가 설명력을 안정적으로
 분리하지 못한다는 뜻입니다. 상세 수치는
 `artifacts/exp11_complexity_feature_results.json`에 보존했습니다.
+
+---
+
+# 12. 조회수-스크랩 관계 feature 실험 (롤백)
+
+## 1. 실험 내용
+
+기존 popularity 신호인 `INQ_CNT_LOG_CENTERED`, `SRAP_CNT_LOG_CENTERED`에
+관계형 feature 2개를 추가해 성능 변화를 확인했습니다.
+
+- `scrap_per_view = SRAP_CNT / (INQ_CNT + 1)`
+- `scrap_view_log_gap = log1p(SRAP_CNT) - log1p(INQ_CNT)`
+
+비교 기준은 기존과 동일한 `random_state=42`, holdout 450/113 및
+Stratified 5-fold 보조 검증입니다.
+
+## 2. 결과 요약
+
+| 지표 | baseline | 추가 후 | 변화 |
+|------|----------|----------|------|
+| Holdout Spearman | 0.2837 | 0.2451 | 하락 |
+| Holdout Hit@10 | 0.20 | 0.10 | 하락 |
+| Holdout Hit@20 | 0.30 | 0.25 | 하락 |
+| Holdout Hit@50 | 0.60 | 0.62 | 소폭 상승 |
+| CV mean Spearman | 0.1359 | 0.1016 | 하락 |
+| CV mean Hit@10 | 0.10 | 0.08 | 하락 |
+| CV mean Hit@20 | 0.19 | 0.18 | 하락 |
+| CV mean Hit@50 | 0.516 | 0.480 | 하락 |
+
+RMSE/MAE/R²는 일부 개선됐지만, 본 실험의 1차 판정 기준인 rank 지표
+(Spearman, Hit@K)에서 일관된 개선이 없어서 채택하지 않았습니다.
+
+## 3. 결정
+
+- production feature에는 **미반영**
+- 관련 코드/산출물은 모두 **롤백**
+- 결론: 현재 데이터/모델(ExtraTrees) 기준으로 조회수-스크랩 관계 feature는
+  순위 품질 개선 신호로 충분하지 않음
