@@ -41,6 +41,16 @@ class Settings:
     NAVER_CLIENT_ID: str = os.getenv("NAVER_CLIENT_ID", "")
     NAVER_CLIENT_SECRET: str = os.getenv("NAVER_CLIENT_SECRET", "")
     NAVER_REDIRECT_URI: str = os.getenv("NAVER_REDIRECT_URI", "")
+
+    # Naver Shopping Search API Settings
+    NAVER_SHOPPING_CLIENT_ID: str = os.getenv("NAVER_SHOPPING_CLIENT_ID", NAVER_CLIENT_ID)
+    NAVER_SHOPPING_CLIENT_SECRET: str = os.getenv("NAVER_SHOPPING_CLIENT_SECRET", NAVER_CLIENT_SECRET)
+    NAVER_SHOPPING_API_URL: str = os.getenv(
+        "NAVER_SHOPPING_API_URL",
+        "https://openapi.naver.com/v1/search/shop.json",
+    )
+    NAVER_SHOPPING_DISPLAY: int = int(os.getenv("NAVER_SHOPPING_DISPLAY", 1))
+    NAVER_SHOPPING_TIMEOUT_SECONDS: int = int(os.getenv("NAVER_SHOPPING_TIMEOUT_SECONDS", 5))
     
     # Google OAuth Settings
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
