@@ -31,21 +31,21 @@ def router_node(state: GraphState) -> dict:
     history = state.get("history", [])
 
     if normalized.startswith(CONFIRM_PREFIX):
-        return {"intent": "mcp.confirm"}
+        return {"intent": "action.confirm"}
     if normalized in CANCEL_WORDS:
-        return {"intent": "mcp.cancel"}
+        return {"intent": "action.cancel"}
 
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
-            return {"intent": "mcp.pending_add_many"}
+            return {"intent": "inventory.pending_add_many"}
         if _is_quantity_only_list(text):
-            return {"intent": "mcp.pending_add_many_retry"}
+            return {"intent": "inventory.pending_add_many_retry"}
     if _pending_add_storage_from_history(history) and _extract_storage(text):
-        return {"intent": "mcp.pending_add_storage"}
+        return {"intent": "inventory.pending_add_storage"}
     if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
-        return {"intent": "mcp.pending_add"}
+        return {"intent": "inventory.pending_add"}
     if _pending_consume_from_history(history) and _extract_quantity(text):
-        return {"intent": "mcp.pending_consume"}
+        return {"intent": "inventory.pending_consume"}
 
     # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
     if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
@@ -58,13 +58,13 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "alarm.calendar"}
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
-        return {"intent": "mcp.delete"}
-    if any(word in normalized for word in CONSUME_WORDS):
-        return {"intent": "mcp.inventory"}
-    if any(word in normalized for word in ADD_WORDS):
-        return {"intent": "mcp.inventory"}
+        return {"intent": "inventory.delete"}
     if any(word in normalized for word in EXPIRING_WORDS):
         return {"intent": "inventory.expiring"}
+    if any(word in normalized for word in CONSUME_WORDS):
+        return {"intent": "inventory.action"}
+    if any(word in normalized for word in ADD_WORDS):
+        return {"intent": "inventory.action"}
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return {"intent": "inventory.list"}
 
@@ -93,7 +93,7 @@ def inventory_agent_node(state: GraphState) -> dict:
     from ai.agents.inventory_agent.inventory_agent import run_inventory_agent
     
     intent = state.get("intent", "")
-    if (intent.startswith("inventory.") or intent.startswith("mcp.")) and not state.get("user_id"):
+    if (intent.startswith("inventory.") or intent.startswith("action.")) and not state.get("user_id"):
         return {"response_text": LOGIN_REQUIRED_REPLY}
         
     return run_inventory_agent(
@@ -137,7 +137,7 @@ def alarm_agent_node(state: GraphState) -> dict:
     
     intent = state.get("intent", "")
     text = state["text"]
-    confirmed = (intent == "mcp.confirm")
+    confirmed = (intent == "action.confirm")
 
     # 챗봇 프론트에서 들어온 '확인' 액션일 경우 파싱 (기존 동작 호환)
     action = None
@@ -233,10 +233,10 @@ def general_node(state: GraphState) -> dict:
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
-    if intent.startswith("alarm.") or intent == "mcp.calendar":
+    if intent.startswith("alarm."):
         return "alarm_agent_node"
-    if intent.startswith("mcp.") or intent.startswith("inventory."):
-        if intent == "mcp.confirm":
+    if intent.startswith("inventory.") or intent.startswith("action."):
+        if intent == "action.confirm":
             parts = state["text"].split(":")
             if len(parts) >= 2 and parts[1] not in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
                 return "alarm_agent_node"

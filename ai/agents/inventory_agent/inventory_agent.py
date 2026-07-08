@@ -171,7 +171,7 @@ def _handle_inventory_action(text: str, db: Session, user_id: int) -> dict:
 
 def run_inventory_agent(intent: str, text: str, history: list, db: Session, user_id: int) -> dict:
     """냉장고 에이전트의 단일 진입점입니다."""
-    if intent == "mcp.confirm":
+    if intent == "action.confirm":
         parts = text.split(":")
         if len(parts) >= 2:
             return execute_inventory_action(parts[1], parts, db, user_id)
@@ -183,10 +183,10 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
     if intent == "inventory.expiring":
         return {"response_text": get_expiring_inventory(db, user_id, text)}
 
-    if intent == "inventory.cancel" or intent == "mcp.cancel":
+    if intent == "inventory.cancel" or intent == "action.cancel":
         return {"response_text": "알겠습니다. 작업을 취소하겠습니다."}
         
-    if intent == "inventory.delete" or intent == "mcp.delete":
+    if intent == "inventory.delete":
         name = _extract_delete_name(text)
         if not name:
             return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
@@ -194,14 +194,14 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         command = f"확인:delete_ingredient:{name}"
         return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
-    if intent == "inventory.pending_consume" or intent == "mcp.pending_consume":
+    if intent == "inventory.pending_consume":
         name = _pending_consume_from_history(history) or ""
         quantity = _extract_quantity(text) or 1
         reply = f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?"
         command = f"확인:consume_ingredient:{name}:{quantity}"
         return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
-    if intent == "inventory.pending_add_storage" or intent == "mcp.pending_add_storage":
+    if intent == "inventory.pending_add_storage":
         pending = _pending_add_storage_from_history(history)
         storage = _extract_storage(text) or DEFAULT_STORAGE
         if not pending:
@@ -211,7 +211,7 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
         return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
-    if intent == "inventory.pending_add" or intent == "mcp.pending_add":
+    if intent == "inventory.pending_add":
         name = _pending_add_from_history(history) or ""
         quantity = _extract_quantity(text) or 1
         storage = _extract_storage(text)
@@ -221,17 +221,17 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
         return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
-    if intent == "inventory.pending_add_many_retry" or intent == "mcp.pending_add_many_retry":
+    if intent == "inventory.pending_add_many_retry":
         return {"response_text": "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"}
 
-    if intent == "inventory.pending_add_many" or intent == "mcp.pending_add_many":
+    if intent == "inventory.pending_add_many":
         items = _extract_add_items(text)
         payload = "|".join(f"{item['name']},{item['quantity'] or 1},{item['storage'] or DEFAULT_STORAGE}" for item in items)
         summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'] or 1)}개" for item in items)
         reply = f"{summary}를 냉장고에 추가할까요?"
         return {"response_text": reply, "actions": [_confirm_action("확인", f"확인:add_ingredients:{payload}"), _confirm_action("취소", "취소")]}
 
-    if intent == "inventory.action" or intent == "mcp.inventory":
+    if intent == "inventory.action":
         return _handle_inventory_action(text, db, user_id)
 
     return {"response_text": "아직 지원하지 않는 냉장고 작업이에요."}
