@@ -690,3 +690,58 @@ def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None
     })
 
     assert result["response_text"] == "'안심'의 수량을 알려주시겠어요? (예: 안심 1개)"
+
+
+
+
+def test_guide_reply_formats_nutrition(monkeypatch) -> None:
+    """영양성분 응답을 확인합니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "action": "lookup_nutrition",
+            "data": {
+                "ingredient": {"name": "두부"},
+                "nutrition": {
+                    "base_amount": "100g",
+                    "energy_kcal": 80,
+                    "protein_g": 8.1,
+                    "carbohydrate_g": 1.9,
+                    "fat_g": 4.8,
+                    "sodium_mg": 7,
+                },
+            },
+            "ui": {"sources": [{"title": "영양DB", "url": None}]},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("두부 영양성분")
+
+    assert "두부 영양성분이에요." in reply
+    assert "기준량: 100g" in reply
+    assert "열량: 80kcal" in reply
+    assert "단백질: 8.1g" in reply
+    assert sources[0]["url"] == ""
+
+
+def test_guide_reply_formats_seasonality(monkeypatch) -> None:
+    """제철 목록 응답을 확인합니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "action": "list_seasonal_ingredients",
+            "data": {
+                "month": 7,
+                "items": [{"name": "수박"}, {"name": "애호박"}, {"name": "옥수수"}],
+            },
+            "ui": {"sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("7월 제철음식")
+
+    assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
+    assert sources == []
+
