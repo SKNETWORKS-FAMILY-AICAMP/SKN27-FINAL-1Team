@@ -609,7 +609,6 @@ function ReceiptOcr() {
   const [activeStep, setActiveStep] = useState(0)
   const [detectedRows, setDetectedRows] = useState(createInitialReceiptRows)
   const [editingRows, setEditingRows] = useState(() => getInitialEditingRows(createInitialReceiptRows()))
-  const [receiptSource, setReceiptSource] = useState('샘플 영수증')
   const [receiptMeta, setReceiptMeta] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [analysisStep, setAnalysisStep] = useState(0)
@@ -636,8 +635,8 @@ function ReceiptOcr() {
   const progressDescriptions = [
     '영수증을 올리거나 촬영하면 분석을 시작해요.',
     isProcessing
-      ? `${receiptSource} 기준으로 품목과 금액을 읽는 중이에요.`
-      : `${receiptSource} 기준으로 품목과 금액을 읽었어요.`,
+      ? '영수증 이미지를 분석하고 있어요.'
+      : '영수증 이미지 분석을 완료했어요.',
     detectedRows.length === 0
       ? '품목 리스트를 찾지 못했어요. 필요한 품목은 직접 추가해서 등록할 수 있어요.'
       : reviewCount
@@ -716,7 +715,6 @@ function ReceiptOcr() {
 
     clearFlowTimers()
     setUploadedPreview(file)
-    setReceiptSource(file.name || source)
     setReceiptMeta(null)
     setDetectedRows([])
     setEditingRows({})
@@ -761,7 +759,7 @@ function ReceiptOcr() {
         }
 
         if (event.type === 'error') {
-          throw new Error(event.message || '?곸닔利?OCR 遺꾩꽍???ㅽ뙣?덉뼱??')
+          throw new Error(event.message || '영수증 OCR 분석에 실패했어요.')
         }
 
         if (event.type === 'result') {
@@ -770,7 +768,7 @@ function ReceiptOcr() {
       })
 
       if (!data) {
-        throw new Error('?곸닔利?OCR 遺꾩꽍 寃곌낵瑜?諛쏆? 紐삵뻽?댁슂.')
+        throw new Error('영수증 OCR 분석 결과를 받지 못했어요.')
       }
 
       if (data.needs_reupload) {
@@ -779,7 +777,6 @@ function ReceiptOcr() {
         setDetectedRows([])
         setEditingRows({})
         setReceiptMeta(null)
-        setReceiptSource(source)
         await showAlert(
           data.reupload_message ||
             '영수증 이미지 인식 품질이 낮아요. 글자와 금액이 선명하게 보이도록 다시 촬영하거나 다른 이미지를 첨부해주세요.',
@@ -803,7 +800,6 @@ function ReceiptOcr() {
         totalAmount: data.total_amount,
         confidenceNote: data.confidence_note,
       })
-      setReceiptSource(data.store_name || data.original_file_name || file.name || source)
       setAnalysisStep(aiAnalysisSteps.length - 1)
       setActiveStep(2)
     } catch (error) {
@@ -892,6 +888,10 @@ function ReceiptOcr() {
 
   const toggleRowSelect = (rowId) => {
     setSelectedRowIds((prev) => (prev.includes(rowId) ? prev.filter((value) => value !== rowId) : [...prev, rowId]))
+  }
+
+  const selectAllRows = () => {
+    setSelectedRowIds(detectedRows.map((row) => row.id))
   }
 
   const deleteSelectedRows = async () => {
@@ -1477,14 +1477,24 @@ function ReceiptOcr() {
                   <div className="receipt-row-tools">
                     {rowSelectionMode ? (
                       <>
-                        <button
-                          className="receipt-add-row receipt-row-tools__delete"
-                          type="button"
-                          disabled={detectedRows.length === 0}
-                          onClick={deleteAllRows}
-                        >
-                          전체 삭제
-                        </button>
+                        {detectedRows.length > 0 && selectedRowIds.length === detectedRows.length ? (
+                          <button
+                            className="receipt-add-row receipt-row-tools__delete"
+                            type="button"
+                            onClick={deleteAllRows}
+                          >
+                            전체 삭제
+                          </button>
+                        ) : (
+                          <button
+                            className="receipt-add-row"
+                            type="button"
+                            disabled={detectedRows.length === 0}
+                            onClick={selectAllRows}
+                          >
+                            전체 선택
+                          </button>
+                        )}
                         <button
                           className="receipt-add-row receipt-row-tools__delete"
                           type="button"

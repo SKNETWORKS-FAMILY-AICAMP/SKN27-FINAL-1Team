@@ -16,7 +16,7 @@ services:
         volumes:
             - ./app:/project/app
             - ./ai:/project/ai
-            - ./storage:/project/storage # 컨테이너 안에 저장된 영수증 파일이 로컬 프로젝트 폴더에도 실제로 남도록 하기 위해서 추가.
+            - ./storage:/project/storage
         command:
             [
                 "uvicorn",
@@ -28,6 +28,8 @@ services:
                 "--reload",
                 "--reload-dir",
                 "/project/app/backend",
+                "--reload-dir",
+                "/project/ai",
             ]
         depends_on:
             postgres:

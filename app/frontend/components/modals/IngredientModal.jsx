@@ -284,7 +284,10 @@ export default function IngredientModal({
           </div>
           <div className="fridge-form-group">
             <label>
-              소비기한 <small style={{ color: '#8b673e', fontWeight: 'normal' }}>(비우면 자동 계산)</small>
+              소비기한{' '}
+              <small style={{ color: '#8b673e', fontWeight: 'normal' }}>
+                (미 입력시 <span className="fridge-ai-badge" style={{ padding: '2px 6px', fontSize: '11px', margin: '0 2px', verticalAlign: 'baseline', borderRadius: '6px' }}>AI</span>가 자동 계산)
+              </small>
             </label>
             <input type="date" name="expiration_date" value={formData.expiration_date} onChange={handleFormChange} />
           </div>

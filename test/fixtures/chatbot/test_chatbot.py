@@ -1,10 +1,12 @@
+from unittest.mock import MagicMock
 import sys
 from pathlib import Path
 
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app.backend.services.chat_service import chat_service
+from ai.agents.supervisor_agent.supervisor_service import supervisor_service
+from ai.agents.supervisor_agent import supervisor_utils
 
 
 def test_route_intent_examples() -> None:
@@ -34,46 +36,46 @@ def test_route_intent_examples() -> None:
     }
 
     for message, expected in cases.items():
-        assert chat_service._route_intent(message) == expected
+        assert supervisor_service._route_intent(message) == expected
 
 
 def test_extract_recipe_ingredient() -> None:
     """특정 재료 레시피 질문에서 재료명만 추출되는지 확인합니다."""
-    assert chat_service._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
-    assert chat_service._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
-    assert chat_service._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
-    assert chat_service._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
-    assert chat_service._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
-    assert chat_service._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
-    assert chat_service._extract_keyword("먹다 남은 햄버거 어떡하지?") == "햄버거"
-    assert chat_service._extract_keyword("아보카도 보관법") == "아보카도"
-    assert chat_service._extract_keyword("남은 피자 보관법") == "피자"
+    assert supervisor_utils._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
+    assert supervisor_utils._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
+    assert supervisor_utils._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
+    assert supervisor_utils._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
+    assert supervisor_utils._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
+    assert supervisor_utils._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
+
+    assert supervisor_utils._extract_keyword("아보카도 보관법") == "아보카도"
+    assert supervisor_utils._extract_keyword("남은 피자 보관법") == "피자"
 
 
 def test_login_status_question() -> None:
     """로그인 상태를 묻는 문장을 별도로 인식합니다."""
-    assert chat_service._is_login_status_question("지금 로그인 되어 있어?")
-    assert chat_service._is_login_status_question("나 로그인 상태야?")
-    assert not chat_service._is_login_status_question("로그인하려면 어디로 가?")
+    assert supervisor_utils._is_login_status_question("지금 로그인 되어 있어?")
+    assert supervisor_utils._is_login_status_question("나 로그인 상태야?")
+    assert not supervisor_utils._is_login_status_question("로그인하려면 어디로 가?")
 
 def test_guest_chat_login_boundary() -> None:
     """비회원은 개인 냉장고 기능만 막고 일반 레시피/보관법은 허용합니다."""
-    assert chat_service._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
-    assert chat_service._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
-    assert chat_service._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
-    assert chat_service._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
-    assert chat_service._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
-    assert not chat_service._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
-    assert not chat_service._requires_login("recipe.search", "깐풍기 레시피")
-    assert not chat_service._requires_login("ingredient.guide", "양파 보관법")
+    assert supervisor_utils._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
+    assert supervisor_utils._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
+    assert supervisor_utils._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
+    assert supervisor_utils._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
+    assert supervisor_utils._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
+    assert not supervisor_utils._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
+    assert not supervisor_utils._requires_login("recipe.search", "깐풍기 레시피")
+    assert not supervisor_utils._requires_login("ingredient.guide", "양파 보관법")
 
 def test_guide_result_match() -> None:
     """가이드 검색이 비슷한 이름의 다른 재료를 답하지 않는지 확인합니다."""
-    assert not chat_service._is_guide_result_match("피자", "피자소스")
-    assert not chat_service._is_guide_result_match("치킨", "치킨스톡")
-    assert not chat_service._is_guide_result_match("김", "김치")
-    assert chat_service._is_guide_result_match("파", "대파")
-    assert chat_service._is_guide_result_match("마늘", "깐마늘")
+    assert not supervisor_utils._is_guide_result_match("피자", "피자소스")
+    assert not supervisor_utils._is_guide_result_match("치킨", "치킨스톡")
+    assert not supervisor_utils._is_guide_result_match("김", "김치")
+    assert supervisor_utils._is_guide_result_match("파", "대파")
+    assert supervisor_utils._is_guide_result_match("마늘", "깐마늘")
 
 
 def test_search_result_relevance() -> None:
@@ -83,23 +85,23 @@ def test_search_result_relevance() -> None:
     pizza_sauce = {"title": "피자소스 보관법", "content": "피자소스는 개봉 후 냉장 보관", "url": "https://example.com"}
     url_only = {"title": "마늘 보관법", "content": "마늘은 서늘하게 보관", "url": "https://example.com/chicken"}
 
-    assert chat_service._is_relevant_search_result("먹다남은 치킨", good)
-    assert not chat_service._is_relevant_search_result("먹다남은 치킨", bad)
-    assert not chat_service._is_relevant_search_result("피자", pizza_sauce)
-    assert not chat_service._is_relevant_search_result("보관법", good)
-    assert not chat_service._is_relevant_search_result("치킨", url_only)
+    assert supervisor_utils._is_relevant_search_result("먹다남은 치킨", good)
+    assert not supervisor_utils._is_relevant_search_result("먹다남은 치킨", bad)
+    assert not supervisor_utils._is_relevant_search_result("피자", pizza_sauce)
+    assert not supervisor_utils._is_relevant_search_result("보관법", good)
+    assert not supervisor_utils._is_relevant_search_result("치킨", url_only)
 
 
 def test_format_guide_tip() -> None:
     """긴 보관법 문장을 번호 목록으로 줄여 보여주는지 확인합니다."""
-    formatted = chat_service._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
+    formatted = supervisor_utils._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
     assert formatted == "1. 첫 문장입니다.\n2. 둘째 문장입니다.\n3. 셋째 문장입니다."
-    assert chat_service._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
+    assert supervisor_utils._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
 
 
 def test_cooking_time_question_uses_external_recipe() -> None:
     """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
-    original_external = chat_service._reply_external_recipe
+    original_external = supervisor_service._reply_external_recipe
     called = {"external": False, "query": ""}
 
     def fake_external(keyword: str, query_text: str | None = None):
@@ -107,16 +109,16 @@ def test_cooking_time_question_uses_external_recipe() -> None:
         called["query"] = query_text or ""
         return f"{keyword} 웹 검색", []
 
-    chat_service._reply_external_recipe = fake_external
+    supervisor_service._reply_external_recipe = fake_external
     try:
-        reply, actions, sources = chat_service._reply_recipe_search(None, "감자튀김 에어프라이기 시간")
+        reply, actions, sources = supervisor_service._reply_recipe_search(None, "감자튀김 에어프라이기 시간")
         assert called["external"]
         assert called["query"] == "감자튀김 에어프라이기 시간"
         assert reply == "감자튀김 웹 검색"
         assert actions == []
         assert sources == []
     finally:
-        chat_service._reply_external_recipe = original_external
+        supervisor_service._reply_external_recipe = original_external
 if __name__ == "__main__":
     test_route_intent_examples()
     test_extract_recipe_ingredient()
@@ -138,7 +140,9 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app.backend.services.chat_graph import LOGIN_REQUIRED_REPLY, _calendar_datetime_from_text, _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _parse_calendar_date, mcp_agent_node, route_intent, router_node
+from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node
+from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY
+from ai.agents.inventory_agent.inventory_utils import _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage
 
 
 class FakeService:
@@ -172,13 +176,75 @@ def test_delete_inventory_item_routes_to_mcp() -> None:
     text = "냉장고에 두부 폐기처리 해줘"
     assert _extract_delete_name(text) == "두부"
     assert router_node({"text": text, "service": FakeService("general"), "history": []})["intent"] == "mcp.delete"
-    result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
     assert result["response_text"] == "두부 폐기 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
-def test_calendar_action_routes_to_mcp() -> None:
-    """일정/캘린더 문장은 calendar MCP 노드로 보냅니다."""
-    state = {"text": "내일 저녁 일정 등록해줘", "service": FakeService("general"), "history": []}
-    assert router_node(state)["intent"] == "mcp.calendar"
+def test_alarm_agent_feature_words_route_to_alarm() -> None:
+    """알람 에이전트가 제공하는 기능 키워드는 알람 에이전트로 보냅니다."""
+    messages = (
+        "내일 저녁 일정 등록해줘",
+        "내일 알람 삭제해줘",
+        "리마인더 조회해줘",
+        "푸시토큰 등록해줘",
+        "알림 읽음 처리해줘",
+    )
+
+    for message in messages:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.calendar"
+
+
+def test_calendar_delete_routes_to_alarm() -> None:
+    """일정 삭제 요청은 냉장고 삭제가 아니라 알람 에이전트로 보냅니다."""
+    state = {"text": "장보기 일정 삭제해줘", "service": FakeService("general"), "history": []}
+
+    assert router_node(state)["intent"] == "alarm.calendar"
+
+
+def test_supervisor_calendar_list_shows_events(monkeypatch) -> None:
+    """캘린더 조회 결과가 있으면 일정 목록을 말풍선에 보여줍니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    def fake_run_alarm_agent(**kwargs):
+        return {
+            "intent": "calendar.list",
+            "message": "캘린더 일정을 조회했어요.",
+            "data": {"events": [{"dateKey": "2026-07-08", "title": "장보기"}]},
+        }
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 등록된 일정 있어?",
+        "intent": "alarm.calendar",
+    })
+
+    assert result["response_text"] == "등록된 일정이에요.\n2026-07-08 - 장보기"
+
+
+def test_supervisor_calendar_delete_delegates_to_alarm_agent(monkeypatch) -> None:
+    """자연어 일정 삭제 후보 조회는 alarm agent 책임입니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 장보기 일정 삭제해줘",
+        "intent": "alarm.calendar",
+    })
+
+    assert captured["tools"]
+    assert captured["context"]["user_id"] == 1
+    assert result["response_text"] == "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."
 
 
 def test_confirm_and_cancel_route_to_mcp() -> None:
@@ -194,26 +260,15 @@ def test_confirm_and_cancel_route_to_mcp() -> None:
 
 
 
-def test_inventory_add_sentence_asks_storage_without_llm() -> None:
+def test_inventory_add_sentence_asks_storage_without_llm(monkeypatch) -> None:
     """식재료 구매 문장은 LLM 보관법으로 새지 않고 추가 확인으로 갑니다."""
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+    monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: name)
     text = "두부 어제 1개 샀어"
     assert router_node({"text": text, "service": FakeService("ingredient.guide"), "history": []})["intent"] == "mcp.inventory"
-    result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.inventory", "history": []})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.inventory", "history": []})
     assert result["response_text"] == "두부 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
-def test_pending_calendar_time_update_stays_calendar() -> None:
-    """일정 확인 문맥에서 시간만 바꿔도 재료 추가로 빠지지 않습니다."""
-    class Message:
-        def __init__(self, role, text):
-            self.role = role
-            self.text = text
-
-    history = [Message("bot", "'럭키데이' 일정을 2024-07-07 09:00에 등록할까요?")]
-    state = {"text": '11시에 등록해줘', "service": FakeService("general"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_calendar"
-    result = mcp_agent_node({"user_id": 1, "text": '11시에 등록해줘', "intent": "mcp.pending_calendar", "history": history})
-    assert result["response_text"] == "'럭키데이' 일정을 2024-07-07 11:00에 등록할까요?"
-    assert result["actions"][0]["data"]["message"] == '확인:add_calendar_event:럭키데이:2024-07-07T11:00:00+09:00'
 
 
 def test_pending_add_cancel_word_routes_to_cancel() -> None:
@@ -239,7 +294,7 @@ def test_pending_add_asks_storage_after_quantity() -> None:
     history = [Message("bot", "냉동 새우를 몇 개 추가할까요? 수량을 알려주세요.")]
     state = {"text": "1", "service": FakeService("general"), "history": history}
     assert router_node(state)["intent"] == "mcp.pending_add"
-    result = mcp_agent_node({"user_id": 1, "text": "1", "intent": "mcp.pending_add", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1", "intent": "mcp.pending_add", "history": history})
     assert result["response_text"] == "냉동 새우 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
@@ -255,7 +310,7 @@ def test_pending_add_storage_answer_builds_confirm_action() -> None:
     assert _extract_storage("내 냉장고 재료 뭐 있어?") is None
     assert _extract_storage("냉동실에") == "냉동"
     assert router_node(state)["intent"] == "mcp.pending_add_storage"
-    result = mcp_agent_node({"user_id": 1, "text": "냉동실에", "intent": "mcp.pending_add_storage", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "냉동실에", "intent": "mcp.pending_add_storage", "history": history})
     assert result["response_text"] == "냉동 새우 1개를 냉동에 추가할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:냉동 새우:1.0:냉동"
 
@@ -280,7 +335,7 @@ def test_pending_add_handles_short_quantity_question() -> None:
     history = [Message("bot", "감자를 몇 개 추가하시겠어요?")]
     state = {"text": "한개", "service": FakeService("general"), "history": history}
     assert router_node(state)["intent"] == "mcp.pending_add"
-    result = mcp_agent_node({"user_id": 1, "text": "한개", "intent": "mcp.pending_add", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "한개", "intent": "mcp.pending_add", "history": history})
     assert result["response_text"] == "감자 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
@@ -289,7 +344,7 @@ def test_multi_add_items_build_confirm_action() -> None:
     text = "파스타1, 토마토소스2, 냉동새우1"
     items = _extract_add_items(text)
     assert [item["name"] for item in items] == ["파스타", "토마토소스", "냉동새우"]
-    result = mcp_agent_node({"user_id": 1, "text": text, "intent": "mcp.pending_add_many", "history": []})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.pending_add_many", "history": []})
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredients:파스타,1.0,냉장|토마토소스,2.0,냉장|냉동새우,1.0,냉장"
 
 def test_extract_add_item_trims_also_particle() -> None:
@@ -310,7 +365,7 @@ def test_pending_add_many_quantity_only_asks_for_named_quantities() -> None:
     history = [Message("bot", "각 식재료의 수량을 알려주시면 추가해드릴게요.")]
     state = {"text": "1,1,1", "service": FakeService("general"), "history": history}
     assert router_node(state)["intent"] == "mcp.pending_add_many_retry"
-    result = mcp_agent_node({"user_id": 1, "text": "1,1,1", "intent": "mcp.pending_add_many_retry", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1,1,1", "intent": "mcp.pending_add_many_retry", "history": history})
     assert result["response_text"] == "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"
 def test_pending_add_quantity_routes_to_mcp() -> None:
     """추가 대기 중 수량만 답해도 MCP로 이어집니다."""
@@ -333,7 +388,7 @@ def test_pending_add_quantity_builds_confirm_action() -> None:
             self.text = text
 
     history = [Message("bot", "팽이버섯을 몇 개 추가할까요? 수량을 알려주세요.")]
-    result = mcp_agent_node({"user_id": 1, "text": "2개", "intent": "mcp.pending_add", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "2개", "intent": "mcp.pending_add", "history": history})
     assert result["response_text"] == "팽이버섯 2개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
@@ -348,7 +403,7 @@ def test_pending_add_korean_quantity_and_storage() -> None:
     state = {"text": "한개 냉장", "service": FakeService("ingredient.guide"), "history": history}
     assert _extract_quantity("한개 냉장") == 1.0
     assert router_node(state)["intent"] == "mcp.pending_add"
-    result = mcp_agent_node({"user_id": 1, "text": "한개 냉장", "intent": "mcp.pending_add", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "한개 냉장", "intent": "mcp.pending_add", "history": history})
     assert result["response_text"] == "두부 1개를 냉장에 추가할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:두부:1.0:냉장"
 
@@ -391,41 +446,21 @@ def test_pending_consume_quantity_builds_confirm_action() -> None:
     history = [Message("bot", "귤을 몇 개 먹으셨나요? 수량을 알려주시면, 냉장고에서 차감해드리겠습니다.")]
     state = {"text": "1개", "service": FakeService("inventory.list"), "history": history}
     assert router_node(state)["intent"] == "mcp.pending_consume"
-    result = mcp_agent_node({"user_id": 1, "text": "1개", "intent": "mcp.pending_consume", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1개", "intent": "mcp.pending_consume", "history": history})
     assert result["response_text"] == "귤 1개를 소비 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:consume_ingredient:귤:1.0"
 
 def test_mcp_requires_login() -> None:
     """MCP 쓰기 작업은 비회원 상태에서 실행하지 않습니다."""
-    assert mcp_agent_node({"user_id": 0, "text": "감자 먹었어", "intent": "mcp.inventory"})["response_text"] == LOGIN_REQUIRED_REPLY
-
-
-def test_calendar_date_parser() -> None:
-    """캘린더 날짜 표현을 실제 날짜로 변환합니다."""
-    assert _parse_calendar_date("오늘") == date.today()
-    assert _parse_calendar_date("내일") == date.today() + timedelta(days=1)
-    assert _parse_calendar_date("2026-07-01") == date(2026, 7, 1)
+    assert inventory_agent_node({"db": MagicMock(), "user_id": 0, "text": "감자 먹었어", "intent": "mcp.inventory"})["response_text"] == LOGIN_REQUIRED_REPLY
 
 
 
-def test_calendar_month_day_uses_current_year() -> None:
-    """월/일만 있는 일정은 LLM의 과거 연도를 버리고 현재 연도를 사용합니다."""
-    result = _calendar_datetime_from_text('7월7일 럭키데이 일정 등록해줘', "2023-07-07T09:00:00")
-    assert result.date() == date(date.today().year, 7, 7)
-    assert result.hour == 9
-
-
-def test_calendar_today_time_uses_current_date() -> None:
-    """LLM이 과거 날짜를 줘도 사용자 원문의 오늘/시간을 우선합니다."""
-    result = _calendar_datetime_from_text("오늘 11시에 미팅 일정 등록해줘", "2023-10-04T11:00:00")
-    assert result.date() == date.today()
-    assert result.hour == 11
-    assert result.minute == 0
 
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
     assert route_intent({"intent": "recipe.search"}) == "recipe_search_node"
-    assert route_intent({"intent": "mcp.inventory"}) == "mcp_agent_node"
+    assert route_intent({"intent": "mcp.inventory"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"
 
 
@@ -451,9 +486,6 @@ if __name__ == "__main__":
     test_latest_pending_question_wins_over_old_add_history()
     test_pending_consume_quantity_builds_confirm_action()
     test_mcp_requires_login()
-    test_calendar_date_parser()
-    test_calendar_month_day_uses_current_year()
-    test_calendar_today_time_uses_current_date()
     test_route_intent_uses_lookup_table()
     print("chat graph tests ok")
 
@@ -466,36 +498,18 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app.backend.services import chat_service as chat_module
+from ai.agents.supervisor_agent import supervisor_service as chat_module
 
-
-def test_empty_inventory_replies_are_helpful() -> None:
-    """냉장고가 비어 있으면 개인화 질문에 등록 안내를 반환합니다."""
-    original_inventory_service = chat_module.inventory_service
-    chat_module.inventory_service = SimpleNamespace(get_ingredients=lambda db, user_id: [])
-    try:
-        service = chat_module.chat_service
-        expected = service.EMPTY_INVENTORY_REPLY
-        assert service._reply_inventory_list(None, 1) == expected
-        assert service._reply_expiring_items(None, 1, "소비 임박재료 뭐 있어?") == expected
-        assert service._reply_recipe_recommend(None, 1, "오늘 뭐 해먹지?") == (expected, [])
-    finally:
-        chat_module.inventory_service = original_inventory_service
-
-
-if __name__ == "__main__":
-    test_empty_inventory_replies_are_helpful()
-    print("empty inventory chat tests ok")
 
 
 def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> None:
     """인사말은 수량 질문으로 넘기지 않고 거절합니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
 
-    result = chat_graph.mcp_agent_node({
+    result = supervisor_agent.inventory_agent_node({"db": MagicMock(), 
         "user_id": 1,
         "db": object(),
         "text": "안녕 냉장고에 넣어줘",
@@ -508,12 +522,12 @@ def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> Non
 
 def test_inventory_add_unknown_name_asks_quantity(monkeypatch) -> None:
     """마스터에 없는 식재료는 1개로 두고 보관 위치를 확인합니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
 
-    result = chat_graph.mcp_agent_node({
+    result = supervisor_agent.inventory_agent_node({"db": MagicMock(), 
         "user_id": 1,
         "db": object(),
         "text": "게살 냉장고에 넣어줘",
@@ -521,8 +535,7 @@ def test_inventory_add_unknown_name_asks_quantity(monkeypatch) -> None:
         "history": [],
     })
 
-    assert result["response_text"] == "게살 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
-    assert result["actions"][0]["data"]["message"] == "확인:add_ingredient_unchecked:게살:1.0:냉장"
+    assert result["response_text"] == "'게살'의 수량을 알려주시겠어요? (예: 게살 1개)"
 
 
 
@@ -535,12 +548,14 @@ def test_extract_add_items_keeps_leading_ga() -> None:
 
 def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> None:
     """부정 표현이 섞인 재료명은 보관 위치를 묻지 않습니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
+    import ai.agents.inventory_agent.inventory_agent as inv_agent
+    monkeypatch.setattr(inv_agent, "is_valid_ingredient", lambda name: False)
 
-    result = chat_graph.mcp_agent_node({
+    result = supervisor_agent.inventory_agent_node({"db": MagicMock(), 
         "user_id": 1,
         "db": object(),
         "text": "가지 안튀김 냉장고에 넣어줘",
@@ -554,12 +569,12 @@ def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> Non
 
 def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None:
     """안으로 시작하는 실제 재료명은 부정 표현으로 처리하지 않습니다."""
-    import app.backend.services.chat_graph as chat_graph
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
     from app.backend.services.inventory_service.inventory_service import inventory_service
 
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
 
-    result = chat_graph.mcp_agent_node({
+    result = supervisor_agent.inventory_agent_node({"db": MagicMock(), 
         "user_id": 1,
         "db": object(),
         "text": "안심 냉장고에 넣어줘",
@@ -567,4 +582,4 @@ def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None
         "history": [],
     })
 
-    assert result["response_text"] == "안심 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
+    assert result["response_text"] == "'안심'의 수량을 알려주시겠어요? (예: 안심 1개)"

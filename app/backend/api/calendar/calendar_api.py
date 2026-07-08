@@ -112,7 +112,7 @@ def _daily_event_keys(user_id: int, target_date: date) -> set[str]:
 def _event_key_belongs_to_user(event_key: str, user_id: int) -> bool:
     return any(
         event_key.startswith(f"{prefix}-{user_id}-")
-        for prefix in ("ingredient-expiry", "today-menu", "recipe-delete", "receipt-cost")
+        for prefix in ("ingredient-expiry", "today-menu", "recipe-delete", "receipt-cost", "calendar-agent")
     )
 
 

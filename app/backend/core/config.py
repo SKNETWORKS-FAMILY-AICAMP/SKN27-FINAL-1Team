@@ -30,7 +30,8 @@ class Settings:
     # JWT Settings
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "YOUR_JWT_SECRET_KEY_HERE")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 30)) # 개발 기간 편의를 위해 30일로 연장
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", 60 * 24 * 30)) # 개발 기간 편의를 위해 30일로 연장
     
     # Kakao OAuth Settings
     KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
@@ -41,6 +42,16 @@ class Settings:
     NAVER_CLIENT_ID: str = os.getenv("NAVER_CLIENT_ID", "")
     NAVER_CLIENT_SECRET: str = os.getenv("NAVER_CLIENT_SECRET", "")
     NAVER_REDIRECT_URI: str = os.getenv("NAVER_REDIRECT_URI", "")
+
+    # Naver Shopping Search API Settings
+    NAVER_SHOPPING_CLIENT_ID: str = os.getenv("NAVER_SHOPPING_CLIENT_ID", NAVER_CLIENT_ID)
+    NAVER_SHOPPING_CLIENT_SECRET: str = os.getenv("NAVER_SHOPPING_CLIENT_SECRET", NAVER_CLIENT_SECRET)
+    NAVER_SHOPPING_API_URL: str = os.getenv(
+        "NAVER_SHOPPING_API_URL",
+        "https://openapi.naver.com/v1/search/shop.json",
+    )
+    NAVER_SHOPPING_DISPLAY: int = int(os.getenv("NAVER_SHOPPING_DISPLAY", 1))
+    NAVER_SHOPPING_TIMEOUT_SECONDS: int = int(os.getenv("NAVER_SHOPPING_TIMEOUT_SECONDS", 5))
     
     # Google OAuth Settings
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")

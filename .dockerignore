@@ -10,4 +10,6 @@ ai/*
 !ai/tools/**
 !ai/calendar
 !ai/calendar/**
+!ai/agents
+!ai/agents/**
 docs

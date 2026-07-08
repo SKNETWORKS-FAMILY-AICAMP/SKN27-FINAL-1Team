@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import re
 from collections import defaultdict
@@ -11,12 +12,14 @@ from uuid import uuid4
 from fastapi import HTTPException, UploadFile, status
 from langgraph.graph import END, StateGraph
 from openai import OpenAI
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.backend.core.config import settings
 from app.backend.db.models import Receipt
 from app.backend.services.ingredient_match_service import ingredient_name_matcher
+from app.backend.services.receipt_ocr_service.privacy_masking import mask_sensitive_text
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -87,20 +90,21 @@ class ReceiptOcrService:
         self._enforce_upload_rate_limit(user_id)
         image_bytes = await file.read()
         storage_extension = self._validate_upload(file, image_bytes)
+        sanitized_image_bytes = self._sanitize_image(image_bytes, storage_extension=storage_extension)
 
         original_file_path = self._save_original_image(
             user_id=user_id,
-            image_bytes=image_bytes,
+            image_bytes=sanitized_image_bytes,
             storage_extension=storage_extension,
         )
 
-        image_id = Path(file.filename or original_file_path).stem
+        image_id = Path(original_file_path).stem
         return {
             "db": db,
             "user_id": user_id,
-            "image_bytes": image_bytes,
+            "image_bytes": sanitized_image_bytes,
             "image_id": image_id,
-            "original_file_name": file.filename,
+            "original_file_name": mask_sensitive_text(file.filename),
             "original_file_path": original_file_path,
             "retry_count": 0,
             "max_retries": OCR_MAX_RETRIES,
@@ -286,13 +290,13 @@ class ReceiptOcrService:
         normalized = state.get("normalized") or {}
         receipt_validation_issues = state.get("receipt_validation_issues", [])
         reupload_message = (
-            "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0\uac00 \uc544\ub2cc \uac83 \uac19\uc544\uc694. "
-            "\ub9e4\uc7a5\uba85, \uad6c\ub9e4\uc77c\uc790, \ud488\ubaa9, \uacb0\uc81c \ub0b4\uc5ed \uc911 \ud558\ub098 \uc774\uc0c1\uc774 "
-            "\ubcf4\uc774\ub294 \uc601\uc218\uc99d\uc744 \ub2e4\uc2dc \ucca8\ubd80\ud574\uc8fc\uc138\uc694."
+            "영수증 이미지가 아닌 것 같아요. "
+            "매장명, 구매일자, 품목, 결제 내역 중 하나 이상이 "
+            "보이는 영수증을 다시 첨부해주세요."
             if receipt_validation_issues
-            else "\uc601\uc218\uc99d \uc774\ubbf8\uc9c0 \uc778\uc2dd \ud488\uc9c8\uc774 \ub0ae\uc544\uc694. "
-            "\uae00\uc790\uc640 \uae08\uc561\uc774 \uc120\uba85\ud558\uac8c \ubcf4\uc774\ub3c4\ub85d \ub2e4\uc2dc \ucd2c\uc601\ud558\uac70\ub098 "
-            "\ub2e4\ub978 \uc774\ubbf8\uc9c0\ub97c \ucca8\ubd80\ud574\uc8fc\uc138\uc694."
+            else "영수증 이미지 인식 품질이 낮아요. "
+            "글자와 금액이 선명하게 보이도록 다시 촬영하거나 "
+            "다른 이미지를 첨부해주세요."
         )
         response = {
             "receipt_id": None,
@@ -366,6 +370,32 @@ class ReceiptOcrService:
                 detail="Uploaded image could not be parsed.",
             )
         return CANONICAL_EXTENSION_BY_IMAGE_TYPE[detected_type]
+
+    def _sanitize_image(self, image_bytes: bytes, *, storage_extension: str) -> bytes:
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                image = ImageOps.exif_transpose(image)
+                output = io.BytesIO()
+
+                if storage_extension == ".jpg":
+                    if image.mode not in {"RGB", "L"}:
+                        image = image.convert("RGB")
+                    image.save(output, format="JPEG", quality=95, optimize=True)
+                elif storage_extension == ".png":
+                    image.save(output, format="PNG", optimize=True)
+                elif storage_extension == ".webp":
+                    if image.mode == "P":
+                        image = image.convert("RGBA")
+                    image.save(output, format="WEBP", quality=95, method=6)
+                else:
+                    raise ValueError("Unsupported sanitized image extension.")
+
+                return output.getvalue()
+        except (OSError, UnidentifiedImageError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded image could not be sanitized.",
+            ) from exc
 
     def _enforce_upload_rate_limit(self, user_id: int) -> None:
         now = datetime.now(timezone.utc)
@@ -543,7 +573,7 @@ class ReceiptOcrService:
     def _normalize_ocr_result(self, result: Dict[str, Any], *, image_id: str, db: Session) -> Dict[str, Any]:
         items = []
         for item in result.get("items") or []:
-            raw_name = self._nullable_str(item.get("raw_name"))
+            raw_name = mask_sensitive_text(self._nullable_str(item.get("raw_name")))
             if not raw_name:
                 continue
 
@@ -563,13 +593,13 @@ class ReceiptOcrService:
             "image_id": self._nullable_str(result.get("image_id")) or image_id,
             "document_type": self._normalize_document_type(result.get("document_type")),
             "is_receipt_like": self._nullable_bool(result.get("is_receipt_like")),
-            "store_name": self._nullable_str(result.get("store_name")),
+            "store_name": mask_sensitive_text(self._nullable_str(result.get("store_name"))),
             "purchase_datetime": self._nullable_str(result.get("purchase_datetime")),
             "items": items,
             "total_item_count": self._nullable_number(result.get("total_item_count")),
             "total_amount": self._nullable_int(result.get("total_amount")),
             "currency": "KRW",
-            "confidence_note": self._nullable_str(result.get("confidence_note")),
+            "confidence_note": mask_sensitive_text(self._nullable_str(result.get("confidence_note"))),
         }
 
     def _validate_receipt_document(self, normalized: Dict[str, Any]) -> List[str]:
@@ -747,12 +777,14 @@ Rules:
 6. Exclude subtotals, taxes, payment methods, card numbers, approval numbers, and notices from items.
 7. Exclude discount lines and zero-price option lines from items.
 8. If the receipt is a card approval screen or e-receipt without visible item rows, return an empty items array.
-9. Return quantity as a number. Use null if unknown.
-10. Use only "\uac1c", "kg", or null for unit. Use "\uac1c" for normal packaged/menu items.
-11. Keep volume text such as ml or L inside raw_name, not unit.
-12. item_amount is the line amount for that item, not the unit price unless only unit price is visible.
-13. total_amount is a reference value. Use null if uncertain.
-14. Write uncertainty about hard-to-read text, inferred values, omitted lines, or non-receipt classification in confidence_note.
+9. Do not extract or include card numbers, approval numbers, phone numbers, or addresses in any field.
+10. If those sensitive values are visible, ignore them. Do not copy them into store_name, raw_name, confidence_note, or any other field.
+11. Return quantity as a number. Use null if unknown.
+12. Use only "\uac1c", "kg", or null for unit. Use "\uac1c" for normal packaged/menu items.
+13. Keep volume text such as ml or L inside raw_name, not unit.
+14. item_amount is the line amount for that item, not the unit price unless only unit price is visible.
+15. total_amount is a reference value. Use null if uncertain.
+16. Write uncertainty about hard-to-read text, inferred values, omitted lines, or non-receipt classification in confidence_note without copying sensitive values.
 """.strip()
         if retry_note:
             prompt += "\n\n" + f"""Retry guidance:
@@ -802,13 +834,29 @@ Re-read the receipt image carefully and fix only the problematic fields. If the 
             return path.as_posix()
 
     def _delete_saved_file(self, relative_or_absolute_path: str) -> None:
-        path = Path(relative_or_absolute_path)
-        target = path if path.is_absolute() else PROJECT_ROOT / path
+        target = self._resolve_deletable_upload_path(relative_or_absolute_path)
+        if not target:
+            return
+
         try:
             if target.is_file():
                 target.unlink()
         except OSError:
             pass
+
+    def _resolve_deletable_upload_path(self, relative_or_absolute_path: str) -> Optional[Path]:
+        path = Path(relative_or_absolute_path)
+        target = path if path.is_absolute() else PROJECT_ROOT / path
+        upload_root = self._resolve_storage_root(settings.OCR_UPLOAD_DIR)
+
+        try:
+            resolved_target = target.resolve(strict=False)
+            resolved_upload_root = upload_root.resolve(strict=False)
+            resolved_target.relative_to(resolved_upload_root)
+        except (OSError, ValueError):
+            return None
+
+        return resolved_target
 
     def _safe_filename(self, value: str) -> str:
         safe = re.sub(r"[^0-9A-Za-z\uac00-\ud7a3_-]+", "_", value).strip("._")

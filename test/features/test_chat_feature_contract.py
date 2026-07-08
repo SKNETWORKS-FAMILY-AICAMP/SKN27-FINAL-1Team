@@ -1,10 +1,14 @@
 from types import SimpleNamespace
 
-from app.backend.services import chat_graph
-from app.backend.services.chat_service import chat_service
+import pytest
+
+pytest.importorskip("langchain_openai")
+
+from ai.agents.supervisor_agent import supervisor_agent
+from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 
 
-def test_chat_service_maps_graph_state_to_chat_response(monkeypatch):
+def test_supervisor_service_maps_graph_state_to_chat_response(monkeypatch):
     def fake_invoke(state):
         assert state["text"] == "두부로 뭐 해먹지?"
         assert state["history"][0].role == "user"
@@ -15,9 +19,9 @@ def test_chat_service_maps_graph_state_to_chat_response(monkeypatch):
             "sources": [{"title": "출처", "url": "https://example.com"}],
         }
 
-    monkeypatch.setattr(chat_graph.chat_graph, "invoke", fake_invoke)
+    monkeypatch.setattr(supervisor_agent.supervisor_agent, "invoke", fake_invoke)
 
-    result = chat_service.handle_message(
+    result = supervisor_service.handle_message(
         db=SimpleNamespace(),
         user_id=7,
         message="두부로 뭐 해먹지?",
@@ -35,21 +39,21 @@ def test_chat_service_maps_graph_state_to_chat_response(monkeypatch):
 
 def test_chat_route_table_covers_current_feature_nodes():
     expected_routes = {
-        "inventory.list": "inventory_list_node",
-        "inventory.expiring": "inventory_expiring_node",
-        "ingredient.guide": "ingredient_guide_node",
+        "inventory.list": "inventory_agent_node",
+        "inventory.expiring": "inventory_agent_node",
+        "ingredient.guide": "guide_agent_node",
         "recipe.recommend": "recipe_recommend_node",
         "recipe.search": "recipe_search_node",
         "receipt.guide": "receipt_guide_node",
-        "mcp.inventory": "mcp_agent_node",
+        "mcp.inventory": "inventory_agent_node",
     }
 
     for intent, node_name in expected_routes.items():
-        assert chat_graph.route_intent({"intent": intent}) == node_name
+        assert supervisor_agent.route_intent({"intent": intent}) == node_name
 
 
 def test_chat_feature_ab_routes_inventory_and_calendar_requests():
-    assert chat_graph.router_node({"text": "두부 1개 샀어", "history": []}) == {"intent": "mcp.inventory"}
-    assert chat_graph.router_node({"text": "내일 캘린더 일정 등록해줘", "history": []}) == {
-        "intent": "mcp.calendar"
+    assert supervisor_agent.router_node({"text": "두부 1개 샀어", "history": []}) == {"intent": "mcp.inventory"}
+    assert supervisor_agent.router_node({"text": "내일 캘린더 일정 등록해줘", "history": []}) == {
+        "intent": "alarm.calendar"
     }
