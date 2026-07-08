@@ -223,6 +223,30 @@ def test_supervisor_calendar_list_shows_events(monkeypatch) -> None:
     assert result["response_text"] == "등록된 일정이에요.\n2026-07-08 - 장보기"
 
 
+def test_supervisor_calendar_delete_delegates_to_alarm_agent(monkeypatch) -> None:
+    """자연어 일정 삭제 후보 조회는 alarm agent 책임입니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 장보기 일정 삭제해줘",
+        "intent": "alarm.calendar",
+    })
+
+    assert captured["tools"]
+    assert captured["context"]["user_id"] == 1
+    assert result["response_text"] == "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."
+
+
 def test_confirm_and_cancel_route_to_mcp() -> None:
     """확인/취소 버튼으로 돌아온 내부 메시지는 MCP 노드에서 처리합니다."""
     assert router_node({"text": "확인:add_ingredient:감자:1.0:냉장", "service": FakeService("general"), "history": []})["intent"] == "mcp.confirm"

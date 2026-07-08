@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -21,6 +22,14 @@ def _target_date(value: str | None) -> date:
         return today + timedelta(days=2)
     if value in (None, "", "오늘"):
         return today
+    full_match = re.fullmatch(r"\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*", value)
+    if full_match:
+        year, month, day = map(int, full_match.groups())
+        return date(year, month, day)
+    month_day_match = re.fullmatch(r"\s*(\d{1,2})월\s*(\d{1,2})일\s*", value)
+    if month_day_match:
+        month, day = map(int, month_day_match.groups())
+        return date(today.year, month, day)
     if "월" in value and "일" in value:
         month, day = value.replace("일", "").split("월", 1)
         return date(today.year, int(month.strip()), int(day.strip()))
@@ -150,8 +159,61 @@ async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, 
     return {"ok": True, "message": "캘린더 일정을 조회했어요.", "data": result}
 
 
+async def sync_daily_events_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    db = context.get("db")
+    user_id = context.get("user_id")
+    if not db or not user_id:
+        return {
+            "ok": False,
+            "error": {"code": "CALENDAR_SYNC_CONTEXT_REQUIRED", "message": "db와 user_id가 필요해요."},
+        }
+
+    target_date = _target_date(payload.get("date_text") or payload.get("date"))
+    try:
+        integration = calendar_api._get_google_integration(db, user_id)
+        access_token = await calendar_api._get_access_token(integration, db)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            created, deleted = await calendar_api._sync_daily_events(
+                client,
+                db,
+                user_id,
+                integration.calendar_id,
+                access_token,
+                target_date,
+                "alarm-agent",
+            )
+    except HTTPException as exc:
+        return {"ok": False, "error": {"code": f"HTTP_{exc.status_code}", "message": str(exc.detail)}}
+    except Exception as exc:
+        return {"ok": False, "error": {"code": "CALENDAR_SYNC_FAILED", "message": str(exc)}}
+
+    return {"ok": True, "message": "오늘 알림 일정을 동기화했어요.", "data": {"events": created, "deleted": deleted}}
+
+
+def list_notifications_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if not context.get("user_id"):
+        return {"ok": False, "error": {"code": "ALARM_CONTEXT_REQUIRED", "message": "user_id가 필요해요."}}
+    return {"ok": True, "message": "알림 목록을 조회했어요.", "data": {"notifications": []}}
+
+
+def mark_notification_read_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if not context.get("user_id"):
+        return {"ok": False, "error": {"code": "ALARM_CONTEXT_REQUIRED", "message": "user_id가 필요해요."}}
+    return {"ok": True, "message": "알림을 읽음 처리했어요.", "data": {"notification_id": payload.get("notification_id")}}
+
+
+def register_device_token_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if not context.get("user_id"):
+        return {"ok": False, "error": {"code": "ALARM_CONTEXT_REQUIRED", "message": "user_id가 필요해요."}}
+    return {"ok": True, "message": "알림 수신 기기를 등록했어요.", "data": {"device_token": payload.get("device_token")}}
+
+
 ALARM_AGENT_TOOLS = {
     "create_event": create_calendar_event_tool,
     "delete_event": delete_calendar_event_tool,
     "list_events": list_calendar_events_tool,
+    "sync_daily_events": sync_daily_events_tool,
+    "list_notifications": list_notifications_tool,
+    "mark_notification_read": mark_notification_read_tool,
+    "register_device_token": register_device_token_tool,
 }
