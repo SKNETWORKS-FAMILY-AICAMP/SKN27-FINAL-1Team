@@ -190,7 +190,6 @@ CREATE TABLE fridge_items (
     storage_location VARCHAR(50),
     purchased_date DATE,
     expiry_date DATE,
-    is_ai_recommended BOOLEAN DEFAULT FALSE,
     status VARCHAR(30) NOT NULL DEFAULT 'normal',
     is_ai_recommended BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
