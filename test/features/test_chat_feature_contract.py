@@ -45,7 +45,7 @@ def test_chat_route_table_covers_current_feature_nodes():
         "recipe.recommend": "recipe_recommend_node",
         "recipe.search": "recipe_search_node",
         "receipt.guide": "receipt_guide_node",
-        "mcp.inventory": "inventory_agent_node",
+        "inventory.action": "inventory_agent_node",
     }
 
     for intent, node_name in expected_routes.items():
@@ -53,7 +53,7 @@ def test_chat_route_table_covers_current_feature_nodes():
 
 
 def test_chat_feature_ab_routes_inventory_and_calendar_requests():
-    assert supervisor_agent.router_node({"text": "두부 1개 샀어", "history": []}) == {"intent": "mcp.inventory"}
+    assert supervisor_agent.router_node({"text": "두부 1개 샀어", "history": []}) == {"intent": "inventory.action"}
     assert supervisor_agent.router_node({"text": "내일 캘린더 일정 등록해줘", "history": []}) == {
         "intent": "alarm.calendar"
     }

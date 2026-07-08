@@ -25,24 +25,24 @@ from app.backend.core.config import settings
 # 1. 테스트 데이터셋 구성 (총 38개)
 # -----------------------------------------------------------------------------
 DATASET = [
-    # mcp.inventory (추가/소비)
-    {"text": "양파 2개 추가해", "expected": "mcp.inventory"},
-    {"text": "냉장고에 감자 3개 넣어둬", "expected": "mcp.inventory"},
-    {"text": "양상추 다 먹었어", "expected": "mcp.inventory"},
-    {"text": "바베큐 소스도 다 먹음", "expected": "mcp.inventory"},
-    {"text": "어제 소고기 구워먹었어", "expected": "mcp.inventory"},
-    {"text": "방울토마토 추가", "expected": "mcp.inventory"},
+    # inventory.action (추가/소비)
+    {"text": "양파 2개 추가해", "expected": "inventory.action"},
+    {"text": "냉장고에 감자 3개 넣어둬", "expected": "inventory.action"},
+    {"text": "양상추 다 먹었어", "expected": "inventory.action"},
+    {"text": "바베큐 소스도 다 먹음", "expected": "inventory.action"},
+    {"text": "어제 소고기 구워먹었어", "expected": "inventory.action"},
+    {"text": "방울토마토 추가", "expected": "inventory.action"},
     
-    # mcp.delete (폐기)
-    {"text": "상한 우유 버렸어", "expected": "mcp.delete"},
-    {"text": "오래된 계란 쓰레기통에 버림", "expected": "mcp.delete"},
-    {"text": "당근이 썩어서 폐기할게", "expected": "mcp.delete"},
-    {"text": "파프리카 삭제해줘", "expected": "mcp.delete"},
+    # inventory.delete (폐기)
+    {"text": "상한 우유 버렸어", "expected": "inventory.delete"},
+    {"text": "오래된 계란 쓰레기통에 버림", "expected": "inventory.delete"},
+    {"text": "당근이 썩어서 폐기할게", "expected": "inventory.delete"},
+    {"text": "파프리카 삭제해줘", "expected": "inventory.delete"},
     
-    # mcp.calendar (일정)
-    {"text": "내일 장보러 가야해", "expected": "mcp.calendar"},
-    {"text": "모레 이마트 배송 일정 등록해", "expected": "mcp.calendar"},
-    {"text": "이번주 주말에 마트 장보기", "expected": "mcp.calendar"},
+    # alarm.calendar (일정)
+    {"text": "내일 장보러 가야해", "expected": "alarm.calendar"},
+    {"text": "모레 이마트 배송 일정 등록해", "expected": "alarm.calendar"},
+    {"text": "이번주 주말에 마트 장보기", "expected": "alarm.calendar"},
     
     # inventory.list (재고 목록)
     {"text": "냉장고에 뭐 있어?", "expected": "inventory.list"},
@@ -73,22 +73,22 @@ DATASET = [
     {"text": "오늘 날씨 좋네", "expected": "general"},
     {"text": "넌 뭘 할 수 있어?", "expected": "general"},
     
-    # mcp.confirm / cancel (상태 전환)
-    {"text": "확인:add_ingredient:양파:2:냉장", "expected": "mcp.confirm"},
-    {"text": "취소", "expected": "mcp.cancel"},
+    # action.confirm / cancel (상태 전환)
+    {"text": "확인:add_ingredient:양파:2:냉장", "expected": "action.confirm"},
+    {"text": "취소", "expected": "action.cancel"},
     
     # ---------------------------------------------------------
     # 🌶️ Wild / Edge Cases (사용자가 횡설수설하거나 혼동하기 쉬운 문장들)
     # ---------------------------------------------------------
     {"text": "아 냉장고 보니까 오이가 좀 상한 거 같기도 하고... 일단 빼놓을까? 아니야 그냥 냅둬", "expected": "general"}, 
     {"text": "유통기한 다 된 우유로 뭐 만들 수 있을까?", "expected": "recipe.recommend"}, 
-    {"text": "저번에 양배추 다 먹었는데 이번 주말에 마트가서 또 사야겠다", "expected": "mcp.calendar"}, 
+    {"text": "저번에 양배추 다 먹었는데 이번 주말에 마트가서 또 사야겠다", "expected": "alarm.calendar"}, 
     {"text": "이 레시피 너무 어려운데 그냥 다 쓰레기통에 버릴까봐", "expected": "general"},
-    {"text": "양파 샀는데 아 아니다 양파 말고 대파 샀어", "expected": "mcp.inventory"},
+    {"text": "양파 샀는데 아 아니다 양파 말고 대파 샀어", "expected": "inventory.action"},
     {"text": "어제 먹다 남은 치킨 어디에 활용하지?", "expected": "recipe.recommend"},
     {"text": "방금 마트에서 삼겹살 샀는데 신선하게 보관하려면 어떡해?", "expected": "ingredient.guide"},
     {"text": "아까 오이 버렸는데 냉장고에 뭐 남았는지 좀 알려줄래?", "expected": "inventory.list"},
-    {"text": "장보기 귀찮은데 내일로 일정 미뤄줘", "expected": "mcp.calendar"},
+    {"text": "장보기 귀찮은데 내일로 일정 미뤄줘", "expected": "alarm.calendar"},
     {"text": "유통기한 지난 두부 폐기하지 말고 찌개에 넣을까", "expected": "recipe.recommend"},
 ]
 
@@ -101,18 +101,18 @@ def rule_based_router(text: str) -> str:
     normalized = _normalize_text(text)
     
     if normalized.startswith(CONFIRM_PREFIX):
-        return "mcp.confirm"
+        return "action.confirm"
     if normalized in CANCEL_WORDS:
-        return "mcp.cancel"
+        return "action.cancel"
         
     if any(word in normalized for word in DELETE_WORDS):
-        return "mcp.delete"
+        return "inventory.delete"
     if any(word in normalized for word in CONSUME_WORDS):
-        return "mcp.inventory"
+        return "inventory.action"
     if any(word in normalized for word in CALENDAR_WORDS):
-        return "mcp.calendar"
+        return "alarm.calendar"
     if any(word in normalized for word in ADD_WORDS):
-        return "mcp.inventory"
+        return "inventory.action"
     if any(word in normalized for word in EXPIRING_WORDS):
         return "inventory.expiring"
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
@@ -135,16 +135,16 @@ def llm_only_router(text: str) -> str:
     system_prompt = """다음 사용자의 입력을 분석하여 가장 알맞은 의도(Intent) 하나만 답변해. 
 답변은 아래 목록 중 정확히 하나여야 해.
 
-- mcp.inventory: 추가, 소비
-- mcp.delete: 폐기, 버림
-- mcp.calendar: 일정, 장보기
+- inventory.action: 추가, 소비
+- inventory.delete: 폐기, 버림
+- alarm.calendar: 일정, 장보기
 - inventory.list: 조회, 목록
 - inventory.expiring: 임박, 상하는, 기한
 - ingredient.guide: 보관, 세척, 손질, 신선도 질문 (남은 재료 보관 질문 포함)
 - recipe.search: 레시피 검색, 시간 기반
 - recipe.recommend: 메뉴 추천, 남은 재료 요리 추천
-- mcp.confirm: 확인
-- mcp.cancel: 취소
+- action.confirm: 확인
+- action.cancel: 취소
 - general: 인사, 잡담
 """
     try:
@@ -153,9 +153,9 @@ def llm_only_router(text: str) -> str:
             HumanMessage(content=text)
         ])
         ans = res.content.strip()
-        for valid in ["mcp.inventory", "mcp.delete", "mcp.calendar", "inventory.list", 
+        for valid in ["inventory.action", "inventory.delete", "alarm.calendar", "inventory.list", 
                       "inventory.expiring", "ingredient.guide", "recipe.search", 
-                      "recipe.recommend", "mcp.confirm", "mcp.cancel", "general"]:
+                      "recipe.recommend", "action.confirm", "action.cancel", "general"]:
             if valid in ans:
                 return valid
         return "general"
@@ -167,12 +167,12 @@ def hybrid_router(text: str) -> str:
     # 1. 룰 베이스 통과
     normalized = _normalize_text(text)
     
-    if normalized.startswith(CONFIRM_PREFIX): return "mcp.confirm"
-    if normalized in CANCEL_WORDS: return "mcp.cancel"
-    if any(word in normalized for word in DELETE_WORDS): return "mcp.delete"
-    if any(word in normalized for word in CONSUME_WORDS): return "mcp.inventory"
-    if any(word in normalized for word in CALENDAR_WORDS): return "mcp.calendar"
-    if any(word in normalized for word in ADD_WORDS): return "mcp.inventory"
+    if normalized.startswith(CONFIRM_PREFIX): return "action.confirm"
+    if normalized in CANCEL_WORDS: return "action.cancel"
+    if any(word in normalized for word in DELETE_WORDS): return "inventory.delete"
+    if any(word in normalized for word in CONSUME_WORDS): return "inventory.action"
+    if any(word in normalized for word in CALENDAR_WORDS): return "alarm.calendar"
+    if any(word in normalized for word in ADD_WORDS): return "inventory.action"
     if any(word in normalized for word in EXPIRING_WORDS): return "inventory.expiring"
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS): return "inventory.list"
     

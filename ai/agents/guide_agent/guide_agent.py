@@ -1,4 +1,6 @@
+import difflib
 import re
+import unicodedata
 from typing import Any
 from urllib.parse import urlparse
 
@@ -150,6 +152,88 @@ def _clean_query_keyword(text_value: str) -> str:
     for word in GUIDE_STOPWORDS:
         keyword = keyword.replace(word, " ")
     return re.sub(r"\s+", " ", keyword).strip()
+
+
+def _normalize_match_text(value: str | None) -> str:
+    value = unicodedata.normalize("NFKC", value or "").lower()
+    return re.sub(r"[^0-9a-z가-힣]", "", value)
+
+
+def _match_score(query: str, candidate: str) -> float:
+    query_norm = _normalize_match_text(query)
+    candidate_norm = _normalize_match_text(candidate)
+    if not query_norm or not candidate_norm:
+        return 0.0
+    if query_norm == candidate_norm:
+        return 1.0
+    if query_norm in candidate_norm or candidate_norm in query_norm:
+        return 0.94
+    return difflib.SequenceMatcher(None, query_norm, candidate_norm).ratio()
+
+
+def _guide_fuzzy_candidates(ingredient: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    query = """
+    MATCH (g)
+    WHERE (g:FoodGuide OR g:Ingredient)
+      AND coalesce(g.name, g.rawName, g.representativeName) IS NOT NULL
+      AND NOT coalesce(g.name, g.rawName, g.representativeName) STARTS WITH "food-guide-"
+    OPTIONAL MATCH (g)-[:HAS_ALIAS]->(alias:Alias)
+    WITH g, [name IN collect(DISTINCT alias.name) WHERE name IS NOT NULL] AS relation_aliases
+    RETURN g.key AS code,
+           coalesce(g.name, g.rawName, g.representativeName) AS name,
+           g.representativeName AS representative_name,
+           g.rawName AS raw_name,
+           coalesce(g.aliases, []) + relation_aliases AS aliases
+    """
+    scored: list[dict[str, Any]] = []
+    with guide_service.session() as session:
+        for record in session.run(query):
+            row = dict(record)
+            names = [
+                row.get("name"),
+                row.get("representative_name"),
+                row.get("raw_name"),
+                *(row.get("aliases") or []),
+            ]
+            score = max(_match_score(ingredient, name) for name in names if name)
+            if score >= 0.72:
+                scored.append(
+                    {
+                        "code": row.get("code"),
+                        "name": row.get("name"),
+                        "representative_name": row.get("representative_name"),
+                        "raw_name": row.get("raw_name"),
+                        "aliases": row.get("aliases") or [],
+                        "score": round(score, 3),
+                    }
+                )
+    return sorted(scored, key=lambda item: item["score"], reverse=True)[:limit]
+
+
+def _needs_confirmation(candidates: list[dict[str, Any]]) -> bool:
+    if not candidates:
+        return False
+    if candidates[0]["score"] < 0.88:
+        return True
+    return len(candidates) > 1 and candidates[0]["score"] - candidates[1]["score"] < 0.04
+
+
+def _confirm_ingredient_response(ingredient: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    return build_guide_response(
+        action="confirm_ingredient",
+        message=f"'{ingredient}'와 비슷한 식재료를 찾았어요. 어떤 재료를 조회할까요?",
+        data={"input": ingredient, "candidates": candidates},
+        requires_confirmation=True,
+        actions=[
+            {
+                "type": "select_candidate",
+                "label": f"{candidate['name']}로 조회",
+                "value": candidate["name"],
+            }
+            for candidate in candidates
+        ],
+        meta={"match_type": "fuzzy", "candidate_count": len(candidates)},
+    )
 
 
 def _lookup_guide_detail(ingredient: str) -> tuple[dict[str, Any] | None, list[dict[str, str | None]]]:
@@ -502,7 +586,27 @@ def answer_guide_query(query: str) -> dict[str, Any]:
 
     keyword = _clean_query_keyword(query)
     if any(word in query for word in NUTRITION_WORDS):
-        return lookup_ingredient_nutrition(keyword)
+        result = lookup_ingredient_nutrition(keyword)
+        if result.get("ok"):
+            return result
+
+        candidates = _guide_fuzzy_candidates(keyword)
+        if candidates:
+            if _needs_confirmation(candidates):
+                return _confirm_ingredient_response(keyword, candidates)
+
+            corrected = candidates[0]["name"]
+            result = lookup_ingredient_nutrition(corrected)
+            result["meta"].update(
+                {
+                    "match_type": "fuzzy_auto",
+                    "original_ingredient": keyword,
+                    "matched_ingredient": corrected,
+                    "match_score": candidates[0]["score"],
+                }
+            )
+            return result
+        return result
 
     ingredient = keyword or query
     result = lookup_ingredient_guide(ingredient)
@@ -511,6 +615,27 @@ def answer_guide_query(query: str) -> dict[str, Any]:
     guide = (data.get("guides") or {}).get(guide_type) or {}
     if result.get("ok") and guide.get("status") != "missing":
         return result
+
+    if not result.get("ok") and (result.get("error") or {}).get("code") == "GUIDE_NOT_FOUND":
+        candidates = _guide_fuzzy_candidates(ingredient)
+        if candidates:
+            if _needs_confirmation(candidates):
+                return _confirm_ingredient_response(ingredient, candidates)
+
+            corrected = candidates[0]["name"]
+            result = lookup_ingredient_guide(corrected)
+            result["meta"].update(
+                {
+                    "match_type": "fuzzy_auto",
+                    "original_ingredient": ingredient,
+                    "matched_ingredient": corrected,
+                    "match_score": candidates[0]["score"],
+                }
+            )
+            data = result.get("data", {})
+            guide = (data.get("guides") or {}).get(guide_type) or {}
+            if result.get("ok") and guide.get("status") != "missing":
+                return result
 
     ingredient_info = data.get("ingredient")
     nutrition = None
