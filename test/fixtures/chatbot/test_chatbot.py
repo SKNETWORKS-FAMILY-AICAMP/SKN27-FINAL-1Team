@@ -179,10 +179,18 @@ def test_delete_inventory_item_routes_to_mcp() -> None:
     result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
     assert result["response_text"] == "두부 폐기 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
-def test_calendar_action_routes_to_alarm() -> None:
-    """일정/캘린더 문장은 alarm.calendar 인텐트로 보냅니다."""
-    state = {"text": "내일 저녁 일정 등록해줘", "service": FakeService("general"), "history": []}
-    assert router_node(state)["intent"] == "alarm.calendar"
+def test_alarm_agent_feature_words_route_to_alarm() -> None:
+    """알람 에이전트가 제공하는 기능 키워드는 알람 에이전트로 보냅니다."""
+    messages = (
+        "내일 저녁 일정 등록해줘",
+        "내일 알람 삭제해줘",
+        "리마인더 조회해줘",
+        "푸시토큰 등록해줘",
+        "알림 읽음 처리해줘",
+    )
+
+    for message in messages:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.calendar"
 
 
 def test_calendar_delete_routes_to_alarm() -> None:

@@ -48,7 +48,7 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.pending_consume"}
 
     # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if any(word in normalized for word in ("일정", "캘린더", "알림")):
+    if any(word in normalized for word in ("일정", "캘린더", "알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")):
         return {"intent": "alarm.calendar"}
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
