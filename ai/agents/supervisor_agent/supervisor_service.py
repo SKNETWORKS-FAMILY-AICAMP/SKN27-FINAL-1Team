@@ -113,7 +113,7 @@ class ChatService:
             return "recipe.search"
 
         normalized = text.replace(" ", "").lower()
-        guide_words = ("보관", "세척", "씻", "손질", "신선", "가이드", "어떡", "남은")
+        guide_words = ('보관', '세척', '씻', '손질', '신선', '가이드', '어떡', '남은', '영양', '영양성분', '칼로리', '열량', '단백질', '탄수화물', '지방', '당류', '나트륨', '제철')
         if any(word in normalized for word in guide_words):
             return "ingredient.guide"
 
@@ -181,7 +181,7 @@ class ChatService:
         if any(word in normalized for word in ("레시피", "요리법", "요리")):
             return "recipe.search"
             
-        if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "세척", "씻", "신선", "확인", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
+        if any(word in normalized for word in ('보관법', '보관방법', '보관', '손질', '세척', '씻', '신선', '확인', '가이드', '어떡', '어떻게하지', '먹다남은', '남은', '영양', '영양성분', '칼로리', '열량', '단백질', '탄수화물', '지방', '당류', '나트륨', '제철')):
             return "ingredient.guide"
         if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")):
             return "inventory.expiring"
