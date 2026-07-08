@@ -64,6 +64,10 @@ function formatPrice(value) {
   return `${Number(value).toLocaleString('ko-KR')}원`
 }
 
+function buildOwnedSearchLink(name) {
+  return `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(name)}`
+}
+
 function formatQuantity(item) {
   if (item.amount) {
     return item.amount
@@ -127,7 +131,7 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
           <span className="shopping-eyebrow">장보기 시작</span>
           <h1 id="shopping-title">무엇을 기준으로 장볼까요?</h1>
           <p>
-            레시피에서 부족 재료를 바로 확인하거나, 최근 장보기 목록을 이어서 볼 수 있어요.
+            레시피에서 부족한 재료를 바로 확인하거나, 최근 장보기 목록을 이어서 볼 수 있어요.
           </p>
         </div>
         <div className="shopping-hero__art" aria-hidden="true">
@@ -147,8 +151,9 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
             <span>최근 장바구니</span>
             <h2>이어서 장보기</h2>
             <p>
-              구매 전 재료 {recentList.items.filter((item) => !item.is_purchased).length}개가 남아 있어요.
-              {formatCreatedAt(recentList.created_at)} 기준 목록입니다.
+              아직 담아둔 재료 {recentList.items.filter((item) => !item.is_purchased).length}개가 있어요
+              {' '}
+              <span className="shopping-start-card__meta">({formatCreatedAt(recentList.created_at)} 기준)</span>
             </p>
             <button className="shopping-primary-action" type="button" onClick={onContinue}>
               이어서 장보기
@@ -158,7 +163,7 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
 
         <article className="shopping-start-card">
           <span>1순위 흐름</span>
-          <h2>레시피 기준으로 장보기</h2>
+          <h2>레시피 기준 장보기</h2>
           <p>레시피 상세에서 냉장고 재료와 비교한 뒤 부족한 재료만 구매 링크로 연결해요.</p>
           <button className="shopping-soft-action" type="button" onClick={onRecipeBrowse}>
             레시피 먼저 확인하기
@@ -489,7 +494,11 @@ function ShoppingList() {
 
           <div className="shopping-item-rows">
             {activeItems.length === 0 ? (
-              <p className="shopping-empty-note">구매가 필요한 재료를 모두 냉장고에 입고했어요.</p>
+              <p className="shopping-empty-note">
+                {ownedItems.length > 0
+                  ? '따로 구매할 재료가 없어요. 필요한 재료는 이미 냉장고에 있어요.'
+                  : '구매가 필요한 재료를 모두 냉장고에 입고했어요.'}
+              </p>
             ) : (
               activeItems.map((item) => (
                 <div className="shopping-item-row" key={item.id}>
@@ -524,6 +533,28 @@ function ShoppingList() {
                 </div>
               ))
             )}
+
+            {ownedItems.map((item, index) => (
+              <div className="shopping-item-row shopping-item-row--owned" key={`owned-${item.name}-${index}`}>
+                <span className="shopping-owned-check" aria-hidden="true" />
+                <ImageSlot className="shopping-item-row__image" src={null} alt="" />
+                <div className="shopping-item-row__info">
+                  <strong>{item.name}{item.amount ? <span>· {item.amount}</span> : null}</strong>
+                  <small>냉장고에 있는 재료라 구매하지 않아도 돼요</small>
+                </div>
+                <div className="shopping-item-row__meta">
+                  <span className="shopping-owned-badge">이미 있음</span>
+                </div>
+                <a
+                  className="shopping-item-row__link"
+                  href={buildOwnedSearchLink(item.name)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  구매 링크
+                </a>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -568,20 +599,11 @@ function ShoppingList() {
 
           <div className="shopping-sidebar__card">
             <div className="shopping-sidebar__card-head">
-              <h3>이미 있는 재료</h3>
-              <span>{ownedItems.length}개</span>
+              <h3>구매 링크 안내</h3>
             </div>
-            {ownedItems.length > 0 ? (
-              <div className="shopping-owned-chips">
-                {ownedItems.map((item, index) => (
-                  <span key={`${item.name}-${index}`}>
-                    {item.name}{item.amount ? ` ${item.amount}` : ''}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="shopping-sidebar__note">보유 재료 정보는 레시피 상세에서 이어온 경우에만 표시돼요.</p>
-            )}
+            <p className="shopping-sidebar__note">
+              <span className="shopping-owned-badge">이미 있음</span> 표시는 냉장고에 있는 재료예요. 구매 대상·금액·입고에는 포함되지 않아요.
+            </p>
             <p className="shopping-sidebar__note">
               {isFallbackList
                 ? '지금은 장보기 목록 생성에 실패해 부족 재료만 임시로 보여주고 있어요.'
