@@ -87,17 +87,17 @@ def test_alarm_agent_feature_applies_or_ignores_human_choice(choice, expected):
 
 
 @pytest.mark.parametrize(
-    ("intent", "action"),
+    ("intent", "action", "payload"),
     [
-        ("calendar.create", "create_event"),
-        ("calendar.delete", "delete_event"),
-        ("calendar.sync_daily", "sync_daily_events"),
-        ("alarm.read", "mark_notification_read"),
-        ("alarm.register_device", "register_device_token"),
+        ("calendar.create", "create_event", {"title": "두부 알림"}),
+        ("calendar.delete", "delete_event", {"title": "두부 알림", "event_key": "calendar-agent-7-x"}),
+        ("calendar.sync_daily", "sync_daily_events", {"title": "두부 알림"}),
+        ("alarm.read", "mark_notification_read", {"title": "두부 알림"}),
+        ("alarm.register_device", "register_device_token", {"title": "두부 알림"}),
     ],
 )
-def test_alarm_agent_feature_mutating_actions_require_confirmation(intent, action):
-    result = run(intent, {"title": "두부 알림"})
+def test_alarm_agent_feature_mutating_actions_require_confirmation(intent, action, payload):
+    result = run(intent, payload)
 
     assert result["ok"] is True
     assert result["action"] == action

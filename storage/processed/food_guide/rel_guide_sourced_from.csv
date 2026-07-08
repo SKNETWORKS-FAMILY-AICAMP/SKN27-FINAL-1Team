@@ -1,4 +1,4 @@
-﻿guide_id,source_id,relationship
+guide_id,source_id,relationship
 guide_0001,source_0007,SOURCED_FROM
 guide_0002,source_0007,SOURCED_FROM
 guide_0003,source_0007,SOURCED_FROM
@@ -774,9 +774,6 @@ guide_0772,source_0172,SOURCED_FROM
 guide_0773,source_0173,SOURCED_FROM
 guide_0774,source_0174,SOURCED_FROM
 guide_0775,source_0173,SOURCED_FROM
-guide_0776,source_0175,SOURCED_FROM
-guide_0777,source_0175,SOURCED_FROM
-guide_0778,source_0175,SOURCED_FROM
 guide_0779,source_0173,SOURCED_FROM
 guide_0780,source_0174,SOURCED_FROM
 guide_0781,source_0173,SOURCED_FROM
@@ -792,9 +789,6 @@ guide_0790,source_0176,SOURCED_FROM
 guide_0791,source_0177,SOURCED_FROM
 guide_0792,source_0178,SOURCED_FROM
 guide_0793,source_0177,SOURCED_FROM
-guide_0794,source_0179,SOURCED_FROM
-guide_0795,source_0179,SOURCED_FROM
-guide_0796,source_0179,SOURCED_FROM
 guide_0797,source_0177,SOURCED_FROM
 guide_0798,source_0178,SOURCED_FROM
 guide_0799,source_0177,SOURCED_FROM
@@ -1194,3 +1188,6 @@ guide_1192,source_0180,SOURCED_FROM
 guide_1193,source_0180,SOURCED_FROM
 guide_1194,source_0180,SOURCED_FROM
 guide_1195,source_0180,SOURCED_FROM
+guide_1196,source_0183,SOURCED_FROM
+guide_1197,source_0183,SOURCED_FROM
+guide_1198,source_0183,SOURCED_FROM

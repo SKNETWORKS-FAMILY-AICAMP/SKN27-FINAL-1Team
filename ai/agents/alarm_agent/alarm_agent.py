@@ -24,6 +24,7 @@ MSG_UNKNOWN = "알림/캘린더 agent가 처리할 수 없는 요청이에요."
 MSG_TOOL_MISSING = "실행할 도구가 연결되지 않았어요."
 MSG_TOOL_FAILED = "도구 실행에 실패했어요."
 MSG_ASYNC_REQUIRED = "비동기 환경에서는 arun()을 호출해주세요."
+MSG_DELETE_NOT_FOUND = "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."
 TITLE_CALENDAR_EVENT = "캘린더 일정"
 LABEL_CREATE = "등록"
 LABEL_DELETE = "삭제"
@@ -49,7 +50,7 @@ _CONFIRM_ACTIONS = {"create_event", "delete_event", "sync_daily_events", "mark_n
 _CREATE_WORDS = ("등록", "추가", "생성", "예약", "잡아", "만들", "설정")
 _DELETE_WORDS = ("삭제", "지워", "취소", "없애")
 _LIST_WORDS = ("조회", "목록", "보여", "확인", "알려")
-_SYNC_WORDS = ("동기화", "자동", "일일", "오늘알림", "아침")
+_SYNC_WORDS = ("동기화", "자동 알림", "일일 알림", "오늘알림", "아침 알림")
 _CALENDAR_WORDS = ("캘린더", "일정", "알림", "알람", "리마인더")
 _DATE_WORDS = ("오늘", "내일", "모레")
 _CONSUME_WORDS = ("먹", "사용", "소비", "처리", "요리")
@@ -107,11 +108,15 @@ def _unknown() -> dict[str, Any]:
 def _confirmation(intent: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
     title = payload.get("title") or payload.get("summary") or payload.get("event_key") or TITLE_CALENDAR_EVENT
     label = LABEL_DELETE if action == "delete_event" else LABEL_SYNC if action == "sync_daily_events" else LABEL_CREATE
+    subject = title
+    if action == "delete_event":
+        date_text = payload.get("date_text")
+        subject = " ".join(part for part in (date_text, title, "일정") if part)
     return build_response(
         ok=True,
         action=action,
         intent=intent,
-        message=f"{title} {label}할까요?",
+        message=f"{subject} {label}할까요?",
         data={"payload": deepcopy(payload)},
         requires_confirmation=True,
         ui={
@@ -194,7 +199,12 @@ def _contains_any(text: str, words: tuple[str, ...]) -> bool:
 
 
 def _extract_date_text(text: str) -> str | None:
-    for pattern in (r"\d{4}-\d{1,2}-\d{1,2}", r"\d{1,2}/\d{1,2}", r"\d{1,2}월\s*\d{1,2}일"):
+    for pattern in (
+        r"\d{4}년\s*\d{1,2}월\s*\d{1,2}일",
+        r"\d{4}-\d{1,2}-\d{1,2}",
+        r"\d{1,2}/\d{1,2}",
+        r"\d{1,2}월\s*\d{1,2}일",
+    ):
         match = re.search(pattern, text)
         if match:
             return match.group(0)
@@ -202,7 +212,11 @@ def _extract_date_text(text: str) -> str | None:
 
 
 def _extract_title(text: str) -> str:
-    title = re.sub(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}|\d{1,2}월\s*\d{1,2}일", " ", text)
+    title = re.sub(
+        r"\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}|\d{1,2}월\s*\d{1,2}일",
+        " ",
+        text,
+    )
     for word in (
         ("먹으라고", "사야한다고")
         + _CALENDAR_WORDS
@@ -235,10 +249,10 @@ def analyze_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str
     elif _contains_any(compact, _CALENDAR_WORDS):
         if _contains_any(compact, _DELETE_WORDS):
             intent = "calendar.delete"
-        elif _contains_any(compact, _SYNC_WORDS):
-            intent = "calendar.sync_daily"
         elif _contains_any(compact, _LIST_WORDS) and not _contains_any(compact, _CREATE_WORDS):
             intent = "calendar.list"
+        elif _contains_any(text, _SYNC_WORDS):
+            intent = "calendar.sync_daily"
         elif _contains_any(compact, _CREATE_WORDS):
             intent = "calendar.create"
         else:
@@ -247,6 +261,10 @@ def analyze_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str
         intent = "unknown"
 
     action, _ = _INTENT_ACTIONS.get(intent, ("unknown", MSG_HANDLED))
+    if action in {"list_events", "sync_daily_events"}:
+        date_text = _extract_date_text(text)
+        if date_text:
+            payload.setdefault("date_text", date_text)
     if action in {"create_event", "delete_event"}:
         payload.setdefault("title", _extract_title(text))
         date_text = _extract_date_text(text)
@@ -263,6 +281,77 @@ def analyze_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str
                 intent, action = "alarm.clarify", "clarify"
 
     return {"intent": intent, "action": action, "payload": payload}
+
+
+def _candidate_matches_title(candidate: dict[str, Any], title: str | None) -> bool:
+    if not title or title == TITLE_CALENDAR_EVENT:
+        return True
+    expected = re.sub(r"\s+", "", title)
+    actual = re.sub(r"\s+", "", candidate.get("title") or candidate.get("summary") or "")
+    return expected in actual or actual in expected
+
+
+def _fill_calendar_payload(text: str | None, intent: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if text in _INTENT_ACTIONS:
+        text = None
+    if action in {"list_events", "create_event", "delete_event", "sync_daily_events"}:
+        date_text = _extract_date_text(text or "")
+        if date_text:
+            payload.setdefault("date_text", date_text)
+    if action in {"create_event", "delete_event"}:
+        payload.setdefault("title", _extract_title(text or ""))
+    return payload
+
+
+def _delete_candidate_response(intent: str, action: str, payload: dict[str, Any], tool_result: dict[str, Any]) -> dict[str, Any]:
+    if tool_result.get("ok") is False:
+        return _from_tool_result(intent, "list_events", MSG_CALENDAR_LIST, tool_result)
+
+    events = (tool_result.get("data") or {}).get("events") or []
+    title = payload.get("title")
+    candidates = [event for event in events if event.get("eventKey") and _candidate_matches_title(event, title)]
+
+    if not candidates:
+        return build_response(ok=False, action=action, intent=intent, message=MSG_DELETE_NOT_FOUND, error={"code": "CALENDAR_EVENT_NOT_FOUND", "message": MSG_DELETE_NOT_FOUND})
+
+    if len(candidates) == 1:
+        event = candidates[0]
+        next_payload = {
+            **payload,
+            "event_key": event["eventKey"],
+            "title": event.get("title") or title or TITLE_CALENDAR_EVENT,
+            "date_text": payload.get("date_text") or event.get("dateKey"),
+        }
+        return _confirmation(intent, action, next_payload)
+
+    return build_response(
+        ok=True,
+        action=action,
+        intent=intent,
+        message="삭제할 일정을 선택해주세요.",
+        data={"candidates": candidates},
+        requires_confirmation=True,
+        ui={
+            "actions": [
+                {
+                    "type": "confirm",
+                    "label": f"{event.get('dateKey') or ''} {event.get('title') or TITLE_CALENDAR_EVENT} 삭제",
+                    "value": {
+                        "intent": intent,
+                        "action": action,
+                        "payload": {
+                            **payload,
+                            "event_key": event["eventKey"],
+                            "title": event.get("title") or title or TITLE_CALENDAR_EVENT,
+                            "date_text": payload.get("date_text") or event.get("dateKey"),
+                        },
+                    },
+                }
+                for event in candidates[:5]
+            ]
+        },
+        meta={"human_in_the_loop": True, "stage": "select_delete_candidate"},
+    )
 
 
 def _resolve_request(
@@ -287,7 +376,8 @@ def _resolve_request(
         return "unknown", "unknown", {}, MSG_UNKNOWN
 
     inferred_action, message = _INTENT_ACTIONS.get(intent, (action or "unknown", MSG_HANDLED))
-    return intent, action or inferred_action, payload, message
+    resolved_action = action or inferred_action
+    return intent, resolved_action, _fill_calendar_payload(text_or_intent, intent, resolved_action, payload), message
 
 
 async def execute_tool(
@@ -329,6 +419,12 @@ async def arun(
 
     if tool_result is not None:
         return _from_tool_result(intent, action, message, tool_result)
+
+    if action == "delete_event" and not payload.get("event_key"):
+        if tools and "list_events" in tools:
+            result = await execute_tool("list_events", payload, tools, context)
+            return _delete_candidate_response(intent, action, payload, result)
+        return build_response(ok=False, action=action, intent=intent, message=MSG_DELETE_NOT_FOUND, error={"code": "CALENDAR_EVENT_NOT_FOUND", "message": MSG_DELETE_NOT_FOUND})
 
     if action in _CONFIRM_ACTIONS and not confirmed:
         return _confirmation(intent, action, payload)

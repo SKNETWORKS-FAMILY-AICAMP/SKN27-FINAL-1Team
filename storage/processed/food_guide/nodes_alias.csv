@@ -1,4 +1,4 @@
-﻿alias_id,name
+alias_id,name
 alias_0001,갓김치
 alias_0002,장아찌
 alias_0003,고추장아찌
@@ -821,7 +821,6 @@ alias_0819,메추라기
 alias_0820,메추라기알
 alias_0821,메추리알
 alias_0822,닭가슴살
-alias_0823,닭
 alias_0824,닭날개
 alias_0825,닭다리
 alias_0826,닭다리살
@@ -949,10 +948,6 @@ alias_0952,대파뿌리
 alias_0953,고추씨
 alias_0954,고춧씨
 alias_0955,잡곡밥
-alias_0956,돼지고기 내장
-alias_0957,돼지꼬리
-alias_0958,돼지부산물꼬리
-alias_0959,돼지등뼈
 alias_0960,돼지뼈
 alias_0961,들기름 드레싱
 alias_0962,들기름드레싱
@@ -1113,7 +1108,6 @@ alias_1116,얼그레이 시럽
 alias_1117,요리당
 alias_1118,원당
 alias_1119,청귤청
-alias_1120,초코시럽
 alias_1121,카라멜시럽
 alias_1122,카라멜 시럽
 alias_1123,둘세데레체시럽
@@ -1228,7 +1222,6 @@ alias_1231,조미소스
 alias_1232,참깨드레싱
 alias_1233,참소스
 alias_1234,초대리
-alias_1235,초코소스
 alias_1236,치폴레소스
 alias_1237,크림소스
 alias_1238,크림스튜루
@@ -1614,3 +1607,12 @@ alias_1617,소갈비양념
 alias_1618,인스턴트커피
 alias_1619,커피
 alias_1620,샐러드채소
+alias_1621,돼지 사태
+alias_1622,돼지고기 사태
+alias_1623,돼지사태
+alias_1624,돼지고기사태
+alias_1625,소고기 등심
+alias_1626,짜장소스
+alias_0823,닭
+alias_0956,돼지고기 내장
+alias_0959,돼지등뼈

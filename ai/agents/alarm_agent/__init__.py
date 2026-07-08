@@ -5,6 +5,7 @@ _TOOL_EXPORTS = {
     "create_calendar_event_tool",
     "delete_calendar_event_tool",
     "list_calendar_events_tool",
+    "sync_daily_events_tool",
 }
 
 
@@ -26,5 +27,6 @@ __all__ = [
     "delete_calendar_event_tool",
     "execute_tool",
     "list_calendar_events_tool",
+    "sync_daily_events_tool",
     "run",
 ]

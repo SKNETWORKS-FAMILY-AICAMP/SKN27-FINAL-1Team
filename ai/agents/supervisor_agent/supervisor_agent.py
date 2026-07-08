@@ -48,7 +48,7 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "mcp.pending_consume"}
 
     # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if any(word in normalized for word in ("일정", "캘린더", "알림")):
+    if any(word in normalized for word in ("일정", "캘린더", "알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")):
         return {"intent": "alarm.calendar"}
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
@@ -68,10 +68,7 @@ def router_node(state: GraphState) -> dict:
 
 
 
-def _is_calendar_delete_request(text: str) -> bool:
-    """일정 삭제 요청인지 확인합니다."""
-    normalized = _normalize_text(text)
-    return any(word in normalized for word in ("일정", "캘린더", "알림")) and any(word in normalized for word in DELETE_WORDS)
+
 
 
 def _format_calendar_events(data: dict) -> str | None:
@@ -142,12 +139,6 @@ def alarm_agent_node(state: GraphState) -> dict:
     text = state["text"]
     confirmed = (intent == "mcp.confirm")
 
-    if not confirmed and _is_calendar_delete_request(text):
-        return {
-            "response_text": "일정 삭제는 정확한 일정 선택이 필요해요. 등록된 일정을 확인한 뒤 캘린더 화면에서 삭제해주세요.",
-            "actions": [{"label": "캘린더 확인하기", "url": "/mypage"}],
-        }
-    
     # 챗봇 프론트에서 들어온 '확인' 액션일 경우 파싱 (기존 동작 호환)
     action = None
     payload = None
@@ -165,6 +156,12 @@ def alarm_agent_node(state: GraphState) -> dict:
                 action = "create_event"
                 alarm_intent = "calendar.create"
                 payload = {"title": parts[2], "date_text": ":".join(parts[3:])}
+            elif len(parts) >= 3 and action == "delete_event":
+                alarm_intent = "calendar.delete"
+                payload = {"event_key": parts[2]}
+            elif action == "sync_daily_events":
+                alarm_intent = "calendar.sync_daily"
+                payload = {}
     elif any(word in text for word in ("조회", "있어", "확인")):
         # 등록된 일정 조회 문장이 등록 요청으로 오분류되지 않게 조회 의도를 고정합니다.
         alarm_intent = "calendar.list"
@@ -201,6 +198,12 @@ def alarm_agent_node(state: GraphState) -> dict:
                     t = p.get("title", "")
                     d = p.get("date_text", "")
                     actions.append({"label": label, "data": {"message": f"확인:add_calendar_event:{t}:{d}"}})
+                elif val.get("action") == "delete_event":
+                    p = val.get("payload", {})
+                    event_key = p.get("event_key", "")
+                    actions.append({"label": label, "data": {"message": f"확인:delete_event:{event_key}"}})
+                elif val.get("action") == "sync_daily_events":
+                    actions.append({"label": label, "data": {"message": "확인:sync_daily_events"}})
                 else:
                     # 기타 알람 액션
                     a_name = val.get("action", "")

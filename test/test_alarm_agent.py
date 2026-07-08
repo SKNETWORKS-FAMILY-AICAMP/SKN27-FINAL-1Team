@@ -63,6 +63,20 @@ def test_alarm_agent_analyzes_shopping_alarm_text():
     assert result["payload"]["reminder_type"] == "shopping_reminder"
 
 
+def test_alarm_agent_date_lookup_stays_calendar_list():
+    cases = {
+        "7\uc6d4 8\uc77c \uc77c\uc815 \uc870\ud68c\ud574\uc918": "7\uc6d4 8\uc77c",
+        "2026\ub144 7\uc6d4 8\uc77c \uc77c\uc815 \uc54c\ub824\uc918": "2026\ub144 7\uc6d4 8\uc77c",
+        "\ub0b4\uc77c \uc77c\uc815 \uc788\uc5b4?": "\ub0b4\uc77c",
+    }
+
+    for text, date_text in cases.items():
+        result = analyze_intent(text)
+        assert result["intent"] == "calendar.list"
+        assert result["action"] == "list_events"
+        assert result["payload"]["date_text"] == date_text
+
+
 def test_alarm_agent_applies_human_choice_to_payload():
     payload = apply_human_choice({"title": "\ub450\ubd80", "date_text": "\ub0b4\uc77c"}, "shopping_reminder")
 
@@ -219,6 +233,52 @@ def test_alarm_agent_real_delete_tool_calls_calendar_helpers(monkeypatch):
     delete_once.assert_awaited_once()
 
 
+def test_alarm_agent_delete_without_event_key_resolves_candidate_before_confirm():
+    calls = []
+
+    def list_tool(payload, context):
+        calls.append((payload, context))
+        return {
+            "ok": True,
+            "data": {
+                "events": [
+                    {"eventKey": "calendar-agent-7-x", "dateKey": "\ub0b4\uc77c", "title": "\ubbf8\ud305"},
+                ]
+            },
+        }
+
+    result = asyncio.run(
+        arun(
+            "\ub0b4\uc77c \ubbf8\ud305 \uc77c\uc815 \uc0ad\uc81c\ud574\uc918",
+            tools={"list_events": list_tool},
+            context={"db": MagicMock(), "user_id": 7},
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["requires_confirmation"] is True
+    assert result["message"] == "\ub0b4\uc77c \ubbf8\ud305 \uc77c\uc815 \uc0ad\uc81c\ud560\uae4c\uc694?"
+    assert result["data"]["payload"]["event_key"] == "calendar-agent-7-x"
+    assert calls[0][0]["date_text"] == "\ub0b4\uc77c"
+
+
+def test_alarm_agent_delete_without_candidate_uses_user_message():
+    def list_tool(payload, context):
+        return {"ok": True, "data": {"events": []}}
+
+    result = asyncio.run(
+        arun(
+            "\ub0b4\uc77c \ubbf8\ud305 \uc77c\uc815 \uc0ad\uc81c\ud574\uc918",
+            tools={"list_events": list_tool},
+            context={"db": MagicMock(), "user_id": 7},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "CALENDAR_EVENT_NOT_FOUND"
+    assert "\ubc25\ubc8c\uc774\uc5d0\uc11c \ub4f1\ub85d\ud55c \uc77c\uc815\ub9cc \uc0ad\uc81c" in result["message"]
+
+
 def test_alarm_agent_real_list_tool_calls_calendar_api(monkeypatch):
     list_events = AsyncMock(return_value={"events": [{"eventKey": "calendar-agent-7-x"}]})
     monkeypatch.setattr(alarm_tools.calendar_api, "list_google_calendar_events", list_events)
@@ -235,6 +295,18 @@ def test_alarm_agent_real_list_tool_calls_calendar_api(monkeypatch):
     assert result["ok"] is True
     assert result["data"] == {"events": [{"eventKey": "calendar-agent-7-x"}]}
     list_events.assert_awaited_once()
+
+
+def test_alarm_agent_tools_include_sync_daily():
+    assert {
+        "create_event",
+        "delete_event",
+        "list_events",
+        "sync_daily_events",
+        "list_notifications",
+        "mark_notification_read",
+        "register_device_token",
+    } <= set(ALARM_AGENT_TOOLS)
 
 
 def test_calendar_agent_event_key_is_visible_to_calendar_api():
