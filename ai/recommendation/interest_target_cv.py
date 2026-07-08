@@ -1,4 +1,4 @@
-"""24->26 조회수 로그 변화 타깃 전용 KFold 진단."""
+"""2026 조회수 로그 타깃 전용 KFold 진단."""
 
 from __future__ import annotations
 
@@ -29,10 +29,10 @@ from ai.recommendation.config import (
 )
 from ai.recommendation.utils import reset_seeds
 
-INTEREST_TARGET_COL = "INTEREST_TARGET_LOG_DELTA_2024_2026"
-INTEREST_TARGET_FORMULA = "log1p(INQ_CNT_2026) - log1p(INQ_CNT_2024)"
-REPORT_PATH = ARTIFACTS_DIR / "interest_target_kfold_report.json"
-PREDICTIONS_PATH = ARTIFACTS_DIR / "interest_target_kfold_predictions.csv"
+INTEREST_TARGET_COL = "INTEREST_TARGET_LOG_2026"
+INTEREST_TARGET_FORMULA = "log1p(INQ_CNT_2026)"
+REPORT_PATH = ARTIFACTS_DIR / "interest_target_2026log_kfold_report.json"
+PREDICTIONS_PATH = ARTIFACTS_DIR / "interest_target_2026log_kfold_predictions.csv"
 QUALITY_BASELINE_PATH = ARTIFACTS_DIR / "stratified_kfold_report.json"
 SUMMARY_METRICS = ("Spearman", "Hit@10", "Hit@20", "Hit@50", "RMSE", "MAE", "R2")
 
@@ -82,18 +82,15 @@ def _summary_from_folds(folds: list[dict[str, Any]]) -> dict[str, dict[str, floa
 
 def _audit_interest_target(merged: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     out = merged.copy()
-    c24 = pd.to_numeric(out["INQ_CNT_2024"], errors="coerce")
     c26 = pd.to_numeric(out["INQ_CNT_2026"], errors="coerce")
-    valid = c24.notna() & c26.notna() & (c24 >= 0) & (c26 >= 0)
+    valid = c26.notna() & (c26 >= 0)
     out[INTEREST_TARGET_COL] = np.nan
-    out.loc[valid, INTEREST_TARGET_COL] = np.log1p(c26[valid]) - np.log1p(c24[valid])
+    out.loc[valid, INTEREST_TARGET_COL] = np.log1p(c26[valid])
     target = out.loc[valid, INTEREST_TARGET_COL].to_numpy(dtype=float)
     audit = {
         "rows_total": int(len(out)),
         "valid_rows": int(valid.sum()),
-        "null_2024": int(c24.isna().sum()),
         "null_2026": int(c26.isna().sum()),
-        "negative_2024": int((c24 < 0).sum()),
         "negative_2026": int((c26 < 0).sum()),
         "target_p01": float(np.quantile(target, 0.01)),
         "target_p50": float(np.quantile(target, 0.5)),

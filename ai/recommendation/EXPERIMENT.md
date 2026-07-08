@@ -1509,3 +1509,55 @@ baseline(winner) 기준으로 재생성 완료.
   - 품질 점수와 관심도 점수를 별도 모델로 학습한 뒤 가중 결합 실험
   - 관심도 모델에서 누수 가능성 재점검(추가 제외군 실험)
 
+---
+
+# 15. 2026 조회수(log) 타깃 KFold 진단 (비적용)
+
+직전 실험(#14)의 타깃을 `24->26 log-delta`에서 `2026 조회수 log` 자체로 바꾼
+진단 실험입니다. production 반영 없이 비교 데이터만 기록합니다.
+
+## 1. 타깃·데이터
+
+- 타깃: `INTEREST_TARGET_LOG_2026 = log1p(INQ_CNT_2026)` (런타임 재계산)
+- 유효 행: **3170 / 3171**
+  - `INQ_CNT_2026` 결측 1건, 음수 0건
+- 분포 요약:
+  - p01/p50/p99 = 7.1905 / 8.3971 / 10.6058
+  - mean/std = 8.5055 / 0.7568
+
+## 2. 실행·산출물
+
+- 실행: `python -m ai.recommendation.interest_target_cv`
+- 산출물:
+  - `ai/recommendation/artifacts/interest_target_2026log_kfold_report.json`
+  - `ai/recommendation/artifacts/interest_target_2026log_kfold_predictions.csv`
+- 비교군:
+  - A: 기존 feature 12개
+  - B: `INQ_CNT_LOG_CENTERED` 제외(11개)
+
+## 3. 결과 요약 (A/B + 직전 log-delta 비교)
+
+| 타깃 / 비교군 | Spearman mean | Spearman std | Spearman min | Hit@10 mean | Hit@20 mean | Hit@50 mean |
+|---|---:|---:|---:|---:|---:|---:|
+| 2026 log / A | **0.7254** | **0.0094** | **0.7112** | **0.40** | **0.48** | **0.552** |
+| 2026 log / B | 0.2411 | 0.0278 | 0.2100 | 0.14 | 0.14 | 0.240 |
+| 24->26 log-delta / A (#14) | 0.4086 | 0.0321 | 0.3752 | 0.04 | 0.03 | 0.144 |
+| 24->26 log-delta / B (#14) | 0.3144 | 0.0235 | 0.2745 | 0.02 | 0.06 | 0.120 |
+
+## 4. 해석
+
+- 같은 모델/구성에서 타깃을 `2026 log`로 두면 A군 성능이 크게 상승했습니다.
+  - Spearman mean: 0.4086 -> **0.7254**
+  - std: 0.0321 -> **0.0094** (fold 안정성 개선)
+  - min: 0.3752 -> **0.7112**
+- A/B 격차가 매우 커져(`+0.4843`), `INQ_CNT_LOG_CENTERED` 신호의 기여가
+  2026 log 타깃에 특히 강하게 작용함을 확인했습니다.
+
+## 5. 결론 (비적용)
+
+- 본 결과는 **diagnostic only**이며 production 타깃/스코어링에는 미반영.
+- 의미: “26년 절대 관심도” 예측 목적에는 현재 피처/모델이 적합할 가능성이 높음.
+- 다음 검토:
+  - 관심도 모델을 별도 트랙으로 유지하고 품질 모델과 후단 결합 실험
+  - 타깃 누수/시간축 해석을 위한 추가 제외군(`SRAP`, `INQ rate`) 점검
+
