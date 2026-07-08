@@ -5,6 +5,7 @@ import './ShoppingList.css'
 import imageShop from '../../assets/extracted/images/image_shop.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
+  compareShoppingProducts,
   completeShoppingPurchase,
   deleteShoppingListItem,
   getCurrentShoppingList,
@@ -62,10 +63,6 @@ function formatPrice(value) {
     return '가격 확인 필요'
   }
   return `${Number(value).toLocaleString('ko-KR')}원`
-}
-
-function buildOwnedSearchLink(name) {
-  return `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(name)}`
 }
 
 function formatQuantity(item) {
@@ -194,6 +191,7 @@ function ShoppingList() {
   const [isMutating, setIsMutating] = useState(false)
   const [error, setError] = useState('')
   const [startNotice, setStartNotice] = useState('')
+  const [ownedProductMap, setOwnedProductMap] = useState({})
 
   const isLoggedIn = hasShoppingAuth()
   const shoppingListId = searchParams.get('shoppingListId')
@@ -204,6 +202,11 @@ function ShoppingList() {
   const ownedItems = storedContext?.recipeId && Number(storedContext.recipeId) === Number(shoppingList?.recipe_id)
     ? storedContext.ownedIngredients
     : []
+  const ownedProductQuery = ownedItems.map((item) => item.name).filter(Boolean).join('|')
+  const ownedShoppingItems = ownedItems.map((item) => ({
+    ...item,
+    ...(ownedProductMap[item.name] || {}),
+  }))
   const activeItems = items.filter((item) => !item.is_purchased)
 
   useEffect(() => {
@@ -268,6 +271,43 @@ function ShoppingList() {
       isAlive = false
     }
   }, [shoppingListId])
+
+  useEffect(() => {
+    let isAlive = true
+
+    async function loadOwnedProducts() {
+      if (!shoppingList?.recipe_id || isFallbackList || ownedItems.length === 0 || !hasShoppingAuth()) {
+        setOwnedProductMap({})
+        return
+      }
+
+      const ingredientNames = [...new Set(ownedItems.map((item) => item.name).filter(Boolean))]
+      if (ingredientNames.length === 0) {
+        setOwnedProductMap({})
+        return
+      }
+
+      try {
+        const data = await compareShoppingProducts(ingredientNames)
+        if (!isAlive) return
+
+        const nextMap = {}
+        ;(data.market_prices || []).forEach((row) => {
+          nextMap[row.name] = row
+        })
+        setOwnedProductMap(nextMap)
+      } catch {
+        if (isAlive) {
+          setOwnedProductMap({})
+        }
+      }
+    }
+
+    loadOwnedProducts()
+    return () => {
+      isAlive = false
+    }
+  }, [shoppingList?.recipe_id, isFallbackList, ownedProductQuery])
 
   const allChecked = activeItems.length > 0 && activeItems.every((item) => item.is_checked)
 
@@ -534,25 +574,33 @@ function ShoppingList() {
               ))
             )}
 
-            {ownedItems.map((item, index) => (
+            {ownedShoppingItems.map((item, index) => (
               <div className="shopping-item-row shopping-item-row--owned" key={`owned-${item.name}-${index}`}>
                 <span className="shopping-owned-check" aria-hidden="true" />
-                <ImageSlot className="shopping-item-row__image" src={null} alt="" />
+                <ImageSlot className="shopping-item-row__image" src={item.product_image} alt={item.product_name || item.name} />
                 <div className="shopping-item-row__info">
-                  <strong>{item.name}{item.amount ? <span>· {item.amount}</span> : null}</strong>
-                  <small>냉장고에 있는 재료라 구매하지 않아도 돼요</small>
+                  <div className="shopping-item-row__title">
+                    <strong>{item.name}{item.amount ? <span>· {item.amount}</span> : null}</strong>
+                    <span className="shopping-owned-badge">보유 재료</span>
+                  </div>
+                  <small>{item.product_name || '상품 검색 결과 없음'}</small>
                 </div>
                 <div className="shopping-item-row__meta">
-                  <span className="shopping-owned-badge">이미 있음</span>
+                  <span>{item.mall_name || item.provider || 'provider'}</span>
+                  <strong>{formatPrice(item.price)}</strong>
                 </div>
-                <a
-                  className="shopping-item-row__link"
-                  href={buildOwnedSearchLink(item.name)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  구매 링크
-                </a>
+                {item.product_link ? (
+                  <a
+                    className="shopping-item-row__link"
+                    href={item.product_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    구매 링크
+                  </a>
+                ) : (
+                  <span className="shopping-item-row__link is-disabled">링크 없음</span>
+                )}
               </div>
             ))}
           </div>
@@ -595,20 +643,6 @@ function ShoppingList() {
             >
               선택 {selectedItems.length}개 삭제
             </button>
-          </div>
-
-          <div className="shopping-sidebar__card">
-            <div className="shopping-sidebar__card-head">
-              <h3>구매 링크 안내</h3>
-            </div>
-            <p className="shopping-sidebar__note">
-              <span className="shopping-owned-badge">이미 있음</span> 표시는 냉장고에 있는 재료예요. 구매 대상·금액·입고에는 포함되지 않아요.
-            </p>
-            <p className="shopping-sidebar__note">
-              {isFallbackList
-                ? '지금은 장보기 목록 생성에 실패해 부족 재료만 임시로 보여주고 있어요.'
-                : '재료별로 찾은 상품 링크로 바로 연결돼요. 쇼핑몰 장바구니에 자동으로 담기지는 않아요.'}
-            </p>
           </div>
 
           <button

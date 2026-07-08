@@ -154,11 +154,14 @@ class ShoppingService:
             rows.append(
                 {
                     "name": name,
+                    "provider": product.provider if product else self.provider.provider_name,
                     "coupang": None,
                     "kurly": None,
                     "best_market": product.mall_name if product else None,
+                    "product_id": product.product_id if product else None,
                     "product_name": product.product_name if product else None,
                     "product_link": product.product_link if product else None,
+                    "product_image": product.product_image if product else None,
                     "price": price,
                     "mall_name": product.mall_name if product else None,
                 }

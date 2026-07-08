@@ -146,8 +146,11 @@ def test_compare_api_returns_provider_product_candidates(monkeypatch):
                     "coupang": None,
                     "kurly": None,
                     "best_market": "네이버쇼핑",
+                    "provider": "naver",
+                    "product_id": "100",
                     "product_name": "국산 두부 1모",
                     "product_link": "https://shopping.example/products/100",
+                    "product_image": "https://shopping.example/products/100.jpg",
                     "price": 5900,
                     "mall_name": "네이버쇼핑",
                 }
@@ -163,3 +166,4 @@ def test_compare_api_returns_provider_product_candidates(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["market_prices"][0]["product_link"] == "https://shopping.example/products/100"
+    assert response.json()["market_prices"][0]["product_image"] == "https://shopping.example/products/100.jpg"

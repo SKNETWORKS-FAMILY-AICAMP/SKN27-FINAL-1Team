@@ -325,8 +325,16 @@
   min-width: 0;
 }
 
+.shopping-item-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .shopping-item-row__info strong {
   display: block;
+  min-width: 0;
   font-size: 14px;
   font-weight: 900;
   color: var(--figma-text);
