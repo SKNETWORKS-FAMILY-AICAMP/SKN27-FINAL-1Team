@@ -1,4 +1,3 @@
-from typing import Any
 import re
 
 # 확인/취소 액션 키워드

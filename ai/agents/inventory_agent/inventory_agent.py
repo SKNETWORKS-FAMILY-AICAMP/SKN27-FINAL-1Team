@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.backend.services.inventory_service.inventory_service import inventory_service
-from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text
+from ai.agents.supervisor_agent.supervisor_utils import GENERAL_REPLY, _apply_josa, _normalize_text
 from ai.agents.inventory_agent.inventory_utils import (
     _inventory_refresh_action,
     _extract_expiry_keyword,
