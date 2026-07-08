@@ -1,4 +1,4 @@
-# LightFM notebook dependencies (Python 3.13 baseline)
+# LightFM notebook dependencies (Python 3.11 baseline)
 # Target notebook: ai/experiments/LightFM_Model.ipynb
 
 numpy==2.2.6
@@ -6,10 +6,10 @@ pandas==2.2.3
 scipy==1.14.1
 lightfm==1.17
 
-# Build/runtime helpers (LightFM source build fallback on Windows/Python 3.13)
+# Build/runtime helpers (LightFM source build fallback on Windows/Python 3.11)
 cython==3.0.11
-setuptools>=75.0.0
-wheel>=0.44.0
+setuptools==69.5.1
+wheel==0.43.0
 
 # Notebook runtime
 jupyterlab==4.2.5
