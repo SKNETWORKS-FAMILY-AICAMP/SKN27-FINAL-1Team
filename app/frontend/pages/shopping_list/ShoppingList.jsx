@@ -5,6 +5,7 @@ import './ShoppingList.css'
 import imageShop from '../../assets/extracted/images/image_shop.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
+  compareShoppingProducts,
   completeShoppingPurchase,
   deleteShoppingListItem,
   getCurrentShoppingList,
@@ -127,7 +128,7 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
           <span className="shopping-eyebrow">장보기 시작</span>
           <h1 id="shopping-title">무엇을 기준으로 장볼까요?</h1>
           <p>
-            레시피에서 부족 재료를 바로 확인하거나, 최근 장보기 목록을 이어서 볼 수 있어요.
+            레시피에서 부족한 재료를 바로 확인하거나, 최근 장보기 목록을 이어서 볼 수 있어요.
           </p>
         </div>
         <div className="shopping-hero__art" aria-hidden="true">
@@ -147,8 +148,9 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
             <span>최근 장바구니</span>
             <h2>이어서 장보기</h2>
             <p>
-              구매 전 재료 {recentList.items.filter((item) => !item.is_purchased).length}개가 남아 있어요.
-              {formatCreatedAt(recentList.created_at)} 기준 목록입니다.
+              아직 담아둔 재료 {recentList.items.filter((item) => !item.is_purchased).length}개가 있어요
+              {' '}
+              <span className="shopping-start-card__meta">({formatCreatedAt(recentList.created_at)} 기준)</span>
             </p>
             <button className="shopping-primary-action" type="button" onClick={onContinue}>
               이어서 장보기
@@ -158,7 +160,7 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
 
         <article className="shopping-start-card">
           <span>1순위 흐름</span>
-          <h2>레시피 기준으로 장보기</h2>
+          <h2>레시피 기준 장보기</h2>
           <p>레시피 상세에서 냉장고 재료와 비교한 뒤 부족한 재료만 구매 링크로 연결해요.</p>
           <button className="shopping-soft-action" type="button" onClick={onRecipeBrowse}>
             레시피 먼저 확인하기
@@ -189,6 +191,7 @@ function ShoppingList() {
   const [isMutating, setIsMutating] = useState(false)
   const [error, setError] = useState('')
   const [startNotice, setStartNotice] = useState('')
+  const [ownedProductMap, setOwnedProductMap] = useState({})
 
   const isLoggedIn = hasShoppingAuth()
   const shoppingListId = searchParams.get('shoppingListId')
@@ -199,6 +202,11 @@ function ShoppingList() {
   const ownedItems = storedContext?.recipeId && Number(storedContext.recipeId) === Number(shoppingList?.recipe_id)
     ? storedContext.ownedIngredients
     : []
+  const ownedProductQuery = ownedItems.map((item) => item.name).filter(Boolean).join('|')
+  const ownedShoppingItems = ownedItems.map((item) => ({
+    ...item,
+    ...(ownedProductMap[item.name] || {}),
+  }))
   const activeItems = items.filter((item) => !item.is_purchased)
 
   useEffect(() => {
@@ -263,6 +271,43 @@ function ShoppingList() {
       isAlive = false
     }
   }, [shoppingListId])
+
+  useEffect(() => {
+    let isAlive = true
+
+    async function loadOwnedProducts() {
+      if (!shoppingList?.recipe_id || isFallbackList || ownedItems.length === 0 || !hasShoppingAuth()) {
+        setOwnedProductMap({})
+        return
+      }
+
+      const ingredientNames = [...new Set(ownedItems.map((item) => item.name).filter(Boolean))]
+      if (ingredientNames.length === 0) {
+        setOwnedProductMap({})
+        return
+      }
+
+      try {
+        const data = await compareShoppingProducts(ingredientNames)
+        if (!isAlive) return
+
+        const nextMap = {}
+        ;(data.market_prices || []).forEach((row) => {
+          nextMap[row.name] = row
+        })
+        setOwnedProductMap(nextMap)
+      } catch {
+        if (isAlive) {
+          setOwnedProductMap({})
+        }
+      }
+    }
+
+    loadOwnedProducts()
+    return () => {
+      isAlive = false
+    }
+  }, [shoppingList?.recipe_id, isFallbackList, ownedProductQuery])
 
   const allChecked = activeItems.length > 0 && activeItems.every((item) => item.is_checked)
 
@@ -489,7 +534,11 @@ function ShoppingList() {
 
           <div className="shopping-item-rows">
             {activeItems.length === 0 ? (
-              <p className="shopping-empty-note">구매가 필요한 재료를 모두 냉장고에 입고했어요.</p>
+              <p className="shopping-empty-note">
+                {ownedItems.length > 0
+                  ? '따로 구매할 재료가 없어요. 필요한 재료는 이미 냉장고에 있어요.'
+                  : '구매가 필요한 재료를 모두 냉장고에 입고했어요.'}
+              </p>
             ) : (
               activeItems.map((item) => (
                 <div className="shopping-item-row" key={item.id}>
@@ -524,6 +573,36 @@ function ShoppingList() {
                 </div>
               ))
             )}
+
+            {ownedShoppingItems.map((item, index) => (
+              <div className="shopping-item-row shopping-item-row--owned" key={`owned-${item.name}-${index}`}>
+                <span className="shopping-owned-check" aria-hidden="true" />
+                <ImageSlot className="shopping-item-row__image" src={item.product_image} alt={item.product_name || item.name} />
+                <div className="shopping-item-row__info">
+                  <div className="shopping-item-row__title">
+                    <strong>{item.name}{item.amount ? <span>· {item.amount}</span> : null}</strong>
+                    <span className="shopping-owned-badge">보유 재료</span>
+                  </div>
+                  <small>{item.product_name || '상품 검색 결과 없음'}</small>
+                </div>
+                <div className="shopping-item-row__meta">
+                  <span>{item.mall_name || item.provider || 'provider'}</span>
+                  <strong>{formatPrice(item.price)}</strong>
+                </div>
+                {item.product_link ? (
+                  <a
+                    className="shopping-item-row__link"
+                    href={item.product_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    구매 링크
+                  </a>
+                ) : (
+                  <span className="shopping-item-row__link is-disabled">링크 없음</span>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 
@@ -564,29 +643,6 @@ function ShoppingList() {
             >
               선택 {selectedItems.length}개 삭제
             </button>
-          </div>
-
-          <div className="shopping-sidebar__card">
-            <div className="shopping-sidebar__card-head">
-              <h3>이미 있는 재료</h3>
-              <span>{ownedItems.length}개</span>
-            </div>
-            {ownedItems.length > 0 ? (
-              <div className="shopping-owned-chips">
-                {ownedItems.map((item, index) => (
-                  <span key={`${item.name}-${index}`}>
-                    {item.name}{item.amount ? ` ${item.amount}` : ''}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="shopping-sidebar__note">보유 재료 정보는 레시피 상세에서 이어온 경우에만 표시돼요.</p>
-            )}
-            <p className="shopping-sidebar__note">
-              {isFallbackList
-                ? '지금은 장보기 목록 생성에 실패해 부족 재료만 임시로 보여주고 있어요.'
-                : '재료별로 찾은 상품 링크로 바로 연결돼요. 쇼핑몰 장바구니에 자동으로 담기지는 않아요.'}
-            </p>
           </div>
 
           <button

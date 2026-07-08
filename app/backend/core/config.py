@@ -50,7 +50,9 @@ class Settings:
         "NAVER_SHOPPING_API_URL",
         "https://openapi.naver.com/v1/search/shop.json",
     )
-    NAVER_SHOPPING_DISPLAY: int = int(os.getenv("NAVER_SHOPPING_DISPLAY", 1))
+    NAVER_SHOPPING_DISPLAY: int = int(os.getenv("NAVER_SHOPPING_DISPLAY", 10))
+    NAVER_SHOPPING_SORT: str = os.getenv("NAVER_SHOPPING_SORT", "sim")
+    NAVER_SHOPPING_EXCLUDE: str = os.getenv("NAVER_SHOPPING_EXCLUDE", "used:rental:cbshop")
     NAVER_SHOPPING_TIMEOUT_SECONDS: int = int(os.getenv("NAVER_SHOPPING_TIMEOUT_SECONDS", 5))
     
     # Google OAuth Settings
