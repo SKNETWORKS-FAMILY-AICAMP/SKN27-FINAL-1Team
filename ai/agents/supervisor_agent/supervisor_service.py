@@ -211,6 +211,13 @@ class ChatService:
         query = text
         if "제철" in normalized and not re.search(r"\d{1,2}\s*월", text):
             query = f"{date.today().month}월 {text}"
+        elif "제철" not in normalized:
+            # 제철음식 검색이 아닌 일반 가이드 검색의 경우 핵심 식재료명만 추출
+            extracted = _extract_keyword(text)
+            if not extracted:
+                return "질문하신 내용에서 명확한 식재료 이름을 찾지 못했어요. '당근 보관법'처럼 식재료를 명시해서 다시 물어봐 주시겠어요?", []
+            # extracted는 검증용으로만 쓰고, 실제 검색어는 원문(query)을 그대로 넘겨야 
+            # 가이드 에이전트가 "세척법", "손질법" 등의 의도를 파악할 수 있음
 
         agent_result = answer_guide_query(query)
         sources = agent_result.get("ui", {}).get("sources", [])

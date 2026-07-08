@@ -16,12 +16,12 @@ def _normalize_text(text: str) -> str:
 
 def _extract_keyword(text: str) -> str:
     cleaned = re.sub(
-        r"(먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|세척법|세척방법|세척|씻|손질법|손질방법|손질|신선도|확인법|확인|어떻게|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|좀|해먹을|만들)",
+        r"(냉장고|냉동고|냉장실|냉동실|실온|냉장|냉동|상온|먹다\s*남은|먹다남은|남은|먹다|어떡하지|어떡해|어떻게하지|보관법|보관방법|보관해|보관|세척법|세척방법|세척|씻|손질법|손질방법|손질|신선도|확인법|확인|어떻게|가이드|레시피|요리|추천|알려줘|찾아줘|해줘|좀|해먹을|만들|영양성분|영양|칼로리|열량|단백질|탄수화물|지방|당류|나트륨|제철)",
         " ",
         text,
     )
     words = [word.strip() for word in cleaned.split() if word.strip() and word.strip() not in ("내", "제", "나", "어떤", "무슨", "이", "그", "저", "이런", "그런", "저런", "수", "있어", "있어?", "있나요", "있나요?")]
-    return words[0] if words else text.strip()
+    return words[0] if words else ""
 
 def _extract_recipe_ingredient(text: str) -> str:
     match = re.search(r"(?:남은\s*)?([가-힣A-Za-z0-9]+?)(?:으로|로).*(?:뭐|뭘|무엇|메뉴|레시피|요리|만들|추천)", text)
