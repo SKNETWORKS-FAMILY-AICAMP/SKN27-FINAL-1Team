@@ -105,11 +105,14 @@ class MarketPriceItem(BaseModel):
     """하위 호환용 가격 비교 응답 항목입니다."""
 
     name: str = Field(..., description="재료명")
+    provider: str | None = Field(default=None, description="쇼핑 provider")
     coupang: int | None = Field(default=None, description="쿠팡 가격")
     kurly: int | None = Field(default=None, description="마켓컬리 가격")
     best_market: str | None = Field(default=None, description="추천 마켓")
+    product_id: str | None = Field(default=None, description="외부 상품 ID")
     product_name: str | None = Field(default=None, description="추천 상품명")
     product_link: str | None = Field(default=None, description="추천 상품 링크")
+    product_image: str | None = Field(default=None, description="추천 상품 이미지")
     price: int | None = Field(default=None, description="추천 상품 가격")
     mall_name: str | None = Field(default=None, description="판매몰")
 

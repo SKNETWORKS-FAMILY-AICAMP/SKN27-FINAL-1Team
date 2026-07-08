@@ -87,6 +87,7 @@ docker-compose.override.yml
 storage/raw/crawling_recipes/**
 # storage/processed/**
 storage/processed/crawling_recipes/**
+storage/processed/nutrition/*.csv
 
 # 디렉터리 구조를 보존하기 위해 하위 폴더 및 .gitkeep은 추적 허용
 !storage/raw/**/
