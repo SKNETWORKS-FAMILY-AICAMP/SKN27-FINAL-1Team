@@ -325,8 +325,16 @@
   min-width: 0;
 }
 
+.shopping-item-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .shopping-item-row__info strong {
   display: block;
+  min-width: 0;
   font-size: 14px;
   font-weight: 900;
   color: var(--figma-text);
@@ -388,6 +396,42 @@
 .shopping-item-row__link.is-disabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+.shopping-item-row--owned {
+  background: rgba(232, 245, 236, 0.45);
+}
+
+.shopping-owned-check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: #4fae7c;
+  line-height: 0;
+}
+
+.shopping-owned-check::before {
+  content: "✓";
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.shopping-item-row__meta .shopping-owned-badge,
+.shopping-owned-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #e5f4ea;
+  color: #2f7a52;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .shopping-sidebar {
@@ -1096,6 +1140,12 @@
   font-size: 14px;
   font-weight: 800;
   line-height: 1.55;
+}
+
+.shopping-start-card__meta {
+  font-size: 0.85em;
+  color: #a98a6f;
+  white-space: nowrap;
 }
 
 .shopping-start-card .shopping-primary-action,
