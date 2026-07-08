@@ -179,19 +179,93 @@ def test_delete_inventory_item_routes_to_mcp() -> None:
     result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
     assert result["response_text"] == "두부 폐기 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
+def test_receipt_register_words_route_to_receipt_guide() -> None:
+    """영수증 등록 요청은 냉장고 재료 추가가 아니라 영수증 안내로 보냅니다."""
+    messages = ("영수증 등록", "영수증 등록 어디서해", "OCR 등록")
+
+    for message in messages:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "receipt.guide"
+
 def test_alarm_agent_feature_words_route_to_alarm() -> None:
-    """알람 에이전트가 제공하는 기능 키워드는 알람 에이전트로 보냅니다."""
-    messages = (
-        "내일 저녁 일정 등록해줘",
+    """알림과 캘린더 요청을 슈퍼바이저에서 분리해 보냅니다."""
+    notification_messages = (
         "내일 알람 삭제해줘",
         "리마인더 조회해줘",
         "푸시토큰 등록해줘",
         "알림 읽음 처리해줘",
     )
+    calendar_messages = (
+        "내일 저녁 일정 등록해줘",
+        "캘린더 일정 조회",
+        "내일 캘린더 일정 알려줘",
+    )
 
-    for message in messages:
+    for message in notification_messages:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.notification"
+    for message in calendar_messages:
         assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.calendar"
 
+
+def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
+    """알림 조회는 캘린더 조회가 아니라 알림 intent로 알람 에이전트에 넘깁니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "알림 목록을 조회했어요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "알림 조회",
+        "intent": "alarm.notification",
+    })
+
+    assert captured["intent"] == "alarm.list"
+
+def test_unread_notification_query_is_not_reported_as_full_list(monkeypatch) -> None:
+    """읽지 않은 알림 조회는 전체 알림 조회 성공처럼 응답하지 않습니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    def fail_run_alarm_agent(**kwargs):
+        raise AssertionError("미확인 알림 조회는 아직 알람 에이전트럼 넘기지 않습니다.")
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fail_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "읽지 않은 알림 있어?",
+        "intent": "alarm.notification",
+    })
+
+    assert "아직 준비 중" in result["response_text"]
+
+
+def test_alarm_agent_node_does_not_force_notification_create_to_list(monkeypatch) -> None:
+    """알림 등록 문장은 알림 목록 조회로 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "어떤 알림인지 알려주세요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 우유 사기 알림 등록해줘",
+        "intent": "alarm.notification",
+    })
+
+    assert captured["intent"] is None
 
 def test_calendar_delete_routes_to_alarm() -> None:
     """일정 삭제 요청은 냉장고 삭제가 아니라 알람 에이전트로 보냅니다."""

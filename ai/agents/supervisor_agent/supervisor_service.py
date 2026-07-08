@@ -244,7 +244,7 @@ class ChatService:
             
         # DB에 해당 정보가 비어있을 경우
         if not tip:
-            return f"알고 계신 {item_name} 가이드는 찾았지만, 아쉽게도 {label}에 대한 구체적인 정보가 비어 있어요. 😅", []
+            return f"{item_name}의 {label} 정보는 아직 준비 중이에요. 다른 가이드가 필요하면 보관법, 세척법, 손질법처럼 다시 물어봐 주세요.", []
 
         formatted_tip = _format_guide_tip(tip)
         sources = agent_result.get("ui", {}).get("sources", [])
