@@ -608,3 +608,119 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
   }
 }
 ```
+
+---
+
+## 실험 7 — ingredients_only vs 5c 피처 세트 확정 검증 (hybrid)
+
+**일자:** 2026-07-09  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert)  
+**스크립트:** `run_experiment7.ps1`  
+**목적:** `ingredients`만 제외 vs 5c 중 기본 hybrid 피처 세트 확정
+
+### 공통 설정
+
+| 항목 | 값 |
+|------|-----|
+| mode | hybrid |
+| interaction | star + sentiment (1:1) |
+| loss | `warp` |
+| seeds | 42, 123, 456, 789, 1024 |
+| epochs | 30 |
+| runs | 5 seed × 3 config = **15** |
+
+### 테이블 A — seed × config
+
+| seed | config | excluded | precision@5 | recall@5 | Δp@5 vs seed baseline |
+|------|--------|----------|-------------|----------|----------------------|
+| 42 | baseline | (none) | 0.0101 | 0.0506 | +0.0000 |
+| 42 | ingredients_only | ingredients | 0.0112 | 0.0534 | +0.0011 |
+| 42 | alt_5c | main_ingred, cooking_category, ingredients | 0.0112 | 0.0562 | +0.0011 |
+| 123 | baseline | (none) | 0.0069 | 0.0305 | +0.0000 |
+| 123 | ingredients_only | ingredients | 0.0091 | 0.0457 | +0.0023 |
+| 123 | alt_5c | main_ingred, cooking_category, ingredients | 0.0091 | 0.0457 | +0.0023 |
+| 456 | baseline | (none) | 0.0067 | 0.0333 | +0.0000 |
+| 456 | ingredients_only | ingredients | 0.0067 | 0.0333 | +0.0000 |
+| 456 | alt_5c | main_ingred, cooking_category, ingredients | 0.0056 | 0.0278 | -0.0011 |
+| 789 | baseline | (none) | 0.0056 | 0.0281 | +0.0000 |
+| 789 | ingredients_only | ingredients | 0.0056 | 0.0281 | +0.0000 |
+| 789 | alt_5c | main_ingred, cooking_category, ingredients | 0.0056 | 0.0281 | +0.0000 |
+| 1024 | baseline | (none) | 0.0056 | 0.0282 | +0.0000 |
+| 1024 | ingredients_only | ingredients | 0.0068 | 0.0339 | +0.0011 |
+| 1024 | alt_5c | main_ingred, cooking_category, ingredients | 0.0068 | 0.0339 | +0.0011 |
+
+### 테이블 B — config별 seed 평균
+
+| config | mean p@5 | std p@5 | mean Δp@5 vs baseline | wins vs baseline (of 5) |
+|--------|----------|---------|----------------------|-------------------------------|
+| baseline | 0.0070 | 0.0016 | +0.0000 | 0/5 |
+| ingredients_only | 0.0079 | 0.0020 | +0.0009 | 3/5 |
+| alt_5c | 0.0077 | 0.0022 | +0.0007 | 3/5 |
+
+### 테이블 C — ingredients_only vs alt_5c
+
+| seed | ingredients_only p@5 | alt_5c p@5 | winner |
+|------|------------------------|------------|--------|
+| 42 | 0.0112 | 0.0112 | tie |
+| 123 | 0.0091 | 0.0091 | tie |
+| 456 | 0.0067 | 0.0056 | ingredients_only |
+| 789 | 0.0056 | 0.0056 | tie |
+| 1024 | 0.0068 | 0.0068 | tie |
+
+**head-to-head:** ingredients_only 1/5, alt_5c 0/5, tie 4/5
+
+### 해석·최종 판단
+
+- ingredients_only baseline 대비 우위: **3/5 seed**
+- alt_5c baseline 대비 우위: **3/5 seed**
+- ingredients_only vs alt_5c head-to-head: **1/5 seed**
+- mean p@5: ingredients_only **0.0079** (std 0.0020) vs alt_5c **0.0077** (std 0.0022)
+
+**최종 피처 세트 권고 (자동 초안):**
+- **ingredients_only 조건부 채택** — 둘 다 baseline 대비 이득이나 차이 미미, 변경 최소 원칙으로 ingredients만 제외
+
+**exp6 교차검증 (seed 42·123·456):**
+- seed 42 `ingredients_only`: exp7 **0.0112**, exp6 **0.0112**, 차이 0.0000 (OK)
+- seed 42 `alt_5c`: exp7 **0.0112**, exp6 **0.0124**, 차이 0.0012 (확인 필요)
+- seed 123 `ingredients_only`: exp7 **0.0091**, exp6 **0.0080**, 차이 0.0011 (확인 필요)
+- seed 123 `alt_5c`: exp7 **0.0091**, exp6 **0.0103**, 차이 0.0012 (확인 필요)
+- seed 456 `ingredients_only`: exp7 **0.0067**, exp6 **0.0067**, 차이 0.0000 (OK)
+- seed 456 `alt_5c`: exp7 **0.0056**, exp6 **0.0044**, 차이 0.0012 (확인 필요)
+
+### 원본 리포트 (seed=42 baseline)
+
+```json
+{
+  "data_files": {
+    "review": "review_by_llm.csv",
+    "recipe": "recipe_fix.csv",
+    "ingredient_alias": "recipe_ingredient_alias.csv"
+  },
+  "mode": "hybrid",
+  "target_mode": "star_sentiment_sum",
+  "excluded_recipe_columns": [],
+  "seed": 42,
+  "test_ratio": 0.2,
+  "epochs": 30,
+  "loss": "warp",
+  "matrix": {
+    "num_users": 821,
+    "num_items": 563,
+    "nnz": 990,
+    "train_nnz": 792,
+    "test_nnz": 198,
+    "item_feature_nnz": 17284,
+    "unique_features": 2382
+  },
+  "metrics": {
+    "precision@5": 0.010112359188497066,
+    "precision@10": 0.008426966145634651,
+    "recall@5": 0.05056179775280899,
+    "recall@10": 0.08146067415730338
+  },
+  "decision": {
+    "go": false,
+    "criterion": "precision@5 >= 0.05"
+  }
+}
+```
