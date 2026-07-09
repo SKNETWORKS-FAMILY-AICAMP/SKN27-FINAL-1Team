@@ -195,4 +195,92 @@ interaction은 `calc_interaction_value(star, sentiment, star_weight, sentiment_w
 
 ---
 
+## 실험 3 — 인기 메타 아이템 피처 ablation (조회수·스크랩수)
 
+**일자:** 2026-07-09  
+**노트북:** `LightFM_Model.ipynb` (Docker JupyterLab)  
+**목적:** `recipe_fix.csv`의 인기 메타(`INQ_CNT`→`view_count`, `SRAP_CNT`→`scrap_count`)를 아이템 피처에 포함할지 여부를 ablation으로 비교
+
+### 공통 설정
+
+실험 2d와 동일한 interaction·학습 설정.
+
+| 항목 | 값 |
+|------|-----|
+| interaction | star + sentiment (1:1) |
+| loss | `warp` |
+| seed | 42 |
+| train/test split | 0.8 / 0.2 |
+| epochs | 30 |
+| Go/No-Go 기준 | test `precision@5 >= 0.05` |
+
+**데이터 (matrix)**
+
+| 항목 | 값 |
+|------|-----|
+| users / items / nnz | 821 / 563 / 990 |
+| train / test nnz | 792 / 198 |
+| density | 0.21% |
+
+**ablation 방법:** Unit 2 recipe 전처리에서 `column_rename_map`·`columns_to_drop`으로 `INQ_CNT`/`SRAP_CNT` 포함 여부를 바꿨다.
+
+| # | view_count (`INQ_CNT`) | scrap_count (`SRAP_CNT`) |
+|---|------------------------|--------------------------|
+| 3a | ✓ | ✗ (제외) |
+| 3b | ✗ (제외) | ✓ |
+| 3c | ✗ (제외) | ✗ (제외) |
+| 기준 2d | ✓ | ✓ |
+
+### 변형별 결과 (Test set)
+
+| # | view | scrap | precision@5 | precision@10 | recall@5 | recall@10 | 판정 |
+|---|------|-------|-------------|--------------|----------|-----------|------|
+| **2d (기준)** | ✓ | ✓ | **0.0090** | **0.0090** | 0.0421 | **0.0801** | No-Go |
+| 3a | ✓ | ✗ | **0.0090** | 0.0084 | 0.0421 | 0.0787 | No-Go |
+| 3b | ✗ | ✓ | 0.0079 | 0.0067 | 0.0337 | 0.0618 | No-Go |
+| 3c | ✗ | ✗ | 0.0079 | 0.0079 | 0.0365 | 0.0730 | No-Go |
+
+→ 4개 변형 모두 Go 기준(0.05) 미달. **view+scrap 모두 포함(2d) 또는 view만 유지(3a)일 때 precision@5 최고.**
+
+### Train 모니터링 (Unit 7 — train precision@5)
+
+3c(현재 노트북 저장 상태) 기준: epoch 30에서 train precision@5 **0.167**.  
+실험 2d와 동일하게 train·test 격차가 큼.
+
+### 해석
+
+1. **조회수가 스크랩수보다 기여도가 큼:** view 제외(3b) 시 precision@5가 0.0090→0.0079로 하락. scrap만 제외(3a)는 2d와 precision@5 동일(0.0090), recall@10만 소폭 감소(0.080→0.079).
+2. **둘 다 제외(3c)해도 view만 제외(3b)만큼 나쁘지 않음:** 3c recall@10(0.073)은 3b(0.062)보다 높아, 두 메타를 함께 넣었을 때 상호작용·스케일 이슈 가능성은 있으나 test precision 기준 이득은 없음.
+3. **절대 성능은 여전히 미달:** 최선(2d·3a)도 precision@5 0.009 — Go(0.05)의 약 18% 수준.
+4. **재현성 주의:** 실행 계획상 `build_item_features`→`fit_partial` 연결은 아직 미완(`LIGHTFM_NOTEBOOK_EXECUTION_PLAN.md` E2). 순수 CF만 돌린 경우 recipe 컬럼 제거만으로 test 지표가 달라지지 않아야 하므로, **hybrid 학습 경로 사용 여부를 실험 기록에 명시**하고 `build_item_features` 연결 후 동일 ablation을 재검증하는 것이 좋다. 현재 노트북 최종 상태는 3c(둘 다 제외)이며 Unit 8 출력과 일치한다.
+
+### 원본 리포트 요약
+
+**3a — scrap_count 제외 (view 유지)**
+
+```json
+{"metrics": {"precision@5": 0.0090, "precision@10": 0.0084, "recall@5": 0.0421, "recall@10": 0.0787}, "decision": {"go": false}}
+```
+
+**3b — view_count 제외 (scrap 유지)**
+
+```json
+{"metrics": {"precision@5": 0.0079, "precision@10": 0.0067, "recall@5": 0.0337, "recall@10": 0.0618}, "decision": {"go": false}}
+```
+
+**3c — view + scrap 모두 제외** (현재 노트북 상태)
+
+```json
+{"metrics": {"precision@5": 0.0079, "precision@10": 0.0079, "recall@5": 0.0365, "recall@10": 0.0730}, "decision": {"go": false}}
+```
+
+### 다음 실험 (실험 3 후속)
+
+| 우선순위 | 내용 |
+|----------|------|
+| 1 | `build_item_features` 연결 후 동일 ablation 재실행 (hybrid 경로 명시) |
+| 2 | **Binary(1)** + `warp` — loss/target 정합성 |
+| 3 | view_count 단독 vs scrap_count 단독 vs 둘 다 (정규화·binning 포함) |
+| 4 | Unit 10 baseline(인기 기반) 대비 비교 |
+
+---
