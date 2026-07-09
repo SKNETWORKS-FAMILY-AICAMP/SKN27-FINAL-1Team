@@ -679,6 +679,12 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
 **최종 피처 세트 권고 (자동 초안):**
 - **ingredients_only 조건부 채택** — 둘 다 baseline 대비 이득이나 차이 미미, 변경 최소 원칙으로 ingredients만 제외
 
+### 노트북 기본값 반영
+
+`LightFM_Model.ipynb` Unit 1 기본 `EXCLUDED_RECIPE_COLUMNS = ["ingredients"]` (env 미설정 시).  
+`view_count` + `scrap_count` 및 나머지 레시피 컬럼은 포함. override: `EXCLUDED_RECIPE_COLUMNS=""` (전체 feature).  
+`view_count` / `scrap_count` feature token은 항상 `log1p` 적용 (`view_count_log:…`, `scrap_count_log:…`).
+
 **exp6 교차검증 (seed 42·123·456):**
 - seed 42 `ingredients_only`: exp7 **0.0112**, exp6 **0.0112**, 차이 0.0000 (OK)
 - seed 42 `alt_5c`: exp7 **0.0112**, exp6 **0.0124**, 차이 0.0012 (확인 필요)
@@ -687,7 +693,7 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
 - seed 456 `ingredients_only`: exp7 **0.0067**, exp6 **0.0067**, 차이 0.0000 (OK)
 - seed 456 `alt_5c`: exp7 **0.0056**, exp6 **0.0044**, 차이 0.0012 (확인 필요)
 
-### 원본 리포트 (seed=42 baseline)
+### 원본 리포트 (seed=42, ingredients 제외 + log1p)
 
 ```json
 {
@@ -698,25 +704,31 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
   },
   "mode": "hybrid",
   "target_mode": "star_sentiment_sum",
-  "excluded_recipe_columns": [],
+  "excluded_recipe_columns": [
+    "ingredients"
+  ],
   "seed": 42,
   "test_ratio": 0.2,
   "epochs": 30,
   "loss": "warp",
+  "log_numeric_columns": [
+    "scrap_count",
+    "view_count"
+  ],
   "matrix": {
     "num_users": 821,
     "num_items": 563,
     "nnz": 990,
     "train_nnz": 792,
     "test_nnz": 198,
-    "item_feature_nnz": 17284,
-    "unique_features": 2382
+    "item_feature_nnz": 12176,
+    "unique_features": 1870
   },
   "metrics": {
-    "precision@5": 0.010112359188497066,
-    "precision@10": 0.008426966145634651,
-    "recall@5": 0.05056179775280899,
-    "recall@10": 0.08146067415730338
+    "precision@5": 0.012359551154077053,
+    "precision@10": 0.009550562128424644,
+    "recall@5": 0.05898876404494382,
+    "recall@10": 0.08820224719101123
   },
   "decision": {
     "go": false,
