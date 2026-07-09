@@ -603,7 +603,9 @@ function ReceiptOcr() {
   const navigate = useNavigate()
   const { dialogNode, showAlert, showConfirm } = useAppDialog()
   const flowTimersRef = useRef([])
+  const uploadRunIdRef = useRef(0)
   const previewImageUrlRef = useRef(null)
+  const retakeInputRef = useRef(null)
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
   const [hasUploaded, setHasUploaded] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
@@ -713,6 +715,9 @@ function ReceiptOcr() {
       return
     }
 
+    const uploadRunId = uploadRunIdRef.current + 1
+    uploadRunIdRef.current = uploadRunId
+
     clearFlowTimers()
     setUploadedPreview(file)
     setReceiptMeta(null)
@@ -734,6 +739,10 @@ function ReceiptOcr() {
         },
         body: formData,
       })
+      if (uploadRunIdRef.current !== uploadRunId) {
+        return
+      }
+
       if (response.status === 401) {
         window.localStorage.removeItem('bobbeori-token')
         window.dispatchEvent(new Event('bobbeori-auth-change'))
@@ -753,6 +762,10 @@ function ReceiptOcr() {
       let data = null
 
       await readReceiptUploadStream(response, (event) => {
+        if (uploadRunIdRef.current !== uploadRunId) {
+          return
+        }
+
         if (event.type === 'stage') {
           setAnalysisStep(getAnalysisStepForStage(event.stage))
           return
@@ -769,6 +782,10 @@ function ReceiptOcr() {
 
       if (!data) {
         throw new Error('영수증 OCR 분석 결과를 받지 못했어요.')
+      }
+
+      if (uploadRunIdRef.current !== uploadRunId) {
+        return
       }
 
       if (data.needs_reupload) {
@@ -803,6 +820,10 @@ function ReceiptOcr() {
       setAnalysisStep(aiAnalysisSteps.length - 1)
       setActiveStep(2)
     } catch (error) {
+      if (uploadRunIdRef.current !== uploadRunId) {
+        return
+      }
+
       console.error(error)
       setHasUploaded(false)
       setActiveStep(0)
@@ -810,8 +831,10 @@ function ReceiptOcr() {
         title: '분석에 실패했어요',
       })
     } finally {
-      clearFlowTimers()
-      setIsProcessing(false)
+      if (uploadRunIdRef.current === uploadRunId) {
+        clearFlowTimers()
+        setIsProcessing(false)
+      }
     }
   }
 
@@ -1041,6 +1064,7 @@ function ReceiptOcr() {
   }
 
   const resetAnalysis = () => {
+    uploadRunIdRef.current += 1
     clearFlowTimers()
     setUploadedPreview(null)
     const initialRows = createInitialReceiptRows()
@@ -1052,6 +1076,26 @@ function ReceiptOcr() {
     setIsProcessing(false)
     setAnalysisStep(0)
     setActiveStep(0)
+    setIsAddRowOpen(false)
+    setRowSelectionMode(false)
+    setSelectedRowIds([])
+  }
+
+  const openRetakePicker = () => {
+    if (isProcessing) {
+      return
+    }
+
+    retakeInputRef.current?.click()
+  }
+
+  const handleRetakeFileChange = (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (file) {
+      startUpload(file, '재촬영 이미지')
+    }
   }
 
   const stockIngredients = async () => {
@@ -1273,9 +1317,16 @@ function ReceiptOcr() {
             <section className="receipt-panel receipt-preview-panel" aria-labelledby="preview-title">
               <div className="receipt-preview__title">
                 <h2 id="preview-title">영수증 미리보기</h2>
-                <button type="button" onClick={resetAnalysis}>
+                <button type="button" disabled={isProcessing} onClick={openRetakePicker}>
                   다시 촬영
                 </button>
+                <input
+                  ref={retakeInputRef}
+                  className="receipt-file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleRetakeFileChange}
+                />
               </div>
               <ReceiptImageViewer src={previewImageUrl} isScanning={isProcessing} />
             </section>
