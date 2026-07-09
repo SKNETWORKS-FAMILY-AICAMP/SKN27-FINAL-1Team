@@ -497,3 +497,114 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
   }
 }
 ```
+
+---
+
+## 실험 6 — ingredients+cooking_method 제외 최종 검증 (hybrid)
+
+**일자:** 2026-07-09  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert)  
+**스크립트:** `run_experiment6.ps1`  
+**목적:** `ingredients`+`cooking_method` 제외 채택 전 seed 재현성·대안·모순 검증
+
+### 공통 설정
+
+| 항목 | 값 |
+|------|-----|
+| mode | hybrid |
+| interaction | star + sentiment (1:1) |
+| loss | `warp` |
+| seeds | 42, 123, 456 |
+| epochs | 30 |
+| runs | 3 seed × 5 config = **15** |
+
+### 테이블 A — seed × config
+
+| seed | config | excluded | precision@5 | recall@5 | Δp@5 vs seed baseline |
+|------|--------|----------|-------------|----------|----------------------|
+| 42 | baseline | (none) | 0.0090 | 0.0449 | +0.0000 |
+| 42 | candidate | ingredients, cooking_method | 0.0169 | 0.0772 | +0.0079 |
+| 42 | alt_5c | main_ingred, cooking_category, ingredients | 0.0124 | 0.0590 | +0.0034 |
+| 42 | ctrl_ingredients | ingredients | 0.0112 | 0.0534 | +0.0022 |
+| 42 | ctrl_cooking_method | cooking_method | 0.0034 | 0.0169 | -0.0056 |
+| 123 | baseline | (none) | 0.0069 | 0.0305 | +0.0000 |
+| 123 | candidate | ingredients, cooking_method | 0.0057 | 0.0286 | -0.0011 |
+| 123 | alt_5c | main_ingred, cooking_category, ingredients | 0.0103 | 0.0514 | +0.0034 |
+| 123 | ctrl_ingredients | ingredients | 0.0080 | 0.0400 | +0.0011 |
+| 123 | ctrl_cooking_method | cooking_method | 0.0080 | 0.0362 | +0.0011 |
+| 456 | baseline | (none) | 0.0067 | 0.0333 | +0.0000 |
+| 456 | candidate | ingredients, cooking_method | 0.0056 | 0.0278 | -0.0011 |
+| 456 | alt_5c | main_ingred, cooking_category, ingredients | 0.0044 | 0.0222 | -0.0022 |
+| 456 | ctrl_ingredients | ingredients | 0.0067 | 0.0333 | +0.0000 |
+| 456 | ctrl_cooking_method | cooking_method | 0.0067 | 0.0333 | +0.0000 |
+
+### 테이블 B — config별 seed 평균
+
+| config | mean p@5 | std p@5 | mean Δp@5 vs baseline | wins vs baseline (of 3) |
+|--------|----------|---------|----------------------|-------------------------|
+| baseline | 0.0075 | 0.0011 | +0.0000 | 0/3 |
+| candidate | 0.0094 | 0.0053 | +0.0019 | 1/3 |
+| alt_5c | 0.0090 | 0.0034 | +0.0015 | 2/3 |
+| ctrl_ingredients | 0.0086 | 0.0019 | +0.0011 | 2/3 |
+| ctrl_cooking_method | 0.0060 | 0.0019 | -0.0015 | 1/3 |
+
+### 테이블 C — candidate vs alt_5c
+
+| seed | candidate p@5 | alt_5c p@5 | winner |
+|------|---------------|------------|--------|
+| 42 | 0.0169 | 0.0124 | candidate |
+| 123 | 0.0057 | 0.0103 | alt_5c |
+| 456 | 0.0056 | 0.0044 | candidate |
+
+**head-to-head:** candidate 2/3, alt_5c 1/3, tie 0/3
+
+### 해석·최종 판단
+
+- candidate가 baseline 대비 precision@5 우위: **1/3 seed**
+- candidate mean Δp@5 vs baseline: **+0.0019**
+- ctrl_cooking_method 모든 seed에서 baseline 하락: **아니오**
+- candidate vs alt_5c mean p@5: **0.0094** vs **0.0090** (std 0.0053 vs 0.0034)
+
+**최종 피처 세트 권고 (자동 초안):**
+- **보류** — seed 간 재현 부족, 추가 실험 또는 ingredients-only 제외 검토
+
+**exp5 교차검증 (seed=42 candidate):**
+- exp6_s42_candidate p@5 = **0.0169**, exp5 기대값 0.0169, 차이 0.0000 (OK)
+
+### 원본 리포트 (seed=42 baseline)
+
+```json
+{
+  "data_files": {
+    "review": "review_by_llm.csv",
+    "recipe": "recipe_fix.csv",
+    "ingredient_alias": "recipe_ingredient_alias.csv"
+  },
+  "mode": "hybrid",
+  "target_mode": "star_sentiment_sum",
+  "excluded_recipe_columns": [],
+  "seed": 42,
+  "test_ratio": 0.2,
+  "epochs": 30,
+  "loss": "warp",
+  "matrix": {
+    "num_users": 821,
+    "num_items": 563,
+    "nnz": 990,
+    "train_nnz": 792,
+    "test_nnz": 198,
+    "item_feature_nnz": 17284,
+    "unique_features": 2382
+  },
+  "metrics": {
+    "precision@5": 0.008988764137029648,
+    "precision@10": 0.008426966145634651,
+    "recall@5": 0.0449438202247191,
+    "recall@10": 0.08146067415730338
+  },
+  "decision": {
+    "go": false,
+    "criterion": "precision@5 >= 0.05"
+  }
+}
+```
