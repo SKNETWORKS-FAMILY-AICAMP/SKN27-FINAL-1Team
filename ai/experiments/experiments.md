@@ -284,3 +284,95 @@ interaction은 `calc_interaction_value(star, sentiment, star_weight, sentiment_w
 | 4 | Unit 10 baseline(인기 기반) 대비 비교 |
 
 ---
+
+## 실험 4 — 레시피 item feature 컬럼 ablation (hybrid)
+
+**일자:** 2026-07-09  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert)  
+**스크립트:** `run_recipe_ablation.ps1`  
+**목적:** hybrid 학습에서 레시피 컬럼을 1개씩 제외했을 때 test 성능 변화(영향도) 측정
+
+### 공통 설정
+
+| 항목 | 값 |
+|------|-----|
+| mode | hybrid (`build_item_features` + `fit_partial`) |
+| interaction | star + sentiment (1:1) |
+| loss | `warp` |
+| seed | 42 |
+| epochs | 30 |
+| 고정 포함 | `view_count`, `scrap_count` (ablation 대상 아님) |
+
+### 변형별 결과 (Test set)
+
+| run | excluded | precision@5 | precision@10 | recall@5 | recall@10 | Δprecision@5 | unique_features |
+|-----|----------|-------------|--------------|----------|-----------|----------------|-----------------|
+| baseline | (none) | 0.0101 | 0.0084 | 0.0506 | 0.0815 | 0.0000 | 2382 |
+| exclude_recipe_name | recipe_name | 0.0067 | 0.0073 | 0.0292 | 0.0685 | -0.0034 | 1819 |
+| exclude_cooking_method | cooking_method | 0.0045 | 0.0056 | 0.0225 | 0.0562 | -0.0056 | 2369 |
+| exclude_cooking_category | cooking_category | 0.0112 | 0.0090 | 0.0534 | 0.0784 | 0.0011 | 2370 |
+| exclude_main_ingred | main_ingred | 0.0124 | 0.0096 | 0.0590 | 0.0885 | 0.0022 | 2366 |
+| exclude_dishes | dishes | 0.0067 | 0.0084 | 0.0337 | 0.0728 | -0.0034 | 2376 |
+| exclude_cooking_level | cooking_level | 0.0045 | 0.0051 | 0.0225 | 0.0506 | -0.0056 | 2379 |
+| exclude_cooking_time | cooking_time | 0.0079 | 0.0079 | 0.0393 | 0.0713 | -0.0022 | 2374 |
+| exclude_aliases | aliases | 0.0101 | 0.0096 | 0.0478 | 0.0927 | 0.0000 | 1908 |
+| exclude_ingredients | ingredients | 0.0112 | 0.0090 | 0.0534 | 0.0871 | 0.0011 | 1870 |
+| exclude_recipe_kind | recipe_kind | 0.0090 | 0.0079 | 0.0421 | 0.0713 | -0.0011 | 2364 |
+| exclude_others_count | others_count | 0.0045 | 0.0073 | 0.0225 | 0.0657 | -0.0056 | 2378 |
+| exclude_basic_count | basic_count | 0.0045 | 0.0073 | 0.0225 | 0.0702 | -0.0056 | 2379 |
+
+→ Δprecision@5 = run − baseline. **양수** = 제외 시 test가 올라감(해당 컬럼이 노이즈/과적합 가능).
+
+### 해석
+
+**제외 시 precision@5 상승 (노이즈·과적합 후보):**
+- `main_ingred` (Δ=0.0022)
+- `cooking_category` (Δ=0.0011)
+- `ingredients` (Δ=0.0011)
+
+**제외 시 precision@5 하락 (유지 가치 후보):**
+- `cooking_method` (Δ=-0.0056)
+- `cooking_level` (Δ=-0.0056)
+- `others_count` (Δ=-0.0056)
+
+### 원본 리포트
+
+JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
+
+**baseline**
+
+```json
+{
+  "data_files": {
+    "review": "review_by_llm.csv",
+    "recipe": "recipe_fix.csv",
+    "ingredient_alias": "recipe_ingredient_alias.csv"
+  },
+  "mode": "hybrid",
+  "target_mode": "star_sentiment_sum",
+  "excluded_recipe_columns": [],
+  "seed": 42,
+  "test_ratio": 0.2,
+  "epochs": 30,
+  "loss": "warp",
+  "matrix": {
+    "num_users": 821,
+    "num_items": 563,
+    "nnz": 990,
+    "train_nnz": 792,
+    "test_nnz": 198,
+    "item_feature_nnz": 17284,
+    "unique_features": 2382
+  },
+  "metrics": {
+    "precision@5": 0.010112359188497066,
+    "precision@10": 0.008426966145634651,
+    "recall@5": 0.05056179775280899,
+    "recall@10": 0.08146067415730338
+  },
+  "decision": {
+    "go": false,
+    "criterion": "precision@5 >= 0.05"
+  }
+}
+```
