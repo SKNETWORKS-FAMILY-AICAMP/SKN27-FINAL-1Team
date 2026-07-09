@@ -333,7 +333,7 @@ docker compose up --build   # JupyterLab http://localhost:8888
 | 항목 | 값 |
 |------|-----|
 | 타겟 노트북 | `ai/experiments/LightFM_Model.ipynb` |
-| 검증 | `scripts/verify_lightfm.py`, `scripts/run_notebook_e2e.sh` |
+| 검증 | `README.md` §환경 재현·검증 (Docker 인라인 명령) |
 | 공식 환경 변수 | `LIGHTFM_RUNTIME=linux-docker` |
 | 1차 실측 sparsity | 821 users × 563 items, nnz 990, density 0.21% |
 

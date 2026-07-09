@@ -15,7 +15,7 @@ cd ai\experiments
 docker compose up --build
 ```
 
-브라우저: http://localhost:8888 → `LightFM_Model.ipynb` 열기
+브라우저: http://localhost:8888 → `LightFM_Model.ipynb` 열기 → Unit 1부터 순서대로 실행
 
 > 루트(`SKN27-FINAL-1Team/`)의 `docker compose up`은 backend 스택만 기동합니다.  
 > LightFM 노트북은 **반드시 `ai/experiments/`에서** 별도 compose로 실행하세요.
@@ -26,17 +26,70 @@ docker compose up --build
 docker compose down
 ```
 
-## 검증
+## 환경 재현·검증
+
+이미지 재빌드, 다른 PC 세팅, 노트북 수정 후 아래 순서로 확인한다.
+
+### 1) 이미지 빌드
 
 ```powershell
 cd ai\experiments
-
-# 1) LightFM 스모크 테스트
-docker compose run --rm lightfm-jupyter python scripts/verify_lightfm.py
-
-# 2) 노트북 E2E (Unit 1~9 전체 실행)
-docker compose run --rm lightfm-jupyter sh scripts/run_notebook_e2e.sh
+docker compose build
 ```
+
+### 2) LightFM 스모크 테스트
+
+warp fit + `precision_at_k` / `recall_at_k` 동작 확인 (수 초).
+
+```powershell
+docker compose run --rm lightfm-jupyter python -c @"
+import numpy as np
+from scipy.sparse import csr_matrix
+from lightfm import LightFM
+from lightfm.evaluation import precision_at_k, recall_at_k
+
+rng = np.random.default_rng(42)
+n_users, n_items = 20, 30
+rows, cols = rng.integers(0, n_users, 80), rng.integers(0, n_items, 80)
+data = np.ones(80, dtype=np.float32)
+interactions = csr_matrix((data, (rows, cols)), shape=(n_users, n_items))
+
+model = LightFM(loss='warp', random_state=42)
+model.fit(interactions, epochs=2, num_threads=2)
+
+p5 = float(precision_at_k(model, interactions, k=5).mean())
+r5 = float(recall_at_k(model, interactions, k=5).mean())
+assert 0.0 <= p5 <= 1.0 and 0.0 <= r5 <= 1.0
+print(f'lightfm ok: precision@5={p5:.4f}, recall@5={r5:.4f}')
+"@
+```
+
+**통과:** `lightfm ok: precision@5=...` 출력, exit code 0
+
+### 3) 노트북 E2E (Unit 1~9 전체 실행)
+
+`LightFM_Model.ipynb`를 헤드리스로 실행한다 (수 분, epoch 100 기준).
+
+```powershell
+docker compose run --rm lightfm-jupyter jupyter nbconvert `
+  --to notebook `
+  --execute LightFM_Model.ipynb `
+  --output /tmp/LightFM_Model.executed.ipynb `
+  --ExecutePreprocessor.timeout=600
+```
+
+**통과 조건**
+
+| 항목 | 확인 |
+|------|------|
+| exit code | 0 |
+| Unit 1 | `LIGHTFM_RUNTIME=linux-docker` 가드 통과 |
+| Unit 7 | epoch 로그 출력 (warp 학습 완료) |
+| Unit 8 | `precision@5`, `recall@5` 등 metrics dict 출력 |
+| Unit 9 | `experiment_report` dict 출력 |
+| stderr | Python traceback 없음 |
+
+실행 결과 노트북은 컨테이너 `/tmp/`에만 저장되며 원본 `.ipynb`는 수정되지 않는다.
 
 ## 구성
 
@@ -46,6 +99,7 @@ docker compose run --rm lightfm-jupyter sh scripts/run_notebook_e2e.sh
 | `Dockerfile` | Python 3.11 + lightfm + JupyterLab |
 | `LightFM_Model.ipynb` | 실험 노트북 |
 | `requirements.txt` | Docker 빌드 의존성 |
+| `experiments.md` | 실험 결과 기록 |
 
 - 컨테이너명: `lightfm_experiments_jupyter`
 - Compose project: `lightfm-experiments`
