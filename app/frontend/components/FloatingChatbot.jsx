@@ -218,13 +218,19 @@ function FloatingChatbot() {
                           key={`${action.label}-${actionIndex}`}
                           disabled={item.actionDisabled}
                           onClick={() => {
-                            // 사용자가 액션 버튼을 클릭하면 해당 그룹의 버튼들을 모두 비활성화
+                            // URL 이동 액션은 버튼을 비활성화하지 않고 즉시 이동
+                            if (action.url) {
+                              navigate(action.url)
+                              return
+                            }
+
+                            // 확인/취소 등 서버 요청을 동반하는 액션 버튼은 중복 클릭 방지
                             setMessages((prev) => {
                               const next = [...prev]
                               next[index] = { ...next[index], actionDisabled: true }
                               return next
                             })
-                            // 챗봇 액션은 메시지 전송, 냉장고 갱신, 페이지 이동 중 하나로 처리합니다.
+
                             if (action.data?.message) {
                               requestChat(action.data.message, action.label)
                               return
@@ -233,7 +239,6 @@ function FloatingChatbot() {
                               window.dispatchEvent(new CustomEvent('bobbeori:inventory-updated'))
                               return
                             }
-                            if (action.url) navigate(action.url)
                           }}
                         >
                           {action.label}
