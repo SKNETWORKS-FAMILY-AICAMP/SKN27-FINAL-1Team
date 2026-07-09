@@ -29,6 +29,12 @@ def test_route_intent_examples() -> None:
         "두부로 뭐 만들수있어?": "recipe.recommend",
         "두부로 뭘 만들지?": "recipe.recommend",
         "이걸로 만들수 있는 메뉴 뭐야": "recipe.recommend",
+        "냉장고 재료로 뭐 만들어 먹지?": "recipe.recommend",
+        "냉장고 재료로 뭐해먹지": "recipe.recommend",
+        "냉장고 재료로 요리 추천해줘": "recipe.recommend",
+        "냉장고속 재료로 요리추천": "recipe.recommend",
+        "냉장고 재료로 만들 요리 알려줘": "recipe.recommend",
+        "냉장고 재료로 뭐만들어먹지?": "recipe.recommend",
         "파 빨리 써야 하는데 뭐하지": "recipe.recommend",
         "감자로 간단하게 만들수 있는거 알려줘": "recipe.recommend",
         "먹다남은 감자튀김 어디에 쓸수있을까": "recipe.recommend",
@@ -744,4 +750,15 @@ def test_guide_reply_formats_seasonality(monkeypatch) -> None:
 
     assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
     assert sources == []
+
+def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
+    """규칙으로 잡힌 레시피 추천은 LLM 분류로 넘기지 않습니다."""
+    messages = [
+        "냉장고 재료로 뭐 만들어 먹지?",
+        "냉장고 재료로 만들 요리 알려줘",
+        "냉장고 재료로 뭐만들어먹지?",
+    ]
+
+    for message in messages:
+        assert supervisor_service._route_intent_with_llm(message) == "recipe.recommend"
 

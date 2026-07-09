@@ -118,6 +118,10 @@ class ChatService:
         if any(word in normalized for word in guide_words):
             return "ingredient.guide"
 
+        rule_intent = self._route_intent(text)
+        if rule_intent != "general":
+            return rule_intent
+
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
             return self._route_intent(text)
 
@@ -177,7 +181,9 @@ class ChatService:
         if _is_cooking_time_question(text):
             return "recipe.search"
             
-        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")):
+        if "냉장고" in normalized and "재료" in normalized and "요리" in normalized:
+            return "recipe.recommend"
+        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들요리", "만들어먹", "요리추천", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")):
             return "recipe.recommend"
         if any(word in normalized for word in ("레시피", "요리법", "요리")):
             return "recipe.search"
@@ -470,10 +476,10 @@ class ChatService:
         sorted_items = sorted(
             raw_items,
             key=lambda x: (
-                -x.get("owned_ingredient_count", 0),
+                -x.get("final_score", 0),
                 x.get("missing_ingredient_count", 0),
-                -x.get("final_score", 0)
-            )
+                -x.get("owned_ingredient_count", 0),
+            ),
         )
 
         items_perfect = [item for item in sorted_items if item.get("missing_ingredient_count", 0) == 0]
@@ -484,7 +490,7 @@ class ChatService:
             items = sorted_items[:3]
             if not items or items[0].get("owned_ingredient_count", 0) == 0:
                 return "현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.", []
-            prefix = "부족한 재료가 약간 있지만, 냉장고 재료를 최대한 활용할 수 있는 레시피예요.\n"
+            prefix = "소비임박 재료를 우선으로 활용할 수 있는 레시피예요. 부족한 재료는 약간 있을 수 있어요.\n"
 
         titles = [item["title"] for item in items]
         return prefix + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), _recipe_actions(items)
