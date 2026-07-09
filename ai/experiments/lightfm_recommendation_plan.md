@@ -2,8 +2,8 @@
 
 팀 공유용 문서. **ExtraTrees 아이템 점수 파이프라인은 폐기**하고, LightFM 하이브리드 추천을 **단일 ML 랭킹 엔진**으로 새로 구축한다.
 
-**상태:** Phase 0 설계 확정 · 구현 착수 전  
-**최종 갱신:** 2026-07-08
+**상태:** Phase 0 · 실험 1차(노트북+실행환경) 완료  
+**최종 갱신:** 2026-07-09
 
 > **팀 공유:** 개인화 정의·런타임 예측·Phase별 전체 운영 흐름은 [§10. 개인화 추천 및 전체 운영 흐름](#10-개인화-추천-및-전체-운영-흐름) 참고.
 
@@ -321,6 +321,24 @@ ai/recommendation/artifacts/lightfm/
 }
 ```
 
+### 5.4. 실험 실행 환경 (1차 완료)
+
+노트북 실험은 `ai/experiments/docker-compose.yml`로 **루트 서비스와 독립** 운영한다.
+
+```powershell
+cd ai\experiments
+docker compose up --build   # JupyterLab http://localhost:8888
+```
+
+| 항목 | 값 |
+|------|-----|
+| 타겟 노트북 | `ai/experiments/LightFM_Model.ipynb` |
+| 검증 | `scripts/verify_lightfm.py`, `scripts/run_notebook_e2e.sh` |
+| 공식 환경 변수 | `LIGHTFM_RUNTIME=linux-docker` |
+| 1차 실측 sparsity | 821 users × 563 items, nnz 990, density 0.21% |
+
+Windows 로컬 `.venv`는 WARP 미지원으로 공식 실행 경로가 아니다. 상세는 `ai/experiments/README.md` 참고.
+
 ---
 
 ## 6. 설계 시 유의사항
@@ -372,7 +390,7 @@ proxy 데이터 제거·교체 시 추적 가능하도록 한다.
 |----|------|-----------|
 | 0-1 | Cold-start | 신규 user / 신규 recipe / 둘 다 신규 시 predict 동작 |
 | 0-2 | 서비스 결합 | 검색 → 후보 → LightFM → 최종. **후보 수가 과도하게 줄지 않는지** |
-| 0-3 | Sparsity | user 수, recipe 수, interaction 수, density, tail 분포 |
+| 0-3 | Sparsity | user 수, recipe 수, interaction 수, density, tail 분포 — **1차 실측:** 821 users, 563 items, 990 interactions, density 0.21% |
 
 ### 7.2. 모델 실험
 
@@ -389,7 +407,7 @@ proxy 데이터 제거·교체 시 추적 가능하도록 한다.
 | Sparsity 리포트 | `ai/recommendation/artifacts/lightfm/` |
 | LightFM 모델 | `ai/recommendation/artifacts/lightfm/` |
 | 실험 기록 | `ai/recommendation/LIGHTFM_EXPERIMENT.md` (신규) |
-| 실험 노트북 | `ai/experiments/ML Based Collaborative Filtering with LightFM.ipynb` |
+| 실험 노트북 | `ai/experiments/LightFM_Model.ipynb` |
 
 ---
 
@@ -408,13 +426,14 @@ proxy 데이터 제거·교체 시 추적 가능하도록 한다.
 
 ## 9. 다음 작업 (팀 액션)
 
-1. **실험 0-3** — `review_by_llm.csv` sparsity 리포트 작성·공유
-2. **노트북 정리** — `ML Based Collaborative Filtering with LightFM.ipynb`에서 MovieLens 잔여 코드 제거, `review_by_llm` + `group_id` 기반 interaction matrix 구축
-3. **실험 1** — interaction target·loss 조합 비교
-4. **`ai/recommendation` LightFM 모듈 스캐폴딩** — `lightfm_dataset.py`, `lightfm_train.py`, `lightfm_predict.py`
-5. **서비스 결합 POC** — `fetch_review_rank_scores` 제거, 후보 pool 내 LightFM 점수 정렬
-6. **레거시 정리** — ExtraTrees 파이프라인 파일 deprecate 표시 또는 삭제
-7. **문서** — `LIGHTFM_EXPERIMENT.md` 생성, `metadata.json` 규칙 확정
+1. ~~**노트북 정리**~~ → **완료** (`LightFM_Model.ipynb`, Unit 1~9)
+2. ~~**실행 환경**~~ → **완료** (Docker + JupyterLab, E2E 검증 통과)
+3. **실험 1** — interaction target·loss 조합 비교 (Binary vs `star_sentiment_sum`, warp 정합성)
+4. **Unit 10** — baseline 비교 셀 추가
+5. **`ai/recommendation` LightFM 모듈 스캐폴딩** — `lightfm_dataset.py`, `lightfm_train.py`, `lightfm_predict.py`
+6. **서비스 결합 POC** — `fetch_review_rank_scores` 제거, 후보 pool 내 LightFM 점수 정렬
+7. **레거시 정리** — ExtraTrees 파이프라인 파일 deprecate 표시 또는 삭제
+8. **문서** — `LIGHTFM_EXPERIMENT.md` 생성, `metadata.json` 규칙 확정
 
 ---
 
@@ -652,7 +671,8 @@ flowchart TB
 | 문서·코드 | 설명 |
 |-----------|------|
 | `ai/recommendation/features.py` | item feature 생성 (LightFM 입력으로 재사용) |
-| `ai/experiments/ML Based Collaborative Filtering with LightFM.ipynb` | LightFM 실험 노트북 |
+| `ai/experiments/LightFM_Model.ipynb` | LightFM 실험 노트북 |
+| `ai/experiments/README.md` | Docker 공식 실행 가이드 |
 | [LightFM 문서](https://making.lyst.com/lightfm/docs/home.html) | 라이브러리 공식 문서 |
 | `storage/processed/recipe/review_by_llm.csv` | Phase 0 interaction 원천 |
 | `storage/processed/recipe/recipe_fix.csv` | 레시피 마스터·메타 feature 원천 |
