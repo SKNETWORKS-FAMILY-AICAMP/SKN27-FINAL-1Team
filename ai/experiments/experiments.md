@@ -736,3 +736,127 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
   }
 }
 ```
+
+---
+
+## 실험 9 — interaction target 신호 4종 비교 (hybrid, 피처 고정)
+
+**일자:** 2026-07-09  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert)  
+**스크립트:** `run_experiment9.ps1`, `aggregate_experiment9.py`  
+**범위:** target 신호 선택만 수행 (loss/baseline/피처/하이퍼파라미터 변경 없음)  
+**범위 문서:** `EXPERIMENT9_SCOPE.md`
+
+### 공통 설정 (실험 7·8 고정값)
+
+| 항목 | 값 |
+|------|-----|
+| mode | hybrid |
+| excluded_recipe_columns | `ingredients` |
+| log_numeric_columns | `view_count`, `scrap_count` (`log1p`) |
+| loss | `warp` |
+| epochs | 30 |
+| test_ratio | 0.2 |
+| seeds | 42, 123, 456, 789, 1024 |
+| runs | 4 target × 5 seed = **20** |
+
+### 타겟 정의
+
+| target_mode | interaction_value |
+|-------------|-------------------|
+| `binary` | 1.0 (리뷰 존재) |
+| `sentiment_only` | `sentiment` (`positive - negative`) |
+| `star_only` | `star` (`(star_count - 3) / 2`) |
+| `star_sentiment_sum` | `star + sentiment` |
+
+### 테이블 A — seed × target (precision@5)
+
+| seed | binary | sentiment_only | star_only | star_sentiment_sum |
+|------|--------|----------------|-----------|-------------------|
+| 42 | 0.0135 | 0.0135 | 0.0112 | 0.0135 |
+| 123 | 0.0114 | 0.0103 | 0.0103 | 0.0114 |
+| 456 | 0.0056 | 0.0056 | 0.0056 | 0.0056 |
+| 789 | 0.0045 | 0.0067 | 0.0056 | 0.0056 |
+| 1024 | 0.0056 | 0.0056 | 0.0056 | 0.0056 |
+
+### 테이블 A-2 — seed × target (전체 지표)
+
+| seed | target | precision@5 | precision@10 | recall@5 | recall@10 |
+|------|--------|-------------|--------------|----------|-----------|
+| 42 | binary | 0.0135 | 0.0084 | 0.0601 | 0.0770 |
+| 42 | sentiment_only | 0.0135 | 0.0090 | 0.0601 | 0.0784 |
+| 42 | star_only | 0.0112 | 0.0090 | 0.0534 | 0.0826 |
+| 42 | star_sentiment_sum | 0.0135 | 0.0084 | 0.0646 | 0.0770 |
+| 123 | binary | 0.0114 | 0.0091 | 0.0571 | 0.0914 |
+| 123 | sentiment_only | 0.0103 | 0.0091 | 0.0514 | 0.0914 |
+| 123 | star_only | 0.0103 | 0.0097 | 0.0514 | 0.0971 |
+| 123 | star_sentiment_sum | 0.0114 | 0.0097 | 0.0571 | 0.0971 |
+| 456 | binary | 0.0056 | 0.0056 | 0.0278 | 0.0556 |
+| 456 | sentiment_only | 0.0056 | 0.0056 | 0.0278 | 0.0556 |
+| 456 | star_only | 0.0056 | 0.0061 | 0.0278 | 0.0611 |
+| 456 | star_sentiment_sum | 0.0056 | 0.0061 | 0.0278 | 0.0611 |
+| 789 | binary | 0.0045 | 0.0073 | 0.0225 | 0.0730 |
+| 789 | sentiment_only | 0.0067 | 0.0073 | 0.0337 | 0.0730 |
+| 789 | star_only | 0.0056 | 0.0067 | 0.0281 | 0.0674 |
+| 789 | star_sentiment_sum | 0.0056 | 0.0073 | 0.0281 | 0.0730 |
+| 1024 | binary | 0.0056 | 0.0056 | 0.0282 | 0.0565 |
+| 1024 | sentiment_only | 0.0056 | 0.0056 | 0.0282 | 0.0565 |
+| 1024 | star_only | 0.0056 | 0.0073 | 0.0282 | 0.0734 |
+| 1024 | star_sentiment_sum | 0.0056 | 0.0062 | 0.0282 | 0.0621 |
+
+### 테이블 B — target별 집계
+
+| target | mean p@5 | std p@5 | mean r@10 | wins (of 5 seeds) |
+|--------|----------|---------|-----------|-------------------|
+| **star_sentiment_sum** | **0.0083** | 0.0034 | **0.0741** | 4/5 |
+| sentiment_only | 0.0083 | **0.0031** | 0.0710 | 4/5 |
+| binary | 0.0081 | 0.0036 | 0.0707 | 4/5 |
+| star_only | 0.0077 | 0.0025 | 0.0763 | 2/5 |
+
+→ wins = seed별 4 target 중 precision@5 최고 횟수 (동률 시 복수 target 각각 +1).
+
+### 테이블 C — seed별 1위 target
+
+| seed | best p@5 | winner(s) |
+|------|----------|-----------|
+| 42 | 0.0135 | binary, sentiment_only, star_sentiment_sum (동률) |
+| 123 | 0.0114 | binary, star_sentiment_sum |
+| 456 | 0.0056 | 4종 모두 동률 |
+| 789 | 0.0067 | sentiment_only |
+| 1024 | 0.0056 | 4종 모두 동률 |
+
+### 해석·최종 판단
+
+**선정 규칙:** 1) mean precision@5 → 2) std precision@5 (낮을수록 우선) → 3) mean recall@10
+
+1. **1위 `star_sentiment_sum`:** mean p@5 0.00835로 4종 중 최고, mean r@10도 0.0741로 상위. 실험 7 고정 피처 조건에서 현행 합산 타겟 유지 근거가 가장 강함.
+2. **차순위 `sentiment_only`:** mean p@5 0.00834로 1위와 거의 동률, std 0.0031로 재현성은 오히려 더 좋음. 감성 단독도 유효한 대안.
+3. **`binary`:** mean p@5 0.0081, warp 정합성은 좋으나 이번 고정 조건에서는 합산·감성 대비 우위 없음.
+4. **`star_only`:** mean p@5 0.0077로 4종 중 최하. 별점 단독 신호는 이번 데이터에서 열위.
+5. **절대 성능:** 4종 모두 Go 기준(p@5 ≥ 0.05) 미달. 이번 결론은 **target 선택용**이며 loss/baseline/피처 변경은 범위 외.
+
+**최종 target 권고:**
+- **1차 채택:** `star_sentiment_sum`
+- **차순위(대안):** `sentiment_only`
+
+### 원본 리포트
+
+JSON: `runs/exp9_{target_mode}_s{seed}.json` (20개), 집계: `runs/exp9_summary.json`
+
+**seed=42, star_sentiment_sum (1위 target)**
+
+```json
+{
+  "mode": "hybrid",
+  "target_mode": "star_sentiment_sum",
+  "excluded_recipe_columns": ["ingredients"],
+  "seed": 42,
+  "loss": "warp",
+  "metrics": {
+    "precision@5": 0.01348314606741573,
+    "precision@10": 0.008426966145634651,
+    "recall@5": 0.06460674157303371,
+    "recall@10": 0.07752808988764045
+  }
+}
+```
