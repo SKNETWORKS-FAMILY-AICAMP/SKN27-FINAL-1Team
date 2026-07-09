@@ -376,3 +376,124 @@ JSON: `runs/baseline.json`, `runs/exclude_<column>.json`
   }
 }
 ```
+
+---
+
+## 실험 5 — 2컬럼 조합 + 제거후보 3개 동시 제외 (hybrid)
+
+**일자:** 2026-07-09  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert)  
+**스크립트:** `run_experiment5.ps1`  
+**목적:** 제거 후보 포함 2컬럼 조합 ablation + 제거 후보 3개 동시 제외
+
+### 공통 설정
+
+| 항목 | 값 |
+|------|-----|
+| mode | hybrid |
+| interaction | star + sentiment (1:1) |
+| loss | `warp` |
+| seed / epochs | 42 / 30 |
+| 비교 기준 | 실험 4 baseline precision@5 = **0.0101** |
+
+### Phase 5a — 코어 조합 (Remove×Remove, Remove×Keep)
+
+| label | excluded | precision@5 | precision@10 | recall@5 | recall@10 | Δp@5 vs exp4 | unique_features |
+|-------|----------|-------------|--------------|----------|-----------|--------------|-----------------|
+| exp5_5a_cooking_category_basic_count | cooking_category, basic_count | 0.0112 | 0.0073 | 0.0447 | 0.0615 | +0.0011 | 2367 |
+| exp5_5a_cooking_category_cooking_level | cooking_category, cooking_level | 0.0090 | 0.0073 | 0.0334 | 0.0615 | -0.0011 | 2367 |
+| exp5_5a_cooking_category_cooking_method | cooking_category, cooking_method | 0.0101 | 0.0067 | 0.0506 | 0.0629 | +0.0000 | 2357 |
+| exp5_5a_cooking_category_ingredients | cooking_category, ingredients | 0.0135 | 0.0107 | 0.0646 | 0.1039 | +0.0034 | 1858 |
+| exp5_5a_cooking_category_others_count | cooking_category, others_count | 0.0124 | 0.0084 | 0.0548 | 0.0728 | +0.0023 | 2366 |
+| exp5_5a_ingredients_basic_count | ingredients, basic_count | 0.0101 | 0.0101 | 0.0506 | 0.0983 | +0.0000 | 1867 |
+| exp5_5a_ingredients_cooking_level | ingredients, cooking_level | 0.0124 | 0.0079 | 0.0590 | 0.0758 | +0.0023 | 1867 |
+| exp5_5a_ingredients_cooking_method | ingredients, cooking_method | 0.0169 | 0.0112 | 0.0815 | 0.0966 | +0.0068 | 1857 |
+| exp5_5a_ingredients_others_count | ingredients, others_count | 0.0112 | 0.0084 | 0.0534 | 0.0787 | +0.0011 | 1866 |
+| exp5_5a_main_ingred_basic_count | main_ingred, basic_count | 0.0124 | 0.0079 | 0.0562 | 0.0730 | +0.0023 | 2363 |
+| exp5_5a_main_ingred_cooking_category | main_ingred, cooking_category | 0.0067 | 0.0067 | 0.0309 | 0.0601 | -0.0034 | 2354 |
+| exp5_5a_main_ingred_cooking_level | main_ingred, cooking_level | 0.0101 | 0.0090 | 0.0478 | 0.0843 | +0.0000 | 2363 |
+| exp5_5a_main_ingred_cooking_method | main_ingred, cooking_method | 0.0124 | 0.0096 | 0.0590 | 0.0843 | +0.0023 | 2353 |
+| exp5_5a_main_ingred_ingredients | main_ingred, ingredients | 0.0124 | 0.0101 | 0.0590 | 0.0983 | +0.0023 | 1854 |
+| exp5_5a_main_ingred_others_count | main_ingred, others_count | 0.0101 | 0.0084 | 0.0433 | 0.0770 | +0.0000 | 2362 |
+
+### Phase 5b — Remove × Secondary
+
+| label | excluded | precision@5 | precision@10 | recall@5 | recall@10 | Δp@5 vs exp4 | unique_features |
+|-------|----------|-------------|--------------|----------|-----------|--------------|-----------------|
+| exp5_5b_cooking_category_aliases | cooking_category, aliases | 0.0135 | 0.0101 | 0.0646 | 0.0938 | +0.0034 | 1896 |
+| exp5_5b_cooking_category_cooking_time | cooking_category, cooking_time | 0.0056 | 0.0062 | 0.0253 | 0.0545 | -0.0045 | 2362 |
+| exp5_5b_cooking_category_dishes | cooking_category, dishes | 0.0112 | 0.0096 | 0.0534 | 0.0840 | +0.0011 | 2364 |
+| exp5_5b_cooking_category_recipe_kind | cooking_category, recipe_kind | 0.0079 | 0.0079 | 0.0348 | 0.0713 | -0.0022 | 2352 |
+| exp5_5b_cooking_category_recipe_name | cooking_category, recipe_name | 0.0067 | 0.0090 | 0.0337 | 0.0826 | -0.0034 | 1807 |
+| exp5_5b_ingredients_aliases | ingredients, aliases | 0.0112 | 0.0096 | 0.0534 | 0.0882 | +0.0011 | 1396 |
+| exp5_5b_ingredients_cooking_time | ingredients, cooking_time | 0.0124 | 0.0079 | 0.0590 | 0.0758 | +0.0023 | 1862 |
+| exp5_5b_ingredients_dishes | ingredients, dishes | 0.0135 | 0.0084 | 0.0646 | 0.0815 | +0.0034 | 1864 |
+| exp5_5b_ingredients_recipe_kind | ingredients, recipe_kind | 0.0101 | 0.0073 | 0.0478 | 0.0702 | +0.0000 | 1852 |
+| exp5_5b_ingredients_recipe_name | ingredients, recipe_name | 0.0124 | 0.0079 | 0.0590 | 0.0758 | +0.0023 | 1307 |
+| exp5_5b_main_ingred_aliases | main_ingred, aliases | 0.0112 | 0.0107 | 0.0534 | 0.0994 | +0.0011 | 1892 |
+| exp5_5b_main_ingred_cooking_time | main_ingred, cooking_time | 0.0079 | 0.0073 | 0.0365 | 0.0657 | -0.0022 | 2358 |
+| exp5_5b_main_ingred_dishes | main_ingred, dishes | 0.0101 | 0.0090 | 0.0506 | 0.0854 | +0.0000 | 2360 |
+| exp5_5b_main_ingred_recipe_kind | main_ingred, recipe_kind | 0.0101 | 0.0084 | 0.0478 | 0.0815 | +0.0000 | 2348 |
+| exp5_5b_main_ingred_recipe_name | main_ingred, recipe_name | 0.0112 | 0.0101 | 0.0489 | 0.0896 | +0.0011 | 1803 |
+
+### Phase 5c — 제거 후보 3개 동시 제외
+
+| label | excluded | precision@5 | precision@10 | recall@5 | recall@10 | Δp@5 vs exp4 | unique_features |
+|-------|----------|-------------|--------------|----------|-----------|--------------|-----------------|
+| exp5_5c_all_remove | main_ingred, cooking_category, ingredients | 0.0146 | 0.0096 | 0.0657 | 0.0882 | +0.0045 | 1842 |
+
+### 해석
+
+- **최고 precision@5:** `exp5_5a_ingredients_cooking_method` (0.0169, excluded: ingredients, cooking_method)
+- **최저 precision@5:** `exp5_5b_cooking_category_cooking_time` (0.0056)
+
+**exp4 baseline 대비 Δprecision@5 상위:**
+- `ingredients, cooking_method` (+0.0068)
+- `main_ingred, cooking_category, ingredients` (+0.0045)
+- `cooking_category, ingredients` (+0.0034)
+
+**exp4 baseline 대비 Δprecision@5 하위 (제거 시 손실 큼):**
+- `cooking_category, cooking_time` (-0.0045)
+- `main_ingred, cooking_category` (-0.0034)
+- `cooking_category, recipe_name` (-0.0034)
+
+**5c (3개 동시 제외):**
+- 3개 동시 제외 precision@5 **0.0146** (exp4 baseline 0.0101, exp4 main_ingred 단독 0.0124)
+
+### 원본 리포트 (baseline)
+
+```json
+{
+  "data_files": {
+    "review": "review_by_llm.csv",
+    "recipe": "recipe_fix.csv",
+    "ingredient_alias": "recipe_ingredient_alias.csv"
+  },
+  "mode": "hybrid",
+  "target_mode": "star_sentiment_sum",
+  "excluded_recipe_columns": [],
+  "seed": 42,
+  "test_ratio": 0.2,
+  "epochs": 30,
+  "loss": "warp",
+  "matrix": {
+    "num_users": 821,
+    "num_items": 563,
+    "nnz": 990,
+    "train_nnz": 792,
+    "test_nnz": 198,
+    "item_feature_nnz": 17284,
+    "unique_features": 2382
+  },
+  "metrics": {
+    "precision@5": 0.010112359188497066,
+    "precision@10": 0.008988764137029648,
+    "recall@5": 0.05056179775280899,
+    "recall@10": 0.08258426966292134
+  },
+  "decision": {
+    "go": false,
+    "criterion": "precision@5 >= 0.05"
+  }
+}
+```
