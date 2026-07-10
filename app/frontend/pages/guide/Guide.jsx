@@ -10,7 +10,7 @@ const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 12
 const GUIDE_RECIPE_LIMIT = 12
 const GUIDE_RECIPE_VISIBLE_COUNT = 3
-const EMPTY_SUGGESTION_FORM = { content: '', sourceName: '', sourceUrl: '' }
+const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
 
 function normalizeIngredientImageName(name = '') {
   return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
@@ -498,7 +498,7 @@ function Guide() {
           ingredient_code: selectedGuide.code,
           guide_type: selectedTip.guideType,
           content: suggestionForm.content,
-          source_name: suggestionForm.sourceName || null,
+          source_name: null,
           source_url: suggestionForm.sourceUrl || null,
         }),
       })
@@ -815,6 +815,7 @@ function Guide() {
                       {guideTips.map((tip) => {
                         const isActive = selectedTip.title === tip.title
                         const suggestionTitleId = `guide-suggestion-title-${tip.guideType}`
+                        const shouldShowPoints = !(tip.isMissing && isActive && isSuggestionFormOpen)
 
                         return (
                           <div
@@ -822,11 +823,13 @@ function Guide() {
                             className={`guide-tip-copy ${isActive ? 'is-active' : ''}`}
                             key={tip.title}
                           >
-                            <ul>
-                              {tip.points.map((point) => (
-                                <li key={point}>{point}</li>
-                              ))}
-                            </ul>
+                            {shouldShowPoints ? (
+                              <ul>
+                                {tip.points.map((point) => (
+                                  <li key={point}>{point}</li>
+                                ))}
+                              </ul>
+                            ) : null}
 
                             {!tip.isMissing ? (
                               <div className="guide-tip-source">
@@ -842,7 +845,7 @@ function Guide() {
                               <section className="guide-suggestion" aria-labelledby={suggestionTitleId}>
                                 <div className="guide-suggestion__intro">
                                   <h3 id={suggestionTitleId}>나만의 가이드 제보</h3>
-                                  <p>직접 알고 있는 방법과 참고 출처를 남겨주세요. 개발자가 확인한 뒤 반영합니다.</p>
+                                  <p>직접 알고 있는 방법이나 참고한 링크를 남겨주세요. 확인 후 서비스에 반영될 수 있어요.</p>
                                 </div>
 
                                 {isActive && isSuggestionFormOpen ? (
@@ -862,17 +865,6 @@ function Guide() {
                                     </label>
                                     <div className="guide-suggestion__source-fields">
                                       <label>
-                                        <span>출처명 (선택)</span>
-                                        <input
-                                          maxLength={255}
-                                          placeholder="예: 농촌진흥청"
-                                          value={suggestionForm.sourceName}
-                                          onChange={(event) =>
-                                            setSuggestionForm((current) => ({ ...current, sourceName: event.target.value }))
-                                          }
-                                        />
-                                      </label>
-                                      <label>
                                         <span>출처 URL (선택)</span>
                                         <input
                                           placeholder="https://example.com"
@@ -883,20 +875,20 @@ function Guide() {
                                           }
                                         />
                                       </label>
-                                    </div>
-                                    <div className="guide-suggestion__actions">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsSuggestionFormOpen(false)
-                                          setSuggestionMessage('')
-                                        }}
-                                      >
-                                        취소
-                                      </button>
-                                      <button disabled={isSuggestionSubmitting} type="submit">
-                                        {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
-                                      </button>
+                                      <div className="guide-suggestion__actions">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setIsSuggestionFormOpen(false)
+                                            setSuggestionMessage('')
+                                          }}
+                                        >
+                                          취소
+                                        </button>
+                                        <button disabled={isSuggestionSubmitting} type="submit">
+                                          {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
+                                        </button>
+                                      </div>
                                     </div>
                                   </form>
                                 ) : (

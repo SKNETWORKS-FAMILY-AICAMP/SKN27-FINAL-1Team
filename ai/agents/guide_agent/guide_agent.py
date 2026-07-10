@@ -28,6 +28,9 @@ GUIDE_STOPWORDS = (
     "제철", "보관법", "보관", "손질법", "손질", "세척법", "세척", "신선도", "확인법",
     "알려줘", "조회해줘", "조회", "식재료", "재료", "가이드", "언제야", "뭐야",
 )
+RELATED_LIST_WORDS = (
+    "종류", "목록", "분류", "리스트", "어떤", "무슨", "뭐", "있어", "있나요", "있을까",
+)
 TRUSTED_WEB_DOMAINS = (
     "foodsafetykorea.go.kr",
     "mfds.go.kr",
@@ -152,6 +155,20 @@ def _clean_query_keyword(text_value: str) -> str:
     for word in GUIDE_STOPWORDS:
         keyword = keyword.replace(word, " ")
     return re.sub(r"\s+", " ", keyword).strip()
+
+
+def _is_related_list_query(query: str) -> bool:
+    normalized = query.replace(" ", "").lower()
+    return any(word in normalized for word in RELATED_LIST_WORDS)
+
+
+def _clean_related_keyword(query: str) -> str:
+    keyword = _clean_query_keyword(query)
+    keyword = re.sub(r"[?!.,~]", " ", keyword)
+    for word in RELATED_LIST_WORDS:
+        keyword = keyword.replace(word, " ")
+    keyword = re.sub(r"\s+", " ", keyword).strip()
+    return re.sub(r"[은는이가을를에의]$", "", keyword).strip()
 
 
 def _normalize_match_text(value: str | None) -> str:
@@ -480,6 +497,100 @@ def list_guide_categories(
         )
 
 
+def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]:
+    """원재료명/별칭/분류명으로 관련 식재료 목록을 조회합니다."""
+    keyword = (keyword or "").strip()
+    if not keyword:
+        return build_guide_response(
+            action="list_related_ingredients",
+            message="조회할 식재료명이나 분류명을 입력해주세요.",
+            error={"code": "INVALID_RELATED_KEYWORD"},
+        )
+
+    query = """
+    MATCH (g)
+    WHERE (g:FoodGuide OR g:Ingredient)
+      AND coalesce(g.name, g.rawName, g.representativeName) IS NOT NULL
+      AND NOT coalesce(g.name, g.rawName, g.representativeName) STARTS WITH "food-guide-"
+    OPTIONAL MATCH (g)-[:HAS_ALIAS]->(alias:Alias)
+    WITH g, [name IN collect(DISTINCT alias.name) WHERE name IS NOT NULL] AS relation_aliases
+    WITH g, coalesce(g.aliases, []) + relation_aliases AS aliases
+    WHERE toLower(coalesce(g.name, "")) CONTAINS $keyword
+       OR toLower(coalesce(g.rawName, "")) CONTAINS $keyword
+       OR toLower(coalesce(g.representativeName, "")) CONTAINS $keyword
+       OR toLower(coalesce(g.majorCategory, "")) CONTAINS $keyword
+       OR toLower(coalesce(g.middleCategory, "")) CONTAINS $keyword
+       OR toLower(coalesce(g.minorCategory, "")) CONTAINS $keyword
+       OR any(alias IN aliases WHERE toLower(alias) CONTAINS $keyword)
+    RETURN g.key AS code,
+           coalesce(g.name, g.rawName, g.representativeName) AS name,
+           g.representativeName AS representative_name,
+           g.rawName AS raw_name,
+           g.majorCategory AS major_category,
+           g.middleCategory AS middle_category,
+           g.minorCategory AS minor_category,
+           aliases AS aliases
+    ORDER BY
+      CASE
+        WHEN toLower(coalesce(g.middleCategory, "")) = $keyword THEN 0
+        WHEN toLower(coalesce(g.name, "")) CONTAINS $keyword THEN 1
+        WHEN any(alias IN aliases WHERE toLower(alias) CONTAINS $keyword) THEN 2
+        ELSE 3
+      END,
+      name
+    LIMIT $limit
+    """
+    try:
+        with guide_service.session() as session:
+            rows = [
+                {
+                    "code": record["code"],
+                    "name": record["name"],
+                    "representative_name": record["representative_name"],
+                    "raw_name": record["raw_name"],
+                    "aliases": record["aliases"] or [],
+                    "category": {
+                        "major": record["major_category"],
+                        "middle": record["middle_category"],
+                        "minor": record["minor_category"],
+                    },
+                }
+                for record in session.run(query, {"keyword": keyword.lower(), "limit": limit})
+            ]
+    except Exception:
+        return build_guide_response(
+            action="list_related_ingredients",
+            message=f"{keyword} 관련 식재료 목록을 조회하지 못했어요.",
+            error={"code": "GUIDE_RELATED_LIST_ERROR"},
+        )
+
+    if not rows:
+        return build_guide_response(
+            action="list_related_ingredients",
+            message=f"{keyword} 관련 식재료를 찾지 못했어요.",
+            data={"keyword": keyword, "items": [], "total": 0},
+            error={"code": "RELATED_INGREDIENT_NOT_FOUND"},
+        )
+
+    names = [row["name"] for row in rows[:8]]
+    suffix = " 등이 있어요." if len(rows) > 8 else "가 있어요."
+    return build_guide_response(
+        action="list_related_ingredients",
+        message=f"{keyword} 관련 식재료로는 {', '.join(names)}{suffix}",
+        data={"keyword": keyword, "items": rows, "total": len(rows)},
+        cards=[
+            {
+                "title": row["name"],
+                "subtitle": " > ".join(
+                    value for value in row["category"].values() if value
+                ),
+            }
+            for row in rows[:8]
+        ],
+        meta={"data_source": "neo4j", "matched_fields": ["name", "alias", "category"]},
+    )
+
+
 def lookup_ingredient_guide(ingredient: str) -> dict[str, Any]:
     """기존 검색과 상세 조회를 이어 전체 식재료 가이드를 반환합니다."""
     try:
@@ -585,6 +696,11 @@ def answer_guide_query(query: str) -> dict[str, Any]:
         return list_seasonal_ingredients(int(month.group(1)))
 
     keyword = _clean_query_keyword(query)
+    if _is_related_list_query(query):
+        related_keyword = _clean_related_keyword(query)
+        if related_keyword:
+            return list_related_ingredients(related_keyword)
+
     if any(word in query for word in NUTRITION_WORDS):
         result = lookup_ingredient_nutrition(keyword)
         if result.get("ok"):
