@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from catalog_eval import spearman_rho
+from score_02 import add_row_02_columns, sentiment_02, star_02_from_count
 
 ROOT = Path(__file__).resolve().parent
 REVIEW_CSV = ROOT / "review_by_llm.csv"
@@ -20,23 +21,9 @@ BAR_IDS = ("B0_legacy", "B1_sum_02", "B2_prod_avg", "B3_prod_row")
 SUBSETS = ("all", "ceiling", "star_varies", "low_tail")
 
 
-def star_02(star_count: pd.Series) -> pd.Series:
-    return (pd.to_numeric(star_count, errors="coerce") - 1.0) / 2.0
-
-
-def sentiment_02(positive: pd.Series, negative: pd.Series) -> pd.Series:
-    sentiment = pd.to_numeric(positive, errors="coerce") - pd.to_numeric(
-        negative, errors="coerce"
-    )
-    return sentiment.add(1.0).clip(0.0, 2.0)
-
-
 def build_recipe_bars(review_df: pd.DataFrame) -> pd.DataFrame:
-    review = review_df.copy()
+    review = add_row_02_columns(review_df.copy())
     review["recipe_id"] = review["recipe_id"].astype(str)
-    review["star_02"] = star_02(review["star_count"])
-    review["sentiment_02"] = sentiment_02(review["positive"], review["negative"])
-    review["row_product_02"] = review["star_02"] * review["sentiment_02"]
     review["sentiment_row"] = (
         pd.to_numeric(review["positive"], errors="coerce")
         - pd.to_numeric(review["negative"], errors="coerce")
@@ -44,7 +31,7 @@ def build_recipe_bars(review_df: pd.DataFrame) -> pd.DataFrame:
     if "star_norm" in review.columns:
         review["star_norm_row"] = pd.to_numeric(review["star_norm"], errors="coerce")
     else:
-        review["star_norm_row"] = (pd.to_numeric(review["star_count"], errors="coerce") - 3.0) / 2.0
+        review["star_norm_row"] = star_02_from_count(review["star_count"]) - 1.0
 
     grouped = review.groupby("recipe_id", as_index=False).agg(
         star_norm_avg=("star_norm_row", "mean"),

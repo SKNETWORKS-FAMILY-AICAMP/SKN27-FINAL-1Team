@@ -219,6 +219,7 @@ def decomposed_track_b_metrics(
     sentiment_avg: np.ndarray,
     *,
     warm_mask: np.ndarray | None = None,
+    legacy_review_rank: np.ndarray | None = None,
 ) -> list[dict[str, float | str | int]]:
     """Subset x bar Spearman/Pearson for warm rows (experiment 14)."""
     y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
@@ -229,12 +230,16 @@ def decomposed_track_b_metrics(
     if warm_mask is None:
         warm_mask = np.isfinite(review_rank_score)
     warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
+    if legacy_review_rank is None:
+        low_tail_ref = review_rank_score
+    else:
+        low_tail_ref = np.asarray(legacy_review_rank, dtype=np.float64).ravel()
 
     warm_df_masks = {
         "all": warm_mask,
         "ceiling": warm_mask & (star_norm_avg >= 0.99),
         "star_varies": warm_mask & (star_norm_avg < 1.0),
-        "low_tail": warm_mask & (review_rank_score < 1.5),
+        "low_tail": warm_mask & (low_tail_ref < 1.5),
     }
     bars = {
         "review_rank_score": review_rank_score,
@@ -272,6 +277,11 @@ def decomposed_track_b_metrics_df(export_df, warm_item_ids: set[str]) -> list[di
         df["star_norm_avg"].to_numpy(dtype=float),
         df["sentiment_avg"].to_numpy(dtype=float),
         warm_mask=warm.to_numpy(),
+        legacy_review_rank=(
+            df["legacy_review_rank"].to_numpy(dtype=float)
+            if "legacy_review_rank" in df.columns
+            else None
+        ),
     )
 
 

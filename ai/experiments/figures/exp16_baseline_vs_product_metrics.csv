@@ -1,0 +1,9 @@
+﻿target,run,subset,bar,n,spearman,pearson
+star_sentiment_sum,T0 legacy,all,review_rank_score,563,-0.03279426925564687,0.08086024188502781
+star_sentiment_sum,T0 legacy,ceiling,review_rank_score,529,-0.004565961796411722,0.11704671195865232
+star_sentiment_sum,T0 legacy,star_varies,review_rank_score,34,0.42706434499305823,0.3491863647273758
+star_sentiment_sum,T0 legacy,low_tail,review_rank_score,37,0.486896746094728,0.26437240387735655
+product_02_row,T1 product,all,review_rank_score,563,-0.024670826536488367,0.0985321016615625
+product_02_row,T1 product,ceiling,review_rank_score,529,0.0029412311650634597,0.11617391603309689
+product_02_row,T1 product,star_varies,review_rank_score,34,0.49996189495673055,0.4321188111926553
+product_02_row,T1 product,low_tail,review_rank_score,37,0.5635156962972094,0.43195270582814355

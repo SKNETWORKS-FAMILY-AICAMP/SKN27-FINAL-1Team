@@ -19,7 +19,7 @@ SUBSET_LABELS = {
     "all": "ALL warm",
     "ceiling": "star_norm >= 0.99",
     "star_varies": "star_norm < 1.0",
-    "low_tail": "review_rank_score < 1.5",
+    "low_tail": "legacy review_rank < 1.5",
 }
 
 BAR_LABELS = ("star_norm_avg", "sentiment_avg", "review_rank_score")
@@ -38,21 +38,32 @@ def warm_frame(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def subset_masks(warm: pd.DataFrame) -> dict[str, pd.Series]:
+    low_tail_ref = (
+        warm["legacy_review_rank"]
+        if "legacy_review_rank" in warm.columns
+        else warm["review_rank_score"]
+    )
     return {
         "all": pd.Series(True, index=warm.index),
         "ceiling": warm["star_norm_avg"] >= 0.99,
         "star_varies": warm["star_norm_avg"] < 1.0,
-        "low_tail": warm["review_rank_score"] < 1.5,
+        "low_tail": low_tail_ref < 1.5,
     }
 
 
 def decomposed_metrics_from_csv(csv_path: Path) -> list[dict]:
     warm = warm_frame(pd.read_csv(csv_path))
+    legacy = (
+        warm["legacy_review_rank"].to_numpy(dtype=float)
+        if "legacy_review_rank" in warm.columns
+        else None
+    )
     return decomposed_track_b_metrics(
         warm["y_hat"].to_numpy(dtype=float),
         warm["review_rank_score"].to_numpy(dtype=float),
         warm["star_norm_avg"].to_numpy(dtype=float),
         warm["sentiment_avg"].to_numpy(dtype=float),
+        legacy_review_rank=legacy,
     )
 
 

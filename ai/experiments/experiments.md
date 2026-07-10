@@ -1667,6 +1667,107 @@ python plot/plot_exp15_bar_compare.py
 
 ---
 
+## 실험 16 — 0~2 곱 interaction + B3 bar 재학습·비교
+
+**일자:** 2026-07-10  
+**유형:** 2-run 재학습 (seed=42, WARP 30ep) — T0 legacy vs T1 product  
+**코드:** [`score_02.py`](score_02.py), [`LightFM_Model.ipynb`](LightFM_Model.ipynb) (`EXP16=1`), [`plot/plot_exp16_compare.py`](plot/plot_exp16_compare.py)  
+**배경:** 실험 15에서 곱 bar(B3)가 천장 std 2×·subset ρ 우위를 확인했으나 **고정 ŷ** 기준 ceiling ρ +0.05 미달 → interaction·bar **정합 재학습** 검증
+
+### 매트릭스 (2 runs)
+
+| run | `TARGET_MODE` | 학습 `y` (행) | B2 bar `review_rank_score` | export |
+|-----|---------------|---------------|----------------------------|--------|
+| **T0** | `star_sentiment_sum` | `star + sentiment` | `star_norm_avg + sentiment_avg` | `recipe_lightfm_exp16_star_sentiment_sum.csv` |
+| **T1** | `product_02_row` | `star_02 × sentiment_02` | `mean(star_02 × sent_02)` (B3) | `recipe_lightfm_exp16_product_02_row.csv` |
+
+**0~2 정의 (고정):** [`bar_eval.py`](bar_eval.py) / [`score_02.py`](score_02.py)와 동일
+
+```text
+star_02      = (star_count - 1) / 2
+sentiment_02 = clip(sentiment + 1, 0, 2)
+interaction_row = star_02 × sentiment_02
+bar_recipe      = mean(interaction_row)   # B3 (T1 only)
+```
+
+**고정:** hybrid, feature, `__catalog__`, train 80%, WARP 30ep, `EXP16=1`, `SEED=42`.  
+**변경:** `TARGET_MODE` + bar 공식만. `low_tail` subset은 **legacy 합산 &lt; 1.5** (실험 14·15와 동일 37개).
+
+### 실행 결과 — B0~B3 (ALL warm)
+
+[`runs/exp16_star_sentiment_sum.json`](runs/exp16_star_sentiment_sum.json) · [`runs/exp16_product_02_row.json`](runs/exp16_product_02_row.json)
+
+| 지표 | T0 legacy | T1 product |
+|------|-----------|------------|
+| B0 (coverage) | 1.0 ✓ | 1.0 ✓ |
+| B2 Spearman(ŷ, bar) | **-0.033** (미달) | **-0.025** (미달) |
+| B3 Spearman(ŷ, train) | **0.511** ✓ | **0.514** ✓ |
+| B2 Go(0.30) | 미달 (기록) | 미달 (기록) |
+
+### subset×run — Spearman(ŷ, `review_rank_score`)
+
+[`figures/exp16_baseline_vs_product_metrics.csv`](figures/exp16_baseline_vs_product_metrics.csv) · [`exp16_baseline_vs_product_compare.png`](figures/exp16_baseline_vs_product_compare.png)
+
+| subset | T0 | T1 | Δ (T1−T0) |
+|--------|----|----|-----------|
+| all | -0.033 | -0.025 | +0.008 |
+| **ceiling** | **-0.005** | **+0.003** | **+0.008** |
+| star_varies | 0.427 | **0.500** | +0.073 |
+| low_tail | 0.487 | **0.564** | +0.077 |
+
+→ T1이 **모든 subset에서 T0 이상**. ceiling은 여전히 |ρ|&lt;0.01대이나 **부호 전환(+)**. star_varies·low_tail에서 재학습+곱 bar 효과가 가장 뚜렷.
+
+### 가설 판정 (H1~H4)
+
+| ID | 가설 | 기준 | 결과 |
+|----|------|------|------|
+| **H1** | 재학습+곱 bar가 **ceiling ρ**를 T0 대비 개선 | ceiling ρ **≥ T0 + 0.05** | **기각** — Δ≈+0.008 (&lt;0.05) |
+| **H2** | **ALL** B2 proxy 개선 | ALL ρ **&gt; T0** | **지지** — -0.025 &gt; -0.033 |
+| **H3** | subset 신호(H2) 유지 | `low_tail`·`star_varies` ρ **≥ 0.35** | **지지** — 0.500 / 0.564 |
+| **H4** | B0·B3 유지 | T1 B0·B3 통과 | **지지** |
+
+**B2 Go(0.30):** T0·T1 모두 미달 — **기록만** (1차 성공 조건 아님).
+
+### 17+ 채택
+
+**채택:** H2 지지 + H3·H4 통과 → **`product_02_row` + B3 bar (`mean(star_02×sent_02)`)** 를 Track B **기본 축**으로 확정.  
+**미채택 조건:** H1 ceiling +0.05는 미달 — B2 전역 Go는 **추가 튜닝(실험 17)** 대상.  
+**노트북 default:** T1 채택 확정 전까지 **env override** 유지 (`TARGET_MODE=product_02_row`, `EXP16=1`).
+
+### 산출물
+
+| 경로 | 내용 |
+|------|------|
+| `recipe_lightfm_exp16_*.csv` | T0·T1 export (×2) |
+| `runs/exp16_*.json` | Track B + decomposed |
+| `figures/exp16_*_decompose.png` + `_metrics.txt` | run별 6패널 분해 |
+| `figures/exp16_baseline_vs_product_metrics.csv` | T0×T1 long |
+| `figures/exp16_baseline_vs_product_compare.png` | 비교 차트 |
+
+재생성:
+
+```powershell
+cd ai\experiments
+$runs = @(
+  @{ mode='star_sentiment_sum'; tag='star_sentiment_sum' },
+  @{ mode='product_02_row'; tag='product_02_row' }
+)
+foreach ($r in $runs) {
+  docker compose run --rm -e EXP16=1 `
+    -e TARGET_MODE=$($r.mode) -e EXPORT_TAG=$($r.tag) `
+    lightfm-jupyter jupyter nbconvert `
+      --to notebook --execute LightFM_Model.ipynb `
+      --output /tmp/out.ipynb --ExecutePreprocessor.timeout=900
+  python plot/plot_decompose.py --tag "exp16_$($r.tag)" `
+    --csv "recipe_lightfm_exp16_$($r.tag).csv"
+}
+python plot/plot_exp16_compare.py
+```
+
+**한 줄 결론:** 0~2 곱 interaction·B3 bar **재학습**은 ALL·subset B2 proxy를 T0 대비 **전반 개선**(H2)하고 subset 신호를 **강화**(H3)했으나, **ceiling ρ +0.05**(H1)와 **B2 Go 0.30**은 여전히 미달. **17+는 `product_02_row` + B3 bar 축**으로 진행.
+
+---
+
 ### (사양) Track A/B 전략 · 평가 사양 (실험 13 초안 — 아래 유지)
 
 **목적:** 실험 **우선순위를 Track B(전 카탈로그 점수)** 로 전환하고, Track B Go에 쓸 **지표·목표·기준 수치**를 문서에 고정
