@@ -1,7 +1,0 @@
-{
-  "rank_spearman": 0.9995079875080368,
-  "recipes_with_rank_change": 2841,
-  "max_abs_rank_delta": 202,
-  "top50_overlap": 49,
-  "top50_changed": 1
-}
