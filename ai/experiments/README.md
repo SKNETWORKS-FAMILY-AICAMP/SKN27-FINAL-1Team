@@ -17,7 +17,9 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 | **분석** | **12** | 재학습 없음 | Track A metric·이론 상한·L0~L2 해석 |
 | **사양·실행** | **13** | Track B export run | `recipe_lightfm.csv`, B0~B3 |
 | **Track B 개선** | **14** | target ablation | subset×bar 분해·H1~H4 |
-| **Track B 개선** | **15~** (예정) | B4 / multi-seed | warm 리뷰 순위 재현 |
+| **Track B 개선** | **15** | bar-only (0~2 곱) | 천장 std 2×, ρ +0.05 미달 |
+| **Track B 개선** | **16** | interaction·bar 곱 재학습 | bar·학습 정합 |
+| **Track B 개선** | **17~** | `mean(star×sent)` bar/target (B3) | 실험 16 이후 기본 축 |
 
 - **ablation·채택 근거** → §실험 1~11  
 - **왜 Go 기준이 바뀌었는지** → §실험 12 → §실험 13 순  
@@ -34,17 +36,17 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 - **Track A (실험 1~12, 전제 검증):** `review_by_llm.csv` proxy(~563 item) hold-out CF. **L0 통과** — 상세 실행 로그는 §실험 1~11, 해석은 §실험 12.
 - 데이터: interaction `review_by_llm.csv` / feature `recipe_fix.csv`, `recipe_ingredient_alias.csv`.
 
-### 1.2 현재 진행 상황 (실험 14 실행 완료)
+### 1.2 현재 진행 상황 (실험 15 실행 완료)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` Unit 1~11 |
 | hybrid·feature·target | **확정** | 실험 7~10 → Track B 재사용 |
 | **Track A** | **전제 완료 (L0)** | random 우위 5/5; L1/L2 **보류** |
-| **Track B** | **1차 export + target ablation** | `recipe_lightfm.csv` / `recipe_lightfm_exp14_*.csv`; **B0·B3 통과, B2 미달 (4 target 공통)** |
-| **다음** | **15** | B4 view/scrap ablation · `star_only` multi-seed |
+| **Track B** | **export + target/bar ablation** | B0·B3 통과; B2 미달; **bar 곱: 천장 std 2×, ρ +0.05 미달** |
+| **다음** | **16** | interaction·bar 0~2 곱 재학습 → **17+는 `mean(star×sent)` (B3) 통일** |
 
-상세 → **[experiments.md §실험 14](experiments.md)**.
+상세 → **[experiments.md §실험 15](experiments.md)** · **이후 계획** (§15 하단).
 
 ### 1.4 Track A vs Track B
 
@@ -59,12 +61,13 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 
 **점수 정의**
 
-| | 공식 |
-|---|------|
-| 학습 `y` | `star + sentiment` |
-| 관측 / bar `score_review` | `REVIEW_RANK_SCORE` (= 별점·감성 평균 합) |
-| export `ŷ` | LightFM predict — **추정 리뷰 점수** |
-| view/scrap | **feature만** (target·bar·서비스 점수에 미포함) |
+| | 공식 | 비고 |
+|---|------|------|
+| 학습 `y` (현재) | `star + sentiment` | 실험 13~15 baseline |
+| 관측 / bar `score_review` (현재) | `REVIEW_RANK_SCORE` (= 별점·감성 **합**) | 실험 13~15 |
+| **계획 (실험 16→17+)** | **0~2:** `star_02×sent_02` 행 단위 곱; bar = **`mean(star_02×sent_02)`** (실험 15 B3) | §실험 15·로드맵 |
+| export `ŷ` | LightFM predict — **추정 리뷰 점수** | |
+| view/scrap | **feature만** (target·bar·서비스 점수에 미포함) | |
 
 **레거시 Neo4j fallback (리뷰+조회+스크랩) — 사용 안 함.** 정합: **서비스 → 실험** (코드 후속).
 
@@ -216,8 +219,9 @@ docker compose run --rm lightfm-jupyter jupyter nbconvert `
 | `docker-compose.yml`, `Dockerfile`, `requirements.txt`, `*.csv` | 실행·데이터 |
 | `baseline_eval.py` | bar baseline 평가 (Unit 10) |
 | `catalog_eval.py` | Track B B0~B3 (Unit 11) |
-| `plot/` | 차트 스크립트 (`metrics.py`, `plot_decompose.py`, `plot_exp13_*.py`, `plot_exp14_compare.py`) → `figures/` |
-| `figures/` | 산점도 PNG·지표 txt·`exp14_target_subset_metrics.csv` (실험별) |
+| `bar_eval.py` | 실험 15 bar-only (0~2 곱 bar, 재학습 없음) |
+| `plot/` | 차트 스크립트 (`metrics.py`, `plot_decompose.py`, `plot_exp14_compare.py`, `plot_exp15_bar_compare.py`) → `figures/` |
+| `figures/` | 산점도 PNG·지표 txt·`exp14_*`·`exp15_bar_*` CSV/PNG |
 | `recipe_lightfm.csv` | 전 카탈로그 점수 export (T0 legacy; `recipe_lightfm_exp14_<tag>.csv` 병행) |
 | `runs/` | 임시 JSON (비커밋 권장) |
 
@@ -265,9 +269,9 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ---
 
-## 4. 실험 회차 개요 (1~14)
+## 4. 실험 회차 개요 (1~15)
 
-상세 → **[experiments.md](experiments.md)** 해당 §. **1~11 = Track A 실행 / 12 = 분석 / 13 = Track B 실행 / 14 = target ablation**
+상세 → **[experiments.md](experiments.md)** 해당 §. **1~11 = Track A / 12 = 분석 / 13~15 = Track B**
 
 | # | 목적 (한 줄) | 결론 | 비고 |
 |---|-------------|------|------|
@@ -275,13 +279,15 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 | 11 | random + train 인기 | mean 인기 > LightFM | Unit 10 |
 | 12 | 평가·이론 상한·L0~L2 | 0.05 폐기 | Track A 사양 |
 | **13** | **Track B export·eval** | **B0·B3 통과; `recipe_lightfm.csv`** | B2 미달 |
-| **14** | **target 4종 × subset 분해** | **B2 미달 유지; H2 지지; Simpson 혼합 해석** | 1차 채택 `star_only` (탐색) |
+| **14** | **target 4종 × subset 분해** | **B2 미달; H2 지지; Simpson 해석** | 탐색 `star_only` |
+| **15** | **bar-only 0~2 곱** | **천장 std 2×; B3 bar 후보** | exp16 재학습 |
+| **16~** (계획) | interaction·bar 곱 재학습 → **17+ `mean(star×sent)`** | B3 통일 |
 
 **스냅샷**
 
 - **Track A:** L0 통과 — LightFM ≠ 무의미, **1차 Go 아님**
-- **Track B:** **리뷰 only** target·bar; **export + target ablation** — B0·B3 통과, B2 미달 (전 target)
-- **다음:** **15** B4 ablation · multi-seed
+- **Track B:** B0·B3 통과, B2 미달 — 곱 bar는 분산↑; **이후 bar = B3_prod_row 방향**
+- **다음:** **16** 재학습 → **17+** 감성×별점 곱 평균 bar/target
 
 ---
 
@@ -289,6 +295,7 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ### 2026-07-10
 
+- **실험 15:** `bar_eval.py` — 0~2 스케일 bar 4종, 고정 `ŷ` bar-only. B2 vs B3 해석·**17+ `mean(star×sent)` (B3) 방향** 기록. exp16 재학습 예정.
 - **실험 14:** `TARGET_MODE` 4종 ablation, `decomposed_track_b_metrics`, `plot_decompose` / `plot_exp14_compare`. B2 미달 유지; subset 신호(H2) 지지; 1차 채택 target `star_only` (탐색, 노트북 default 미변경).
 - **실험 13 실행:** `catalog_eval.py`, Unit 11, `recipe_lightfm.csv` (3,171행, `y_hat_linear` 선형보정 컬럼). B0·B3 통과, B2 미달 (MAE raw 1.6→linear 0.17, R²≈0, Spearman≈0).
 - **실험 13 (리뷰-only):** target/bar = 리뷰 점수만; view/scrap=feature; 레거시 fallback bar 폐기; 서비스→실험 정합 (코드 후속).

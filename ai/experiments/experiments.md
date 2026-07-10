@@ -1550,7 +1550,7 @@ Simpson·혼합 구조를 **해결**하려는 쪽 (15+ 검토용, 미실행):
 
 1. **평가 bar 분리** — B2를 subset별로 정의하거나, 천장 군은 별도 지표(예: sentiment만, 또는 tie-aware rank).
 2. **scoring variant** — catalog predict 방식·보정(`__catalog__` 대안) 변경.
-3. **관측 bar 재정의** — `review_rank_score` 천장 쏠림 완화(별점·감성 분리 bar, 저분산 군 제외 등).
+3. **관측 bar 재정의** — 실험 15에서 **0~2 곱 `mean(star×sent)` (B3_prod_row)** 가 천장 분산·subset ρ에 유리 → **실험 16 재학습 후 17+ 기본 bar** (§실험 15).
 4. **B4** — view/scrap feature ablation (리뷰 정합과는 별 축).
 5. **이중 모델** — cold 라우팅·표본 불균형(n=34) 때문에 **우선순위 낮음**; 도입 시 별도 실험 설계 필요.
 
@@ -1558,9 +1558,112 @@ Simpson·혼합 구조를 **해결**하려는 쪽 (15+ 검토용, 미실행):
 
 ### 한 줄 결론
 
-> **target 변경만으로 B2 Go(0.30) 미달은 해소되지 않음.** subset 신호(H2)는 유지되나, **1차 채택 target = `star_only`** (ALL·ceiling review ρ 최고, -0.031 / -0.003). 천장 군·전체 순위 개선(H1·H3)은 **유의미하지 않음** — 다음은 scoring variant·B4·multi-seed(실험 15+) 검토.
+> **target 변경만으로 B2 Go(0.30) 미달은 해소되지 않음.** subset 신호(H2)는 유지되나, **1차 채택 target = `star_only`** (ALL·ceiling review ρ 최고, -0.031 / -0.003). 천장 군·전체 순위 개선(H1·H3)은 **유의미하지 않음** — bar 방향은 **§실험 15·16** (`mean(star×sent)` B3).
 
 **채택 target (1차):** `star_only` — 동률 시 ceiling 우선 규칙에서도 동일. **베이스라인 노트북 default 변경은 하지 않음** (탐색 실험; Track B 학습 y는 여전히 `star+sentiment` 관례).
+
+---
+
+## 실험 15 — bar-only 스모크 (0~2 스케일 · 곱셈 검증)
+
+**일자:** 2026-07-10  
+**유형:** **재학습 없음** — 고정 `ŷ`(실험 13) + 관측 bar만 4종 비교  
+**코드:** [`bar_eval.py`](bar_eval.py), [`plot/plot_exp15_bar_compare.py`](plot/plot_exp15_bar_compare.py)  
+**입력:** [`recipe_lightfm.csv`](recipe_lightfm.csv) `y_hat`, [`review_by_llm.csv`](review_by_llm.csv) (행 단위 `B3_prod_row`)  
+**목적:** 실험 14 후속 **1단계** — 천장 군 bar 분산·Spearman(ŷ, bar)이 합산 baseline 대비 개선되는지 (star_idf 제외)
+
+### 0~2 스케일 (bar 전용, 학습·ETL 미변경)
+
+```text
+star_02      = (star_count - 1) / 2
+sentiment_02 = clip(sentiment + 1, 0, 2)
+```
+
+### bar 변형
+
+| id | 공식 |
+|----|------|
+| **B0_legacy** | `star_norm_avg + sentiment_avg` (실험 13/14 baseline) |
+| **B1_sum_02** | `mean(star_02) + mean(sentiment_02)` |
+| **B2_prod_avg** | `mean(star_02) × mean(sentiment_02)` |
+| **B3_prod_row** | `mean(star_02 × sentiment_02)` per review |
+
+subset: ceiling / star_varies는 `star_norm_avg` 기준, **low_tail은 B0_legacy &lt; 1.5** (실험 14와 동일 37개).
+
+### B2_prod_avg vs B3_prod_row (평균의 곱 vs 곱의 평균)
+
+두 곱 bar의 차이는 **곱을 언제 하느냐**뿐이다.
+
+| | **B2_prod_avg** | **B3_prod_row** |
+|---|-----------------|-----------------|
+| 공식 | `mean(star_02) × mean(sent_02)` | `mean(star_02 × sent_02)` |
+| 의미 | 레시피 **평균 별점 × 평균 감성** (recipe 단위에서 별·감성을 독립 집계) | **리뷰마다** 별×감성 후 평균 (같은 리뷰 안 동시 반영) |
+| 데이터 | `star_02_avg`, `sent_02_avg`만 있으면 됨 | `review_by_llm` 행 단위 필요 |
+
+**수학:** 일반적으로 `mean(a)×mean(b) ≠ mean(a×b)`. 레시피 안에서 “5점인데 감성 낮음” vs “별점 낮은데 감성 높음” 리뷰가 섞이면 B2·B3 순위가 달라진다.
+
+**실험 15에서 확인된 패턴**
+
+| 구간 | B2 | B3 | 해석 |
+|------|----|----|------|
+| **ceiling** (n=529) | std 0.412, ρ≈-0.0009 | **동일** | 천장은 리뷰별 `star_02≈2`로 거의 상수 → `mean(star)×mean(sent) ≈ mean(star×sent)` |
+| **star_varies** (n=34) | ρ 0.452 | **ρ 0.476** | 별·감성 조합 변동 구간에서 B3 우위 |
+| **low_tail** (n=37) | ρ 0.512 | **ρ 0.572** | 저점수 꼬리에서 B3가 고정 ŷ와 가장 잘 맞음 |
+
+→ 천장에서는 B2≈B3이지만, **정보 있는 subset에서는 B3_prod_row가 bar 후보로 유리**하다.
+
+### 실행 결과 — ceiling 분산 (n=529)
+
+[`figures/exp15_bar_ceiling_stats.csv`](figures/exp15_bar_ceiling_stats.csv)
+
+| bar | std | range | min | max |
+|-----|-----|-------|-----|-----|
+| B0_legacy | 0.206 | 1.92 | 0.06 | 1.98 |
+| B1_sum_02 | 0.206 | 1.92 | 2.06 | 3.98 |
+| **B2_prod_avg** | **0.412** | **3.84** | 0.12 | 3.96 |
+| **B3_prod_row** | **0.412** | **3.84** | 0.12 | 3.96 |
+
+→ **곱 bar는 천장에서 std·range가 약 2배** (순위는 B2≈B3). 합산·0~2 합산은 **순위 동형**(ρ 동일).
+
+### 실행 결과 — Spearman(ŷ, bar) (고정 ŷ)
+
+[`figures/exp15_bar_variant_metrics.csv`](figures/exp15_bar_variant_metrics.csv) · [`exp15_bar_variant_compare.png`](figures/exp15_bar_variant_compare.png)
+
+| subset | B0_legacy | B1_sum_02 | B2_prod_avg | B3_prod_row |
+|--------|-----------|-----------|-------------|-------------|
+| all | -0.032 | -0.029 | -0.029 | -0.028 |
+| **ceiling** | **-0.005** | **-0.001** | **-0.001** | **-0.001** |
+| star_varies | 0.442 | 0.442 | 0.452 | **0.476** |
+| low_tail | 0.494 | 0.497 | 0.512 | **0.572** |
+
+### 판정
+
+| 기준 | 결과 |
+|------|------|
+| ceiling std 증가 (곱 bar) | **지지** — B2/B3 std 0.412 vs B0 0.206 |
+| ceiling ρ **+0.05** vs B0 | **미달** — -0.001 vs -0.005 (Δ≈+0.004) |
+| low_tail ρ ≥ 0.35 유지 | **지지** — 전 bar ≥ 0.49; B3_prod_row **0.57** |
+| **exp16 interaction 곱 학습** | **당장 권고 안 함** — bar-only로는 천장 ρ 개선 미미; 분산만 확대 |
+
+### 이후 계획 — 점수·bar 방향 (실험 16 이후)
+
+| 단계 | 내용 |
+|------|------|
+| **실험 16** (다음) | **0~2 스케일** interaction 곱(`star_02 × sentiment_02`) **+ 동일 철학 bar**로 **재학습** — bar-only(15) 한계 해소 여부 검증 |
+| **실험 17~** (방향 확정) | 관측 bar·학습 target·B2 `score_review`를 **`mean(star_02 × sentiment_02)`** (= 실험 15 **B3_prod_row**) 로 통일해 진행. 합산 legacy(`star+sentiment`)·**B2_prod_avg**는 baseline 대조만 유지 |
+| ETL/서비스 | exp16 결과·B2 판정 후 `REVIEW_RANK_SCORE` / Neo4j 반영 (코드는 별도 회차) |
+
+**0~2 정의 (16+ 공통):** `star_02 = (star_count-1)/2`, `sentiment_02 = clip(sentiment+1, 0, 2)`.
+
+**한 줄 결론:** 0~2 곱 bar는 **천장 관측 분산을 늘리고** low_tail·star_varies에서 **고정 ŷ와의 ρ가 소폭↑** 하지만, **B2 proxy(ceiling ρ +0.05)는 미달**. **실험 16**에서 interaction·bar 동시 곱 재학습 후, **이후 회차는 B3(`mean(star×sent)` 평균) 축**으로 Track B를 이어간다.
+
+재생성:
+
+```powershell
+cd ai\experiments
+python bar_eval.py
+python plot/plot_exp15_bar_compare.py
+```
 
 ---
 
@@ -1714,8 +1817,10 @@ score_review(item) = REVIEW_RANK_SCORE
 | **13a** | `catalog_eval` + **`score_review`** bar + B0~B3 리포트 | **완료** (실험 13) |
 | **13b** | 전 카탈로그 fit + catalog user predict export | **완료** (`recipe_lightfm.csv`) |
 | **14** | B2 target ablation (subset 분해) | **완료** (실험 14) |
-| **15** | B4 feature ablation / multi-seed | **다음** |
-| **15+** | 서비스 연동; Track A L1 재개 | 후순위 |
+| **15** | bar-only (0~2 곱 bar) | **완료** (실험 15) |
+| **16** | interaction·bar 동시 곱 재학습 | **다음** |
+| **17+** | bar/target = `mean(star_02×sent_02)` (B3) 통일 | **방향 확정** (16 결과로 B2 Go 확인) |
+| — | 서비스 연동; Track A L1 재개 | 후순위 |
 
 **보류:** 실험 12 초안 Track A **Mode P NDCG/HR 공정 비교** — Track B 안정화 전까지 진행 안 함.
 
