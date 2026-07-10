@@ -212,6 +212,8 @@ docker compose run --rm lightfm-jupyter jupyter nbconvert `
 | `docker-compose.yml`, `Dockerfile`, `requirements.txt`, `*.csv` | 실행·데이터 |
 | `baseline_eval.py` | bar baseline 평가 (Unit 10) |
 | `catalog_eval.py` | Track B B0~B3 (Unit 11) |
+| `plot/` | 차트 스크립트 (`paths.py`, `charts.py`, `plot_exp13_*.py`) → `figures/` |
+| `figures/` | 산점도 PNG·지표 txt (실험별) |
 | `recipe_lightfm.csv` | 전 카탈로그 점수 export (`y_hat`, `y_hat_linear`, `review_rank_score`) |
 | `runs/` | 임시 JSON (비커밋 권장) |
 
