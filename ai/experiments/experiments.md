@@ -1235,11 +1235,162 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 
 ---
 
-## 실험 13 — Track A/B 전략 확정 · Track B 평가 사양 고정
+## 실험 13 — Track B 실행 · 전 카탈로그 `recipe_lightfm.csv` export
 
 **일자:** 2026-07-10  
-**유형:** **전략·사양 확정** (노트북 재학습·코드 변경 없음 — 구현은 별도 요청 후 진행)  
-**입력:** 실험 1~12 결과, 제품 1차 목표 논의, 백엔드 추천 파이프라인 확인  
+**유형:** **전략·사양 확정 + Track B 실행 로그**  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert, Unit 11 추가)  
+**코드:** `catalog_eval.py` (신규), `recipe_lightfm.csv` (산출물)  
+**입력:** 실험 1~12 결과, `recipe_fix.csv` 3,171 item, `review_by_llm.csv`  
+**목적:** Track B 1차 목표 — 전 카탈로그 **추정 리뷰 점수** `ŷ` export 및 B0~B3 판정
+
+### 실행 설정 (확정 학습 재사용)
+
+| 항목 | 값 |
+|------|-----|
+| `SEED` | 42 |
+| `item_ids` | `recipe_fix` 전체 **3,171** |
+| interaction | `review_by_llm` warm only (nnz 990) |
+| 학습 split | train 80% (**leakage 방지**, 100% 재학습 안 함) |
+| catalog user | `__catalog__` (interaction 없음 → item feature 기반 predict) |
+| target `y` | `star + sentiment` (1:1) |
+| feature | hybrid, `ingredients` 제외, view/scrap `log1p`, WARP 30ep |
+
+### 실행 결과 — matrix
+
+| 항목 | 값 |
+|------|-----|
+| `num_users` | 822 (821 + catalog) |
+| `num_items` | **3,171** |
+| `warm_items` | 563 |
+| `cold_items` | 2,608 |
+| `train_nnz` / `test_nnz` | 792 / 198 |
+| `item_feature_nnz` | 66,722 |
+
+### 실행 결과 — Track A (회귀, hold-out)
+
+| 지표 | 값 |
+|------|-----|
+| precision@5 | 0.0056 |
+| precision@10 | 0.0056 |
+| recall@5 | 0.0281 |
+| recall@10 | 0.0534 |
+
+(행렬 확대 후에도 L0 전제 유지 — Track A Go 아님.)
+
+### 실행 결과 — Track B (B0~B3)
+
+| 층 | 지표 | 값 | 판정 |
+|----|------|-----|------|
+| **B0** | coverage | 1.0 | **통과** |
+| **B0** | score_std(`ŷ`) | 0.287 | **통과** |
+| **B2** | warm NDCG@50(`ŷ`) | 0.955 | |
+| **B2** | warm NDCG@50(`score_review`) | 1.0 | |
+| **B2** | Spearman(`ŷ`, `score_review`) | -0.034 | **미달** (NDCG bar도 미달) |
+| **B3** | Spearman(`ŷ`, train signal) | 0.510 | **통과** |
+| 참고 | warm Top-100 overlap | 0.18 | |
+| 참고 | 관측 Top-50 ∩ 예측 Top-100 | **0.16** | Spearman보다 직관적 |
+
+**관측 리뷰 컬럼 (`recipe_lightfm.csv`):** `review_by_llm` recipe_id별 집계 — `review_rank_score = star_norm_avg + sentiment_avg`. cold 2,608행은 관측 리뷰 **NaN**, `y_hat`·`y_hat_linear`만 유한.
+
+**산출물:** [`recipe_lightfm.csv`](recipe_lightfm.csv) — **3,171 rows**, 컬럼 9개:
+
+`recipe_id`, `recipe_name`, `positive_avg`, `negative_avg`, `star_count_avg`, `star_norm_avg`, `y_hat`, **`y_hat_linear`**, `review_rank_score`(맨 끝)
+
+- `y_hat` — LightFM raw predict (`__catalog__` user)
+- `y_hat_linear` — warm 563개로 **선형 보정**한 예측 (`review_rank_score` 스케일에 맞춤, cold 포함 전 item 적용)
+- `review_rank_score` — 관측 합산( warm only ); **`y_hat_linear` 바로 옆**에서 비교용
+
+선형 보정식 (warm OLS): `review_rank_score ≈ 0.1491 × y_hat + 1.7996`
+
+### 실행 결과 — 관측 vs 예측 (warm 563, `review_rank_score` vs `y_hat`)
+
+| 구분 | `review_rank_score` (관측) | `y_hat` (예측) |
+|------|------------------------------|----------------|
+| 평균 | **1.84** | **0.27** |
+| 범위 | -1.9 ~ 1.98 | -0.72 ~ 0.78 |
+| 표준편차 | 0.38 | 0.20 |
+
+**절댓값 차이는 크다.** 관측은 고점수(1.9대)에 몰리고, 예측은 0 근처에 분포한다.
+
+| 지표 | raw (`y_hat`) | 선형 보정 후 (`y_hat_linear`) |
+|------|---------------|-------------------------------|
+| **MAE** | **1.600** | **0.166** |
+| **RMSE** | **1.629** | **0.384** |
+| **R²** | — | **0.006** |
+| Spearman | -0.034 | -0.034 |
+| Pearson | 0.079 | (동일 순위 → 동일 ρ) |
+
+**해석**
+
+1. **MAE·RMSE가 선형 보정 후 크게 줄어듦** → raw 차이 상당 부분은 **스케일·오프셋** 문제 (`ŷ`가 전반적으로 낮게 나옴).
+2. **R² ≈ 0.006** → 스케일을 맞춰도 관측 분산을 거의 설명 못 함. **순위·패턴은 여전히 불일치.**
+3. **Spearman ≈ 0, Top-50∩Top-100 = 16%** → “어떤 레시피가 좋은지” 순위가 관측과 맞지 않음. **스케일만의 문제가 아님.**
+
+### NDCG@50 해석 (과대평가 주의)
+
+| 지표 | 값 |
+|------|-----|
+| NDCG@50(`ŷ`, `score_review`) | **0.955** |
+| NDCG@50(`score_review`, `score_review`) | 1.0 |
+
+NDCG@50이 0.95대로 **높아 보이지만**, warm 관측 `review_rank_score`가 **1.9~1.98에 과도하게 몰려** 상위 relevance **구분력이 거의 없다**. 이 조건에서는 순위가 엉망이어도 NDCG가 **과대평가**될 수 있다.
+
+**B2 판정에는 Spearman·Top-K 겹침을 우선 신뢰**한다.
+
+| 신뢰 지표 | 값 | 의미 |
+|-----------|-----|------|
+| Spearman(`ŷ`, `score_review`) | **-0.034** | 순위 무관 |
+| Top-100 overlap | 0.18 | 상위 집합 거의 불일치 |
+| Top-50(관측) ∩ Top-100(예측) | **0.16** | 관측 상위가 예측 상위에 잘 안 들어옴 |
+
+→ **B2 미달**은 NDCG만이 아니라 Spearman·Top-K로도 뒷받침됨.
+
+### 실행 결과 JSON 스냅샷
+
+```json
+{
+  "experiment": "13_track_b",
+  "seed": 42,
+  "matrix": {
+    "num_users": 822,
+    "num_items": 3171,
+    "warm_items": 563,
+    "cold_items": 2608,
+    "train_nnz": 792,
+    "test_nnz": 198
+  },
+  "track_b_eval": {
+    "coverage": 1.0,
+    "score_std": 0.287,
+    "b0_pass": true,
+    "warm_ndcg50_yhat": 0.955,
+    "warm_ndcg50_review": 1.0,
+    "warm_spearman_review": -0.034,
+    "b2_pass": false,
+    "warm_spearman_train": 0.510,
+    "b3_pass": true,
+    "warm_top100_overlap": 0.18,
+    "warm_top50_in_pred_top100": 0.16,
+    "warm_mae_raw": 1.600,
+    "warm_rmse_raw": 1.629,
+    "warm_mae_linear": 0.166,
+    "warm_rmse_linear": 0.384,
+    "warm_r2_linear": 0.006,
+    "linear_formula": "review_rank_score ~= 0.1491 * y_hat + 1.7996",
+    "export_csv": "recipe_lightfm.csv"
+  }
+}
+```
+
+### 한 줄 결론 (실행)
+
+> **B0·B3 통과, B2 미달** — 전 카탈로그 `ŷ` export 완료. warm에서 raw MAE≈1.6이나 선형 보정 후 MAE≈0.17로 **스케일 차이는 큼**; **R²≈0·Spearman≈0**으로 **순위 정합은 미달**. NDCG@50(0.955)은 관측 점수 쏠림으로 **과대평가 가능** — Spearman·Top-K 우선 해석.
+
+---
+
+### (사양) Track A/B 전략 · 평가 사양 (실험 13 초안 — 아래 유지)
+
 **목적:** 실험 **우선순위를 Track B(전 카탈로그 점수)** 로 전환하고, Track B Go에 쓸 **지표·목표·기준 수치**를 문서에 고정
 
 ### 제품 1차 목표 (팀 합의)
@@ -1257,7 +1408,7 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 | **과제** | hold-out user–item 맞추기 (CF) | **user 없이** 전 item 점수·순위 |
 | **item 범위** | 리뷰 있는 **~563** | `recipe_fix` **~3,100** (cold **~2,500+**) |
 | **대표 지표** | Mode P/G precision@5, recall | coverage, meta baseline 대비 NDCG/Spearman |
-| **현재 상태** | L0 통과, L1 미달 | **미착수** (노트북 `item_ids` = review만) |
+| **현재 상태** | L0 통과, L1 미달 | **1차 export 완료** — B0·B3 통과, B2 미달 |
 | **역할** | hybrid·feature **전제 검증 완료** | **메인 실험·서비스 1차 Go** |
 
 **결정 (실험 13):**
@@ -1352,7 +1503,7 @@ score_review(item) = REVIEW_RANK_SCORE
 
 ### Track B 지표 사양 (고정 — 13a 구현 대상)
 
-Track B 본 실험(13b) **이전**에 `catalog_eval.py`(신규) 등에 구현. **코드 미착수.**
+`catalog_eval.py` 구현 완료 (실험 13 run). B4 ablation은 미실행.
 
 | 지표 | 정의 | subset | 용도 |
 |------|------|--------|------|
@@ -1376,18 +1527,18 @@ Track B 본 실험(13b) **이전**에 `catalog_eval.py`(신규) 등에 구현. *
 
 | 갭 | 현재 | 필요 |
 |----|------|------|
-| 노트북 item 집합 | `review_df` unique **~563** | `recipe_fix` **~3,100** `dataset.fit` |
-| 평가 코드 | p@5/r@5 only | **NDCG@50, Spearman, coverage** |
-| 점수 export | 없음 | cold+warm 전 item 점수 |
+| 노트북 item 집합 | ~~`review_df` unique ~563~~ | **`recipe_fix` 3,171** `dataset.fit` ✓ |
+| 평가 코드 | ~~p@5/r@5 only~~ | **`catalog_eval.py`** B0~B3 ✓ |
+| 점수 export | ~~없음~~ | **`recipe_lightfm.csv`** 3,171행 ✓ |
 | 서비스 | 레거시 fallback (리뷰+조회+스크랩) — **실험 후 정합 예정** | `ŷ` = 리뷰 점수 only |
 
 ### 로드맵 (문서상 순서)
 
 | 단계 | 내용 | 상태 |
 |------|------|------|
-| **13a** | `catalog_eval` + **`score_review`** bar + B0~B4 리포트 | **다음 작업** (코드, 미착수) |
-| **13b** | 전 카탈로그 fit + dummy user predict export | 대기 |
-| **14** | Track B 실험 run → B2/B3 판정 | 대기 |
+| **13a** | `catalog_eval` + **`score_review`** bar + B0~B3 리포트 | **완료** (실험 13) |
+| **13b** | 전 카탈로그 fit + catalog user predict export | **완료** (`recipe_lightfm.csv`) |
+| **14** | B2 개선 ablation / B4 feature ablation | **다음** |
 | **15+** | 서비스 연동; Track A L1 재개 | 후순위 |
 
 **보류:** 실험 12 초안 Track A **Mode P NDCG/HR 공정 비교** — Track B 안정화 전까지 진행 안 함.
@@ -1449,9 +1600,9 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 
 - ETL/Neo4j/추천의 `review_rank_score` → **`ŷ` / `score_review` 의미로 통일** (리뷰+조회+스크랩 합산 fallback 제거).
 
-### 한 줄 결론
+### 한 줄 결론 (사양)
 
-> **1차 목표 = 전 카탈로그 추정 리뷰 점수 `ŷ`.** target·bar = **리뷰 only**; view/scrap = **feature**. 다음: **13a** `score_review` 평가 구현 → **13b** 카탈로그 export.
+> **1차 목표 = 전 카탈로그 추정 리뷰 점수 `ŷ`.** target·bar = **리뷰 only**; view/scrap = **feature**. 실행 완료 → **실험 14** B2 개선·B4 ablation.
 
 ### 원본 사양 스냅샷
 
@@ -1482,7 +1633,7 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
     "log1p_view_plus_scrap_simple_sum_bar"
   ],
   "metrics_to_implement": ["coverage", "score_std", "ndcg@50", "spearman", "top100_overlap"],
-  "next_code_task": "13a catalog_eval (not started)",
+  "next_code_task": "14 B2 improvement / B4 ablation",
   "service_code": "deferred"
 }
 ```
