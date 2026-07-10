@@ -1006,3 +1006,86 @@ JSON: `runs/exp10_s{seed}_ratio_1_{1,2,3}.json` (15개), 집계: `runs/exp10_sum
   }
 }
 ```
+
+---
+
+## 실험 11 — Random / train-popularity baseline (LightFM 대비)
+
+**일자:** 2026-07-10  
+**노트북:** `LightFM_Model.ipynb` Unit 10 (`baseline_eval.py`)  
+**목적:** LightFM hybrid가 **개인화 없는 bar baseline** 대비 쓸모가 있는지 확인 (질문 ①)
+
+### 공통 설정
+
+실험 10 LightFM과 **동일 split** (`random_train_test_split`, test 0.2, seeds 5종).  
+LightFM 수치는 **재학습 없이** 실험 10 Phase A `ratio_1_1` p@5 사용.
+
+| 항목 | 값 |
+|------|-----|
+| baseline 종류 | **Random** (uniform item scores), **train_popularity** (train interaction count) |
+| 평가 | `baseline_eval.precision_recall_at_k` — LightFM `precision@k`와 동일 정의 |
+| 실행 | `BASELINE_ONLY=1` → Unit 5b·7·8·9 스킵 |
+| seeds | 42, 123, 456, 789, 1024 |
+
+**인기 baseline 정의:** train 행렬에서 item별 interaction 수 집계 → **전 사용자 동일 Top-K** 추천.
+
+### 테이블 A — seed × 방법 (precision@5)
+
+| seed | random | train_popularity | LightFM (exp10) | Δ LightFM vs pop | Δ LightFM vs random |
+|------|--------|------------------|-----------------|------------------|---------------------|
+| 42 | 0.0022 | **0.0124** | **0.0135** | +0.0011 | +0.0113 |
+| 123 | 0.0011 | **0.0103** | **0.0114** | +0.0011 | +0.0103 |
+| 456 | 0.0033 | **0.0078** | 0.0056 | -0.0022 | +0.0023 |
+| 789 | 0.0011 | **0.0067** | 0.0056 | -0.0011 | +0.0045 |
+| 1024 | 0.0023 | **0.0102** | 0.0056 | -0.0046 | +0.0033 |
+| **mean** | **0.0020** | **0.0095** | **0.0083** | -0.0011 | +0.0063 |
+
+### 테이블 B — 집계
+
+| 방법 | mean p@5 | std p@5 | vs LightFM |
+|------|----------|---------|------------|
+| random | 0.0020 | 0.0008 | LightFM wins **5/5** seed |
+| train_popularity | 0.0095 | 0.0020 | LightFM wins **2/5** seed |
+| LightFM (exp10) | 0.0083 | 0.0034 | — |
+
+### 해석·최종 판단
+
+1. **Random sanity 통과:** LightFM mean p@5(0.0083) >> random(0.0020), 5/5 seed 우위 → 평가·구현 이상 없음.
+2. **인기 baseline이 강함:** train_popularity mean p@5 **0.0095**로 LightFM(0.0083)보다 **평균적으로 소폭 높음**. seed 42·123에서만 LightFM이 인기보다 우위(+0.0011).
+3. **개인화 이득은 제한적:** wins vs popularity **2/5** — CF/hybrid 추가 튜닝만으로 큰 jump 기대하기 어렵다.
+4. **절대 Go(0.05)는 여전히 미달:** 세 방법 모두 2% 미만 p@5.
+5. **다음 방향 (LightFM):** loss/정규화·전체 카탈로그 cold-start 점수·평가 설계 재검토.
+
+### 원본 리포트 (seed=42)
+
+```json
+{
+  "experiment": "11_baseline",
+  "seed": 42,
+  "test_ratio": 0.2,
+  "baselines": {
+    "random": {
+      "precision@5": 0.0022471910112359553,
+      "precision@10": 0.0022471910112359553,
+      "recall@5": 0.011235955056179775,
+      "recall@10": 0.02247191011235955
+    },
+    "train_popularity": {
+      "precision@5": 0.012359550561797755,
+      "precision@10": 0.011797752808988765,
+      "recall@5": 0.05449438202247191,
+      "recall@10": 0.10617977528089886
+    }
+  },
+  "matrix": {"train_nnz": 792, "test_nnz": 198}
+}
+```
+
+### 다음 실험 (실험 11 후속)
+
+| 우선순위 | 내용 |
+|----------|------|
+| 1 | loss / 정규화 (bpr, `no_components`, early stopping) — train 인기 baseline 대비 우위 확대 |
+| 2 | view/scrap **메타 인기** baseline (`recipe_fix` 조회·스크랩 vs train interaction 인기) |
+| 3 | **전체 카탈로그**(~3,100 item) `dataset.fit` + item feature + cold 점수 export |
+| 4 | 평가 split·Go 기준 재검토 (cold item용 지표 별도) |

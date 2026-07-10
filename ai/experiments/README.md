@@ -13,23 +13,24 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 
 ### 1.1 목적
 
-- **LightFM hybrid**(CF + item feature)가 proxy 리뷰 interaction으로 오프라인 추천에 쓸 만한지 검증한다.
-- 학습 데이터: `review_by_llm.csv` (`group_id`, `recipe_id`, 별점·감성).
-- item feature: `recipe_fix.csv` 등 (전체 레시피 feature, interaction은 ~563개 item).
-- ExtraTrees / Neo4j `review_rank_score` 랭킹은 **대체 대상**이며 본 실험 범위 밖.
+- **LightFM hybrid**(CF + item feature)로 레시피 추천·점수 모델을 검증한다.
+- **오프라인 CF (실험 1~11):** `review_by_llm.csv` proxy interaction(~563 item, 821 user)으로 hold-out `precision@5`·bar baseline(random / train 인기) 비교.
+- **향후 목표:** `recipe_fix.csv` **전체 카탈로그**(~3,100+ item)에 hybrid cold-start **item 점수**를 부여 (리뷰 없는 레시피 포함). interaction은 리뷰 있는 item만, feature는 전체 item.
+- 데이터: interaction `review_by_llm.csv` (`group_id`, `recipe_id`, 별점·감성) / feature `recipe_fix.csv`, `recipe_ingredient_alias.csv`.
 
-### 1.2 현재 진행 상황 (실험 10까지)
+### 1.2 현재 진행 상황 (실험 11까지)
 
 | 영역 | 상태 | 채택 (노트북 기본) |
 |------|------|-------------------|
-| 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` Unit 1~9 |
+| 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` Unit 1~10 |
 | hybrid pipeline | 완료 | `build_item_features` + warp |
 | item feature | **확정** | `ingredients` 제외, `view_count`/`scrap_count` **log1p** |
 | interaction target | **확정** | `star_sentiment_sum`, 가중치 **1:1** |
 | loss / 학습 | 고정 | warp, 30 epoch, test 0.2 |
-| Go (p@5 ≥ 0.05) | **전 회차 No-Go** | 절대 기준 미달 — ablation·seed로 상대 비교 |
+| bar baseline | **완료 (실험 11)** | random + train_popularity |
+| Go (p@5 ≥ 0.05) | **전 회차 No-Go** | mean LightFM 0.0083 < mean 인기 0.0095 |
 
-**다음 후보:** Unit 10 인기 baseline, 서비스 POC (본 README 범위 밖).
+**다음 후보:** loss/정규화, 전체 카탈로그 item 등록·cold 점수 export, view/scrap 메타 인기 baseline, 평가 재설계.
 
 ### 1.3 문서·커밋 정책
 
@@ -132,6 +133,7 @@ docker compose run --rm lightfm-jupyter jupyter nbconvert `
 | `SEED` | 42 | split·학습 |
 | `EXCLUDED_RECIPE_COLUMNS` | `ingredients` | feature ablation |
 | `STAR_WEIGHT` / `SENTIMENT_WEIGHT` | 1.0 | interaction 가중 |
+| `BASELINE_ONLY` | (unset) | `1`이면 Unit 5b·7·8·9 스킵, Unit 10만 실행 |
 
 ### 2.5 노트북 Unit
 
@@ -140,9 +142,10 @@ docker compose run --rm lightfm-jupyter jupyter nbconvert `
 | 1 | 설정·env |
 | 2~4 | 데이터·Dataset |
 | 5 / 5b | interaction · item features |
-| 6~8 | split · 학습 · 평가 |
+| 6 | split |
+| **10** | **Random / train-popularity baseline** (`baseline_eval.py`) |
+| 7~8 | 학습 · 평가 |
 | 9 | 리포트 JSON |
-| 10 | 인기 baseline (미구현) |
 
 ### 2.6 파일
 
@@ -152,6 +155,7 @@ docker compose run --rm lightfm-jupyter jupyter nbconvert `
 | `experiments.md` | **실험 상세 로그** (커밋) |
 | `README.md` | 개요 (커밋) |
 | `docker-compose.yml`, `Dockerfile`, `requirements.txt`, `*.csv` | 실행·데이터 |
+| `baseline_eval.py` | bar baseline 평가 (Unit 10) |
 | `runs/` | 임시 JSON (비커밋 권장) |
 
 ---
@@ -198,7 +202,7 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ---
 
-## 4. 실험 회차 개요 (1~10)
+## 4. 실험 회차 개요 (1~11)
 
 상세 표·JSON·해석 → **[experiments.md](experiments.md)** 해당 §.
 
@@ -214,12 +218,14 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 | 8 | log1p (view/scrap) | log1p 채택 | **Yes** (§7과 통합) |
 | 9 | target 4종 × 5 seed | **star_sentiment_sum** | 선택 확정 |
 | 10 | sent 가중 1:2, 1:3 | **1:1 유지** | — |
+| **11** | **random + train 인기 baseline** | **mean 인기 > mean LightFM** | Unit 10 |
 
-**현재 베이스라인 (실험 10 Phase A 기준)**
+**현재 베이스라인 (실험 10 LightFM / 실험 11 bar)**
 
-- feature: `ingredients` 제외, log1p popularity  
-- target: `star + sentiment`, weights 1:1, warp, 30ep  
-- mean p@5 (5 seed): **0.0083** — Go 미달  
+- LightFM: mean p@5 **0.0083** (5 seed)  
+- train_popularity: mean p@5 **0.0095**  
+- random: mean p@5 **0.0020**  
+- Go(0.05) 미달 — LightFM wins vs random 5/5, vs popularity 2/5  
 
 ---
 
@@ -227,9 +233,11 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ### 2026-07-10
 
+- **실험 11:** Unit 10 Random / train-popularity baseline (`baseline_eval.py`).
+- 문서를 **LightFM 전용**으로 정리 (ExtraTrees·`ai/recommendation` 교차 언급 제거).
 - README를 **전체 개요·운행 가이드**로 재구성.
 - `LIGHTFM_NOTEBOOK_EXECUTION_PLAN.md`, `lightfm_recommendation_plan.md` 제거 → README로 통합.
-- 상세 실험 기록은 **`experiments.md` 유지** (실험 1~10).
+- 상세 실험 기록은 **`experiments.md` 유지** (실험 1~11).
 
 ### 2026-07-09
 
