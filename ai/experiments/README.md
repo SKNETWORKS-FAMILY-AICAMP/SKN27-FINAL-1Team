@@ -14,11 +14,11 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 ### 1.1 목적
 
 - **LightFM hybrid**(CF + item feature)로 레시피 추천·점수 모델을 검증한다.
-- **오프라인 CF (실험 1~11):** `review_by_llm.csv` proxy interaction(~563 item, 821 user)으로 hold-out `precision@5`·bar baseline(random / train 인기) 비교.
+- **오프라인 CF (실험 1~12):** `review_by_llm.csv` proxy interaction(~563 item, 821 user)으로 hold-out 평가·bar baseline 비교. **평가 Mode·목표 체계는 실험 12에서 재정의.**
 - **향후 목표:** `recipe_fix.csv` **전체 카탈로그**(~3,100+ item)에 hybrid cold-start **item 점수**를 부여 (리뷰 없는 레시피 포함). interaction은 리뷰 있는 item만, feature는 전체 item.
 - 데이터: interaction `review_by_llm.csv` (`group_id`, `recipe_id`, 별점·감성) / feature `recipe_fix.csv`, `recipe_ingredient_alias.csv`.
 
-### 1.2 현재 진행 상황 (실험 11까지)
+### 1.2 현재 진행 상황 (실험 12까지)
 
 | 영역 | 상태 | 채택 (노트북 기본) |
 |------|------|-------------------|
@@ -27,10 +27,32 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 | item feature | **확정** | `ingredients` 제외, `view_count`/`scrap_count` **log1p** |
 | interaction target | **확정** | `star_sentiment_sum`, 가중치 **1:1** |
 | loss / 학습 | 고정 | warp, 30 epoch, test 0.2 |
-| bar baseline | **완료 (실험 11)** | random + train_popularity |
-| Go (p@5 ≥ 0.05) | **전 회차 No-Go** | mean LightFM 0.0083 < mean 인기 0.0095 |
+| bar baseline | **완료 (실험 11)** | random + train_popularity (Mode **G**) |
+| 평가·목표 체계 | **재정의 (실험 12)** | 구 Go **0.05 폐기** → L0~L2 + Track B (§1.4) |
+| LightFM vs bar | **L0 통과 / L1 미달** | random 우위 5/5; mean 인기(0.0095) > mean LightFM(0.0083) — **Mode G vs P 혼합 주의** |
 
-**다음 후보:** loss/정규화, 전체 카탈로그 item 등록·cold 점수 export, view/scrap 메타 인기 baseline, 평가 재설계.
+**다음 우선:** 실험 **13** — `baseline_eval` NDCG/HR + Mode P bar, 공정 재비교 → loss/메타 인기/카탈로그(14~16).
+
+### 1.4 평가 목표 (실험 12 확정, 실험 13+ 적용)
+
+**Mode**
+
+| Mode | 정의 | bar 예 |
+|------|------|--------|
+| **G (Global)** | 전 user 동일 Top-K (`baseline_eval`) | random, train 인기 |
+| **P (Personalized)** | user별 Top-K (LightFM `precision_at_k`) | personalized 인기 |
+
+**목표 층 (구 `p@5 ≥ 0.05` 대체)**
+
+| 층 | 조건 | 현재 |
+|----|------|------|
+| **L0 Sanity** | Mode G: random 대비 우위 (5/5 seed) | **충족** |
+| **L1 1차** | Mode P: personalized 인기 이상 또는 NDCG@5 ≥ **0.032** | **미달** (재측정 필요) |
+| **L2 달성** | Mode P: 인기 대비 p@5 **+10%**, 4/5 seed | 미달 |
+| **L3 상한 (참고)** | Mode G oracle p@5 **~0.018**, NDCG@5 **~0.055** | — |
+| **Track B** | ~3,100 item cold 점수·coverage (hold-out p@5와 별도) | 미착수 |
+
+상세 표·JSON → **[experiments.md §실험 12](experiments.md)**.
 
 ### 1.3 문서·커밋 정책
 
@@ -202,7 +224,7 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ---
 
-## 4. 실험 회차 개요 (1~11)
+## 4. 실험 회차 개요 (1~12)
 
 상세 표·JSON·해석 → **[experiments.md](experiments.md)** 해당 §.
 
@@ -218,14 +240,16 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 | 8 | log1p (view/scrap) | log1p 채택 | **Yes** (§7과 통합) |
 | 9 | target 4종 × 5 seed | **star_sentiment_sum** | 선택 확정 |
 | 10 | sent 가중 1:2, 1:3 | **1:1 유지** | — |
-| **11** | **random + train 인기 baseline** | **mean 인기 > mean LightFM** | Unit 10 |
+| 11 | random + train 인기 baseline | mean 인기 > mean LightFM | Unit 10 |
+| **12** | **평가·이론 상한·Go 재정의** | **0.05 폐기; L0~L2·Mode G/P** | 평가 사양 |
 
-**현재 베이스라인 (실험 10 LightFM / 실험 11 bar)**
+**현재 스냅샷 (실험 11 수치 + 실험 12 해석)**
 
-- LightFM: mean p@5 **0.0083** (5 seed)  
-- train_popularity: mean p@5 **0.0095**  
-- random: mean p@5 **0.0020**  
-- Go(0.05) 미달 — LightFM wins vs random 5/5, vs popularity 2/5  
+- LightFM (Mode P): mean p@5 **0.0083** — L0 통과, L1 미달(Mode 재비교 전)  
+- train 인기 (Mode G): mean p@5 **0.0095**, NDCG@5 **~0.032** (seed 42)  
+- random (Mode G): mean p@5 **0.0020** — 이론 기대 **~0.002**  
+- Mode G oracle 상한: p@5 **~0.018**, NDCG@5 **~0.055**  
+- **다음:** 실험 13 — NDCG/HR·Mode P bar 구현 후 공정 비교  
 
 ---
 
@@ -233,11 +257,12 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ### 2026-07-10
 
+- **실험 12:** 평가 Mode(G/P)·이론 상한·NDCG/HR 해석·Go 기준 재정의 (L0~L2, Track B). 구 **p@5≥0.05** 폐기.
 - **실험 11:** Unit 10 Random / train-popularity baseline (`baseline_eval.py`).
 - 문서를 **LightFM 전용**으로 정리 (ExtraTrees·`ai/recommendation` 교차 언급 제거).
 - README를 **전체 개요·운행 가이드**로 재구성.
 - `LIGHTFM_NOTEBOOK_EXECUTION_PLAN.md`, `lightfm_recommendation_plan.md` 제거 → README로 통합.
-- 상세 실험 기록은 **`experiments.md` 유지** (실험 1~11).
+- 상세 실험 기록은 **`experiments.md` 유지** (실험 1~12).
 
 ### 2026-07-09
 

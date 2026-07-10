@@ -1023,7 +1023,7 @@ LightFM 수치는 **재학습 없이** 실험 10 Phase A `ratio_1_1` p@5 사용.
 | 항목 | 값 |
 |------|-----|
 | baseline 종류 | **Random** (uniform item scores), **train_popularity** (train interaction count) |
-| 평가 | `baseline_eval.precision_recall_at_k` — LightFM `precision@k`와 동일 정의 |
+| 평가 | `baseline_eval` — **Mode G**(전역 Top-K). LightFM은 **Mode P**(user별). → 실험 12 |
 | 실행 | `BASELINE_ONLY=1` → Unit 5b·7·8·9 스킵 |
 | seeds | 42, 123, 456, 789, 1024 |
 
@@ -1083,9 +1083,210 @@ LightFM 수치는 **재학습 없이** 실험 10 Phase A `ratio_1_1` p@5 사용.
 
 ### 다음 실험 (실험 11 후속)
 
-| 우선순위 | 내용 |
-|----------|------|
-| 1 | loss / 정규화 (bpr, `no_components`, early stopping) — train 인기 baseline 대비 우위 확대 |
-| 2 | view/scrap **메타 인기** baseline (`recipe_fix` 조회·스크랩 vs train interaction 인기) |
-| 3 | **전체 카탈로그**(~3,100 item) `dataset.fit` + item feature + cold 점수 export |
-| 4 | 평가 split·Go 기준 재검토 (cold item용 지표 별도) |
+→ **실험 12**에서 평가·목표 재정의. 구현 우선순위는 실험 12 §다음 실험 설계 참고.
+
+---
+
+## 실험 12 — 평가 체계·이론 상한 분석 (Go 기준 재정의)
+
+**일자:** 2026-07-10  
+**유형:** **분석 전용** (노트북 재학습 없음)  
+**입력:** 실험 11 수치 + `seed=42`, `test_ratio=0.2` split 로컬 재현 (`review_by_llm.csv` 전처리·`random_train_test_split` 동일)  
+**목적:** metric 절대값·baseline·이론 상한을 정리하고, 이후 실험의 **기본 사양·1차/달성 목표·상한**을 팀 합의용으로 고정
+
+### 배경 (실험 11 이후 질문)
+
+1. interaction이 적을 때 recall·precision이 낮은 것이 정상인가?  
+2. 다른 프로젝트와 비교할 때 “사용 가능” 판단 기준·지표는 무엇인가?  
+3. random mean p@5 **0.002**에 상대 비교만 하면 되는가?  
+4. **p@5 ≥ 0.05** Go 기준은 현 데이터·평가 방식에서 realistic한가?
+
+### test set 구조 (seed=42, matrix 821×563)
+
+| 항목 | 값 |
+|------|-----|
+| interactions (nnz) | 990 |
+| train / test nnz | 792 / **198** |
+| **test에 등장하는 user** | **179 / 821** (22%) |
+| user당 test 정답 수 \|R_u\| | min 1, max 6, **median 1**, mean **1.11** |
+| \|R_u\| 분포 | **1개: 170명**, 2개: 4명, 3개: 3명, 5개: 1명, 6개: 1명 |
+
+**함의:** test의 **95% user가 정답 1개** → `recall@5`와 `HR@5`가 거의 동일. MovieLens급 다중 정답 벤치마크와 직접 비교 불가.
+
+### 평가 방식 정리 (실험 11 보완)
+
+| 모드 | 코드 | 랭킹 | 용도 |
+|------|------|------|------|
+| **G (Global)** | `baseline_eval.precision_recall_at_k` | 전 user **동일** Top-K | random·train 인기·“오늘의 인기 N선” bar |
+| **P (Personalized)** | LightFM `precision_at_k` / `recall_at_k` | **user별** Top-K | LightFM·개인화 CF |
+
+**실험 11 한계:** LightFM(Mode P)과 train 인기(Mode G)를 같은 표에서 직접 비교함. seed 42에서 LightFM p@5(0.0135) > 인기(0.0124)인 일부는 **평가 모드 차이**가 섞인 결과일 수 있음.  
+**이후 규칙:** bar baseline과 모델은 **동일 Mode**로 비교. Mode P bar = user별 인기 점수 Top-K(선택: train seen item 제외).
+
+### 이론·실측 상한 (Mode G, seed=42 재현)
+
+**Random (이론 기대값)**
+
+| 지표 | 공식 | 값 |
+|------|------|-----|
+| E[precision@5] | mean(\|R_u\|) / 563 | **0.00196** |
+| E[recall@5] | 5 / 563 | **0.00888** |
+| E[recall@10] | 10 / 563 | **0.01776** |
+
+실측(seed=42): p@5 **0.00225**, r@5 **0.01124** (2000 seed 평균 p@5 **0.00199** ± 0.00149, p95 **0.0045**).
+
+**Train 인기 (Mode G, train interaction count → 전역 Top-K)**
+
+| K | p@K | r@K | HR@K | NDCG@K | test 적중 |
+|---|-----|-----|------|--------|-----------|
+| 5 | **0.0101** | **0.0447** | **0.0447** | **0.032** | 9 / 198 |
+| 10 | **0.0067** | **0.0568** | **0.0615** | **0.038** | 12 / 198 |
+
+실험 11 JSON(seed=42): p@5 **0.0124**, r@5 **0.0545** — 방향 일치, 소폭 차이는 Docker/LightFM `Dataset` 인덱싱·환경 재현 오차로 간주.
+
+**전역 oracle** (test 정답 빈도만 보고 최적 전역 Top-K — cheating upper bound)
+
+| K | p@K | r@K | HR@K | NDCG@K | 적중 |
+|---|-----|-----|------|--------|------|
+| 5 | **0.0179** | **0.0829** | **0.0894** | **0.055** | 16 / 198 |
+| 10 | **0.0145** | **0.134** | **0.145** | **0.073** | 26 / 198 |
+
+**개인화 oracle** (user별 test 정답을 Top-K에 배치 — Mode P 상한)
+
+| K | p@K | r@K | HR@K | 비고 |
+|---|-----|-----|------|------|
+| 5 | **0.220** | **~1.00** | **1.00** | 적중 197/198 (정답 6개 user 1명) |
+| 10 | — | **1.00** | **1.00** | 적중 198/198 |
+
+**p@5 스케일 (Mode G, seed=42 기준)**
+
+```
+random 기대      ~0.002  ██
+train 인기 실측  ~0.010  █████
+전역 oracle      ~0.018  █████████
+구 Go 목표 0.050  █████████████████████████  ← 전역 천장(~0.018) 초과
+개인화 oracle    ~0.220  (Mode P, 현실 불가)
+LightFM mean     ~0.008  (Mode P, 실험 11)
+```
+
+### NDCG / Hit Rate 해석
+
+| 방법 (Mode G) | NDCG@5 | NDCG@10 | HR@5 | HR@10 |
+|---------------|--------|---------|------|-------|
+| random | 0.006 | 0.008 | 0.011 | 0.017 |
+| train 인기 | **0.032** | **0.038** | **0.045** | **0.062** |
+| 전역 oracle | **0.055** | **0.073** | **0.089** | **0.145** |
+
+- **NDCG:** 순위 품질. 인기가 random 대비 ~5× — 전역 bar로서 유효. oracle 대비 ~58% 수준.  
+- **HR:** \|R_u\|=1이 대부분이라 **recall@K와 거의 동일** — 추가해도 해석 변화는 제한적.  
+- **p@10 < p@5 (인기):** Top-10 슬롯은 2배인데 test 적중은 9→12로만 증가 → precision은 K↑ 시 하락 가능.
+
+### 결론 (이번 세션)
+
+1. **낮은 recall·precision은 희소·소규모 데이터에서 정상**이나, 우리 절대값(p@5 &lt; 2%)은 “서비스 품질 충분”이 아니라 **과제·데이터·평가가 어려운 상태**를 반영.
+2. **random(0.002)은 sanity 바닥** — LightFM mean 0.0083은 random 대비 ~4.2×(5/5 seed)로 **구현·평가 정상**. 채택 근거로는 부족.
+3. **실무 오프라인 bar는 train 인기(~0.010, Mode G)** — LightFM mean이 **평균적으로 인기보다 낮음**(실험 11, wins 2/5). 개인화 이득 불안정·미미.
+4. **구 Go `p@5 ≥ 0.05`는 Mode G 전역 천장(~0.018)보다 높아 현 matrix·평가에서 구조적으로 unreachable** — 폐기·대체 필요.
+5. **실험 11 비교는 Mode G vs P 혼합** — 이후 LightFM vs baseline은 **Mode P 통일** 또는 **Mode G 통일**로 재측정.
+6. **제품 목표(전체 ~3,100 레시피 cold 점수)** 와 **현 hold-out CF p@5** 는 과제 불일치 — Track B(카탈로그)용 지표 별도 필요.
+
+### 평가 기본 사양 (실험 13+ 적용)
+
+| 항목 | 값 |
+|------|-----|
+| 데이터 | `review_by_llm.csv` proxy, 821 user × 563 item, nnz 990 |
+| split | `random_train_test_split`, test **0.2**, seed 기본 **42** (multi-seed 시 5종 유지) |
+| interaction | `star_sentiment_sum`, 가중치 1:1 (실험 10 확정) |
+| item feature | ingredients 제외, view/scrap log1p (실험 7·8 확정) |
+| loss / epoch | warp, 30 (튜닝 실험 시 명시) |
+| **Mode G** | `baseline_eval` — 전역 item_scores, p/r/NDCG/HR @5·@10 |
+| **Mode P** | user별 Top-K — LightFM `precision_at_k` 동일 정의; bar는 **personalized popularity** |
+| 리포트 | 방법 × Mode × seed; mean ± std; wins vs bar |
+
+### 목표 체계 (구 Go 0.05 대체)
+
+| 층 | 이름 | 조건 (제안) | 근거 |
+|----|------|-------------|------|
+| **L0 Sanity** | 구현·평가 정상 | Mode G: p@5 **> random mean + 3σ** (~0.0045) 또는 5/5 seed random 우위 | 실험 11 **충족** |
+| **L1 1차 목표** | 오프라인 bar 통과 | **Mode P:** mean p@5 **≥ train_popularity (Mode P)** 또는 mean NDCG@5 **≥ 0.032** (Mode G 인기 NDCG) | 인기만 쓸 이유 제거 |
+| **L2 달성 목표** | 개인화 유의 개선 | Mode P: mean p@5 **≥ Mode P 인기 × 1.10** (상대 +10%), **4/5 seed** bar 우위 | seed 노이즈(std ~0.002) 고려 |
+| **L3 이론 참고** | Mode G 상한 | p@5 **~0.018**, NDCG@5 **~0.055** | 전역 oracle; 달성 목표 아님 |
+| **L3 이론 참고** | Mode P 상한 | p@5 **~0.22** (현 test 분포) | 완벽 개인화; 비현실 |
+| **Track B** | 카탈로그 cold | 전체 item 점수 export + coverage / cold-item 랭킹 검증 | hold-out p@5와 **별도** Go |
+
+**폐기:** 단일 절대값 **precision@5 ≥ 0.05** (실험 1~11 `decision.criterion`).
+
+### 실험 11 수치 재해석 (실험 12 lens)
+
+| 관찰 | 이전 해석 | 실험 12 보정 |
+|------|-----------|--------------|
+| LightFM vs random | “학습됨” | **L0 통과** — bar는 random이 아님 |
+| LightFM vs 인기 | “평균 약함” | **L1 미달** — Mode 혼합 가능성; Mode P 재비교 필요 |
+| Go 0.05 No-Go | “모델 부족” | **기준 자체 비현실** — 데이터·Mode G 상한 대비 재정의 |
+| train p@5 ~0.16 vs test ~0.008 | “과적합” | 유지 — L2 달성 전 과적합 완화(loss·early stopping) 병행 |
+
+### 다음 실험 설계 (실험 13+ 우선순위)
+
+| # | 실험 | 내용 | 산출물 |
+|---|------|------|--------|
+| **13** | **평가 확장** | `baseline_eval.py`에 NDCG@K·HR@K; **Mode P** personalized popularity bar | 공정 비교 표 (LightFM vs pop, 동일 Mode) |
+| 14 | 메타 인기 baseline | `recipe_fix` view/scrap 인기 (Mode G·P) | L1 bar 강화 |
+| 15 | loss / 정규화 | bpr, `no_components`, test 기준 early stopping | L2 달성 시도 |
+| 16 | Track B 카탈로그 | ~3,100 item `dataset.fit`, cold 점수 export | Track B Go 초안 |
+
+### 원본 분석 스냅샷 (seed=42, Mode G)
+
+```json
+{
+  "experiment": "12_eval_analysis",
+  "seed": 42,
+  "test_ratio": 0.2,
+  "matrix": {
+    "num_users": 821,
+    "num_items": 563,
+    "nnz": 990,
+    "train_nnz": 792,
+    "test_nnz": 198,
+    "test_users": 179,
+    "r_per_user_median": 1,
+    "r_per_user_mean": 1.106
+  },
+  "mode_G": {
+    "random_expected": {"precision@5": 0.00196, "recall@5": 0.00888},
+    "random_observed": {"precision@5": 0.00225, "recall@5": 0.01124},
+    "train_popularity": {
+      "precision@5": 0.01006,
+      "recall@5": 0.0447,
+      "hr@5": 0.0447,
+      "ndcg@5": 0.03225,
+      "hits@5": "9/198"
+    },
+    "global_oracle": {
+      "precision@5": 0.01788,
+      "recall@5": 0.0829,
+      "hr@5": 0.0894,
+      "ndcg@5": 0.055,
+      "hits@5": "16/198"
+    }
+  },
+  "mode_P_oracle": {
+    "precision@5": 0.220,
+    "recall@5": 0.999,
+    "hr@5": 1.0,
+    "hits@5": "197/198"
+  },
+  "go_criteria": {
+    "deprecated": "precision@5 >= 0.05",
+    "L0_sanity": "beat random (Mode G)",
+    "L1_primary": "Mode P beat personalized popularity or NDCG@5 >= 0.032",
+    "L2_target": "Mode P p@5 >= pop_P * 1.10, 4/5 seeds",
+    "L3_ceiling_G": {"precision@5": 0.018, "ndcg@5": 0.055}
+  },
+  "exp11_context": {
+    "lightfm_mean_p5": 0.0083,
+    "train_pop_mean_p5": 0.0095,
+    "random_mean_p5": 0.0020,
+    "note": "exp11 LightFM=Mode P, train_pop=Mode G"
+  }
+}
+```
