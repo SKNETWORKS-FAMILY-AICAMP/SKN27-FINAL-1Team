@@ -1190,7 +1190,9 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 5. **실험 11 비교는 Mode G vs P 혼합** — 이후 LightFM vs baseline은 **Mode P 통일** 또는 **Mode G 통일**로 재측정.
 6. **제품 목표(전체 ~3,100 레시피 cold 점수)** 와 **현 hold-out CF p@5** 는 과제 불일치 — Track B(카탈로그)용 지표 별도 필요.
 
-### 평가 기본 사양 (실험 13+ 적용)
+### 평가 기본 사양 (Track A — 실험 13+ 개인화 재개 시)
+
+> **1차 목표·Track B 평가 사양 → 실험 13.** 아래는 Track A(2차) 보류 스펙.
 
 | 항목 | 값 |
 |------|-----|
@@ -1203,7 +1205,9 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 | **Mode P** | user별 Top-K — LightFM `precision_at_k` 동일 정의; bar는 **personalized popularity** |
 | 리포트 | 방법 × Mode × seed; mean ± std; wins vs bar |
 
-### 목표 체계 (구 Go 0.05 대체)
+### 목표 체계 (Track A — 구 Go 0.05 대체, **2차·보류**)
+
+> Track B Go(B0~B4) → **실험 13**.
 
 | 층 | 이름 | 조건 (제안) | 근거 |
 |----|------|-------------|------|
@@ -1225,16 +1229,265 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 | Go 0.05 No-Go | “모델 부족” | **기준 자체 비현실** — 데이터·Mode G 상한 대비 재정의 |
 | train p@5 ~0.16 vs test ~0.008 | “과적합” | 유지 — L2 달성 전 과적합 완화(loss·early stopping) 병행 |
 
-### 다음 실험 설계 (실험 13+ 우선순위)
+### 다음 실험 설계 (실험 12 시점 — **실험 13에서 갱신**)
 
-| # | 실험 | 내용 | 산출물 |
-|---|------|------|--------|
-| **13** | **평가 확장** | `baseline_eval.py`에 NDCG@K·HR@K; **Mode P** personalized popularity bar | 공정 비교 표 (LightFM vs pop, 동일 Mode) |
-| 14 | 메타 인기 baseline | `recipe_fix` view/scrap 인기 (Mode G·P) | L1 bar 강화 |
-| 15 | loss / 정규화 | bpr, `no_components`, test 기준 early stopping | L2 달성 시도 |
-| 16 | Track B 카탈로그 | ~3,100 item `dataset.fit`, cold 점수 export | Track B Go 초안 |
+→ **실험 13** 참고. Track A 주 실험 종료·**Track B 1차 목표** 확정.
 
-### 원본 분석 스냅샷 (seed=42, Mode G)
+---
+
+## 실험 13 — Track A/B 전략 확정 · Track B 평가 사양 고정
+
+**일자:** 2026-07-10  
+**유형:** **전략·사양 확정** (노트북 재학습·코드 변경 없음 — 구현은 별도 요청 후 진행)  
+**입력:** 실험 1~12 결과, 제품 1차 목표 논의, 백엔드 추천 파이프라인 확인  
+**목적:** 실험 **우선순위를 Track B(전 카탈로그 점수)** 로 전환하고, Track B Go에 쓸 **지표·목표·기준 수치**를 문서에 고정
+
+### 제품 1차 목표 (팀 합의)
+
+| 항목 | 내용 |
+|------|------|
+| **1차 목표** | 리뷰·interaction **없는 ~2,500+ 레시피** 포함, **전 카탈로그(~3,100)** 에 신뢰할 만한 **item 점수(순위)** 제공 |
+| **대응 범위** | **유저 없음** → 전역 item 점수 / **유저 있음** → 동일 hybrid 모델로 개인화(2차) |
+| **서비스 맥락** | `recommendation_service`는 `review_rank_score`(Neo4j) 없는 레시피를 추천 풀에서 **제외** — cold 점수 부재가 **커버리지 병목** |
+
+### Track A vs Track B — 전략 결정
+
+| | **Track A** (실험 1~12) | **Track B** (1차 목표) |
+|---|-------------------------|-------------------------|
+| **과제** | hold-out user–item 맞추기 (CF) | **user 없이** 전 item 점수·순위 |
+| **item 범위** | 리뷰 있는 **~563** | `recipe_fix` **~3,100** (cold **~2,500+**) |
+| **대표 지표** | Mode P/G precision@5, recall | coverage, meta baseline 대비 NDCG/Spearman |
+| **현재 상태** | L0 통과, L1 미달 | **미착수** (노트북 `item_ids` = review만) |
+| **역할** | hybrid·feature **전제 검증 완료** | **메인 실험·서비스 1차 Go** |
+
+**결정 (실험 13):**
+
+1. **메인 실험 축을 Track B로 전환** — 완전 다른 모델로 갈아타는 것이 아니라, **동일 LightFM hybrid** + 학습 설정(실험 7~10) 유지, **평가·노트북 스코프·Go** 를 Track B 중심으로 이동.
+2. **Track A는 2차 목표로 후순위** — L0(random 우위)까지로 **전제 검증 종료**. Mode P 공정 재비교·L1/L2 p@5 튜닝은 **유저 데이터 축적·Track B 안정화 후** 재개.
+3. **LightFM 폐기 아님** — interaction(리뷰) 학습 + item feature(view/scrap·메타) → cold **추정 리뷰 점수** `ŷ`. Go bar = **`score_review` (warm)**, not 레거시 fallback.
+
+### Track A 요약 (보존·참고)
+
+| 확인됨 | 미확인/후순위 |
+|--------|----------------|
+| random 대비 LightFM 유의 (~4.2× mean p@5, 5/5 seed) → **파이프라인·학습 유효** | 평균적으로 train 인기(Mode G)보다 LightFM(Mode P) **약함** |
+| feature/target ablation 결과 Track B에 **재사용** | hold-out p@5로 **서비스 1차 Go 판단 불가** |
+| L0 Sanity **충족** | L1/L2 **미달** — 1차 출시 Go에 **미포함** |
+
+### Track B 평가 전제
+
+| 항목 | 정의 |
+|------|------|
+| **Cold item** | train interaction **0건**인 item (`recipe_fix`에 있으나 `review_by_llm`에 없음) |
+| **Warm item** | interaction **≥1건** (~563) |
+| **목표 점수 (단일)** | **리뷰 점수만** — 조회·스크랩은 **feature**, 점수 공식·target에 **미포함** |
+| **점수 용도** | export `ŷ` = **추정 리뷰 점수** (상대 순위). 향후 서비스 `review_rank_score`와 **동일 의미** (코드 반영은 후속) |
+| **User 없음 scoring** | dummy / average user로 **전 item** `predict` (13b 구현 시 명세 고정) |
+| **정합 방향** | **서비스 → 실험** (레거시 Neo4j fallback에 실험을 맞추지 않음) |
+
+### 목표 점수 정의 (실험 기준 — 고정)
+
+**학습 target (행 단위, 노트북):**
+
+```
+y = star + sentiment   # calc_interaction_value, 실험 10 가중치 1:1
+```
+
+**레시피 관측 리뷰 점수 (`recipe_fix`, warm proxy):**
+
+```
+score_review(item) = REVIEW_RANK_SCORE
+                   = REVIEW_STAR_NORM_AVG + REVIEW_SENTIMENT_AVG
+```
+
+(ETL `apply_rank_score`와 동일 계열. 행 단위 `y`는 리뷰 집계의 입력.)
+
+**모델 출력:**
+
+```
+ŷ_export(item) = LightFM predict  # 의미: 추정 리뷰 점수 (cold·warm 공통)
+```
+
+**조회·스크랩 (`view_count`, `scrap_count`):**
+
+| 용도 | 포함 여부 |
+|------|-----------|
+| LightFM **item feature** (`log1p` 토큰) | **예** — cold extrapolation 입력 |
+| **학습 target** `y` | **아니오** |
+| **`score_review` / ŷ 의미** | **아니오** |
+| Track B **1차 Go bar** | **아니오** (진단용 optional 만) |
+
+### 서비스 방향 (문서 합의 — 코드 미반영)
+
+| 항목 | 결정 |
+|------|------|
+| **목표** | 서비스 전역에서 **`review_rank_score` = 리뷰 점수 하나** |
+| **레거시 fallback** | `REVIEW_RANK_SCORE + INQ_CNT_LOG_CENTERED + SRAP_CNT_LOG_CENTERED` — **사용 안 함** |
+| **정합** | 배포 시 ETL/Neo4j/추천이 **실험 `score_review` / `ŷ` 정의**를 따름 (구현은 Track B 실험·연동 단계) |
+| **cold** | 관측 리뷰 없음 → **ŷ만** 제공 (imputed review score) |
+
+> **폐기 (실험 13 초안):** Neo4j fallback에 맞춘 `score_meta_cold` / `score_meta_warm` 를 **1차 Go bar**로 쓰는 설계.
+
+### Track B 목표 체계 (고정 — Track B Go)
+
+**서비스 1차 Go에는 Track A L1/L2를 넣지 않는다.**  
+냉장고 매칭·유통기한은 범위 밖.
+
+| 층 | 이름 | 조건 (고정) | subset | 역할 |
+|----|------|-------------|--------|------|
+| **B0** | 동작 | 전 item **100%** 유한 `ŷ`; NaN·전 item 동일 점수 없음 | all | cold 포함 **점수 존재** |
+| **B2** | **1차 Go** | NDCG@50(`ŷ`) **≥** NDCG@50(`score_review`) 또는 Spearman(`ŷ`, `score_review`) **≥ 0.30** | **warm** | **리뷰 target 정합** |
+| **B3** | warm 보조 | hold-out / train interaction 리뷰 신호와 방향 일치 (Spearman **≥ 0.30**) | warm | CF·집계 일관성 |
+| **B4** | 추가 가치 (권장) | **full hybrid** vs **view/scrap feature 제외** — warm NDCG@50 full **≥** ablated + 마진, 또는 relative **+5%** | warm | feature·CF **incremental** |
+| **B1′** | cold 진단 (optional) | Spearman(`ŷ`, view/scrap proxy) — **Go 아님** | cold | extrapolation 방향 참고 |
+
+**cold (~2,500+)와 Go:** 리뷰 **정답 없음** → cold 단독 NDCG@50(review proxy) **불가**. cold는 **B0(ŷ 존재)** + **warm B2/B3 통과**로 간접 검증.
+
+**B2 vs B4 (리뷰-only 기준)**
+
+| | B2 | B4 |
+|---|----|----|
+| 질문 | warm에서 **관측 리뷰 점수**를 랭킹으로 재현하는가 | **view/scrap 빼도** warm 성능이 유지·개선되는가 (다른 feature·CF 기여) |
+| bar | `score_review` | ablated model 또는 B2 대비 lift |
+
+### Track B 지표 사양 (고정 — 13a 구현 대상)
+
+Track B 본 실험(13b) **이전**에 `catalog_eval.py`(신규) 등에 구현. **코드 미착수.**
+
+| 지표 | 정의 | subset | 용도 |
+|------|------|--------|------|
+| **coverage** | `ŷ` 부여 item / 전체 item | all | B0 |
+| **score_std** | std > **1e-6** | all | B0 |
+| **NDCG@50** | proxy = **`score_review`** | **warm** | **B2, B4** |
+| **Spearman ρ** | `ŷ` vs `score_review` / vs train 리뷰 인기 | warm | **B2, B3** |
+| **Top-100 overlap** | `ŷ` vs `score_review` Top-100 | warm | 참고 |
+| view/scrap Spearman | `ŷ` vs log popularity | cold | **B1′ 진단 only** |
+| precision@5 / recall@5 | — | — | Track A 전용 |
+
+### Track A 목표 (2차 — 참고만)
+
+| 층 | 조건 | 상태 |
+|----|------|------|
+| L0 | random 우위 | **충족** |
+| L1 | Mode P personalized 인기 이상 | 미달·**보류** |
+| L2 | Mode P 인기 +10%, 4/5 seed | 미달·**보류** |
+
+### 현재 갭 (Track B 착수 전)
+
+| 갭 | 현재 | 필요 |
+|----|------|------|
+| 노트북 item 집합 | `review_df` unique **~563** | `recipe_fix` **~3,100** `dataset.fit` |
+| 평가 코드 | p@5/r@5 only | **NDCG@50, Spearman, coverage** |
+| 점수 export | 없음 | cold+warm 전 item 점수 |
+| 서비스 | 레거시 fallback (리뷰+조회+스크랩) — **실험 후 정합 예정** | `ŷ` = 리뷰 점수 only |
+
+### 로드맵 (문서상 순서)
+
+| 단계 | 내용 | 상태 |
+|------|------|------|
+| **13a** | `catalog_eval` + **`score_review`** bar + B0~B4 리포트 | **다음 작업** (코드, 미착수) |
+| **13b** | 전 카탈로그 fit + dummy user predict export | 대기 |
+| **14** | Track B 실험 run → B2/B3 판정 | 대기 |
+| **15+** | 서비스 연동; Track A L1 재개 | 후순위 |
+
+**보류:** 실험 12 초안 Track A **Mode P NDCG/HR 공정 비교** — Track B 안정화 전까지 진행 안 함.
+
+### 13a 작업 가이드 (리뷰-only bar + B2/B4)
+
+**목적:** 13b 전에 **평가만** — bar = **`score_review`**, 서비스 레거시 fallback **미사용**.
+
+**1. `score_review` 계산 (bar / proxy)**
+
+```python
+# recipe_fix — REVIEW_RANK_SCORE 컬럼 또는 동일 집계
+score_review = df["REVIEW_STAR_NORM_AVG"] + df["REVIEW_SENTIMENT_AVG"]
+# warm_ids: review_by_llm에 recipe_id가 있는 RCP_SNO
+# cold_ids: recipe_fix - warm_ids
+```
+
+**2. 학습 target (노트북, 방향 확정 — 코드 정리는 후속)**
+
+```python
+y = star + sentiment  # interaction; view/scrap은 feature만
+```
+
+**3. B2 / B4 판정 (warm-only)**
+
+```
+proxy_rel(item) = score_review(item)   # warm만 유효
+B2: NDCG@50(ŷ, proxy) >= NDCG@50(score_review, proxy)  또는 Spearman >= 0.30
+B4: full model vs EXCLUDED view/scrap features — warm NDCG@50 lift >= 5%
+```
+
+**4. cold**
+
+```
+B0: len(ŷ finite) / len(all_items) == 1.0
+B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 아님
+```
+
+**5. 13a 리포트 스키마**
+
+```json
+{
+  "track_b_eval": {
+    "target": "review_only",
+    "score_review_formula": "REVIEW_STAR_NORM_AVG + REVIEW_SENTIMENT_AVG",
+    "y_train": "star + sentiment",
+    "warm_n": "...",
+    "cold_n": "...",
+    "coverage": null,
+    "warm_ndcg50_yhat": null,
+    "warm_ndcg50_review": null,
+    "b2_pass": null,
+    "b4_ablation_lift_pct": null
+  }
+}
+```
+
+**6. 서비스 (후속, 본 실험 범위 밖)**
+
+- ETL/Neo4j/추천의 `review_rank_score` → **`ŷ` / `score_review` 의미로 통일** (리뷰+조회+스크랩 합산 fallback 제거).
+
+### 한 줄 결론
+
+> **1차 목표 = 전 카탈로그 추정 리뷰 점수 `ŷ`.** target·bar = **리뷰 only**; view/scrap = **feature**. 다음: **13a** `score_review` 평가 구현 → **13b** 카탈로그 export.
+
+### 원본 사양 스냅샷
+
+```json
+{
+  "experiment": "13_strategy_track_b_spec",
+  "date": "2026-07-10",
+  "revision": "review_only_target_service_aligns_to_experiment",
+  "primary_goal": "track_B_catalog_review_scores",
+  "score_definition": {
+    "y_train": "star + sentiment",
+    "score_review": "REVIEW_STAR_NORM_AVG + REVIEW_SENTIMENT_AVG",
+    "y_export": "LightFM predict — imputed review score"
+  },
+  "features_not_in_target": ["view_count", "scrap_count"],
+  "service_direction": "review_rank_score = review only; no legacy fallback sum",
+  "alignment": "service_will_match_experiment_not_vice_versa",
+  "track_B_go": {
+    "B0": "100% items finite ŷ",
+    "B2_primary": "warm NDCG@50(ŷ) >= NDCG@50(score_review) or Spearman >= 0.30",
+    "B3": "warm Spearman vs train review signal >= 0.30",
+    "B4": "full vs no view/scrap features ablation on warm",
+    "B1_prime_optional": "cold diagnostic vs popularity — not Go"
+  },
+  "deprecated": [
+    "neo4j_fallback_meta_bar",
+    "cold_ndcg_vs_score_meta_cold_as_primary_go",
+    "log1p_view_plus_scrap_simple_sum_bar"
+  ],
+  "metrics_to_implement": ["coverage", "score_std", "ndcg@50", "spearman", "top100_overlap"],
+  "next_code_task": "13a catalog_eval (not started)",
+  "service_code": "deferred"
+}
+```
+
+### 원본 분석 스냅샷 (seed=42, Mode G) — 실험 12
 
 ```json
 {

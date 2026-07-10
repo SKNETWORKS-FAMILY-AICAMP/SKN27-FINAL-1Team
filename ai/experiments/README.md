@@ -7,52 +7,84 @@ LightFM 하이브리드 추천 오프라인 실험 환경입니다. **공식 실
 | **본 README** | 전체 목표·진행 상황·실행 방법·실험 **개요** |
 | **[experiments.md](experiments.md)** | 회차별 **상세** 기록 (설정·표·JSON·해석) — **실험할 때마다 여기만 갱신** |
 
+### experiments.md 읽는 법 (실험 1~12 vs 13~)
+
+`experiments.md`는 **한 파일**에 이어지지만, 회차마다 **성격이 다릅니다.** 아래로 구간을 나눠 읽으면 됩니다.
+
+| 구간 | 회차 | 성격 | 무엇을 보나 |
+|------|------|------|-------------|
+| **Track A 실행 로그** | **1~11** | 노트북 run·ablation | feature/target 확정, p@5·baseline **숫자** |
+| **분석** | **12** | 재학습 없음 | Track A metric·이론 상한·L0~L2 해석 |
+| **사양·전략** | **13** | 재학습 없음 | Track B 1차 목표, 리뷰-only Go(B0~B4), 13a 로드맵 |
+| **Track B 실행 로그** | **14~** (예정) | catalog fit·export·eval run | `score_review` bar, cold `ŷ`, B2/B3 **판정** |
+
+- **ablation·채택 근거** → §실험 1~11  
+- **왜 Go 기준이 바뀌었는지** → §실험 12 → §실험 13 순  
+- **지금 무엇을 구현할지** → §실험 13 · README §1.5
+
 ---
 
 ## 1. 실험 목적 및 목표
 
 ### 1.1 목적
 
-- **LightFM hybrid**(CF + item feature)로 레시피 추천·점수 모델을 검증한다.
-- **오프라인 CF (실험 1~12):** `review_by_llm.csv` proxy interaction(~563 item, 821 user)으로 hold-out 평가·bar baseline 비교. **평가 Mode·목표 체계는 실험 12에서 재정의.**
-- **향후 목표:** `recipe_fix.csv` **전체 카탈로그**(~3,100+ item)에 hybrid cold-start **item 점수**를 부여 (리뷰 없는 레시피 포함). interaction은 리뷰 있는 item만, feature는 전체 item.
-- 데이터: interaction `review_by_llm.csv` (`group_id`, `recipe_id`, 별점·감성) / feature `recipe_fix.csv`, `recipe_ingredient_alias.csv`.
+- **LightFM hybrid**(CF + item feature)로 레시피 **점수·추천**을 검증한다.
+- **1차 목표 (Track B):** 전 카탈로그(~3,100)에 **추정 리뷰 점수** `ŷ` 부여. **목표 점수 = 리뷰만**; 조회·스크랩은 **feature**. 서비스도 실험 정의에 맞춤 (코드 후속).
+- **Track A (실험 1~12, 전제 검증):** `review_by_llm.csv` proxy(~563 item) hold-out CF. **L0 통과** — 상세 실행 로그는 §실험 1~11, 해석은 §실험 12.
+- 데이터: interaction `review_by_llm.csv` / feature `recipe_fix.csv`, `recipe_ingredient_alias.csv`.
 
-### 1.2 현재 진행 상황 (실험 12까지)
+### 1.2 현재 진행 상황 (실험 13까지)
 
-| 영역 | 상태 | 채택 (노트북 기본) |
-|------|------|-------------------|
+| 영역 | 상태 | 비고 |
+|------|------|------|
 | 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` Unit 1~10 |
-| hybrid pipeline | 완료 | `build_item_features` + warp |
-| item feature | **확정** | `ingredients` 제외, `view_count`/`scrap_count` **log1p** |
-| interaction target | **확정** | `star_sentiment_sum`, 가중치 **1:1** |
-| loss / 학습 | 고정 | warp, 30 epoch, test 0.2 |
-| bar baseline | **완료 (실험 11)** | random + train_popularity (Mode **G**) |
-| 평가·목표 체계 | **재정의 (실험 12)** | 구 Go **0.05 폐기** → L0~L2 + Track B (§1.4) |
-| LightFM vs bar | **L0 통과 / L1 미달** | random 우위 5/5; mean 인기(0.0095) > mean LightFM(0.0083) — **Mode G vs P 혼합 주의** |
+| hybrid·feature·target | **확정** | 실험 7~10 → Track B에 재사용 |
+| **Track A** | **전제 완료 (L0)** | random 우위 5/5; L1/L2 **보류** |
+| **Track B** | **사양 확정 (실험 13)** | 리뷰-only target·bar; B0~B4 |
+| **다음 (코드, 미착수)** | **13a** | Track B 평가 지표 구현 (`baseline_eval` 확장 등) |
 
-**다음 우선:** 실험 **13** — `baseline_eval` NDCG/HR + Mode P bar, 공정 재비교 → loss/메타 인기/카탈로그(14~16).
+상세 → **[experiments.md §실험 13](experiments.md)**.
 
-### 1.4 평가 목표 (실험 12 확정, 실험 13+ 적용)
+### 1.4 Track A vs Track B
 
-**Mode**
+| | Track A (2차) | Track B (**1차**) |
+|---|---------------|-------------------|
+| 과제 | user–item CF hold-out | **전 카탈로그 item 점수** |
+| item | ~563 | **~3,100** |
+| Go | L0 충족; L1/L2 보류 | **B0~B3** (§1.5) |
+| 노트북 | `item_ids` = review만 | **13b**에서 전체 fit 예정 |
 
-| Mode | 정의 | bar 예 |
-|------|------|--------|
-| **G (Global)** | 전 user 동일 Top-K (`baseline_eval`) | random, train 인기 |
-| **P (Personalized)** | user별 Top-K (LightFM `precision_at_k`) | personalized 인기 |
+### 1.5 Track B 목표 (실험 13 — 리뷰 only)
 
-**목표 층 (구 `p@5 ≥ 0.05` 대체)**
+**점수 정의**
 
-| 층 | 조건 | 현재 |
+| | 공식 |
+|---|------|
+| 학습 `y` | `star + sentiment` |
+| 관측 / bar `score_review` | `REVIEW_RANK_SCORE` (= 별점·감성 평균 합) |
+| export `ŷ` | LightFM predict — **추정 리뷰 점수** |
+| view/scrap | **feature만** (target·bar·서비스 점수에 미포함) |
+
+**레거시 Neo4j fallback (리뷰+조회+스크랩) — 사용 안 함.** 정합: **서비스 → 실험** (코드 후속).
+
+| 층 | 조건 |
+|----|------|
+| **B0** | 전 item 유한 `ŷ` (cold 포함) |
+| **B2** | **1차 Go** — **warm:** NDCG@50(ŷ) ≥ NDCG@50(`score_review`) 또는 Spearman **≥ 0.30** |
+| **B3** | warm: train 리뷰 신호와 Spearman **≥ 0.30** |
+| **B4** | full vs view/scrap feature 제외 ablation (warm) |
+| **B1′** | cold vs 인기 — **진단 only**, Go 아님 |
+
+cold는 리뷰 정답 없음 → **B0 + warm B2/B3**로 간접 검증. 상세 → **[experiments.md §실험 13](experiments.md)**.
+
+### 1.6 Track A 목표 (2차·보류)
+
+| 층 | 조건 | 상태 |
 |----|------|------|
-| **L0 Sanity** | Mode G: random 대비 우위 (5/5 seed) | **충족** |
-| **L1 1차** | Mode P: personalized 인기 이상 또는 NDCG@5 ≥ **0.032** | **미달** (재측정 필요) |
-| **L2 달성** | Mode P: 인기 대비 p@5 **+10%**, 4/5 seed | 미달 |
-| **L3 상한 (참고)** | Mode G oracle p@5 **~0.018**, NDCG@5 **~0.055** | — |
-| **Track B** | ~3,100 item cold 점수·coverage (hold-out p@5와 별도) | 미착수 |
+| L0 | random 대비 우위 | **충족** |
+| L1/L2 | personalized 인기 이상 / +10% | **보류** |
 
-상세 표·JSON → **[experiments.md §실험 12](experiments.md)**.
+상세 Mode G/P·이론 상한 → **[experiments.md §실험 12](experiments.md)**.
 
 ### 1.3 문서·커밋 정책
 
@@ -224,32 +256,22 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ---
 
-## 4. 실험 회차 개요 (1~12)
+## 4. 실험 회차 개요 (1~13)
 
-상세 표·JSON·해석 → **[experiments.md](experiments.md)** 해당 §.
+상세 → **[experiments.md](experiments.md)** 해당 §. **1~11 = 실행 로그 / 12~13 = 분석·사양** (README 상단 「experiments.md 읽는 법」).
 
-| # | 목적 (한 줄) | 결론 | baseline 갱신 |
-|---|-------------|------|---------------|
-| 1 | `star_sentiment_sum`+WARP 100ep | p@5 0.0079, 과적합 | — |
-| 2 | 별점/감성/합산·epoch | sentiment only 소폭 우세 | — |
-| 3 | view/scrap popularity ablation | view 포함이 유리 | — |
-| 4 | 컬럼 1개씩 제외 (13) | `cooking_method` critical | hybrid 방법 |
-| 5 | 2컬럼 조합 (32) | ingr+cooking_method 1위(42) | — |
-| 6 | exp5 seed 검증 | candidate 보류 (1/3) | — |
-| 7 | ingredients_only vs 5c | **ingredients만 제외** | **Yes** |
-| 8 | log1p (view/scrap) | log1p 채택 | **Yes** (§7과 통합) |
-| 9 | target 4종 × 5 seed | **star_sentiment_sum** | 선택 확정 |
-| 10 | sent 가중 1:2, 1:3 | **1:1 유지** | — |
-| 11 | random + train 인기 baseline | mean 인기 > mean LightFM | Unit 10 |
-| **12** | **평가·이론 상한·Go 재정의** | **0.05 폐기; L0~L2·Mode G/P** | 평가 사양 |
+| # | 목적 (한 줄) | 결론 | 비고 |
+|---|-------------|------|------|
+| 1~10 | CF hybrid ablation | feature/target 확정 | Track B 재사용 |
+| 11 | random + train 인기 | mean 인기 > LightFM | Unit 10 |
+| 12 | 평가·이론 상한·L0~L2 | 0.05 폐기 | Track A 사양 |
+| **13** | **Track B 전략·리뷰-only 사양** | **target/bar=리뷰; 서비스→실험** | 13a 대기 |
 
-**현재 스냅샷 (실험 11 수치 + 실험 12 해석)**
+**스냅샷**
 
-- LightFM (Mode P): mean p@5 **0.0083** — L0 통과, L1 미달(Mode 재비교 전)  
-- train 인기 (Mode G): mean p@5 **0.0095**, NDCG@5 **~0.032** (seed 42)  
-- random (Mode G): mean p@5 **0.0020** — 이론 기대 **~0.002**  
-- Mode G oracle 상한: p@5 **~0.018**, NDCG@5 **~0.055**  
-- **다음:** 실험 13 — NDCG/HR·Mode P bar 구현 후 공정 비교  
+- **Track A:** L0 통과 — LightFM ≠ 무의미, **1차 Go 아님**
+- **Track B:** **리뷰 only** target·bar; cold=B0, **Go=warm B2/B3**
+- **다음:** **13a** `catalog_eval` + `score_review` (코드 미착수)
 
 ---
 
@@ -257,12 +279,11 @@ print(r["metrics"]["precision@5"], r.get("excluded_recipe_columns"))
 
 ### 2026-07-10
 
-- **실험 12:** 평가 Mode(G/P)·이론 상한·NDCG/HR 해석·Go 기준 재정의 (L0~L2, Track B). 구 **p@5≥0.05** 폐기.
+- **실험 13 (리뷰-only):** target/bar = 리뷰 점수만; view/scrap=feature; 레거시 fallback bar 폐기; 서비스→실험 정합 (코드 후속).
+- **실험 13:** Track A/B 전략 — **1차 목표 Track B**.
+- **실험 12:** 평가 Mode(G/P)·이론 상한·Track A L0~L2. 구 **p@5≥0.05** 폐기.
 - **실험 11:** Unit 10 Random / train-popularity baseline (`baseline_eval.py`).
-- 문서를 **LightFM 전용**으로 정리 (ExtraTrees·`ai/recommendation` 교차 언급 제거).
-- README를 **전체 개요·운행 가이드**로 재구성.
-- `LIGHTFM_NOTEBOOK_EXECUTION_PLAN.md`, `lightfm_recommendation_plan.md` 제거 → README로 통합.
-- 상세 실험 기록은 **`experiments.md` 유지** (실험 1~12).
+- 상세 실험 기록 **`experiments.md`** (실험 1~13).
 
 ### 2026-07-09
 
