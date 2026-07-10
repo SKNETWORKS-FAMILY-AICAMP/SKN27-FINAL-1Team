@@ -31,44 +31,44 @@ def router_node(state: GraphState) -> dict:
     history = state.get("history", [])
 
     if normalized.startswith(CONFIRM_PREFIX):
-        return {"intent": "mcp.confirm"}
+        return {"intent": "action.confirm"}
     if normalized in CANCEL_WORDS:
-        return {"intent": "mcp.cancel"}
+        return {"intent": "action.cancel"}
 
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
-            return {"intent": "mcp.pending_add_many"}
+            return {"intent": "inventory.pending_add_many"}
         if _is_quantity_only_list(text):
-            return {"intent": "mcp.pending_add_many_retry"}
+            return {"intent": "inventory.pending_add_many_retry"}
     if _pending_add_storage_from_history(history) and _extract_storage(text):
-        return {"intent": "mcp.pending_add_storage"}
+        return {"intent": "inventory.pending_add_storage"}
     if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
-        return {"intent": "mcp.pending_add"}
+        return {"intent": "inventory.pending_add"}
     if _pending_consume_from_history(history) and _extract_quantity(text):
-        return {"intent": "mcp.pending_consume"}
+        return {"intent": "inventory.pending_consume"}
+
+    # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
+    if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
+        return {"intent": "receipt.guide"}
 
     # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if any(word in normalized for word in ("일정", "캘린더", "알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")):
+    if any(word in normalized for word in ("알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")) and not any(word in normalized for word in ("일정", "캘린더")):
+        return {"intent": "alarm.notification"}
+    if any(word in normalized for word in ("일정", "캘린더")):
         return {"intent": "alarm.calendar"}
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
-        return {"intent": "mcp.delete"}
-    if any(word in normalized for word in CONSUME_WORDS):
-        return {"intent": "mcp.inventory"}
-    if any(word in normalized for word in ADD_WORDS):
-        return {"intent": "mcp.inventory"}
+        return {"intent": "inventory.delete"}
     if any(word in normalized for word in EXPIRING_WORDS):
         return {"intent": "inventory.expiring"}
+    if any(word in normalized for word in CONSUME_WORDS):
+        return {"intent": "inventory.action"}
+    if any(word in normalized for word in ADD_WORDS):
+        return {"intent": "inventory.action"}
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return {"intent": "inventory.list"}
 
     return {"intent": state["service"]._route_intent_with_llm(text, history)}
-
-
-
-
-
-
 
 
 def _format_calendar_events(data: dict) -> str | None:
@@ -93,7 +93,7 @@ def inventory_agent_node(state: GraphState) -> dict:
     from ai.agents.inventory_agent.inventory_agent import run_inventory_agent
     
     intent = state.get("intent", "")
-    if (intent.startswith("inventory.") or intent.startswith("mcp.")) and not state.get("user_id"):
+    if (intent.startswith("inventory.") or intent.startswith("action.")) and not state.get("user_id"):
         return {"response_text": LOGIN_REQUIRED_REPLY}
         
     return run_inventory_agent(
@@ -106,7 +106,7 @@ def inventory_agent_node(state: GraphState) -> dict:
 
 
 def guide_agent_node(state: GraphState) -> dict:
-    """식재료 보관/손질 가이드를 안내합니다."""
+    """식재료 보관/손질 가이드 에이전트를 안내합니다."""
     reply, sources = state["service"]._reply_guide(state["text"])
     return {"response_text": reply, "sources": sources}
 
@@ -137,7 +137,7 @@ def alarm_agent_node(state: GraphState) -> dict:
     
     intent = state.get("intent", "")
     text = state["text"]
-    confirmed = (intent == "mcp.confirm")
+    confirmed = (intent == "action.confirm")
 
     # 챗봇 프론트에서 들어온 '확인' 액션일 경우 파싱 (기존 동작 호환)
     action = None
@@ -162,7 +162,17 @@ def alarm_agent_node(state: GraphState) -> dict:
             elif action == "sync_daily_events":
                 alarm_intent = "calendar.sync_daily"
                 payload = {}
-    elif any(word in text for word in ("조회", "있어", "확인")):
+    elif intent == "alarm.notification":
+        # 미확인 알림 필터는 알람 에이전트에 아직 전용 도구가 없어 성공 응답처럼 보이지 않게 막습니다.
+        if any(word in text for word in ('읽지 않은', '안 읽은', '안읽은', '미확인', '미열람')):
+            return {"response_text": "읽지 않은 알림만 따로 조회하는 기능은 아직 준비 중이에요. 현재는 전체 알림 목록 조회만 가능해요."}
+        if any(word in text for word in ('읽음', '읽었')):
+            alarm_intent = "alarm.read"
+        elif any(word in text for word in ('디바이스', '기기', '푸시토큰')) and any(word in text for word in ('등록', '추가', '설정')):
+            alarm_intent = "alarm.register_device"
+        elif any(word in text for word in ('조회', '있어', '확인', '알려')) and not any(word in text for word in ('등록', '추가', '생성', '예약', '설정', '삭제', '지워', '취소', '없애')):
+            alarm_intent = "alarm.list"
+    elif intent == "alarm.calendar" and any(word in text for word in ("조회", "있어", "확인", "알려")):
         # 등록된 일정 조회 문장이 등록 요청으로 오분류되지 않게 조회 의도를 고정합니다.
         alarm_intent = "calendar.list"
     # Alarm Agent 실행
@@ -223,10 +233,10 @@ def general_node(state: GraphState) -> dict:
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
-    if intent.startswith("alarm.") or intent == "mcp.calendar":
+    if intent.startswith("alarm."):
         return "alarm_agent_node"
-    if intent.startswith("mcp.") or intent.startswith("inventory."):
-        if intent == "mcp.confirm":
+    if intent.startswith("inventory.") or intent.startswith("action."):
+        if intent == "action.confirm":
             parts = state["text"].split(":")
             if len(parts) >= 2 and parts[1] not in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
                 return "alarm_agent_node"

@@ -23,6 +23,9 @@ def test_route_intent_examples() -> None:
         "남은 피자 보관법": "ingredient.guide",
         "계란 보관 어떻게 해": "ingredient.guide",
         "먹다 남은 햄버거 어떡하지?": "ingredient.guide",
+        "양파 영양성분 알려줘": "ingredient.guide",
+        "감자 칼로리 알려줘": "ingredient.guide",
+        "7월 제철 음식 뭐야": "ingredient.guide",
         "두부로 뭐 만들수있어?": "recipe.recommend",
         "두부로 뭘 만들지?": "recipe.recommend",
         "이걸로 만들수 있는 메뉴 뭐야": "recipe.recommend",
@@ -142,7 +145,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node
 from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY
-from ai.agents.inventory_agent.inventory_utils import _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage
+from ai.agents.inventory_agent.inventory_utils import _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _extract_expiry_keyword, _pending_add_from_history
 
 
 class FakeService:
@@ -155,43 +158,130 @@ class FakeService:
         return self.intent
 
 
-def test_inventory_expiry_does_not_route_to_mcp() -> None:
-    """소비기한 질문은 소비 처리 MCP로 빠지지 않습니다."""
+def test_inventory_expiry_does_not_route_to_action() -> None:
+    """소비기한 질문은 소비 처리 action으로 빠지 않습니다."""
     state = {"text": "소비기한 임박 재료 알려줘", "service": FakeService("inventory.expiring"), "history": []}
     assert router_node(state)["intent"] == "inventory.expiring"
 
 
-def test_inventory_action_routes_to_mcp() -> None:
-    """실제 소비/등록 문장은 inventory MCP 노드로 보냅니다."""
-    assert router_node({"text": "감자 2개 먹었어", "service": FakeService("general"), "history": []})["intent"] == "mcp.inventory"
-    assert router_node({"text": "감자 등록해줘", "service": FakeService("general"), "history": []})["intent"] == "mcp.inventory"
-    assert router_node({"text": "두부 어제 1개 샀어", "service": FakeService("ingredient.guide"), "history": []})["intent"] == "mcp.inventory"
-    assert router_node({"text": "두부 어제 1개 삿어", "service": FakeService("ingredient.guide"), "history": []})["intent"] == "mcp.inventory"
+def test_inventory_action_routes_to_inventory_action() -> None:
+    """실제 소비/등록 문장은 inventory action 노드로 보냅니다."""
+    assert router_node({"text": "감자 2개 먹었어", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
+    assert router_node({"text": "감자 등록해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
+    assert router_node({"text": "두부 어제 1개 샀어", "service": FakeService("ingredient.guide"), "history": []})["intent"] == "inventory.action"
+    assert router_node({"text": "두부 어제 1개 삿어", "service": FakeService("ingredient.guide"), "history": []})["intent"] == "inventory.action"
 
 
 
 
-def test_delete_inventory_item_routes_to_mcp() -> None:
+def test_inventory_consume_plain_word_routes_to_inventory_action() -> None:
+    """소비해줘 표현도 냉장고 소비 처리로 보냅니다."""
+    assert router_node({"text": "두부 소비해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
+    assert router_node({"text": "냉장고에 두부 소비해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
+
+
+def test_expiring_question_does_not_use_consume_as_ingredient_name() -> None:
+    """소비기한 임박 질문에서 소비를 식재료명으로 보지 않습니다."""
+    assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("general"), "history": []})["intent"] == "inventory.expiring"
+    assert _extract_expiry_keyword("소비기한 임박 재료 있어?") == ""
+    assert _extract_expiry_keyword("소비 임박재료 뭐 있어?") == ""
+
+
+def test_delete_inventory_item_routes_to_inventory_delete() -> None:
     """삭제/폐기 문장은 전체 폐기 확인 플로우로 보냅니다."""
     text = "냉장고에 두부 폐기처리 해줘"
     assert _extract_delete_name(text) == "두부"
-    assert router_node({"text": text, "service": FakeService("general"), "history": []})["intent"] == "mcp.delete"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.delete", "history": []})
+    assert router_node({"text": text, "service": FakeService("general"), "history": []})["intent"] == "inventory.delete"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "inventory.delete", "history": []})
     assert result["response_text"] == "두부 폐기 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
+def test_receipt_register_words_route_to_receipt_guide() -> None:
+    """영수증 등록 요청은 냉장고 재료 추가가 아니라 영수증 안내로 보냅니다."""
+    messages = ("영수증 등록", "영수증 등록 어디서해", "OCR 등록")
+
+    for message in messages:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "receipt.guide"
+
 def test_alarm_agent_feature_words_route_to_alarm() -> None:
-    """알람 에이전트가 제공하는 기능 키워드는 알람 에이전트로 보냅니다."""
-    messages = (
-        "내일 저녁 일정 등록해줘",
+    """알림과 캘린더 요청을 슈퍼바이저에서 분리해 보냅니다."""
+    notification_messages = (
         "내일 알람 삭제해줘",
         "리마인더 조회해줘",
         "푸시토큰 등록해줘",
         "알림 읽음 처리해줘",
     )
+    calendar_messages = (
+        "내일 저녁 일정 등록해줘",
+        "캘린더 일정 조회",
+        "내일 캘린더 일정 알려줘",
+    )
 
-    for message in messages:
+    for message in notification_messages:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.notification"
+    for message in calendar_messages:
         assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.calendar"
 
+
+def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
+    """알림 조회는 캘린더 조회가 아니라 알림 intent로 알람 에이전트에 넘깁니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "알림 목록을 조회했어요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "알림 조회",
+        "intent": "alarm.notification",
+    })
+
+    assert captured["intent"] == "alarm.list"
+
+def test_unread_notification_query_is_not_reported_as_full_list(monkeypatch) -> None:
+    """읽지 않은 알림 조회는 전체 알림 조회 성공처럼 응답하지 않습니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    def fail_run_alarm_agent(**kwargs):
+        raise AssertionError("미확인 알림 조회는 아직 알람 에이전트럼 넘기지 않습니다.")
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fail_run_alarm_agent)
+
+    result = supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "읽지 않은 알림 있어?",
+        "intent": "alarm.notification",
+    })
+
+    assert "아직 준비 중" in result["response_text"]
+
+
+def test_alarm_agent_node_does_not_force_notification_create_to_list(monkeypatch) -> None:
+    """알림 등록 문장은 알림 목록 조회로 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "어떤 알림인지 알려주세요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
+
+    supervisor_agent.alarm_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "내일 우유 사기 알림 등록해줘",
+        "intent": "alarm.notification",
+    })
+
+    assert captured["intent"] is None
 
 def test_calendar_delete_routes_to_alarm() -> None:
     """일정 삭제 요청은 냉장고 삭제가 아니라 알람 에이전트로 보냅니다."""
@@ -247,10 +337,10 @@ def test_supervisor_calendar_delete_delegates_to_alarm_agent(monkeypatch) -> Non
     assert result["response_text"] == "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."
 
 
-def test_confirm_and_cancel_route_to_mcp() -> None:
-    """확인/취소 버튼으로 돌아온 내부 메시지는 MCP 노드에서 처리합니다."""
-    assert router_node({"text": "확인:add_ingredient:감자:1.0:냉장", "service": FakeService("general"), "history": []})["intent"] == "mcp.confirm"
-    assert router_node({"text": "취소", "service": FakeService("general"), "history": []})["intent"] == "mcp.cancel"
+def test_confirm_and_cancel_route_to_action() -> None:
+    """확인/취소 버튼으로 돌아온 내부 메시지는 action 노드에서 처리합니다."""
+    assert router_node({"text": "확인:add_ingredient:감자:1.0:냉장", "service": FakeService("general"), "history": []})["intent"] == "action.confirm"
+    assert router_node({"text": "취소", "service": FakeService("general"), "history": []})["intent"] == "action.cancel"
 
 
 
@@ -265,8 +355,8 @@ def test_inventory_add_sentence_asks_storage_without_llm(monkeypatch) -> None:
     from app.backend.services.inventory_service.inventory_service import inventory_service
     monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: name)
     text = "두부 어제 1개 샀어"
-    assert router_node({"text": text, "service": FakeService("ingredient.guide"), "history": []})["intent"] == "mcp.inventory"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.inventory", "history": []})
+    assert router_node({"text": text, "service": FakeService("ingredient.guide"), "history": []})["intent"] == "inventory.action"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "inventory.action", "history": []})
     assert result["response_text"] == "두부 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
@@ -281,7 +371,7 @@ def test_pending_add_cancel_word_routes_to_cancel() -> None:
     history = [Message("bot", "감자를 몇 개 추가하시겠어요?")]
     state = {"text": "안넣어", "service": FakeService("general"), "history": history}
 
-    assert router_node(state)["intent"] == "mcp.cancel"
+    assert router_node(state)["intent"] == "action.cancel"
 
 
 def test_pending_add_asks_storage_after_quantity() -> None:
@@ -293,9 +383,26 @@ def test_pending_add_asks_storage_after_quantity() -> None:
 
     history = [Message("bot", "냉동 새우를 몇 개 추가할까요? 수량을 알려주세요.")]
     state = {"text": "1", "service": FakeService("general"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_add"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1", "intent": "mcp.pending_add", "history": history})
+    assert router_node(state)["intent"] == "inventory.pending_add"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1", "intent": "inventory.pending_add", "history": history})
     assert result["response_text"] == "냉동 새우 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
+
+
+def test_pending_add_quantity_sentence_with_storage_keeps_previous_item() -> None:
+    """수량 질문 뒤 보관 위치와 수량을 함께 말해도 추가 흐름을 이어갑니다."""
+    class Message:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    history = [Message("bot", "냉동실에 피자의 수량을 알려주시겠어요? (예: 냉동실에 피자 1개)")]
+    state = {"text": "냉동실에 피자 1개", "service": FakeService("general"), "history": history}
+
+    assert _pending_add_from_history(history) == "피자"
+    assert router_node(state)["intent"] == "inventory.pending_add"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "냉동실에 피자 1개", "intent": "inventory.pending_add", "history": history})
+    assert result["response_text"] == "피자 1개를 냉동에 추가할까요?"
+    assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:피자:1.0:냉동"
 
 
 def test_pending_add_storage_answer_builds_confirm_action() -> None:
@@ -309,8 +416,8 @@ def test_pending_add_storage_answer_builds_confirm_action() -> None:
     state = {"text": "냉동실에", "service": FakeService("general"), "history": history}
     assert _extract_storage("내 냉장고 재료 뭐 있어?") is None
     assert _extract_storage("냉동실에") == "냉동"
-    assert router_node(state)["intent"] == "mcp.pending_add_storage"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "냉동실에", "intent": "mcp.pending_add_storage", "history": history})
+    assert router_node(state)["intent"] == "inventory.pending_add_storage"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "냉동실에", "intent": "inventory.pending_add_storage", "history": history})
     assert result["response_text"] == "냉동 새우 1개를 냉동에 추가할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:냉동 새우:1.0:냉동"
 
@@ -334,8 +441,8 @@ def test_pending_add_handles_short_quantity_question() -> None:
 
     history = [Message("bot", "감자를 몇 개 추가하시겠어요?")]
     state = {"text": "한개", "service": FakeService("general"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_add"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "한개", "intent": "mcp.pending_add", "history": history})
+    assert router_node(state)["intent"] == "inventory.pending_add"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "한개", "intent": "inventory.pending_add", "history": history})
     assert result["response_text"] == "감자 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
@@ -344,7 +451,7 @@ def test_multi_add_items_build_confirm_action() -> None:
     text = "파스타1, 토마토소스2, 냉동새우1"
     items = _extract_add_items(text)
     assert [item["name"] for item in items] == ["파스타", "토마토소스", "냉동새우"]
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "mcp.pending_add_many", "history": []})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "inventory.pending_add_many", "history": []})
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredients:파스타,1.0,냉장|토마토소스,2.0,냉장|냉동새우,1.0,냉장"
 
 def test_extract_add_item_trims_also_particle() -> None:
@@ -364,11 +471,11 @@ def test_pending_add_many_quantity_only_asks_for_named_quantities() -> None:
 
     history = [Message("bot", "각 식재료의 수량을 알려주시면 추가해드릴게요.")]
     state = {"text": "1,1,1", "service": FakeService("general"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_add_many_retry"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1,1,1", "intent": "mcp.pending_add_many_retry", "history": history})
+    assert router_node(state)["intent"] == "inventory.pending_add_many_retry"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1,1,1", "intent": "inventory.pending_add_many_retry", "history": history})
     assert result["response_text"] == "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"
-def test_pending_add_quantity_routes_to_mcp() -> None:
-    """추가 대기 중 수량만 답해도 MCP로 이어집니다."""
+def test_pending_add_quantity_routes_to_inventory_pending() -> None:
+    """추가 대기 중 수량만 답해도 inventory pending으로 이어집니다."""
     class Message:
         def __init__(self, role, text):
             self.role = role
@@ -376,7 +483,7 @@ def test_pending_add_quantity_routes_to_mcp() -> None:
 
     history = [Message("bot", "팽이버섯을 몇 개 추가할까요? 수량을 알려주세요.")]
     state = {"text": "2개", "service": FakeService("general"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_add"
+    assert router_node(state)["intent"] == "inventory.pending_add"
 
 
 
@@ -388,7 +495,7 @@ def test_pending_add_quantity_builds_confirm_action() -> None:
             self.text = text
 
     history = [Message("bot", "팽이버섯을 몇 개 추가할까요? 수량을 알려주세요.")]
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "2개", "intent": "mcp.pending_add", "history": history})
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "2개", "intent": "inventory.pending_add", "history": history})
     assert result["response_text"] == "팽이버섯 2개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
@@ -402,8 +509,8 @@ def test_pending_add_korean_quantity_and_storage() -> None:
     history = [Message("bot", "두부를 몇 개나 추가할까요? 그리고 보관 방법은 냉장, 냉동, 실온 중 어떤 걸 원하시나요?")]
     state = {"text": "한개 냉장", "service": FakeService("ingredient.guide"), "history": history}
     assert _extract_quantity("한개 냉장") == 1.0
-    assert router_node(state)["intent"] == "mcp.pending_add"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "한개 냉장", "intent": "mcp.pending_add", "history": history})
+    assert router_node(state)["intent"] == "inventory.pending_add"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "한개 냉장", "intent": "inventory.pending_add", "history": history})
     assert result["response_text"] == "두부 1개를 냉장에 추가할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:add_ingredient:두부:1.0:냉장"
 
@@ -433,7 +540,7 @@ def test_latest_pending_question_wins_over_old_add_history() -> None:
         Message("bot", '토마토 소스 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요.'),
         Message("bot", '양파를 몇 개 소비할까요?'),
     ]
-    assert router_node({"text": "1", "service": FakeService("general"), "history": history})["intent"] == "mcp.pending_consume"
+    assert router_node({"text": "1", "service": FakeService("general"), "history": history})["intent"] == "inventory.pending_consume"
 
 
 def test_pending_consume_quantity_builds_confirm_action() -> None:
@@ -445,14 +552,14 @@ def test_pending_consume_quantity_builds_confirm_action() -> None:
 
     history = [Message("bot", "귤을 몇 개 먹으셨나요? 수량을 알려주시면, 냉장고에서 차감해드리겠습니다.")]
     state = {"text": "1개", "service": FakeService("inventory.list"), "history": history}
-    assert router_node(state)["intent"] == "mcp.pending_consume"
-    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1개", "intent": "mcp.pending_consume", "history": history})
+    assert router_node(state)["intent"] == "inventory.pending_consume"
+    result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1개", "intent": "inventory.pending_consume", "history": history})
     assert result["response_text"] == "귤 1개를 소비 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:consume_ingredient:귤:1.0"
 
-def test_mcp_requires_login() -> None:
-    """MCP 쓰기 작업은 비회원 상태에서 실행하지 않습니다."""
-    assert inventory_agent_node({"db": MagicMock(), "user_id": 0, "text": "감자 먹었어", "intent": "mcp.inventory"})["response_text"] == LOGIN_REQUIRED_REPLY
+def test_inventory_action_requires_login() -> None:
+    """action 쓰기 작업은 비회원 상태에서 실행하지 않습니다."""
+    assert inventory_agent_node({"db": MagicMock(), "user_id": 0, "text": "감자 먹었어", "intent": "inventory.action"})["response_text"] == LOGIN_REQUIRED_REPLY
 
 
 
@@ -460,17 +567,17 @@ def test_mcp_requires_login() -> None:
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
     assert route_intent({"intent": "recipe.search"}) == "recipe_search_node"
-    assert route_intent({"intent": "mcp.inventory"}) == "inventory_agent_node"
+    assert route_intent({"intent": "inventory.action"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"
 
 
 if __name__ == "__main__":
-    test_inventory_expiry_does_not_route_to_mcp()
-    test_inventory_action_routes_to_mcp()
-    test_delete_inventory_item_routes_to_mcp()
+    test_inventory_expiry_does_not_route_to_action()
+    test_inventory_action_routes_to_inventory_action()
+    test_delete_inventory_item_routes_to_inventory_delete()
     test_calendar_action_routes_to_mcp()
     test_pending_calendar_time_update_stays_calendar()
-    test_confirm_and_cancel_route_to_mcp()
+    test_confirm_and_cancel_route_to_action()
     test_inventory_add_sentence_asks_storage_without_llm()
     test_pending_add_asks_storage_after_quantity()
     test_pending_add_storage_answer_builds_confirm_action()
@@ -479,13 +586,13 @@ if __name__ == "__main__":
     test_multi_add_items_build_confirm_action()
     test_extract_add_item_trims_also_particle()
     test_pending_add_many_quantity_only_asks_for_named_quantities()
-    test_pending_add_quantity_routes_to_mcp()
+    test_pending_add_quantity_routes_to_inventory_pending()
     test_pending_add_quantity_builds_confirm_action()
     test_pending_add_korean_quantity_and_storage()
     test_stale_pending_add_history_is_ignored()
     test_latest_pending_question_wins_over_old_add_history()
     test_pending_consume_quantity_builds_confirm_action()
-    test_mcp_requires_login()
+    test_inventory_action_requires_login()
     test_route_intent_uses_lookup_table()
     print("chat graph tests ok")
 
@@ -513,7 +620,7 @@ def test_inventory_add_rejects_greeting_name_before_quantity(monkeypatch) -> Non
         "user_id": 1,
         "db": object(),
         "text": "안녕 냉장고에 넣어줘",
-        "intent": "mcp.inventory",
+        "intent": "inventory.action",
         "history": [],
     })
 
@@ -531,7 +638,7 @@ def test_inventory_add_unknown_name_asks_quantity(monkeypatch) -> None:
         "user_id": 1,
         "db": object(),
         "text": "게살 냉장고에 넣어줘",
-        "intent": "mcp.inventory",
+        "intent": "inventory.action",
         "history": [],
     })
 
@@ -559,7 +666,7 @@ def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> Non
         "user_id": 1,
         "db": object(),
         "text": "가지 안튀김 냉장고에 넣어줘",
-        "intent": "mcp.inventory",
+        "intent": "inventory.action",
         "history": [],
     })
 
@@ -578,8 +685,63 @@ def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None
         "user_id": 1,
         "db": object(),
         "text": "안심 냉장고에 넣어줘",
-        "intent": "mcp.inventory",
+        "intent": "inventory.action",
         "history": [],
     })
 
     assert result["response_text"] == "'안심'의 수량을 알려주시겠어요? (예: 안심 1개)"
+
+
+
+
+def test_guide_reply_formats_nutrition(monkeypatch) -> None:
+    """영양성분 응답을 확인합니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "action": "lookup_nutrition",
+            "data": {
+                "ingredient": {"name": "두부"},
+                "nutrition": {
+                    "base_amount": "100g",
+                    "energy_kcal": 80,
+                    "protein_g": 8.1,
+                    "carbohydrate_g": 1.9,
+                    "fat_g": 4.8,
+                    "sodium_mg": 7,
+                },
+            },
+            "ui": {"sources": [{"title": "영양DB", "url": None}]},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("두부 영양성분")
+
+    assert "두부 영양성분이에요." in reply
+    assert "기준량: 100g" in reply
+    assert "열량: 80kcal" in reply
+    assert "단백질: 8.1g" in reply
+    assert sources[0]["url"] == ""
+
+
+def test_guide_reply_formats_seasonality(monkeypatch) -> None:
+    """제철 목록 응답을 확인합니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "action": "list_seasonal_ingredients",
+            "data": {
+                "month": 7,
+                "items": [{"name": "수박"}, {"name": "애호박"}, {"name": "옥수수"}],
+            },
+            "ui": {"sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("7월 제철음식")
+
+    assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
+    assert sources == []
+

@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from typing import Any
 from urllib.parse import quote
 
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings as app_settings
 from app.backend.services.guide_service.guide_service import guide_service
-from ai.agents.guide_agent.guide_agent import lookup_ingredient_guide
+from ai.agents.guide_agent import answer_guide_query
 from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommendation_service import recommendation_service
@@ -113,7 +114,7 @@ class ChatService:
             return "recipe.search"
 
         normalized = text.replace(" ", "").lower()
-        guide_words = ("보관", "세척", "씻", "손질", "신선", "가이드", "어떡", "남은")
+        guide_words = ('보관', '세척', '씻', '손질', '신선', '가이드', '어떡', '남은', '영양', '영양성분', '칼로리', '열량', '단백질', '탄수화물', '지방', '당류', '나트륨', '제철')
         if any(word in normalized for word in guide_words):
             return "ingredient.guide"
 
@@ -181,7 +182,7 @@ class ChatService:
         if any(word in normalized for word in ("레시피", "요리법", "요리")):
             return "recipe.search"
             
-        if any(word in normalized for word in ("보관법", "보관방법", "보관", "손질", "세척", "씻", "신선", "확인", "가이드", "어떡", "어떻게하지", "먹다남은", "남은")):
+        if any(word in normalized for word in ('보관법', '보관방법', '보관', '손질', '세척', '씻', '신선', '확인', '가이드', '어떡', '어떻게하지', '먹다남은', '남은', '영양', '영양성분', '칼로리', '열량', '단백질', '탄수화물', '지방', '당류', '나트륨', '제철')):
             return "ingredient.guide"
         if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")):
             return "inventory.expiring"
@@ -205,56 +206,85 @@ class ChatService:
 
 
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
-        """식재료 가이드 에이전트를 이용해 보관/손질/세척/신선도 정보를 안내합니다."""
-        keyword = _extract_keyword(text)
-        
-        # 질문 종류 파악
-        category = "storage"
+        """Guide Agent 공통 응답을 챗봇 말풍선 형식으로 변환합니다."""
         normalized = text.replace(" ", "").lower()
-        if "손질" in normalized:
-            category = "prep"
-        elif "세척" in normalized or "씻" in normalized:
-            category = "washing"
-        elif "신선" in normalized or "상하는" in normalized or "상한" in normalized:
-            category = "freshness"
-            
-        # Guide Agent 호출
-        agent_result = lookup_ingredient_guide(keyword)
-        if not agent_result.get("ok"):
-            return f"{keyword}에 대한 가이드 정보는 아직 찾지 못했어요. ", []
-            
-        # 데이터 파싱
-        data = agent_result.get("data", {})
-        ingredient_info = data.get("ingredient", {})
-        guides_info = data.get("guides", {})
-        item_name = ingredient_info.get("name") or keyword
-        
-        if category == "prep":
-            tip = guides_info.get("prep", {}).get("content")
-            label = "손질방법"
-        elif category == "washing":
-            tip = guides_info.get("washing", {}).get("content")
-            label = "세척방법"
-        elif category == "freshness":
-            tip = guides_info.get("freshness", {}).get("content")
-            label = "신선도 확인법"
-        else:
-            tip = guides_info.get("storage", {}).get("content") or guides_info.get("horticultural_storage", {}).get("content")
-            label = "보관법"
-            
-        # DB에 해당 정보가 비어있을 경우
-        if not tip:
-            return f"알고 계신 {item_name} 가이드는 찾았지만, 아쉽게도 {label}에 대한 구체적인 정보가 비어 있어요. 😅", []
+        query = text
+        if "제철" in normalized and not re.search(r"\d{1,2}\s*월", text):
+            query = f"{date.today().month}월 {text}"
+        elif "제철" not in normalized:
+            # 제철음식 검색이 아닌 일반 가이드 검색의 경우 핵심 식재료명만 추출
+            extracted = _extract_keyword(text)
+            if not extracted:
+                return "질문하신 내용에서 명확한 식재료 이름을 찾지 못했어요. '당근 보관법'처럼 식재료를 명시해서 다시 물어봐 주시겠어요?", []
+            # extracted는 검증용으로만 쓰고, 실제 검색어는 원문(query)을 그대로 넘겨야 
+            # 가이드 에이전트가 "세척법", "손질법" 등의 의도를 파악할 수 있음
 
-        formatted_tip = _format_guide_tip(tip)
+        agent_result = answer_guide_query(query)
         sources = agent_result.get("ui", {}).get("sources", [])
-        
-        # Pydantic ResponseValidationError 방지: url이 None인 경우 빈 문자열로 치환
         for source in sources:
             if source.get("url") is None:
                 source["url"] = ""
-        
-        return f"{item_name} {label}이에요.\n{formatted_tip}", sources
+
+        if not agent_result.get("ok"):
+            return agent_result.get("message") or "가이드 정보를 찾지 못했어요.", sources
+
+        action = agent_result.get("action")
+        data = agent_result.get("data", {})
+
+        if action == "list_seasonal_ingredients":
+            month = data.get("month") or date.today().month
+            names = [item.get("name") for item in data.get("items", []) if item.get("name")]
+            if not names:
+                return f"{month}월 제철 식재료는 아직 찾지 못했어요.", sources
+            preview = ", ".join(names[:10])
+            suffix = " 등" if len(names) > 10 else ""
+            return f"{month}월 제철 식재료는 {preview}{suffix}이에요.", sources
+
+        if action == "lookup_nutrition":
+            nutrition = data.get("nutrition") or {}
+            ingredient = data.get("ingredient") or {}
+            item_name = ingredient.get("name") or nutrition.get("representative_name") or nutrition.get("food_name") or _extract_keyword(text)
+            lines = []
+            base = nutrition.get("nutrition_base_amount") or nutrition.get("base_amount")
+            if base:
+                lines.append(f"기준량: {base}")
+            for key, label, unit in (
+                ("energy_kcal", "열량", "kcal"),
+                ("protein_g", "단백질", "g"),
+                ("carbohydrate_g", "탄수화물", "g"),
+                ("fat_g", "지방", "g"),
+                ("sugar_g", "당류", "g"),
+                ("sodium_mg", "나트륨", "mg"),
+            ):
+                value = nutrition.get(key)
+                if value is not None:
+                    lines.append(f"{label}: {value}{unit}")
+            if not lines:
+                return agent_result.get("message") or f"{item_name}의 영양성분 정보는 아직 준비 중이에요.", sources
+            return f"{item_name} 영양성분이에요.\n" + "\n".join(lines[:7]), sources
+        # 일반 가이드 질문은 보관법을 기본값으로 두고, 명시 키워드만 다른 유형으로 보냅니다.
+        guide_type = "storage"
+        if "손질" in normalized:
+            guide_type = "prep"
+        elif "세척" in normalized or "씻" in normalized:
+            guide_type = "washing"
+        elif "신선" in normalized or "상한" in normalized:
+            guide_type = "freshness"
+        guide = (data.get("guides") or {}).get(guide_type) or {}
+        tip = guide.get("content")
+        ingredient = data.get("ingredient") or {}
+        item_name = ingredient.get("name") or _extract_keyword(text)
+        if not tip:
+            return agent_result.get("message") or f"{item_name} 가이드 정보는 아직 준비 중이에요.", sources
+
+        labels = {
+            "storage": "보관법",
+            "prep": "손질방법",
+            "washing": "세척방법",
+            "freshness": "신선도 확인법",
+        }
+        formatted_tip = _format_guide_tip(tip)
+        return f"{item_name} {labels.get(guide_type, '가이드')}이에요.\n{formatted_tip}", sources
 
     def _reply_external_guide(self, keyword: str, category_label: str = "보관법") -> tuple[str, list[dict[str, str]]]:
         """내부 가이드가 없을 때 Tavily 검색 결과를 짧게 요약합니다."""
