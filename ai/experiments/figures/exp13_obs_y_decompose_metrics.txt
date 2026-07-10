@@ -1,4 +1,4 @@
-Experiment 13 - y-axis decomposition metrics (warm)
+Experiment 13 — observed (y) axis decomposition vs y_hat (warm only) metrics (warm)
 total warm n = 563
 
 [ALL warm] n=563
@@ -20,6 +20,3 @@ total warm n = 563
   Spearman(y_hat, star_norm_avg) = -0.1143
   Spearman(y_hat, sentiment_avg) = 0.4716
   Spearman(y_hat, review_rank_score) = 0.4859
-
-star_norm_avg == 1.0 count:
-  529 / 563

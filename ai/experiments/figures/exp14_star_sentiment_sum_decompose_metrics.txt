@@ -1,0 +1,22 @@
+exp14_star_sentiment_sum — observed (y) axis decomposition vs y_hat (warm only) metrics (warm)
+total warm n = 563
+
+[ALL warm] n=563
+  Spearman(y_hat, star_norm_avg) = -0.0828
+  Spearman(y_hat, sentiment_avg) = -0.0076
+  Spearman(y_hat, review_rank_score) = -0.0321
+
+[star_norm >= 0.99] n=529
+  Spearman(y_hat, star_norm_avg) = n/a (constant)
+  Spearman(y_hat, sentiment_avg) = -0.0043
+  Spearman(y_hat, review_rank_score) = -0.0047
+
+[star_norm < 1.0] n=34
+  Spearman(y_hat, star_norm_avg) = 0.5059
+  Spearman(y_hat, sentiment_avg) = 0.2723
+  Spearman(y_hat, review_rank_score) = 0.4419
+
+[review_rank_score < 1.5] n=37
+  Spearman(y_hat, star_norm_avg) = -0.1215
+  Spearman(y_hat, sentiment_avg) = 0.4843
+  Spearman(y_hat, review_rank_score) = 0.4937

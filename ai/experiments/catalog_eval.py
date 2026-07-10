@@ -197,6 +197,84 @@ def evaluate_track_b(
     }
 
 
+def _pair_correlations(y_hat: np.ndarray, y_bar: np.ndarray) -> dict[str, float | str | int]:
+    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
+    y_bar = np.asarray(y_bar, dtype=np.float64).ravel()
+    n = int(y_hat.size)
+    if n < 2 or np.std(y_hat) < 1e-12 or np.std(y_bar) < 1e-12:
+        return {"n": n, "spearman": "n/a", "pearson": "n/a"}
+    from scipy.stats import pearsonr
+
+    return {
+        "n": n,
+        "spearman": float(spearman_rho(y_hat, y_bar)),
+        "pearson": float(pearsonr(y_bar, y_hat)[0]),
+    }
+
+
+def decomposed_track_b_metrics(
+    y_hat: np.ndarray,
+    review_rank_score: np.ndarray,
+    star_norm_avg: np.ndarray,
+    sentiment_avg: np.ndarray,
+    *,
+    warm_mask: np.ndarray | None = None,
+) -> list[dict[str, float | str | int]]:
+    """Subset x bar Spearman/Pearson for warm rows (experiment 14)."""
+    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
+    review_rank_score = np.asarray(review_rank_score, dtype=np.float64).ravel()
+    star_norm_avg = np.asarray(star_norm_avg, dtype=np.float64).ravel()
+    sentiment_avg = np.asarray(sentiment_avg, dtype=np.float64).ravel()
+
+    if warm_mask is None:
+        warm_mask = np.isfinite(review_rank_score)
+    warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
+
+    warm_df_masks = {
+        "all": warm_mask,
+        "ceiling": warm_mask & (star_norm_avg >= 0.99),
+        "star_varies": warm_mask & (star_norm_avg < 1.0),
+        "low_tail": warm_mask & (review_rank_score < 1.5),
+    }
+    bars = {
+        "review_rank_score": review_rank_score,
+        "star_norm_avg": star_norm_avg,
+        "sentiment_avg": sentiment_avg,
+    }
+
+    rows: list[dict[str, float | str | int]] = []
+    for subset, smask in warm_df_masks.items():
+        for bar_name, bar_values in bars.items():
+            row = {
+                "subset": subset,
+                "bar": bar_name,
+                **_pair_correlations(y_hat[smask], bar_values[smask]),
+            }
+            rows.append(row)
+    return rows
+
+
+def decomposed_track_b_metrics_df(export_df, warm_item_ids: set[str]) -> list[dict]:
+    """DataFrame wrapper for notebook export."""
+    import pandas as pd
+
+    df = export_df.copy()
+    df["recipe_id"] = df["recipe_id"].astype(str)
+    warm = df["recipe_id"].isin(warm_item_ids)
+    if "sentiment_avg" not in df.columns:
+        df["sentiment_avg"] = (
+            pd.to_numeric(df["positive_avg"], errors="coerce")
+            - pd.to_numeric(df["negative_avg"], errors="coerce")
+        )
+    return decomposed_track_b_metrics(
+        df["y_hat"].to_numpy(),
+        df["review_rank_score"].to_numpy(dtype=float),
+        df["star_norm_avg"].to_numpy(dtype=float),
+        df["sentiment_avg"].to_numpy(dtype=float),
+        warm_mask=warm.to_numpy(),
+    )
+
+
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 200
@@ -210,4 +288,8 @@ if __name__ == "__main__":
     assert m["b0_pass"]
     cmp_m = warm_obs_pred_metrics(scores, relevance, warm)
     assert cmp_m["warm_r2_linear"] >= 0.0
+    dec = decomposed_track_b_metrics(
+        scores, relevance, relevance * 0.5, relevance * 0.8, warm_mask=warm
+    )
+    assert len(dec) == 12
     print("catalog_eval ok", m["b2_pass"], m["b3_pass"], cmp_m["warm_mae_linear"])
