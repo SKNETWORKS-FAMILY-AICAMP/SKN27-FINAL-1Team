@@ -860,3 +860,149 @@ JSON: `runs/exp9_{target_mode}_s{seed}.json` (20개), 집계: `runs/exp9_summary
   }
 }
 ```
+
+---
+
+## 실험 10 — star/sentiment 가중치 비율 탐색 (hybrid)
+
+**일자:** 2026-07-10  
+**노트북:** `LightFM_Model.ipynb` (Docker nbconvert)  
+**스크립트:** `run_experiment10.ps1`  
+**목적:** `star_sentiment_sum` 고정 피처 조건에서 star:sentiment 상대 비율 최적화
+
+### 공통 설정 (실험 9·7·8 고정값)
+
+| 항목 | 값 |
+|------|-----|
+| mode | hybrid |
+| excluded_recipe_columns | `ingredients` |
+| log_numeric_columns | `view_count`, `scrap_count` (`log1p`) |
+| target_mode | `star_sentiment_sum` |
+| star_weight | 1.0 (고정) |
+| loss | `warp` |
+| epochs | 30 |
+| seeds | 42, 123, 456, 789, 1024 |
+| runs | 3 ratio × 5 seed = **15** |
+
+### 가중치 grid
+
+| config | star_w | sent_w | ratio |
+|--------|--------|--------|-------|
+| ratio_1_1 | 1 | 1 | 1:1 (Phase A baseline 재확인) |
+| ratio_1_2 | 1 | 2 | 1:2 |
+| ratio_1_3 | 1 | 3 | 1:3 |
+
+### 테이블 A — seed × ratio (precision@5)
+
+| seed | ratio_1_1 | ratio_1_2 | ratio_1_3 |
+|------|--------|--------|--------|
+| 42 | 0.0135 | 0.0124 | 0.0124 |
+| 123 | 0.0114 | 0.0114 | 0.0103 |
+| 456 | 0.0056 | 0.0056 | 0.0056 |
+| 789 | 0.0056 | 0.0056 | 0.0056 |
+| 1024 | 0.0056 | 0.0068 | 0.0056 |
+
+### 테이블 A-2 — seed × ratio (전체 지표)
+
+| seed | ratio | star_w | sent_w | precision@5 | precision@10 | recall@5 | recall@10 |
+|------|-------|--------|--------|-------------|--------------|----------|-----------|
+| 42 | ratio_1_1 | 1.0 | 1.0 | 0.0135 | 0.0096 | 0.0601 | 0.0882 |
+| 42 | ratio_1_2 | 1.0 | 2.0 | 0.0124 | 0.0096 | 0.0590 | 0.0840 |
+| 42 | ratio_1_3 | 1.0 | 3.0 | 0.0124 | 0.0096 | 0.0590 | 0.0840 |
+| 123 | ratio_1_1 | 1.0 | 1.0 | 0.0114 | 0.0091 | 0.0571 | 0.0914 |
+| 123 | ratio_1_2 | 1.0 | 2.0 | 0.0114 | 0.0097 | 0.0571 | 0.0971 |
+| 123 | ratio_1_3 | 1.0 | 3.0 | 0.0103 | 0.0091 | 0.0514 | 0.0914 |
+| 456 | ratio_1_1 | 1.0 | 1.0 | 0.0056 | 0.0056 | 0.0278 | 0.0556 |
+| 456 | ratio_1_2 | 1.0 | 2.0 | 0.0056 | 0.0050 | 0.0278 | 0.0500 |
+| 456 | ratio_1_3 | 1.0 | 3.0 | 0.0056 | 0.0056 | 0.0278 | 0.0556 |
+| 789 | ratio_1_1 | 1.0 | 1.0 | 0.0056 | 0.0067 | 0.0281 | 0.0674 |
+| 789 | ratio_1_2 | 1.0 | 2.0 | 0.0056 | 0.0067 | 0.0281 | 0.0674 |
+| 789 | ratio_1_3 | 1.0 | 3.0 | 0.0056 | 0.0067 | 0.0281 | 0.0674 |
+| 1024 | ratio_1_1 | 1.0 | 1.0 | 0.0056 | 0.0062 | 0.0282 | 0.0621 |
+| 1024 | ratio_1_2 | 1.0 | 2.0 | 0.0068 | 0.0068 | 0.0339 | 0.0678 |
+| 1024 | ratio_1_3 | 1.0 | 3.0 | 0.0056 | 0.0056 | 0.0282 | 0.0565 |
+
+### 테이블 B — ratio별 집계 (vs fresh baseline)
+
+| ratio | star:sent | mean p@5 | std p@5 | mean r@10 | wins vs fresh baseline (of 5) |
+|-------|-----------|----------|---------|-----------|-------------------------------------|
+| ratio_1_1 | 1:1 | 0.0083 | 0.0034 | 0.0729 | — (ref) |
+| ratio_1_2 | 1:2 | 0.0083 | 0.0029 | 0.0733 | 1/5 |
+| ratio_1_3 | 1:3 | 0.0079 | 0.0029 | 0.0710 | 0/5 |
+
+### 테이블 C — seed별 1위 ratio
+
+| seed | best p@5 | winner(s) |
+|------|----------|-----------|
+| 42 | 0.0135 | ratio_1_1 |
+| 123 | 0.0114 | ratio_1_1, ratio_1_2 |
+| 456 | 0.0056 | ratio_1_1, ratio_1_2, ratio_1_3 |
+| 789 | 0.0056 | ratio_1_1, ratio_1_2, ratio_1_3 |
+| 1024 | 0.0068 | ratio_1_2 |
+
+### 해석·최종 판단
+
+**선정 규칙:** 1) mean precision@5 → 2) std precision@5 → 3) mean recall@10
+
+1. **fresh baseline (1:1):** mean p@5 **0.0083** (Phase A 재실행 기준)
+2. **1위 `ratio_1_2`:** mean p@5 **0.0083**, std 0.0029, wins vs baseline **1/5**
+
+**최종 가중치 권고:**
+- **`(1, 1)` 유지** — `ratio_1_2` 우세하나 wins 1/5 또는 mean Δp@5 +0.0000로 채택 기준 미달
+
+**exp9 cross-check (fresh baseline vs exp9 star_sentiment_sum):**
+- seed 42: fresh **0.0135**, exp9 **0.0135**, 차이 0.0000 (OK)
+- seed 123: fresh **0.0114**, exp9 **0.0114**, 차이 0.0000 (OK)
+- seed 456: fresh **0.0056**, exp9 **0.0056**, 차이 0.0000 (OK)
+- seed 789: fresh **0.0056**, exp9 **0.0056**, 차이 0.0000 (OK)
+- seed 1024: fresh **0.0056**, exp9 **0.0056**, 차이 0.0000 (OK)
+
+### 원본 리포트
+
+JSON: `runs/exp10_s{seed}_ratio_1_{1,2,3}.json` (15개), 집계: `runs/exp10_summary.json`
+
+**seed=42, ratio_1_2**
+
+```json
+{
+  "data_files": {
+    "review": "review_by_llm.csv",
+    "recipe": "recipe_fix.csv",
+    "ingredient_alias": "recipe_ingredient_alias.csv"
+  },
+  "mode": "hybrid",
+  "target_mode": "star_sentiment_sum",
+  "star_weight": 1.0,
+  "sentiment_weight": 2.0,
+  "excluded_recipe_columns": [
+    "ingredients"
+  ],
+  "seed": 42,
+  "test_ratio": 0.2,
+  "epochs": 30,
+  "loss": "warp",
+  "log_numeric_columns": [
+    "scrap_count",
+    "view_count"
+  ],
+  "matrix": {
+    "num_users": 821,
+    "num_items": 563,
+    "nnz": 990,
+    "train_nnz": 792,
+    "test_nnz": 198,
+    "item_feature_nnz": 12176,
+    "unique_features": 1870
+  },
+  "metrics": {
+    "precision@5": 0.012359551154077053,
+    "precision@10": 0.009550562128424644,
+    "recall@5": 0.05898876404494382,
+    "recall@10": 0.08398876404494382
+  },
+  "decision": {
+    "go": false,
+    "criterion": "precision@5 >= 0.05"
+  }
+}
+```
