@@ -876,6 +876,7 @@
 .guide-tip-copy-stack {
   display: grid;
   flex: 1;
+  min-height: 0;
 }
 
 .guide-tip-copy {
@@ -1053,13 +1054,15 @@
 
 .guide-suggestion__source-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 10px;
 }
 
 .guide-suggestion__actions {
   display: flex;
   justify-content: flex-end;
+  align-items: end;
   gap: 8px;
 }
 
