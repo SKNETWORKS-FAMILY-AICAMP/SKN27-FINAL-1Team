@@ -293,6 +293,11 @@ def _has_schedule(payload: dict[str, Any]) -> bool:
 
 
 def _time_clarification(intent: str, payload: dict[str, Any]) -> dict[str, Any]:
+    options = (
+        ("오늘", {"date_text": "오늘"}),
+        ("내일", {"date_text": "내일"}),
+        ("30분 뒤", {"date_text": "30분 뒤", "delay_minutes": 30}),
+    )
     return build_response(
         ok=True,
         action="clarify_time",
@@ -300,6 +305,20 @@ def _time_clarification(intent: str, payload: dict[str, Any]) -> dict[str, Any]:
         message=MSG_TIME_CLARIFY,
         data={"payload": deepcopy(payload)},
         requires_confirmation=True,
+        ui={
+            "actions": [
+                {
+                    "type": "select",
+                    "label": label,
+                    "value": {
+                        "intent": intent,
+                        "action": "create_event",
+                        "payload": _pack_legacy_choice({**payload, **extra}),
+                    },
+                }
+                for label, extra in options
+            ]
+        },
         meta={
             "human_in_the_loop": True,
             "stage": "clarification",

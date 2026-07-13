@@ -1,4 +1,4 @@
-ingredient_id,guide_id,relationship
+﻿ingredient_id,guide_id,relationship
 ingredient_0025,guide_0001,HAS_GUIDE
 ingredient_0025,guide_0002,HAS_GUIDE
 ingredient_0025,guide_0003,HAS_GUIDE
@@ -1191,3 +1191,6 @@ ingredient_0737,guide_1195,HAS_GUIDE
 ingredient_0381,guide_1196,HAS_GUIDE
 ingredient_0381,guide_1197,HAS_GUIDE
 ingredient_0381,guide_1198,HAS_GUIDE
+ingredient_0137,guide_1199,HAS_GUIDE
+ingredient_0137,guide_1200,HAS_GUIDE
+ingredient_0137,guide_1201,HAS_GUIDE

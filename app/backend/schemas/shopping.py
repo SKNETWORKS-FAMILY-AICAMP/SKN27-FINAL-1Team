@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Literal
 
 from pydantic import BaseModel, Field
@@ -63,12 +63,25 @@ class ShoppingProductItem(BaseModel):
         from_attributes = True
 
 
+class ShoppingOwnedIngredientItem(BaseModel):
+    """현재 냉장고 기준으로 레시피에 보유 중인 재료입니다."""
+
+    name: str
+    amount: str | None = None
+    ingredient_id: int | None = None
+    fridge_ingredient_name: str | None = None
+    expiry_date: date | None = None
+    status: str | None = None
+    is_expired: bool = False
+
+
 class ShoppingListResponse(BaseModel):
     """장보기 목록 상세 응답입니다."""
 
     id: int
     user_id: int
     recipe_id: int | None = None
+    recipe_title: str | None = None
     source: ShoppingSource
     status: ShoppingStatus
     total_price: int = 0
@@ -76,6 +89,7 @@ class ShoppingListResponse(BaseModel):
     purchased_count: int = 0
     created_at: datetime | None = None
     items: List[ShoppingProductItem] = Field(default_factory=list)
+    owned_ingredients: List[ShoppingOwnedIngredientItem] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -85,6 +99,12 @@ class ShoppingCurrentResponse(BaseModel):
     """사용자의 최근 활성 장보기 목록 응답입니다."""
 
     shopping_list: ShoppingListResponse | None = None
+
+
+class ShoppingHistoryResponse(BaseModel):
+    """사용자의 장보기 목록 내역 응답입니다."""
+
+    shopping_lists: List[ShoppingListResponse] = Field(default_factory=list)
 
 
 class ShoppingPurchaseResponse(BaseModel):

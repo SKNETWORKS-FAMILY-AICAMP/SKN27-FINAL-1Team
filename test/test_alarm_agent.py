@@ -325,6 +325,53 @@ def test_alarm_agent_calendar_create_requires_schedule_before_confirmation():
     assert result["requires_confirmation"] is True
     assert result["message"] == "언제 등록할까요? 오늘 오후 7시, 내일, 30분 뒤처럼 알려주세요."
     assert result["data"]["payload"] == {"title": "\ub450\ubd80", "reminder_type": "consume_reminder"}
+    assert [action["label"] for action in result["ui"]["actions"]] == ["오늘", "내일", "30분 뒤"]
+
+
+def test_alarm_agent_time_clarification_buttons_preserve_payload_for_legacy_supervisor():
+    clarify = run("\ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+    tomorrow = clarify["ui"]["actions"][1]["value"]["payload"]
+    calls = []
+
+    def create_tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"event_id": "google-event"}}
+
+    result = run(
+        f"\ud655\uc778:add_calendar_event:{tomorrow['title']}:{tomorrow['date_text']}",
+        payload={"title": tomorrow["title"], "date_text": tomorrow["date_text"]},
+        intent="calendar.create",
+        action="create_event",
+        confirmed=True,
+        tools={"create_event": create_tool},
+        context={"db": MagicMock(), "user_id": 7},
+    )
+
+    assert result["ok"] is True
+    assert calls == [{"title": "\ub450\ubd80", "date_text": "\ub0b4\uc77c", "reminder_type": "consume_reminder"}]
+
+
+def test_alarm_agent_time_clarification_delay_button_survives_legacy_supervisor():
+    clarify = run("\ud68c\uc758 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+    delay = clarify["ui"]["actions"][2]["value"]["payload"]
+    calls = []
+
+    def create_tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"event_id": "google-event"}}
+
+    result = run(
+        f"\ud655\uc778:add_calendar_event:{delay['title']}:{delay['date_text']}",
+        payload={"title": delay["title"], "date_text": delay["date_text"]},
+        intent="calendar.create",
+        action="create_event",
+        confirmed=True,
+        tools={"create_event": create_tool},
+        context={"db": MagicMock(), "user_id": 7},
+    )
+
+    assert result["ok"] is True
+    assert calls == [{"title": "\ud68c\uc758", "date_text": "30\ubd84 \ub4a4", "delay_minutes": 30, "reminder_type": "calendar_event"}]
 
 
 def test_alarm_agent_calendar_create_without_schedule_does_not_execute_tool():

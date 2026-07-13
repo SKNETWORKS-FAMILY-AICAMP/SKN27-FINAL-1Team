@@ -67,7 +67,7 @@ class RecipeDetailService:
         if user_id <= 0:
             return classify_fridge_match(ingredients, [])
 
-        fridge_items = fetch_fridge_snapshots(db, user_id)
+        fridge_items = fetch_fridge_snapshots(db, user_id, statuses=("normal", "expiring", "expired"))
         return classify_fridge_match(ingredients, fridge_items)
 
     def _format_amount(self, quantity: Decimal | float | int | None, unit: str | None) -> str | None:

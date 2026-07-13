@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import Cropper from 'react-easy-crop'
 import { useNavigate } from 'react-router-dom'
 import './ReceiptOcr.css'
 
@@ -27,6 +28,15 @@ const quantityUnitOptions = ['kg', '개']
 const storageOptions = ['냉동', '냉장', '실온']
 const maxUploadSizeMb = 10
 const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
+// Main stepper indices (must match the order of receiptSteps).
+const STEP = { UPLOAD: 0, CROP: 1, ANALYZE: 2, CONFIRM: 3, STOCK: 4 }
+
+const defaultCropBox = { w: 0.78, h: 0.86 }
+const minCropBoxScale = 0.32
+const maxCropBoxScale = 1
+const defaultCropZoom = 1
+const minCropZoom = 1
+const maxCropZoom = 3
 const aiAnalysisSteps = [
   '이미지 업로드 중',
   '영수증 내용 분석 중',
@@ -102,6 +112,65 @@ async function readReceiptUploadStream(response, onEvent) {
       onEvent(event)
     }
   }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('이미지를 불러오지 못했어요.'))
+    image.src = src
+  })
+}
+
+function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.92) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+        return
+      }
+      reject(new Error('크롭 이미지를 만들지 못했어요.'))
+    }, type, quality)
+  })
+}
+
+async function createCroppedReceiptFile(imageSrc, cropPixels, originalFileName) {
+  const image = await loadImage(imageSrc)
+  const crop = cropPixels || {
+    x: 0,
+    y: 0,
+    width: image.naturalWidth || image.width,
+    height: image.naturalHeight || image.height,
+  }
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    throw new Error('브라우저에서 이미지 크롭을 처리하지 못했어요.')
+  }
+
+  canvas.width = Math.max(1, Math.round(crop.width))
+  canvas.height = Math.max(1, Math.round(crop.height))
+
+  context.drawImage(
+    image,
+    Math.max(0, Math.round(crop.x)),
+    Math.max(0, Math.round(crop.y)),
+    Math.max(1, Math.round(crop.width)),
+    Math.max(1, Math.round(crop.height)),
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  )
+
+  const blob = await canvasToBlob(canvas)
+  const baseName = String(originalFileName || 'receipt')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\w.-]+/g, '_')
+    .slice(0, 80)
+  return new File([blob], `${baseName || 'receipt'}_cropped.jpg`, { type: 'image/jpeg' })
 }
 
 function getItemDisplayName(item) {
@@ -605,16 +674,25 @@ function ReceiptOcr() {
   const flowTimersRef = useRef([])
   const uploadRunIdRef = useRef(0)
   const previewImageUrlRef = useRef(null)
+  const cropImageUrlRef = useRef(null)
   const retakeInputRef = useRef(null)
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
   const [hasUploaded, setHasUploaded] = useState(false)
-  const [activeStep, setActiveStep] = useState(0)
+  const [activeStep, setActiveStep] = useState(STEP.UPLOAD)
   const [detectedRows, setDetectedRows] = useState(createInitialReceiptRows)
   const [editingRows, setEditingRows] = useState(() => getInitialEditingRows(createInitialReceiptRows()))
   const [receiptMeta, setReceiptMeta] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [analysisStep, setAnalysisStep] = useState(0)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
+  const [cropFile, setCropFile] = useState(null)
+  const [cropImageUrl, setCropImageUrl] = useState(null)
+  const [cropSource, setCropSource] = useState('')
+  const [crop, setCrop] = useState({ x: 0, y: 0 })
+  const [cropBox, setCropBox] = useState(defaultCropBox)
+  const [cropZoom, setCropZoom] = useState(defaultCropZoom)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
+  const [isCreatingCrop, setIsCreatingCrop] = useState(false)
   const [isAddRowOpen, setIsAddRowOpen] = useState(false)
   const [rowSelectionMode, setRowSelectionMode] = useState(false)
   const [selectedRowIds, setSelectedRowIds] = useState([])
@@ -631,11 +709,14 @@ function ReceiptOcr() {
   const isReadyToStock = hasUploaded && activeStep >= steps.length - 1
   const isAllConfirmed = detectedRows.length > 0 && reviewCount === 0
   const isStockDisabled = reviewCount > 0 || detectedRows.length === 0 || isStocking
-  const isShowingAnalysisProgress = isProcessing && activeStep === 1
+  const isShowingAnalysisProgress = isProcessing && activeStep === STEP.ANALYZE
   const analysisProgressPercent = Math.round(((analysisStep + 1) / aiAnalysisSteps.length) * 100)
+  const isCropPending = Boolean(cropFile && cropImageUrl)
 
+  // Indices align with STEP (UPLOAD, CROP, ANALYZE, CONFIRM, STOCK).
   const progressDescriptions = [
     '영수증을 올리거나 촬영하면 분석을 시작해요.',
+    '영수증 영역을 맞춘 뒤 분석을 시작하세요.',
     isProcessing
       ? '영수증 이미지를 분석하고 있어요.'
       : '영수증 이미지 분석을 완료했어요.',
@@ -660,6 +741,49 @@ function ReceiptOcr() {
     const url = file ? URL.createObjectURL(file) : null
     previewImageUrlRef.current = url
     setPreviewImageUrl(url)
+  }
+
+  const setCropPreview = (file) => {
+    if (cropImageUrlRef.current) {
+      URL.revokeObjectURL(cropImageUrlRef.current)
+    }
+
+    const url = file ? URL.createObjectURL(file) : null
+    cropImageUrlRef.current = url
+    setCropImageUrl(url)
+  }
+
+  const clearCropSelection = () => {
+    setCropPreview(null)
+    setCropFile(null)
+    setCropSource('')
+    setCrop({ x: 0, y: 0 })
+    setCropBox(defaultCropBox)
+    setCropZoom(defaultCropZoom)
+    setCroppedAreaPixels(null)
+    setIsCreatingCrop(false)
+  }
+
+  const validateReceiptImageFile = async (file) => {
+    if (!file) {
+      return false
+    }
+
+    if (!acceptedImageTypes.includes(file.type)) {
+      await showAlert('JPG, PNG, WEBP 형식의 영수증 이미지만 업로드할 수 있어요.', {
+        title: '지원하지 않는 파일이에요',
+      })
+      return false
+    }
+
+    if (file.size > maxUploadSizeMb * 1024 * 1024) {
+      await showAlert(`영수증 이미지는 ${maxUploadSizeMb}MB 이하만 업로드할 수 있어요.`, {
+        title: '파일이 너무 커요',
+      })
+      return false
+    }
+
+    return true
   }
 
   const moveToStep = (nextStep) => {
@@ -697,21 +821,7 @@ function ReceiptOcr() {
       return
     }
 
-    if (!file) {
-      return
-    }
-
-    if (!acceptedImageTypes.includes(file.type)) {
-      await showAlert('JPG, PNG, WEBP 형식의 영수증 이미지만 업로드할 수 있어요.', {
-        title: '지원하지 않는 파일이에요',
-      })
-      return
-    }
-
-    if (file.size > maxUploadSizeMb * 1024 * 1024) {
-      await showAlert(`영수증 이미지는 ${maxUploadSizeMb}MB 이하만 업로드할 수 있어요.`, {
-        title: '파일이 너무 커요',
-      })
+    if (!(await validateReceiptImageFile(file))) {
       return
     }
 
@@ -719,6 +829,43 @@ function ReceiptOcr() {
     uploadRunIdRef.current = uploadRunId
 
     clearFlowTimers()
+    setUploadedPreview(null)
+    setCropPreview(file)
+    setCropFile(file)
+    setCropSource(source || 'receipt image')
+    setReceiptMeta(null)
+    setDetectedRows([])
+    setEditingRows({})
+    setHasUploaded(false)
+    setIsProcessing(false)
+    setAnalysisStep(0)
+    setActiveStep(STEP.CROP)
+    setIsAddRowOpen(false)
+    setRowSelectionMode(false)
+    setSelectedRowIds([])
+  }
+
+  const uploadReceiptImage = async (file, source) => {
+    if (!isLoggedIn) {
+      requestLogin()
+      return
+    }
+
+    const token = window.localStorage.getItem('bobbeori-token')
+    if (!token) {
+      requestLogin()
+      return
+    }
+
+    if (!(await validateReceiptImageFile(file))) {
+      return
+    }
+
+    const uploadRunId = uploadRunIdRef.current + 1
+    uploadRunIdRef.current = uploadRunId
+
+    clearFlowTimers()
+    clearCropSelection()
     setUploadedPreview(file)
     setReceiptMeta(null)
     setDetectedRows([])
@@ -726,7 +873,7 @@ function ReceiptOcr() {
     setHasUploaded(true)
     setIsProcessing(true)
     setAnalysisStep(0)
-    setActiveStep(1)
+    setActiveStep(STEP.ANALYZE)
 
     const formData = new FormData()
     formData.append('file', file)
@@ -747,7 +894,7 @@ function ReceiptOcr() {
         window.localStorage.removeItem('bobbeori-token')
         window.dispatchEvent(new Event('bobbeori-auth-change'))
         setHasUploaded(false)
-        setActiveStep(0)
+        setActiveStep(STEP.UPLOAD)
         clearFlowTimers()
         setIsProcessing(false)
         requestLogin()
@@ -790,7 +937,7 @@ function ReceiptOcr() {
 
       if (data.needs_reupload) {
         setHasUploaded(false)
-        setActiveStep(0)
+        setActiveStep(STEP.UPLOAD)
         setDetectedRows([])
         setEditingRows({})
         setReceiptMeta(null)
@@ -818,7 +965,7 @@ function ReceiptOcr() {
         confidenceNote: data.confidence_note,
       })
       setAnalysisStep(aiAnalysisSteps.length - 1)
-      setActiveStep(2)
+      setActiveStep(STEP.CONFIRM)
     } catch (error) {
       if (uploadRunIdRef.current !== uploadRunId) {
         return
@@ -826,7 +973,7 @@ function ReceiptOcr() {
 
       console.error(error)
       setHasUploaded(false)
-      setActiveStep(0)
+      setActiveStep(STEP.UPLOAD)
       await showAlert(error.message || '영수증 분석 중 문제가 발생했어요.', {
         title: '분석에 실패했어요',
       })
@@ -836,6 +983,31 @@ function ReceiptOcr() {
         setIsProcessing(false)
       }
     }
+  }
+
+  const applyCropAndUpload = async () => {
+    if (!cropFile || !cropImageUrl || isCreatingCrop || isProcessing) {
+      return
+    }
+
+    setIsCreatingCrop(true)
+
+    try {
+      const croppedFile = await createCroppedReceiptFile(cropImageUrl, croppedAreaPixels, cropFile.name)
+      await uploadReceiptImage(croppedFile, cropSource || 'cropped receipt image')
+    } catch (error) {
+      console.error(error)
+      setIsCreatingCrop(false)
+      await showAlert(error.message || '영수증 크롭 이미지를 만드는 중 문제가 발생했어요.', {
+        title: '크롭에 실패했어요',
+      })
+    }
+  }
+
+  const cancelCropSelection = () => {
+    uploadRunIdRef.current += 1
+    clearCropSelection()
+    setActiveStep(STEP.UPLOAD)
   }
 
   const proceedNextStep = async () => {
@@ -855,7 +1027,7 @@ function ReceiptOcr() {
       return
     }
 
-    if (activeStep === 2 && reviewCount > 0) {
+    if (activeStep === STEP.CONFIRM && reviewCount > 0) {
       await showAlert('아직 확정되지 않은 항목이 있어요. 수량과 금액을 확인한 뒤 확정 체크를 눌러주세요.', {
         title: '확인이 필요해요',
       })
@@ -895,7 +1067,7 @@ function ReceiptOcr() {
     ])
     setEditingRows((prev) => ({ ...prev, [newRowId]: true }))
     setHasUploaded(true)
-    setActiveStep(2)
+    setActiveStep(STEP.CONFIRM)
     setIsAddRowOpen(false)
   }
 
@@ -978,7 +1150,7 @@ function ReceiptOcr() {
       ),
     )
     setEditingRows((prev) => ({ ...prev, [rowId]: true }))
-    setActiveStep(2)
+    setActiveStep(STEP.CONFIRM)
   }
 
   const stepQuantityAmount = (rowId, direction) => {
@@ -1007,7 +1179,7 @@ function ReceiptOcr() {
       ),
     )
     setEditingRows((prev) => ({ ...prev, [rowId]: true }))
-    setActiveStep(2)
+    setActiveStep(STEP.CONFIRM)
   }
 
   const updateRowField = (rowId, field, value) => {
@@ -1017,7 +1189,7 @@ function ReceiptOcr() {
       ),
     )
     setEditingRows((prev) => ({ ...prev, [rowId]: true }))
-    setActiveStep(2)
+    setActiveStep(STEP.CONFIRM)
   }
 
   const updateReceiptMetaField = (field, value) => {
@@ -1038,7 +1210,7 @@ function ReceiptOcr() {
 
     if (isEditing) {
       setDetectedRows((prev) => prev.map((row) => (row.id === rowId ? { ...row, review: true } : row)))
-      setActiveStep(2)
+      setActiveStep(STEP.CONFIRM)
     } else {
       confirmRow(rowId)
     }
@@ -1047,7 +1219,7 @@ function ReceiptOcr() {
   const confirmRow = (rowId) => {
     setDetectedRows((prev) => prev.map((row) => (row.id === rowId ? { ...row, review: false } : row)))
     setEditingRows((prev) => ({ ...prev, [rowId]: false }))
-    setActiveStep(2)
+    setActiveStep(STEP.CONFIRM)
   }
 
   const toggleAllRowsConfirmation = () => {
@@ -1060,13 +1232,14 @@ function ReceiptOcr() {
         return nextEditingRows
       }, {}),
     )
-    setActiveStep(2)
+    setActiveStep(STEP.CONFIRM)
   }
 
   const resetAnalysis = () => {
     uploadRunIdRef.current += 1
     clearFlowTimers()
     setUploadedPreview(null)
+    clearCropSelection()
     const initialRows = createInitialReceiptRows()
     setDetectedRows(initialRows)
     setEditingRows(getInitialEditingRows(initialRows))
@@ -1075,7 +1248,7 @@ function ReceiptOcr() {
     setHasUploaded(false)
     setIsProcessing(false)
     setAnalysisStep(0)
-    setActiveStep(0)
+    setActiveStep(STEP.UPLOAD)
     setIsAddRowOpen(false)
     setRowSelectionMode(false)
     setSelectedRowIds([])
@@ -1204,6 +1377,9 @@ function ReceiptOcr() {
       if (previewImageUrlRef.current) {
         URL.revokeObjectURL(previewImageUrlRef.current)
       }
+      if (cropImageUrlRef.current) {
+        URL.revokeObjectURL(cropImageUrlRef.current)
+      }
       window.removeEventListener('bobbeori-auth-change', syncAuthState)
       window.removeEventListener('storage', syncAuthState)
     }
@@ -1229,7 +1405,7 @@ function ReceiptOcr() {
             <button
               className={[
                 index === activeStep ? 'is-active' : '',
-                hasUploaded && index < activeStep ? 'is-done' : '',
+                (hasUploaded || isCropPending) && index < activeStep ? 'is-done' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -1259,6 +1435,22 @@ function ReceiptOcr() {
             </button>
           </section>
           <PurchaseFlowChart isLoggedIn={false} />
+        </div>
+      ) : isCropPending ? (
+        <div className="receipt-branch receipt-crop-focus">
+          <ReceiptCropPanel
+            imageUrl={cropImageUrl}
+            crop={crop}
+            cropBox={cropBox}
+            zoom={cropZoom}
+            isSubmitting={isCreatingCrop || isProcessing}
+            onCropChange={setCrop}
+            onCropComplete={(_, nextCroppedAreaPixels) => setCroppedAreaPixels(nextCroppedAreaPixels)}
+            onCropBoxChange={setCropBox}
+            onZoomChange={setCropZoom}
+            onCancel={cancelCropSelection}
+            onApply={applyCropAndUpload}
+          />
         </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
@@ -1316,7 +1508,7 @@ function ReceiptOcr() {
           <div className="receipt-branch receipt-after-grid">
             <section className="receipt-panel receipt-preview-panel" aria-labelledby="preview-title">
               <div className="receipt-preview__title">
-                <h2 id="preview-title">영수증 미리보기</h2>
+                <h2 id="preview-title">업로드한 영수증</h2>
                 <button type="button" disabled={isProcessing} onClick={openRetakePicker}>
                   다시 촬영
                 </button>
@@ -1739,9 +1931,292 @@ function AddRowModal({ onClose, onSubmit }) {
   )
 }
 
+function ReceiptCropPanel({
+  imageUrl,
+  crop,
+  cropBox,
+  zoom,
+  isSubmitting,
+  onCropChange,
+  onCropComplete,
+  onCropBoxChange,
+  onZoomChange,
+  onCancel,
+  onApply,
+}) {
+  const cropperRef = useRef(null)
+  const [cropperSize, setCropperSize] = useState({ width: 0, height: 0 })
+  const [cropAreaRect, setCropAreaRect] = useState(null)
+  const [mediaAspect, setMediaAspect] = useState(null)
+
+  useEffect(() => {
+    setMediaAspect(null)
+  }, [imageUrl])
+
+  useEffect(() => {
+    const cropperElement = cropperRef.current
+
+    if (!cropperElement) {
+      return undefined
+    }
+
+    const updateCropperSize = () => {
+      const rect = cropperElement.getBoundingClientRect()
+      const nextSize = {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+
+      setCropperSize((currentSize) => {
+        if (currentSize.width === nextSize.width && currentSize.height === nextSize.height) {
+          return currentSize
+        }
+
+        return nextSize
+      })
+    }
+
+    updateCropperSize()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateCropperSize)
+      return () => window.removeEventListener('resize', updateCropperSize)
+    }
+
+    const resizeObserver = new ResizeObserver(updateCropperSize)
+    resizeObserver.observe(cropperElement)
+
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  // Size the crop stage to the uploaded image's aspect ratio so the receipt
+  // fills the area edge-to-edge instead of sitting inside gray letterbox bands.
+  const cropperMaxHeight = 620
+  const cropperMinHeight = 320
+  const cropperHeight = mediaAspect && cropperSize.width > 0
+    ? Math.round(Math.min(cropperMaxHeight, Math.max(cropperMinHeight, cropperSize.width / mediaAspect)))
+    : null
+
+  // The crop box can grow up to the full displayed image size on each axis,
+  // so users can select the entire receipt — not just an inset region.
+  // Derive the displayed (object-fit: contain) media size from the aspect
+  // ratio and the current container size so it stays correct after resizes.
+  const displayedMediaWidth = mediaAspect && cropperSize.width > 0 && cropperSize.height > 0
+    ? Math.min(cropperSize.width, cropperSize.height * mediaAspect)
+    : cropperSize.width
+  const displayedMediaHeight = mediaAspect && cropperSize.width > 0 && cropperSize.height > 0
+    ? displayedMediaWidth / mediaAspect
+    : cropperSize.height
+  const maxCropWidth = Math.max(120, Math.round(displayedMediaWidth))
+  const maxCropHeight = Math.max(160, Math.round(displayedMediaHeight))
+  const cropSize =
+    cropperSize.width > 0 && cropperSize.height > 0
+      ? {
+          width: Math.round(maxCropWidth * cropBox.w),
+          height: Math.round(maxCropHeight * cropBox.h),
+        }
+      : undefined
+  const clampCropBoxScale = (value) => Math.min(maxCropBoxScale, Math.max(minCropBoxScale, value))
+
+  // react-easy-crop clamps the crop area to the visible media (letterboxing),
+  // so read the actual rendered crop rectangle and sync the resize-handle overlay to it.
+  useEffect(() => {
+    const cropperElement = cropperRef.current
+    if (!cropperElement) {
+      return undefined
+    }
+
+    let frameId = null
+
+    const syncCropAreaRect = () => {
+      const cropAreaElement = cropperElement.querySelector('.reactEasyCrop_CropArea')
+      if (!cropAreaElement) {
+        return
+      }
+
+      const cropperRect = cropperElement.getBoundingClientRect()
+      const areaRect = cropAreaElement.getBoundingClientRect()
+      const nextRect = {
+        left: areaRect.left - cropperRect.left,
+        top: areaRect.top - cropperRect.top,
+        width: areaRect.width,
+        height: areaRect.height,
+      }
+
+      setCropAreaRect((current) => {
+        if (
+          current &&
+          Math.abs(current.left - nextRect.left) < 0.5 &&
+          Math.abs(current.top - nextRect.top) < 0.5 &&
+          Math.abs(current.width - nextRect.width) < 0.5 &&
+          Math.abs(current.height - nextRect.height) < 0.5
+        ) {
+          return current
+        }
+        return nextRect
+      })
+    }
+
+    // Read after react-easy-crop has laid out the crop area for the new size.
+    frameId = window.requestAnimationFrame(syncCropAreaRect)
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [cropSize?.width, cropSize?.height, cropperSize.width, cropperSize.height, imageUrl, zoom, crop])
+
+  const startCropBoxResize = (handle) => (event) => {
+    if (isSubmitting || !cropperRef.current || event.button > 0) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const cropperElement = cropperRef.current
+    const cropperRect = cropperElement.getBoundingClientRect()
+    const centerX = cropperRect.left + cropperRect.width / 2
+    const centerY = cropperRect.top + cropperRect.height / 2
+    // Corner handles resize both axes; edge handles resize a single axis.
+    const affectsWidth = handle.includes('e') || handle.includes('w')
+    const affectsHeight = handle.includes('n') || handle.includes('s')
+
+    const updateScaleFromPointer = (clientX, clientY) => {
+      onCropBoxChange((current) => ({
+        w: affectsWidth
+          ? clampCropBoxScale((Math.abs(clientX - centerX) * 2) / maxCropWidth)
+          : current.w,
+        h: affectsHeight
+          ? clampCropBoxScale((Math.abs(clientY - centerY) * 2) / maxCropHeight)
+          : current.h,
+      }))
+    }
+
+    updateScaleFromPointer(event.clientX, event.clientY)
+
+    const handlePointerMove = (moveEvent) => {
+      moveEvent.preventDefault()
+      updateScaleFromPointer(moveEvent.clientX, moveEvent.clientY)
+    }
+
+    const stopResize = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', stopResize)
+      window.removeEventListener('pointercancel', stopResize)
+      document.body.classList.remove('is-receipt-crop-resizing')
+    }
+
+    document.body.classList.add('is-receipt-crop-resizing')
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', stopResize)
+    window.addEventListener('pointercancel', stopResize)
+  }
+
+  return (
+    <section className="receipt-panel receipt-crop-panel" aria-labelledby="receipt-crop-title">
+      <div className="receipt-preview__title">
+        <div>
+          <h2 id="receipt-crop-title">영수증 영역 맞추기</h2>
+          <p>영수증 테두리가 잘리지 않도록 영역을 맞춘 뒤 분석을 시작하세요.</p>
+        </div>
+      </div>
+      <div
+        ref={cropperRef}
+        className="receipt-cropper"
+        aria-label="영수증 이미지 크롭"
+        style={cropperHeight ? { height: `${cropperHeight}px` } : undefined}
+      >
+        {imageUrl ? (
+          <Cropper
+            image={imageUrl}
+            crop={crop}
+            zoom={zoom}
+            minZoom={minCropZoom}
+            maxZoom={maxCropZoom}
+            cropSize={cropSize}
+            objectFit="contain"
+            showGrid={false}
+            zoomWithScroll
+            onCropChange={onCropChange}
+            onCropAreaChange={onCropComplete}
+            onCropComplete={onCropComplete}
+            onZoomChange={onZoomChange}
+            onMediaLoaded={(mediaSize) => {
+              if (mediaSize?.naturalWidth && mediaSize?.naturalHeight) {
+                setMediaAspect(mediaSize.naturalWidth / mediaSize.naturalHeight)
+              }
+            }}
+          />
+        ) : (
+          <div className="receipt-paper-image__empty">
+            <p>크롭할 영수증 이미지를 불러올 수 없어요.</p>
+          </div>
+        )}
+        {imageUrl ? (
+          <button
+            type="button"
+            className="receipt-crop-refresh"
+            disabled={isSubmitting}
+            onClick={onCancel}
+          >
+            <i className="receipt-crop-refresh__icon" aria-hidden="true" />
+            다시 선택
+          </button>
+        ) : null}
+        {cropSize && cropAreaRect ? (
+          <div
+            className="receipt-crop-resize-box"
+            aria-hidden="true"
+            style={{
+              left: `${cropAreaRect.left}px`,
+              top: `${cropAreaRect.top}px`,
+              width: `${cropAreaRect.width}px`,
+              height: `${cropAreaRect.height}px`,
+            }}
+          >
+            {['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map((handle) => (
+              <span
+                key={handle}
+                className={`receipt-crop-resize-box__handle is-${handle}`}
+                onPointerDown={startCropBoxResize(handle)}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="receipt-crop-controls">
+        <label className="receipt-crop-zoom">
+          <i className="receipt-crop-zoom__icon" aria-hidden="true" />
+          <span>확대</span>
+          <input
+            type="range"
+            min={minCropZoom}
+            max={maxCropZoom}
+            step="0.1"
+            value={zoom}
+            disabled={isSubmitting}
+            onChange={(event) => onZoomChange(Number(event.target.value))}
+          />
+          <strong>{Math.round(zoom * 100)}%</strong>
+        </label>
+        <button
+          className="receipt-primary-button receipt-crop-submit"
+          type="button"
+          disabled={!imageUrl || isSubmitting}
+          onClick={onApply}
+        >
+          {isSubmitting ? '분석 준비 중...' : '이 영역으로 분석'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function ReceiptImageViewer({ src, isScanning = false }) {
   const minZoom = 1
-  const maxZoom = 4
+  const maxZoom = 3
   const zoomStep = 0.4
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })

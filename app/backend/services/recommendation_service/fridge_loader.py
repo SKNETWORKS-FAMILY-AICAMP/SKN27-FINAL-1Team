@@ -17,15 +17,20 @@ class FridgeExpiryRow:
     fridge_name: str
     expiry_date: date | None
     purchased_date: date | None
+    status: str | None = None
 
 
-def _fetch_fridge_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
+def _fetch_fridge_rows(
+    db: Session,
+    user_id: int,
+    statuses: tuple[str, ...] = ("normal",),
+) -> list[FridgeExpiryRow]:
     rows = (
         db.query(FridgeItem, Ingredient)
         .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
         .filter(
             FridgeItem.user_id == user_id,
-            FridgeItem.status == "normal",
+            FridgeItem.status.in_(statuses),
         )
         .all()
     )
@@ -36,15 +41,25 @@ def _fetch_fridge_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
             fridge_name=fridge_item.display_name or ingredient.name,
             expiry_date=fridge_item.expiry_date,
             purchased_date=fridge_item.purchased_date,
+            status=fridge_item.status,
         )
         for fridge_item, ingredient in rows
     ]
 
 
-def fetch_fridge_snapshots(db: Session, user_id: int) -> list[FridgeItemSnapshot]:
+def fetch_fridge_snapshots(
+    db: Session,
+    user_id: int,
+    statuses: tuple[str, ...] = ("normal",),
+) -> list[FridgeItemSnapshot]:
     return [
-        FridgeItemSnapshot(ingredient_id=row.ingredient_id, fridge_name=row.fridge_name)
-        for row in _fetch_fridge_rows(db, user_id)
+        FridgeItemSnapshot(
+            ingredient_id=row.ingredient_id,
+            fridge_name=row.fridge_name,
+            expiry_date=row.expiry_date,
+            status=row.status,
+        )
+        for row in _fetch_fridge_rows(db, user_id, statuses=statuses)
     ]
 
 
