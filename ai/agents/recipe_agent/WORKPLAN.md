@@ -166,10 +166,10 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 ### P1 — 빈 에이전트 shell
 
-- [ ] **P1-1** `ai/agents/recipe_agent/` 디렉터리 및 `__init__.py` 생성 — `pending`
-- [ ] **P1-2** `run_recipe_agent(text, *, db, user_id, history, settings_obj, intent)` 시그니처 고정 (GraphState subset 인자명) — `pending`
-- [ ] **P1-3** placeholder `{response_text, actions, sources}` 반환 — `pending`
-- [ ] **P1-4** `python -m ai.agents.recipe_agent.recipe_agent` 실행 확인 — `pending`
+- [x] **P1-1** `ai/agents/recipe_agent/` 디렉터리 및 `__init__.py` 생성 — `done`
+- [x] **P1-2** `run_recipe_agent(text, *, db, user_id, history, settings_obj, intent)` 시그니처 고정 (GraphState subset 인자명) — `done`
+- [x] **P1-3** placeholder `{response_text, actions, sources}` 반환 — `done`
+- [x] **P1-4** `python -m ai.agents.recipe_agent.recipe_agent` 실행 확인 — `done`
 
 ### P2 — GraphState boundary + 응답 계약
 
@@ -256,9 +256,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 | 항목 | 값 |
 |------|-----|
-| **현재 Phase** | P0 (WORKPLAN 작성) |
-| **마지막 완료 Todo** | — |
-| **다음 Todo** | P1-1 |
+| **현재 Phase** | P2 |
+| **마지막 완료 Todo** | P1-4 |
+| **다음 Todo** | P2-1 |
 | **블로커** | 없음 |
 
 ### 변경 이력
@@ -266,6 +266,7 @@ def recipe_agent_node(state: GraphState) -> dict:
 | 날짜 | 내용 |
 |------|------|
 | 2026-07-13 | WORKPLAN.md 초안 작성 (GraphState boundary 호환, 5 Phase Todo) |
+| 2026-07-13 | P1 shell 완료 (`__init__.py`, `recipe_agent.py`, smoke test) |
 
 ---
 
