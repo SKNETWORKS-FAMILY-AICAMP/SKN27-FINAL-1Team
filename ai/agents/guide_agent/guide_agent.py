@@ -25,11 +25,14 @@ GUIDE_INTENT = "ingredient.guide"
 NUTRITION_WORDS = ("영양", "영양성분", "칼로리", "열량", "탄수화물", "단백질", "지방", "당류", "나트륨")
 GUIDE_STOPWORDS = (
     "영양성분", "영양", "칼로리", "열량", "탄수화물", "단백질", "지방", "당류", "나트륨",
+    "제철이야", "제철인가요", "제철인가", "맞나요", "맞아",
     "제철", "보관법", "보관", "손질법", "손질", "세척법", "세척", "신선도", "확인법",
-    "알려줘", "조회해줘", "조회", "식재료", "재료", "가이드", "언제야", "뭐야",
+    "설명해줘", "알려줘", "조회해줘", "조회", "식재료", "재료", "가이드", "언제야", "뭐야",
+    "에 대해", "대해", "정보",
 )
 RELATED_LIST_WORDS = (
-    "종류", "목록", "분류", "리스트", "어떤", "무슨", "뭐", "있어", "있나요", "있을까",
+    "종류", "목록", "분류", "리스트",
+    "어떤재료", "무슨재료", "어떤식재료", "무슨식재료",
 )
 TRUSTED_WEB_DOMAINS = (
     "foodsafetykorea.go.kr",
@@ -48,11 +51,15 @@ LOW_PRIORITY_BLOCKED_DOMAINS = (
     "instagram.com",
     "facebook.com",
 )
+SAFETY_SENSITIVE_GUIDE_TYPES = {
+    "freshness",
+}
 GUIDE_TYPE_LABELS = {
     "storage": "보관법",
     "prep": "손질법",
     "washing": "세척법",
     "freshness": "신선도 확인법",
+    "seasonality": "제철 정보",
 }
 
 
@@ -62,6 +69,7 @@ def build_guide_response(
     action: str = "lookup_ingredient",
     data: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
+    status: str = "success",
     requires_confirmation: bool = False,
     actions: list[dict[str, Any]] | None = None,
     cards: list[dict[str, Any]] | None = None,
@@ -69,8 +77,11 @@ def build_guide_response(
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Guide Agent의 기존 처리 결과를 공통 최종 응답으로 감쌉니다."""
+    if error is not None and status == "success":
+        status = "error"
     return {
         "ok": error is None,
+        "status": status,
         "agent": "guide",
         "action": action,
         "intent": GUIDE_INTENT,
@@ -85,6 +96,46 @@ def build_guide_response(
         },
         "meta": meta or {},
     }
+
+
+def _invalid_query_response(message: str, code: str) -> dict[str, Any]:
+    return build_guide_response(
+        action="request_ingredient",
+        message=message,
+        status="needs_input",
+        requires_confirmation=True,
+        actions=[
+            {
+                "type": "request_input",
+                "label": "식재료명 입력",
+                "value": None,
+            }
+        ],
+        meta={
+            "result_code": code,
+            "required_parameter": "ingredient",
+        },
+    )
+
+
+def _request_season_month_response() -> dict[str, Any]:
+    return build_guide_response(
+        action="request_season_month",
+        message="몇 월의 제철 식재료를 조회할까요? 1월부터 12월 사이로 입력해주세요.",
+        status="needs_input",
+        requires_confirmation=True,
+        actions=[
+            {
+                "type": "request_input",
+                "label": "제철 월 입력",
+                "value": None,
+            }
+        ],
+        meta={
+            "result_code": "SEASON_MONTH_REQUIRED",
+            "required_parameter": "month",
+        },
+    )
 
 
 def _source(name: str | None, url: str | None) -> dict[str, str | None] | None:
@@ -152,14 +203,29 @@ def _detail_data(detail: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str,
 
 def _clean_query_keyword(text_value: str) -> str:
     keyword = re.sub(r"\d{1,2}\s*월", " ", text_value)
+    keyword = re.sub(r"(에\s*대해|에\s*대한)", " ", keyword)
     for word in GUIDE_STOPWORDS:
         keyword = keyword.replace(word, " ")
-    return re.sub(r"\s+", " ", keyword).strip()
+    keyword = re.sub(r"[?!.,~]", " ", keyword)
+    keyword = re.sub(r"\b[은는이가을를에의]\b", " ", keyword)
+    keyword = re.sub(r"\s+", " ", keyword).strip()
+    return re.sub(r"[은는이가을를에의]$", "", keyword).strip()
 
 
 def _is_related_list_query(query: str) -> bool:
     normalized = query.replace(" ", "").lower()
-    return any(word in normalized for word in RELATED_LIST_WORDS)
+    explicit_words = ("종류", "목록", "리스트", "분류")
+    patterns = (
+        "어떤재료",
+        "무슨재료",
+        "어떤식재료",
+        "무슨식재료",
+        "뭐가있",
+    )
+    return (
+        any(word in normalized for word in explicit_words)
+        or any(pattern in normalized for pattern in patterns)
+    )
 
 
 def _clean_related_keyword(query: str) -> str:
@@ -176,6 +242,12 @@ def _normalize_match_text(value: str | None) -> str:
     return re.sub(r"[^0-9a-z가-힣]", "", value)
 
 
+def _host_matches_domain(host: str, domain: str) -> bool:
+    host = (host or "").split(":")[0].lower().strip(".")
+    domain = domain.lower().strip(".")
+    return host == domain or host.endswith(f".{domain}")
+
+
 def _match_score(query: str, candidate: str) -> float:
     query_norm = _normalize_match_text(query)
     candidate_norm = _normalize_match_text(candidate)
@@ -186,6 +258,54 @@ def _match_score(query: str, candidate: str) -> float:
     if query_norm in candidate_norm or candidate_norm in query_norm:
         return 0.94
     return difflib.SequenceMatcher(None, query_norm, candidate_norm).ratio()
+
+
+def _select_guide_item(
+    ingredient: str,
+    items: list[dict[str, Any]],
+    *,
+    minimum_score: float = 0.88,
+) -> dict[str, Any] | None:
+    if not items:
+        return None
+
+    query_norm = _normalize_match_text(ingredient)
+    for item in items:
+        names = [
+            item.get("name"),
+            item.get("representative_name"),
+            item.get("raw_name"),
+            *(item.get("aliases") or []),
+        ]
+        if any(_normalize_match_text(name) == query_norm for name in names if name):
+            return item
+
+    scored_items = []
+    for item in items:
+        names = [
+            item.get("name"),
+            item.get("representative_name"),
+            item.get("raw_name"),
+            *(item.get("aliases") or []),
+        ]
+        score = max(
+            (
+                _match_score(ingredient, name)
+                for name in names
+                if name
+            ),
+            default=0.0,
+        )
+        scored_items.append((score, item))
+
+    best_score, best_item = max(
+        scored_items,
+        key=lambda value: value[0],
+    )
+    if best_score < minimum_score:
+        return None
+
+    return best_item
 
 
 def _guide_fuzzy_candidates(ingredient: str, *, limit: int = 5) -> list[dict[str, Any]]:
@@ -236,9 +356,14 @@ def _needs_confirmation(candidates: list[dict[str, Any]]) -> bool:
 
 
 def _confirm_ingredient_response(ingredient: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    candidate_names = [candidate["name"] for candidate in candidates[:5]]
     return build_guide_response(
         action="confirm_ingredient",
-        message=f"'{ingredient}'와 비슷한 식재료를 찾았어요. 어떤 재료를 조회할까요?",
+        message=(
+            f"'{ingredient}'와 비슷한 식재료를 찾았어요. "
+            f"후보: {', '.join(candidate_names)}. 어떤 재료를 조회할까요?"
+        ),
+        status="needs_input",
         data={"input": ingredient, "candidates": candidates},
         requires_confirmation=True,
         actions=[
@@ -249,16 +374,45 @@ def _confirm_ingredient_response(ingredient: str, candidates: list[dict[str, Any
             }
             for candidate in candidates
         ],
-        meta={"match_type": "fuzzy", "candidate_count": len(candidates)},
+        cards=[
+            {
+                "title": candidate["name"],
+                "subtitle": f"유사도 {candidate.get('score', 0):.2f}",
+                "value": candidate["name"],
+            }
+            for candidate in candidates[:5]
+        ],
+        meta={
+            "result_code": "INGREDIENT_CONFIRMATION_REQUIRED",
+            "match_type": "fuzzy",
+            "candidate_count": len(candidates),
+        },
     )
 
 
 def _lookup_guide_detail(ingredient: str) -> tuple[dict[str, Any] | None, list[dict[str, str | None]]]:
-    search = guide_service.search_guides(keyword=ingredient, page=1, page_size=1)
-    if not search["items"]:
+    search = guide_service.search_guides(keyword=ingredient, page=1, page_size=10)
+    selected = _select_guide_item(ingredient, search.get("items") or [])
+    if not selected:
         return None, []
-    detail = guide_service.get_guide_detail(search["items"][0]["code"])
+    detail = guide_service.get_guide_detail(selected["code"])
     return _detail_data(detail) if detail else (None, [])
+
+
+def _normalize_nutrition_match_text(value: Any) -> str:
+    return re.sub(r"[^0-9a-zA-Z가-힣]+", "", str(value or "")).lower()
+
+
+def _is_safe_nutrition_partial_match(keyword: str, row: dict[str, Any]) -> bool:
+    normalized_keyword = _normalize_nutrition_match_text(keyword)
+    normalized_representative = _normalize_nutrition_match_text(row.get("representative_name"))
+    normalized_food_name = _normalize_nutrition_match_text(row.get("food_name"))
+    if len(normalized_keyword) < 2:
+        return False
+    return (
+        normalized_representative.startswith(normalized_keyword)
+        or normalized_food_name.startswith(normalized_keyword)
+    )
 
 
 def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
@@ -288,8 +442,9 @@ def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
             if row:
                 return dict(row)
 
-        like_name = f"%{candidates[0]}%"
-        row = db.execute(
+        keyword = candidates[0]
+        like_name = f"%{keyword}%"
+        rows = db.execute(
             text(
                 """
                 SELECT food_code, food_name, representative_name,
@@ -299,13 +454,33 @@ def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
                        source_name, source_ref, reference_year, source_priority
                 FROM food_nutrition_facts
                 WHERE food_name ILIKE :name OR representative_name ILIKE :name
-                ORDER BY source_priority, food_name
-                LIMIT 1
+                ORDER BY
+                    CASE
+                        WHEN representative_name = :exact_name THEN 0
+                        WHEN food_name = :exact_name THEN 1
+                        WHEN representative_name ILIKE :prefix_name THEN 2
+                        WHEN food_name ILIKE :prefix_name THEN 3
+                        ELSE 4
+                    END,
+                    source_priority,
+                    food_name
+                LIMIT 10
                 """
             ),
-            {"name": like_name},
-        ).mappings().first()
-        return dict(row) if row else None
+            {
+                "name": like_name,
+                "exact_name": keyword,
+                "prefix_name": f"{keyword}%",
+            },
+        ).mappings().all()
+        if not rows:
+            return None
+        safe_rows = [
+            dict(row)
+            for row in rows
+            if _is_safe_nutrition_partial_match(keyword, dict(row))
+        ]
+        return safe_rows[0] if len(safe_rows) == 1 else None
     finally:
         db.close()
 
@@ -329,23 +504,34 @@ def _ingredient_from_nutrition(nutrition: dict[str, Any] | None, fallback_name: 
 
 
 def _summarize_web_content(ingredient: str, guide_type: str, content: str) -> str:
+    fallback_content = content[:600]
     if OpenAI is None or not app_settings.OPENAI_API_KEY:
-        return content[:600]
+        return fallback_content
 
-    label = GUIDE_TYPE_LABELS.get(guide_type, "식재료 가이드")
-    client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
-    response = client_ai.chat.completions.create(
-        model=app_settings.OPENAI_MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": "검색 결과 안에서만 한국어로 3문장 이내 요약해. 추측하지 말고, 식품 안전상 단정이 어려우면 보수적으로 말해.",
-            },
-            {"role": "user", "content": f"식재료: {ingredient}\n요청: {label}\n검색 결과:\n{content}"},
-        ],
-        temperature=0.2,
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        label = GUIDE_TYPE_LABELS.get(guide_type, "식재료 가이드")
+        client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
+        response = client_ai.chat.completions.create(
+            model=app_settings.OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "검색 결과 안에서만 한국어로 3문장 이내 요약해. "
+                        "추측하지 말고, 식품 안전상 단정이 어려우면 보수적으로 말해."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"식재료: {ingredient}\n요청: {label}\n검색 결과:\n{content}",
+                },
+            ],
+            temperature=0.2,
+        )
+        summarized = response.choices[0].message.content
+        return summarized.strip() if summarized else fallback_content
+    except Exception:
+        return fallback_content
 
 
 def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tuple[str | None, list[dict[str, str]]]:
@@ -360,9 +546,9 @@ def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tup
     for item in result.get("results", []):
         url = item.get("url") or ""
         host = urlparse(url).netloc.lower()
-        if any(domain in host for domain in LOW_PRIORITY_BLOCKED_DOMAINS):
+        if any(_host_matches_domain(host, domain) for domain in LOW_PRIORITY_BLOCKED_DOMAINS):
             continue
-        is_trusted = any(domain in host for domain in TRUSTED_WEB_DOMAINS)
+        is_trusted = any(_host_matches_domain(host, domain) for domain in TRUSTED_WEB_DOMAINS)
         if trusted_only and not is_trusted:
             continue
         picked.append(item)
@@ -387,12 +573,13 @@ def _fallback_guide_response(
     nutrition: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     label = GUIDE_TYPE_LABELS.get(guide_type, "가이드")
+    label_josa = "가" if label.endswith("정보") else "이"
     try:
         content, sources = _web_results(ingredient, guide_type, trusted_only=True)
         data_source = "trusted_external"
         source_type = "trusted_external"
         source_label = "외부 공신력 자료"
-        if not content:
+        if not content and guide_type not in SAFETY_SENSITIVE_GUIDE_TYPES:
             content, sources = _web_results(ingredient, guide_type, trusted_only=False)
             data_source = "general_web"
             source_type = "general_web"
@@ -401,36 +588,56 @@ def _fallback_guide_response(
         content, sources = None, []
 
     if not content:
+        if guide_type in SAFETY_SENSITIVE_GUIDE_TYPES:
+            message = (
+                f"{ingredient} {label}{label_josa} 공식 자료에서 찾지 못했어요. "
+                "상했는지 판단하기 어렵거나 상태가 의심되면 섭취하지 않는 것이 안전해요."
+            )
+        else:
+            message = f"{ingredient} {label}{label_josa} 내부 공공데이터와 외부 자료에서 찾지 못했어요."
+
         return build_guide_response(
-            message=f"{ingredient} {label}은 내부 공공데이터와 외부 자료에서 찾지 못했어요.",
+            message=message,
+            status="not_found",
             data={
                 "ingredient": ingredient_info or _ingredient_from_nutrition(nutrition, ingredient),
                 "nutrition": nutrition,
                 "guide_type": guide_type,
             },
-            error={"code": "WEB_GUIDE_NOT_FOUND"},
             meta={
+                "result_code": "WEB_GUIDE_NOT_FOUND",
                 "data_source": "web",
                 "fallback_used": True,
                 "internal_data_available": False,
+                "general_web_allowed": guide_type not in SAFETY_SENSITIVE_GUIDE_TYPES,
             },
         )
 
     source = sources[0] if sources else None
+    fallback_data = {
+        "ingredient": ingredient_info or _ingredient_from_nutrition(nutrition, ingredient),
+        "nutrition": nutrition,
+    }
+    if guide_type == "seasonality":
+        fallback_data["seasonality"] = {
+            "status": "available",
+            "content": content,
+            "source": source,
+            "source_type": source_type,
+        }
+    else:
+        fallback_data["guides"] = {
+            guide_type: {
+                "status": "available",
+                "content": content,
+                "source": source,
+                "source_type": source_type,
+            }
+        }
+
     return build_guide_response(
-        message=f"내부 공공데이터에는 {ingredient} {label}이 없어, {source_label}를 기준으로 안내드릴게요.",
-        data={
-            "ingredient": ingredient_info or _ingredient_from_nutrition(nutrition, ingredient),
-            "nutrition": nutrition,
-            "guides": {
-                guide_type: {
-                    "status": "available",
-                    "content": content,
-                    "source": source,
-                    "source_type": source_type,
-                }
-            },
-        },
+        message=f"내부 공공데이터에는 {ingredient} {label}{label_josa} 없어, {source_label}를 기준으로 안내드릴게요.",
+        data=fallback_data,
         sources=sources,
         meta={
             "data_source": data_source,
@@ -442,13 +649,57 @@ def _fallback_guide_response(
 
 def _guide_type_from_query(query: str) -> str:
     normalized = query.replace(" ", "").lower()
+    if "제철" in normalized:
+        return "seasonality"
     if "손질" in normalized:
         return "prep"
     if "세척" in normalized or "씻" in normalized:
         return "washing"
-    if "신선" in normalized or "상한" in normalized:
+    if any(word in normalized for word in ("신선", "상한", "상했", "먹어도")):
         return "freshness"
-    return "storage"
+    if "보관" in normalized:
+        return "storage"
+    return "all"
+
+
+def _get_requested_guide(data: dict[str, Any], guide_type: str) -> dict[str, Any]:
+    if guide_type == "seasonality":
+        return data.get("seasonality") or {}
+    if guide_type == "all":
+        return {"status": "available"} if data else {}
+    return (data.get("guides") or {}).get(guide_type) or {}
+
+
+def _label_object_josa(label: str) -> str:
+    return "를" if label.endswith("정보") else "을"
+
+
+def _filter_guide_response(result: dict[str, Any], guide_type: str) -> dict[str, Any]:
+    if guide_type == "all":
+        return result
+
+    data = result.get("data") or {}
+    ingredient = data.get("ingredient") or {}
+    ingredient_name = ingredient.get("name") or "식재료"
+    label = GUIDE_TYPE_LABELS.get(guide_type, "가이드")
+
+    if guide_type == "seasonality":
+        result["action"] = "lookup_seasonality"
+        result["data"] = {
+            "ingredient": ingredient,
+            "seasonality": data.get("seasonality"),
+        }
+    else:
+        result["action"] = f"lookup_{guide_type}"
+        result["data"] = {
+            "ingredient": ingredient,
+            "guides": {
+                guide_type: (data.get("guides") or {}).get(guide_type),
+            },
+        }
+
+    result["message"] = f"{ingredient_name} {label}{_label_object_josa(label)} 조회했어요."
+    return result
 
 
 def list_guide_ingredients(
@@ -504,7 +755,19 @@ def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]
         return build_guide_response(
             action="list_related_ingredients",
             message="조회할 식재료명이나 분류명을 입력해주세요.",
-            error={"code": "INVALID_RELATED_KEYWORD"},
+            status="needs_input",
+            requires_confirmation=True,
+            actions=[
+                {
+                    "type": "request_input",
+                    "label": "식재료명 또는 분류명 입력",
+                    "value": None,
+                }
+            ],
+            meta={
+                "result_code": "INVALID_RELATED_KEYWORD",
+                "required_parameter": "keyword",
+            },
         )
 
     query = """
@@ -568,8 +831,12 @@ def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]
         return build_guide_response(
             action="list_related_ingredients",
             message=f"{keyword} 관련 식재료를 찾지 못했어요.",
+            status="not_found",
             data={"keyword": keyword, "items": [], "total": 0},
-            error={"code": "RELATED_INGREDIENT_NOT_FOUND"},
+            meta={
+                "result_code": "RELATED_INGREDIENT_NOT_FOUND",
+                "data_source": "neo4j",
+            },
         )
 
     names = [row["name"] for row in rows[:8]]
@@ -594,17 +861,22 @@ def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]
 def lookup_ingredient_guide(ingredient: str) -> dict[str, Any]:
     """기존 검색과 상세 조회를 이어 전체 식재료 가이드를 반환합니다."""
     try:
-        search = guide_service.search_guides(keyword=ingredient, page=1, page_size=1)
-        if not search["items"]:
+        search = guide_service.search_guides(keyword=ingredient, page=1, page_size=10)
+        selected = _select_guide_item(ingredient, search.get("items") or [])
+        if not selected:
             return build_guide_response(
                 message=f"{ingredient} 식재료 가이드를 찾지 못했어요.",
-                error={"code": "GUIDE_NOT_FOUND"},
+                status="not_found",
+                data={"ingredient": {"name": ingredient}},
+                meta={"result_code": "GUIDE_NOT_FOUND"},
             )
-        detail = guide_service.get_guide_detail(search["items"][0]["code"])
+        detail = guide_service.get_guide_detail(selected["code"])
         if not detail:
             return build_guide_response(
                 message=f"{ingredient} 식재료 가이드를 찾지 못했어요.",
-                error={"code": "GUIDE_NOT_FOUND"},
+                status="not_found",
+                data={"ingredient": {"name": ingredient}},
+                meta={"result_code": "GUIDE_NOT_FOUND"},
             )
         data, sources = _detail_data(detail)
         return build_guide_response(
@@ -664,9 +936,13 @@ def lookup_ingredient_nutrition(ingredient: str) -> dict[str, Any]:
             return build_guide_response(
                 action="lookup_nutrition",
                 message=f"{ingredient} 영양성분 정보를 찾지 못했어요.",
+                status="not_found",
                 data={"ingredient": ingredient_info or {"name": ingredient}},
-                error={"code": "NUTRITION_NOT_FOUND"},
-                meta={"data_source": "postgresql", "fallback_used": False},
+                meta={
+                    "result_code": "NUTRITION_NOT_FOUND",
+                    "data_source": "postgresql",
+                    "fallback_used": False,
+                },
             )
 
         source = _source(nutrition.get("source_name"), nutrition.get("source_ref"))
@@ -691,19 +967,42 @@ def lookup_ingredient_nutrition(ingredient: str) -> dict[str, Any]:
 
 def answer_guide_query(query: str) -> dict[str, Any]:
     """Guide Agent 내부용 최소 라우터: 월 제철/영양/일반 가이드."""
+    print("[Guide Agent 호출]", query)
+    query = unicodedata.normalize("NFKC", query or "").strip()
+    if not query:
+        return _invalid_query_response(
+            "조회할 식재료명을 입력해주세요.",
+            "EMPTY_GUIDE_QUERY",
+        )
+    if len(query) > 100:
+        return _invalid_query_response(
+            "질문이 너무 길어요. 식재료명과 궁금한 정보를 짧게 입력해주세요.",
+            "GUIDE_QUERY_TOO_LONG",
+        )
+
     month = re.search(r"(\d{1,2})\s*월", query)
-    if month and "제철" in query:
+    keyword = _clean_query_keyword(query)
+
+    if month and "제철" in query and not keyword:
         return list_seasonal_ingredients(int(month.group(1)))
 
-    keyword = _clean_query_keyword(query)
+    if "제철" in query and not month and not keyword:
+        return _request_season_month_response()
+
     if _is_related_list_query(query):
         related_keyword = _clean_related_keyword(query)
         if related_keyword:
             return list_related_ingredients(related_keyword)
 
+    if not keyword:
+        return _invalid_query_response(
+            "어떤 식재료를 조회할까요? 예: 감자 보관법, 딸기 제철",
+            "INGREDIENT_REQUIRED",
+        )
+
     if any(word in query for word in NUTRITION_WORDS):
         result = lookup_ingredient_nutrition(keyword)
-        if result.get("ok"):
+        if result.get("status") == "success":
             return result
 
         candidates = _guide_fuzzy_candidates(keyword)
@@ -728,11 +1027,14 @@ def answer_guide_query(query: str) -> dict[str, Any]:
     result = lookup_ingredient_guide(ingredient)
     guide_type = _guide_type_from_query(query)
     data = result.get("data", {})
-    guide = (data.get("guides") or {}).get(guide_type) or {}
-    if result.get("ok") and guide.get("status") != "missing":
-        return result
+    guide = _get_requested_guide(data, guide_type)
+    if result.get("status") == "success" and guide.get("status") != "missing":
+        return _filter_guide_response(result, guide_type)
 
-    if not result.get("ok") and (result.get("error") or {}).get("code") == "GUIDE_NOT_FOUND":
+    if (
+        result.get("status") == "not_found"
+        and (result.get("meta") or {}).get("result_code") == "GUIDE_NOT_FOUND"
+    ):
         candidates = _guide_fuzzy_candidates(ingredient)
         if candidates:
             if _needs_confirmation(candidates):
@@ -749,9 +1051,9 @@ def answer_guide_query(query: str) -> dict[str, Any]:
                 }
             )
             data = result.get("data", {})
-            guide = (data.get("guides") or {}).get(guide_type) or {}
-            if result.get("ok") and guide.get("status") != "missing":
-                return result
+            guide = _get_requested_guide(data, guide_type)
+            if result.get("status") == "success" and guide.get("status") != "missing":
+                return _filter_guide_response(result, guide_type)
 
     ingredient_info = data.get("ingredient")
     nutrition = None
@@ -788,6 +1090,7 @@ if __name__ == "__main__":
     )
     assert list(result) == [
         "ok",
+        "status",
         "agent",
         "action",
         "intent",
@@ -798,4 +1101,22 @@ if __name__ == "__main__":
         "ui",
         "meta",
     ]
+    assert result["ok"] is True
+    assert result["status"] == "success"
+    assert result["error"] is None
     assert result["ui"]["sources"][0]["title"] == "농촌진흥청"
+
+    not_found_result = build_guide_response(
+        message="감자 가이드를 찾지 못했어요.",
+        status="not_found",
+        meta={"result_code": "GUIDE_NOT_FOUND"},
+    )
+    assert not_found_result["ok"] is True
+    assert not_found_result["status"] == "not_found"
+    assert not_found_result["error"] is None
+    assert not_found_result["meta"]["result_code"] == "GUIDE_NOT_FOUND"
+
+    needs_input_result = _invalid_query_response("조회할 식재료명을 입력해주세요.", "EMPTY_GUIDE_QUERY")
+    assert needs_input_result["ok"] is True
+    assert needs_input_result["status"] == "needs_input"
+    assert needs_input_result["error"] is None

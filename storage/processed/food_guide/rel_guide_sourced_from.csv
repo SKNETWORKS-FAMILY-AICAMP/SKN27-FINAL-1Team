@@ -1,4 +1,4 @@
-guide_id,source_id,relationship
+﻿guide_id,source_id,relationship
 guide_0001,source_0007,SOURCED_FROM
 guide_0002,source_0007,SOURCED_FROM
 guide_0003,source_0007,SOURCED_FROM
@@ -1191,3 +1191,6 @@ guide_1195,source_0180,SOURCED_FROM
 guide_1196,source_0183,SOURCED_FROM
 guide_1197,source_0183,SOURCED_FROM
 guide_1198,source_0183,SOURCED_FROM
+guide_1199,source_0019,SOURCED_FROM
+guide_1200,source_0019,SOURCED_FROM
+guide_1201,source_0019,SOURCED_FROM
