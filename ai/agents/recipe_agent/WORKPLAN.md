@@ -192,10 +192,10 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 ### P5 — 라우터 연결 + 통합
 
-- [ ] **P5-1** `run_recipe_agent` dispatch (intent → handler) — `pending`
-- [ ] **P5-2** P3 stub 제거 — `pending`
-- [ ] **P5-3** end-to-end `__main__` — `pending`
-- [ ] **P5-4** Handoff parity: 기존 `_reply_recipe_*`와 동일 `{response_text, actions, sources}` — `pending`
+- [x] **P5-1** `run_recipe_agent` dispatch (intent → handler) — `done`
+- [x] **P5-2** P3 stub 제거 — `done`
+- [x] **P5-3** end-to-end `__main__` — `done`
+- [x] **P5-4** Handoff parity: 기존 `_reply_recipe_*`와 동일 `{response_text, actions, sources}` — `done`
 
 ---
 
@@ -256,9 +256,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 | 항목 | 값 |
 |------|-----|
-| **현재 Phase** | P5 |
-| **마지막 완료 Todo** | P4-c |
-| **다음 Todo** | P5-1 |
+| **현재 Phase** | 완료 (Handoff 대기) |
+| **마지막 완료 Todo** | P5-4 |
+| **다음 Todo** | Supervisor `recipe_agent_node` Handoff |
 | **블로커** | 없음 |
 
 ### 변경 이력
@@ -270,6 +270,7 @@ def recipe_agent_node(state: GraphState) -> dict:
 | 2026-07-13 | P2 boundary contract 완료 (`build_recipe_response`, `to_supervisor_state`) |
 | 2026-07-13 | P3 intent router 완료 (`recipe_intents.py`, golden cases) |
 | 2026-07-13 | P4 handlers 완료 (`recipe_utils.py`, `recipe_handlers.py`) |
+| 2026-07-13 | P5 통합 완료 (`run_recipe_agent` dispatch, login guard, e2e `__main__`) |
 
 ---
 
