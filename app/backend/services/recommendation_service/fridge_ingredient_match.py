@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Literal
 
 from app.backend.services.recommendation_service.recommend_config import (
@@ -19,6 +20,8 @@ MatchType = Literal["recipe_in_fridge", "fridge_in_recipe"]
 class FridgeItemSnapshot:
     ingredient_id: int | None
     fridge_name: str
+    expiry_date: date | None = None
+    status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,8 @@ class MaybeMatch:
     match_type: MatchType
     score: float
     overlap_length: int
+    expiry_date: date | None = None
+    status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,40 @@ class FridgeMatchResult:
 
 def _clamp_rate(value: float) -> int:
     return max(0, min(100, int(round(value))))
+
+
+def _is_expired_snapshot(item: FridgeItemSnapshot | MaybeMatch | None) -> bool:
+    if item is None:
+        return False
+    if item.status == "expired":
+        return True
+    return bool(item.expiry_date and item.expiry_date < date.today())
+
+
+def _fridge_status_payload(item: FridgeItemSnapshot | MaybeMatch | None) -> dict[str, Any]:
+    if item is None:
+        return {}
+
+    return {
+        "expiry_date": item.expiry_date,
+        "status": item.status,
+        "is_expired": _is_expired_snapshot(item),
+    }
+
+
+def _pick_fridge_item(candidates: list[FridgeItemSnapshot]) -> FridgeItemSnapshot | None:
+    if not candidates:
+        return None
+
+    expired = [item for item in candidates if _is_expired_snapshot(item)]
+    if expired:
+        return sorted(expired, key=lambda item: item.expiry_date or date.min)[0]
+
+    with_expiry = [item for item in candidates if item.expiry_date is not None]
+    if with_expiry:
+        return sorted(with_expiry, key=lambda item: item.expiry_date or date.max)[0]
+
+    return candidates[0]
 
 
 def compute_match_rates(
@@ -85,6 +124,8 @@ def find_maybe_match(
                 match_type="recipe_in_fridge",
                 score=MAYBE_MATCH_SCORE,
                 overlap_length=len(recipe),
+                expiry_date=item.expiry_date,
+                status=item.status,
             )
         elif fridge in recipe:
             candidate = MaybeMatch(
@@ -92,6 +133,8 @@ def find_maybe_match(
                 match_type="fridge_in_recipe",
                 score=MAYBE_MATCH_SCORE,
                 overlap_length=len(fridge),
+                expiry_date=item.expiry_date,
+                status=item.status,
             )
         else:
             continue
@@ -142,7 +185,8 @@ def classify_fridge_match(
     for ingredient in recipe_ingredients:
         ingredient_id = ingredient.get("ingredient_id")
         if ingredient_id and ingredient_id in owned_ids:
-            owned.append(ingredient)
+            matched = _pick_fridge_item([item for item in fridge_items if item.ingredient_id == ingredient_id])
+            owned.append({**ingredient, **_fridge_status_payload(matched)})
             continue
 
         recipe_name = ingredient.get("name") or ""
@@ -175,6 +219,7 @@ def classify_fridge_match(
                     "fridge_ingredient_name": maybe.fridge_ingredient_name,
                     "match_type": maybe.match_type,
                     "score": maybe.score,
+                    **_fridge_status_payload(maybe),
                 }
             )
         else:

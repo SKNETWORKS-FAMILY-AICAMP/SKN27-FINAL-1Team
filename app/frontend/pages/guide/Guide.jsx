@@ -60,6 +60,15 @@ const TIP_DEFINITIONS = [
   { title: '신선도 확인법', key: 'freshness_tips', guideType: 'freshness', sourceName: 'freshness_source_name', sourceUrl: 'freshness_source_url' },
 ]
 
+const SOURCE_URL_FALLBACKS = {
+  '해물류 기존 가이드 참고': 'https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7',
+  '건어물류 기존 가이드 참고': 'https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7',
+  '닭고기 분류 기존 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599',
+  '닭고기 분류 기준 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599',
+  '돼지고기 분류 기존 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599',
+  '소고기 분류 기존 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599',
+}
+
 function getAuthHeaders() {
   const token = window.localStorage.getItem('bobbeori-token')
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -99,7 +108,9 @@ function buildGuideTips(guide) {
     const guideText = guide?.[definition.key]
     const points = splitTipText(guideText)
     const source = definition.sourceName ? guide?.[definition.sourceName] : null
-    const sourceUrl = definition.sourceUrl ? normalizeSourceUrl(guide?.[definition.sourceUrl]) : null
+    const sourceUrl =
+      (definition.sourceUrl ? normalizeSourceUrl(guide?.[definition.sourceUrl]) : null) ||
+      normalizeSourceUrl(SOURCE_URL_FALLBACKS[source])
     return {
       ...definition,
       points,

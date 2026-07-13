@@ -16,6 +16,14 @@ KST = timezone(timedelta(hours=9))
 WEEKDAYS = {"월요일": 0, "화요일": 1, "수요일": 2, "목요일": 3, "금요일": 4, "토요일": 5, "일요일": 6}
 
 
+def _now() -> datetime:
+    return datetime.now(KST)
+
+
+def _today() -> date:
+    return _now().date()
+
+
 def _add_months(value: date, months: int) -> date:
     month_index = value.month - 1 + months
     year = value.year + month_index // 12
@@ -30,7 +38,7 @@ def _month_range(value: date) -> tuple[date, date]:
 
 
 def _target_date(value: str | None) -> date:
-    today = date.today()
+    today = _today()
     compact = re.sub(r"\s+", "", value or "")
     if compact == "어제":
         return today - timedelta(days=1)
@@ -68,7 +76,7 @@ def _target_date(value: str | None) -> date:
 
 
 def _target_range(value: str | None) -> tuple[date, date]:
-    today = date.today()
+    today = _today()
     compact = re.sub(r"\s+", "", value or "")
     if compact in ("지난주", "이번주", "다음주"):
         week_offset = {"지난주": -7, "이번주": 0, "다음주": 7}[compact]
@@ -87,6 +95,8 @@ def _start_at(payload: dict[str, Any]) -> datetime:
     if payload.get("start_at"):
         value = datetime.fromisoformat(str(payload["start_at"]))
         return value if value.tzinfo else value.replace(tzinfo=KST)
+    if payload.get("delay_minutes"):
+        return _now() + timedelta(minutes=int(payload["delay_minutes"]))
     target = _target_date(payload.get("date_text") or payload.get("date"))
     hour = int(payload.get("hour", 9))
     minute = int(payload.get("minute", 0))
