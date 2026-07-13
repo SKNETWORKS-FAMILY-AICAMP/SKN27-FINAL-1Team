@@ -1,16 +1,19 @@
-name: lightfm-experiments
+name: notebook-experiments
 
 services:
-  lightfm-jupyter:
+  jupyter:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: lightfm_experiments_jupyter
+    container_name: notebook_experiments_jupyter
     restart: unless-stopped
+    env_file: .env
     ports:
       - "8888:8888"
     volumes:
-      - .:/workspace
-    working_dir: /workspace
+      - ${MOUNT_PROJECT}:${CONTAINER_PROJECT}
+      - ${MOUNT_EXPERIMENTS}:${CONTAINER_EXPERIMENTS}
+    working_dir: ${CONTAINER_PROJECT}
     environment:
       LIGHTFM_RUNTIME: linux-docker
+      PROJECT_ROOT: ${CONTAINER_PROJECT}

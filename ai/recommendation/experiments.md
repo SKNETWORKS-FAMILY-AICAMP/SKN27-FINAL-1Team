@@ -1296,7 +1296,7 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 
 **관측 리뷰 컬럼 (`recipe_lightfm.csv`):** `review_by_llm` recipe_id별 집계 — `review_rank_score = star_norm_avg + sentiment_avg`. cold 2,608행은 관측 리뷰 **NaN**, `y_hat`·`y_hat_linear`만 유한.
 
-**산출물:** [`recipe_lightfm.csv`](recipe_lightfm.csv) — **3,171 rows**, 컬럼 9개:
+**산출물:** [`outputs/recipe_lightfm.csv`](outputs/recipe_lightfm.csv) — **3,171 rows**, 컬럼 9개:
 
 `recipe_id`, `recipe_name`, `positive_avg`, `negative_avg`, `star_count_avg`, `star_norm_avg`, `y_hat`, **`y_hat_linear`**, `review_rank_score`(맨 끝)
 
@@ -1549,7 +1549,7 @@ Simpson·혼합 구조를 **해결**하려는 쪽 (15+ 검토용, 미실행):
 **일자:** 2026-07-10  
 **유형:** **재학습 없음** — 고정 `ŷ`(실험 13) + 관측 bar만 4종 비교  
 **코드:** [`score_02.py`](score_02.py) (bar 정의; `bar_eval.py`는 실험 17 폐기)
-**입력:** [`recipe_lightfm.csv`](recipe_lightfm.csv) `y_hat`, [`review_by_llm.csv`](review_by_llm.csv) (행 단위 `B3_prod_row`)  
+**입력:** [`outputs/recipe_lightfm.csv`](outputs/recipe_lightfm.csv) `y_hat`, [`data/review_by_llm.csv`](data/review_by_llm.csv) (행 단위 `B3_prod_row`)  
 **목적:** 실험 14 후속 **1단계** — 천장 군 bar 분산·Spearman(ŷ, bar)이 합산 baseline 대비 개선되는지 (star_idf 제외)
 
 ### 0~2 스케일 (bar 전용, 학습·ETL 미변경)
@@ -2035,9 +2035,11 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 
 **삭제한 코드:** `baseline_eval.py`, `bar_eval.py`, `plot/`  
 **삭제한 산출물:** `figures/`, `samples/` (수치는 §13~16 표·본 문서에 유지)  
-**유지·갱신:** `catalog_eval.py`, `score_02.py`, `recipe_lightfm.csv` (본 run으로 재생성)
+**유지·갱신:** `catalog_eval.py`, `score_02.py`, `outputs/recipe_lightfm.csv` (본 run으로 재생성)
 
-**노트북 변경:** Unit 6/8/10(CF split·p@k·baseline) 제거, `EXP14`/`EXP16`/`BASELINE_ONLY` 분기 제거, `TARGET_MODE` default = `product_02_row`, export = `recipe_lightfm.csv` 고정.
+**폴더 분리 (실험 17 후속):** 코드·데이터·노트북·산출물 → `ai/recommendation/` (`data/`, `outputs/`). Docker 실행 환경 → `ai/experiments/`.
+
+**노트북 변경:** Unit 6/8/10 제거, `TARGET_MODE` default = `product_02_row`, export = `outputs/recipe_lightfm.csv`.
 
 **`catalog_eval.py`:** `b2_pass` = Spearman(ŷ, bar) ≥ 0.30 only (NDCG Go 제거), `decomposed_*` 제거.
 
@@ -2051,7 +2053,7 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 | loss / epochs | WARP 30 |
 | catalog user | `__catalog__` |
 | bar | `mean(star_02 × sentiment_02)` per recipe |
-| 실행 | `docker compose run --rm lightfm-jupyter jupyter nbconvert --execute LightFM_Model.ipynb` |
+| 실행 | `cd ai/experiments` → `docker compose run --rm jupyter jupyter nbconvert --execute /workspace/project/LightFM_Model.ipynb` |
 
 ### 실행 결과 — matrix
 
@@ -2116,4 +2118,4 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 
 ### JSON 스냅샷
 
-`runs/ablation_report.json` (`experiment: 17_track_b_coldstart`) — Docker run 산출.
+`outputs/ablation_report.json` (`experiment: 17_track_b_coldstart`) — Docker run 산출.
