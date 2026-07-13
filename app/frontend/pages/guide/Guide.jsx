@@ -60,6 +60,15 @@ const TIP_DEFINITIONS = [
   { title: '신선도 확인법', key: 'freshness_tips', guideType: 'freshness', sourceName: 'freshness_source_name', sourceUrl: 'freshness_source_url' },
 ]
 
+const SOURCE_URL_FALLBACKS = {
+  '해물류 기존 가이드 참고': 'https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7',
+  '건어물류 기존 가이드 참고': 'https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7',
+  '닭고기 분류 기존 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599',
+  '닭고기 분류 기준 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599',
+  '돼지고기 분류 기존 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599',
+  '소고기 분류 기존 가이드 참고': 'https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599',
+}
+
 function getAuthHeaders() {
   const token = window.localStorage.getItem('bobbeori-token')
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -99,7 +108,9 @@ function buildGuideTips(guide) {
     const guideText = guide?.[definition.key]
     const points = splitTipText(guideText)
     const source = definition.sourceName ? guide?.[definition.sourceName] : null
-    const sourceUrl = definition.sourceUrl ? normalizeSourceUrl(guide?.[definition.sourceUrl]) : null
+    const sourceUrl =
+      (definition.sourceUrl ? normalizeSourceUrl(guide?.[definition.sourceUrl]) : null) ||
+      normalizeSourceUrl(SOURCE_URL_FALLBACKS[source])
     return {
       ...definition,
       points,
@@ -815,7 +826,9 @@ function Guide() {
                       {guideTips.map((tip) => {
                         const isActive = selectedTip.title === tip.title
                         const suggestionTitleId = `guide-suggestion-title-${tip.guideType}`
-                        const shouldShowPoints = !(tip.isMissing && isActive && isSuggestionFormOpen)
+                        const isSuggestionAccepted =
+                          isActive && suggestionMessage === '제보가 접수되었습니다. 검토 후 가이드에 반영됩니다.'
+                        const shouldShowPoints = !(tip.isMissing && isActive)
 
                         return (
                           <div
@@ -842,64 +855,78 @@ function Guide() {
                                 )}
                               </div>
                             ) : (
-                              <section className="guide-suggestion" aria-labelledby={suggestionTitleId}>
-                                <div className="guide-suggestion__intro">
-                                  <h3 id={suggestionTitleId}>나만의 가이드 제보</h3>
-                                  <p>직접 알고 있는 방법이나 참고한 링크를 남겨주세요. 확인 후 서비스에 반영될 수 있어요.</p>
-                                </div>
-
-                                {isActive && isSuggestionFormOpen ? (
-                                  <form className="guide-suggestion__form" onSubmit={submitSuggestion}>
-                                    <label>
-                                      <span>가이드 내용</span>
-                                      <textarea
-                                        maxLength={2000}
-                                        minLength={10}
-                                        placeholder={`${selectedGuide.name} ${selectedTip.title}을 10자 이상 입력해주세요.`}
-                                        required
-                                        value={suggestionForm.content}
-                                        onChange={(event) =>
-                                          setSuggestionForm((current) => ({ ...current, content: event.target.value }))
-                                        }
-                                      />
-                                    </label>
-                                    <div className="guide-suggestion__source-fields">
-                                      <label>
-                                        <span>출처 URL (선택)</span>
-                                        <input
-                                          placeholder="https://example.com"
-                                          type="url"
-                                          value={suggestionForm.sourceUrl}
-                                          onChange={(event) =>
-                                            setSuggestionForm((current) => ({ ...current, sourceUrl: event.target.value }))
-                                          }
-                                        />
-                                      </label>
-                                      <div className="guide-suggestion__actions">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setIsSuggestionFormOpen(false)
-                                            setSuggestionMessage('')
-                                          }}
-                                        >
-                                          취소
-                                        </button>
-                                        <button disabled={isSuggestionSubmitting} type="submit">
-                                          {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </form>
+                              <section
+                                className={`guide-suggestion ${isSuggestionAccepted ? 'is-complete' : ''} ${
+                                  isActive && isSuggestionFormOpen ? 'is-form-open' : ''
+                                }`}
+                                aria-labelledby={suggestionTitleId}
+                              >
+                                {isSuggestionAccepted ? (
+                                  <div className="guide-suggestion__complete" role="status">
+                                    <strong>제보가 접수되었습니다.</strong>
+                                    <span>검토 후 가이드에 반영됩니다.</span>
+                                  </div>
                                 ) : (
-                                  <button className="guide-suggestion__open" type="button" onClick={openSuggestionForm}>
-                                    {isLoggedIn ? '가이드 제보하기' : '로그인 후 제보하기'}
-                                  </button>
-                                )}
+                                  <div className="guide-suggestion__panel">
+                                    <div className="guide-suggestion__intro">
+                                      <h3 id={suggestionTitleId}>나만의 가이드 제보</h3>
+                                      <p>직접 알고 있는 방법이나 참고한 링크를 남겨주세요. 확인 후 서비스에 반영될 수 있어요.</p>
+                                    </div>
 
-                                {isActive && suggestionMessage ? (
-                                  <p className="guide-suggestion__message" role="status">{suggestionMessage}</p>
-                                ) : null}
+                                    {isActive && isSuggestionFormOpen ? (
+                                      <form className="guide-suggestion__form" onSubmit={submitSuggestion}>
+                                        <label>
+                                          <span>가이드 내용</span>
+                                          <textarea
+                                            maxLength={2000}
+                                            minLength={10}
+                                            placeholder={`${selectedGuide.name} ${selectedTip.title}을 10자 이상 입력해주세요.`}
+                                            required
+                                            value={suggestionForm.content}
+                                            onChange={(event) =>
+                                              setSuggestionForm((current) => ({ ...current, content: event.target.value }))
+                                            }
+                                          />
+                                        </label>
+                                        <div className="guide-suggestion__source-fields">
+                                          <label>
+                                            <span>출처 URL (선택)</span>
+                                            <input
+                                              placeholder="https://example.com"
+                                              type="url"
+                                              value={suggestionForm.sourceUrl}
+                                              onChange={(event) =>
+                                                setSuggestionForm((current) => ({ ...current, sourceUrl: event.target.value }))
+                                              }
+                                            />
+                                          </label>
+                                          <div className="guide-suggestion__actions">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setIsSuggestionFormOpen(false)
+                                                setSuggestionMessage('')
+                                              }}
+                                            >
+                                              취소
+                                            </button>
+                                            <button disabled={isSuggestionSubmitting} type="submit">
+                                              {isSuggestionSubmitting ? '접수 중...' : '제보하기'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </form>
+                                    ) : (
+                                      <button className="guide-suggestion__open" type="button" onClick={openSuggestionForm}>
+                                        {isLoggedIn ? '가이드 제보하기' : '로그인 후 제보하기'}
+                                      </button>
+                                    )}
+
+                                    {isActive && suggestionMessage ? (
+                                      <p className="guide-suggestion__message" role="status">{suggestionMessage}</p>
+                                    ) : null}
+                                  </div>
+                                )}
                               </section>
                             )}
                           </div>

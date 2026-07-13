@@ -738,7 +738,7 @@
 
 .guide-tip-card {
   box-sizing: border-box;
-  min-height: 52px;
+  height: 52px;
   margin-bottom: 0;
   padding: 0 14px;
   display: flex;
@@ -846,7 +846,7 @@
 }
 
 .guide-tip-card.is-active h3 {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .guide-tip-detail {
@@ -863,7 +863,7 @@
 .guide-tip-body {
   box-sizing: border-box;
   margin: 0 -28px -28px;
-  padding: 32px 36px 18px;
+  padding: 20px 24px 16px;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -883,6 +883,7 @@
   grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   visibility: hidden;
 }
 
@@ -891,12 +892,13 @@
 }
 
 .guide-tip-copy .guide-suggestion {
-  margin: auto 0 18px;
+  margin: 0;
+  flex: 0 0 auto;
 }
 
 .guide-tip-detail ul {
-  margin: 18px 0 0;
-  padding: 0 0 18px;
+  margin: 12px 0 0;
+  padding: 0 0 12px;
   display: grid;
   gap: 12px;
   list-style: none;
@@ -924,7 +926,7 @@
 
 .guide-tip-source {
   margin: auto 0 0;
-  padding: 18px 0 0;
+  padding: 12px 0 0;
   display: flex;
   justify-content: flex-end;
   border-top: 1px solid #f1d9b3;
@@ -958,11 +960,33 @@
 }
 
 .guide-suggestion {
-  margin: 16px 0;
-  padding: 16px;
+  margin: 0;
+  padding: 12px;
   border: 1px solid #f0cfc3;
   border-radius: 14px;
   background: #fff8f5;
+}
+
+.guide-suggestion:not(.is-complete):not(.is-form-open) {
+  box-sizing: border-box;
+  display: grid;
+}
+
+.guide-suggestion.is-form-open {
+  box-sizing: border-box;
+  display: grid;
+}
+
+.guide-suggestion__panel {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  border: 1px solid #f0cfc3;
+  border-radius: 12px;
+  background: #fffdf8;
 }
 
 .guide-suggestion__intro h3 {
@@ -970,6 +994,10 @@
   color: var(--figma-text);
   font-size: 15px;
   font-weight: 900;
+}
+
+.guide-suggestion.is-form-open .guide-suggestion__intro {
+  display: none;
 }
 
 .guide-suggestion__intro p,
@@ -1013,9 +1041,8 @@
 }
 
 .guide-suggestion__form {
-  margin-top: 14px;
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .guide-suggestion__form label {
@@ -1041,8 +1068,9 @@
 }
 
 .guide-suggestion__form textarea {
-  min-height: 96px;
-  resize: vertical;
+  height: 74px;
+  min-height: 74px;
+  resize: none;
 }
 
 .guide-suggestion__form input:focus,
@@ -1079,6 +1107,56 @@
 
 .guide-suggestion__message {
   color: #a1473f;
+}
+
+.guide-suggestion.is-complete {
+  box-sizing: border-box;
+  padding: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.guide-suggestion__complete {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid #f0cfc3;
+  border-radius: 12px;
+  background: #fffdf8;
+  color: var(--figma-text);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.guide-suggestion__complete::before {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #f4d3c7;
+  border-radius: 12px;
+  background: #fff4ea;
+  color: var(--figma-coral);
+  font-size: 20px;
+  font-weight: 900;
+  content: "✓";
+}
+
+.guide-suggestion__complete strong {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.guide-suggestion__complete span {
+  color: #765746;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .guide-tip-nutrition {
