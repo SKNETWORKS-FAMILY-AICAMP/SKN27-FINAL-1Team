@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import date
 from typing import Any
@@ -21,6 +22,13 @@ try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
+
+try:
+    from langfuse import propagate_attributes
+    from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
+except ImportError:
+    propagate_attributes = None
+    LangfuseCallbackHandler = None
 
 from ai.agents.supervisor_agent.supervisor_utils import (
     _extract_keyword,
@@ -72,9 +80,29 @@ class ChatService:
             "sources": []
         }
         
-        # 그래프 실행
+        # LangFuse 그래프 실행
         try:
-            final_state = supervisor_agent.invoke(initial_state)
+            if (
+                propagate_attributes
+                and LangfuseCallbackHandler
+                and os.getenv("LANGFUSE_PUBLIC_KEY")
+                and os.getenv("LANGFUSE_SECRET_KEY")
+            ):
+                with propagate_attributes(
+                    trace_name="bobbeori-supervisor-chat",
+                    user_id=str(user_id or "guest"),
+                    session_id=str(user_id or "guest"),
+                    tags=["supervisor", "chatbot", "langgraph"],
+                ):
+                    final_state = supervisor_agent.invoke(
+                        initial_state,
+                        config={
+                            "callbacks": [LangfuseCallbackHandler()],
+                            "run_name": "supervisor-chat",
+                        },
+                    )
+            else:
+                final_state = supervisor_agent.invoke(initial_state)
             intent = final_state.get("intent", "general")
             reply = final_state.get("response_text", "")
             actions = final_state.get("actions") or []
