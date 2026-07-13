@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 
 def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = 50) -> float:
@@ -197,6 +198,91 @@ def evaluate_track_b(
     }
 
 
+def evaluate_export(
+    export_df: pd.DataFrame,
+    warm_item_ids: set[str],
+    train_matrix,
+    *,
+    target_mode: str,
+    catalog_user_id: str,
+) -> tuple[dict, pd.DataFrame]:
+    warm_mask = export_df["recipe_id"].isin(warm_item_ids).to_numpy()
+    score_review = export_df["review_rank_score"].to_numpy(dtype=float)
+    y_hat = export_df["y_hat"].to_numpy(dtype=float)
+
+    lin_slope, lin_intercept = fit_linear_calibration(y_hat, score_review, warm_mask)
+    export_df = export_df.copy()
+    export_df["y_hat_linear"] = apply_linear_calibration(y_hat, lin_slope, lin_intercept)
+
+    train_item_signal = np.asarray(train_matrix.sum(axis=0)).ravel().astype(float)
+    track_b_eval = evaluate_track_b(
+        y_hat,
+        score_review,
+        warm_mask,
+        train_item_signal=train_item_signal,
+    )
+    track_b_eval.update(warm_obs_pred_metrics(y_hat, score_review, warm_mask))
+    track_b_eval["target"] = "review_only"
+    track_b_eval["y_train"] = target_mode
+    track_b_eval["linear_formula"] = (
+        f"review_rank_score ~= {lin_slope:.6f} * y_hat + {lin_intercept:.6f} (warm fit)"
+    )
+    track_b_eval["catalog_user"] = catalog_user_id
+    track_b_eval["export_csv"] = "outputs/recipe_lightfm.csv"
+    return track_b_eval, export_df
+
+
+def build_experiment_report(
+    cfg,
+    track_b_eval: dict,
+    *,
+    interactions,
+    train,
+    item_features,
+    all_feature_names: set,
+    warm_item_ids: set,
+    cold_item_ids: list,
+    log_numeric_columns: list[str],
+) -> dict:
+    go_no_go = (
+        track_b_eval["b0_pass"]
+        and track_b_eval["b2_pass"]
+        and track_b_eval["b3_pass"]
+    )
+    return {
+        "experiment": "17_track_b_coldstart",
+        "data_files": {name: str(path) for name, path in cfg.data_files.items()},
+        "mode": cfg.model_mode,
+        "target_mode": cfg.target_mode,
+        "star_weight": cfg.star_weight,
+        "sentiment_weight": cfg.sentiment_weight,
+        "excluded_recipe_columns": cfg.excluded_recipe_columns,
+        "seed": cfg.seed,
+        "epochs": cfg.epochs,
+        "loss": "warp",
+        "train": "full_interactions",
+        "log_numeric_columns": log_numeric_columns,
+        "matrix": {
+            "num_users": int(interactions.shape[0]),
+            "num_items": int(interactions.shape[1]),
+            "nnz": int(interactions.nnz),
+            "train_nnz": int(train.nnz),
+            "item_feature_nnz": int(item_features.nnz),
+            "unique_features": len(all_feature_names),
+            "warm_items": len(warm_item_ids),
+            "cold_items": len(cold_item_ids),
+        },
+        "track_b_eval": track_b_eval,
+        "decision": {
+            "go": go_no_go,
+            "criterion": "b0_pass and b2_pass and b3_pass (Spearman bar/train >= 0.30)",
+            "b0_pass": track_b_eval["b0_pass"],
+            "b2_pass": track_b_eval["b2_pass"],
+            "b3_pass": track_b_eval["b3_pass"],
+        },
+    }
+
+
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 200
@@ -210,4 +296,4 @@ if __name__ == "__main__":
     assert m["b0_pass"]
     cmp_m = warm_obs_pred_metrics(scores, relevance, warm)
     assert cmp_m["warm_r2_linear"] >= 0.0
-    print("catalog_eval ok", m["b2_pass"], m["b3_pass"], cmp_m["warm_mae_linear"])
+    print("evaluation ok", m["b2_pass"], m["b3_pass"], cmp_m["warm_mae_linear"])

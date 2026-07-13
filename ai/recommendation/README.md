@@ -7,7 +7,8 @@
 | `data/` | 입력 CSV (`review_by_llm.csv`, `recipe_fix.csv`, …) |
 | `outputs/` | `recipe_lightfm.csv`, `ablation_report.json` |
 | `LightFM_Model.ipynb` | 실행 노트북 |
-| `catalog_eval.py`, `score_02.py` | 평가·스케일 유틸 |
+| `evaluation.py`, `scoring.py` | 평가·스코어 유틸 |
+| `config.py`, `data_io.py`, `preprocess.py` | 실행 설정·IO·전처리 |
 | `experiments.md` | 회차별 상세 로그 |
 
 **공식 실행 = Docker only** (`cd ai/experiments` → `docker compose up`). 마운트 경로는 `ai/experiments/.env.example` 참고.
@@ -212,7 +213,7 @@ docker compose run --rm jupyter jupyter nbconvert `
 | 5 / 5b | interaction · item features |
 | 6 | full train (`train = interactions`) |
 | 7 | LightFM 학습 |
-| 11 | catalog predict → `outputs/recipe_lightfm.csv` + `catalog_eval` |
+| 11 | catalog predict → `outputs/recipe_lightfm.csv` + `evaluation` |
 | 9 | 리포트 JSON (`track_b_eval`, B0~B3 decision) |
 
 ### 2.6 파일
@@ -223,8 +224,11 @@ docker compose run --rm jupyter jupyter nbconvert `
 | `experiments.md` | **실험 상세 로그** |
 | `README.md` | 본 문서 |
 | `data/*.csv` | 입력 데이터 |
-| `catalog_eval.py` | Track B B0~B3, MAE/RMSE |
-| `score_02.py` | 0~2 스케일 |
+| `evaluation.py` | Track B B0~B3, MAE/RMSE |
+| `scoring.py` | 0~2 스케일·interaction target |
+| `config.py` | env·시드·경로 |
+| `data_io.py` | CSV load/export·JSON 리포트 |
+| `preprocess.py` | 전처리·LightFM feature |
 | `outputs/recipe_lightfm.csv` | 전 카탈로그 Base Score export |
 | `outputs/ablation_report.json`, `outputs/exp*.json` | 임시 JSON (비커밋) |
 
@@ -293,6 +297,11 @@ print(r["track_b_eval"]["warm_spearman_review"], r["decision"])
 
 ## 5. 업데이트 및 수정 이력
 
+### 2026-07-13 (모듈 분리)
+
+- **모듈 5종:** `config.py`, `data_io.py`, `preprocess.py`, `scoring.py`, `evaluation.py` (`catalog_eval`·`score_02` 통합·rename)
+- **노트북:** 오케스트레이션만 유지 (fit/predict/export 호출)
+
 ### 2026-07-13
 
 - **폴더 분리:** 코드·데이터·노트북·산출물 → `ai/recommendation/` (`data/`, `outputs/`); Docker 실행 환경 → `ai/experiments/`.
@@ -300,10 +309,10 @@ print(r["track_b_eval"]["warm_spearman_review"], r["decision"])
 
 ### 2026-07-10
 
-- **실험 16:** `score_02.py`, `product_02_row` target·B3 bar, `EXP16` 2-run (T0/T1). H2·H3·H4 지지 → **17+ `product_02_row` + B3 bar** 확정. H1 ceiling +0.05·B2 Go 0.30 미달.
+- **실험 16:** `scoring.py`, `product_02_row` target·B3 bar, `EXP16` 2-run (T0/T1). H2·H3·H4 지지 → **17+ `product_02_row` + B3 bar** 확정. H1 ceiling +0.05·B2 Go 0.30 미달.
 - **실험 15:** `bar_eval.py` — 0~2 스케일 bar 4종, 고정 `ŷ` bar-only. B2 vs B3 해석·**17+ `mean(star×sent)` (B3) 방향** 기록.
 - **실험 14:** `TARGET_MODE` 4종 ablation, `decomposed_track_b_metrics`, `plot_decompose` / `plot_exp14_compare`. B2 미달 유지; subset 신호(H2) 지지; 1차 채택 target `star_only` (탐색, 노트북 default 미변경).
-- **실험 13 실행:** `catalog_eval.py`, Unit 11, `recipe_lightfm.csv` (3,171행, `y_hat_linear` 선형보정 컬럼). B0·B3 통과, B2 미달 (MAE raw 1.6→linear 0.17, R²≈0, Spearman≈0).
+- **실험 13 실행:** `evaluation.py`, Unit 11, `recipe_lightfm.csv` (3,171행, `y_hat_linear` 선형보정 컬럼). B0·B3 통과, B2 미달 (MAE raw 1.6→linear 0.17, R²≈0, Spearman≈0).
 - **실험 13 (리뷰-only):** target/bar = 리뷰 점수만; view/scrap=feature; 레거시 fallback bar 폐기; 서비스→실험 정합 (코드 후속).
 - **실험 12:** 평가 Mode(G/P)·이론 상한·Track A L0~L2. 구 **p@5≥0.05** 폐기.
 - **실험 11:** Unit 10 Random / train-popularity baseline (`baseline_eval.py`).
