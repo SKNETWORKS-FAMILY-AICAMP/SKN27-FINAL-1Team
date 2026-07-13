@@ -9,6 +9,7 @@ from app.backend.db.models import Ingredient, ShoppingList, ShoppingListItem
 from app.backend.schemas.inventory import IngredientCreate
 from app.backend.schemas.shopping import ShoppingIngredientInput
 from app.backend.services.inventory_service.inventory_service import inventory_service
+from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
 from app.backend.services.shopping_service.providers.naver_search import NaverShoppingProvider
 
 AMOUNT_RE = re.compile(r"(?P<quantity>\d+(?:\.\d+)?)\s*(?P<unit>[가-힣a-zA-Z%]+)?")
@@ -64,16 +65,37 @@ class ShoppingService:
     def get_current(self, db: Session, user_id: int) -> dict | None:
         shopping_list = (
             db.query(ShoppingList)
-            .options(joinedload(ShoppingList.items))
+            .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
             .filter(ShoppingList.user_id == user_id, ShoppingList.status == "active")
             .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
             .first()
         )
-        return self._map_list(shopping_list) if shopping_list else None
+        if not shopping_list:
+            return None
+
+        recipe_context = self._sync_recipe_list(db, user_id, shopping_list)
+        if recipe_context["changed"]:
+            shopping_list = self._get_user_list(db, user_id, shopping_list.id)
+        return self._map_list(shopping_list, owned_ingredients=recipe_context["owned_ingredients"])
 
     def get_list(self, db: Session, user_id: int, shopping_list_id: int) -> dict:
         shopping_list = self._get_user_list(db, user_id, shopping_list_id)
-        return self._map_list(shopping_list)
+        recipe_context = self._sync_recipe_list(db, user_id, shopping_list)
+        if recipe_context["changed"]:
+            shopping_list = self._get_user_list(db, user_id, shopping_list_id)
+        return self._map_list(shopping_list, owned_ingredients=recipe_context["owned_ingredients"])
+
+    def get_history(self, db: Session, user_id: int, limit: int = 20) -> list[dict]:
+        normalized_limit = min(max(int(limit or 20), 1), 50)
+        shopping_lists = (
+            db.query(ShoppingList)
+            .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
+            .filter(ShoppingList.user_id == user_id)
+            .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
+            .limit(normalized_limit)
+            .all()
+        )
+        return [self._map_list(shopping_list) for shopping_list in shopping_lists]
 
     def update_item(
         self,
@@ -99,6 +121,11 @@ class ShoppingService:
         db.delete(item)
         db.commit()
         return self.get_list(db, user_id=user_id, shopping_list_id=shopping_list_id)
+
+    def delete_list(self, db: Session, user_id: int, shopping_list_id: int) -> None:
+        shopping_list = self._get_user_list(db, user_id, shopping_list_id)
+        db.delete(shopping_list)
+        db.commit()
 
     def complete_purchase(
         self,
@@ -177,7 +204,7 @@ class ShoppingService:
     def _get_user_list(self, db: Session, user_id: int, shopping_list_id: int) -> ShoppingList:
         shopping_list = (
             db.query(ShoppingList)
-            .options(joinedload(ShoppingList.items))
+            .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
             .filter(ShoppingList.id == shopping_list_id, ShoppingList.user_id == user_id)
             .first()
         )
@@ -188,7 +215,7 @@ class ShoppingService:
     def _get_latest_required(self, db: Session, user_id: int) -> ShoppingList:
         shopping_list = (
             db.query(ShoppingList)
-            .options(joinedload(ShoppingList.items))
+            .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
             .filter(ShoppingList.user_id == user_id, ShoppingList.status == "active")
             .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
             .first()
@@ -235,19 +262,103 @@ class ShoppingService:
 
         return None, item.unit or (ingredient.default_unit if ingredient else None)
 
-    def _map_list(self, shopping_list: ShoppingList) -> dict:
+    def _sync_recipe_list(self, db: Session, user_id: int, shopping_list: ShoppingList) -> dict:
+        if shopping_list.source != "recipe" or not shopping_list.recipe_id or shopping_list.status != "active":
+            return {"changed": False, "owned_ingredients": []}
+
+        recipe_detail = recipe_detail_service.get_recipe_detail(db, shopping_list.recipe_id, user_id)
+        owned_ingredients = [
+            *recipe_detail.get("owned_ingredients", []),
+            *recipe_detail.get("maybe_owned_ingredients", []),
+        ]
+        missing_ingredients = recipe_detail.get("missing_ingredients", [])
+
+        desired_by_key = {
+            self._ingredient_key(item.get("ingredient_id"), item.get("name")): item
+            for item in missing_ingredients
+            if item.get("name")
+        }
+        desired_by_key = {key: item for key, item in desired_by_key.items() if key}
+
+        active_items = [item for item in shopping_list.items if not item.is_purchased]
+        active_by_key = {
+            self._ingredient_key(item.ingredient_id, item.name): item
+            for item in active_items
+        }
+        active_by_key = {key: item for key, item in active_by_key.items() if key}
+
+        changed = False
+
+        for key, item in list(active_by_key.items()):
+            if key not in desired_by_key:
+                db.delete(item)
+                changed = True
+
+        for key, raw_item in desired_by_key.items():
+            item = active_by_key.get(key)
+            shopping_input = ShoppingIngredientInput(
+                ingredient_id=raw_item.get("ingredient_id"),
+                name=raw_item["name"],
+                amount=raw_item.get("amount"),
+            )
+            ingredient = self._resolve_ingredient(db, shopping_input.ingredient_id, shopping_input.name)
+            quantity, unit = self._resolve_quantity_and_unit(shopping_input, ingredient)
+
+            if item:
+                next_ingredient_id = ingredient.id if ingredient else shopping_input.ingredient_id
+                if (
+                    item.ingredient_id != next_ingredient_id
+                    or item.name != shopping_input.name.strip()
+                    or item.required_quantity != quantity
+                    or item.unit != unit
+                ):
+                    item.ingredient_id = next_ingredient_id
+                    item.name = shopping_input.name.strip()
+                    item.required_quantity = quantity
+                    item.unit = unit
+                    changed = True
+                continue
+
+            product = self.provider.search_best_product(shopping_input.name)
+            db.add(
+                ShoppingListItem(
+                    shopping_list_id=shopping_list.id,
+                    ingredient_id=ingredient.id if ingredient else shopping_input.ingredient_id,
+                    name=shopping_input.name.strip(),
+                    required_quantity=quantity,
+                    unit=unit,
+                    provider=product.provider if product else self.provider.provider_name,
+                    product_id=product.product_id if product else None,
+                    product_name=product.product_name if product else None,
+                    product_link=self.provider.build_product_link(product) if product else None,
+                    product_image=product.product_image if product else None,
+                    price=product.price if product else None,
+                    mall_name=product.mall_name if product else None,
+                    is_checked=True,
+                )
+            )
+            changed = True
+
+        if changed:
+            db.commit()
+
+        return {"changed": changed, "owned_ingredients": owned_ingredients}
+
+    def _map_list(self, shopping_list: ShoppingList, owned_ingredients: list[dict] | None = None) -> dict:
         items = sorted(shopping_list.items, key=lambda item: item.id)
         total_price = sum((item.price or 0) for item in items if item.is_checked and not item.is_purchased)
         return {
             "id": shopping_list.id,
             "user_id": shopping_list.user_id,
             "recipe_id": shopping_list.recipe_id,
+            "recipe_title": shopping_list.recipe.title if shopping_list.recipe else None,
             "source": shopping_list.source,
             "status": shopping_list.status,
             "total_price": total_price,
             "checked_count": sum(1 for item in items if item.is_checked),
             "purchased_count": sum(1 for item in items if item.is_purchased),
             "created_at": shopping_list.created_at,
+            "owned_ingredients": owned_ingredients or [],
             "items": [
                 {
                     "id": item.id,
@@ -292,6 +403,12 @@ class ShoppingService:
 
     def _normalize_name(self, name: str) -> str:
         return (name or "").strip().replace(" ", "").lower()
+
+    def _ingredient_key(self, ingredient_id: int | None, name: str | None) -> str:
+        if ingredient_id:
+            return f"id:{ingredient_id}"
+        normalized = self._normalize_name(name or "")
+        return f"name:{normalized}" if normalized else ""
 
 
 shopping_service = ShoppingService()
