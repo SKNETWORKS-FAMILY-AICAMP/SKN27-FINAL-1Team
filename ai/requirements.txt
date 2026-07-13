@@ -28,12 +28,9 @@ openai>=1.0.0               # OpenAI API 연동
 pandas>=2.0.0
 numpy>=1.24.0
 scikit-learn
+lightgbm>=4.3.0
 matplotlib
 seaborn
-
-# --- recommendation 감성분석 (BERT/Korean-sentiment) ---
-# 모델: WhitePeak/bert-base-cased-Korean-sentiment
-# torch, transformers, pandas 는 상단 섹션 재사용
 tqdm>=4.67.0
 
 # postgresql

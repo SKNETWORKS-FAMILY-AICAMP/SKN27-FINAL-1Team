@@ -1,0 +1,19 @@
+name: notebook-experiments
+
+services:
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notebook_experiments_jupyter
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8888:8888"
+    volumes:
+      - ${MOUNT_PROJECT}:${CONTAINER_PROJECT}
+      - ${MOUNT_EXPERIMENTS}:${CONTAINER_EXPERIMENTS}
+    working_dir: ${CONTAINER_PROJECT}
+    environment:
+      LIGHTFM_RUNTIME: linux-docker
+      PROJECT_ROOT: ${CONTAINER_PROJECT}

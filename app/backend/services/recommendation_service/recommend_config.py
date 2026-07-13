@@ -2,12 +2,36 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
 # ponytail: 기본재료 — 냉장고 없이 owned 처리. normalized_name 또는 ingredient_id 직접 지정.
 BASIC_INGREDIENT_NORMALIZED_NAMES: frozenset[str] = frozenset({"물"})
 BASIC_INGREDIENT_IDS: frozenset[int] = frozenset()
+
+_EMBEDDED_QUANTITY = re.compile(r"(?:\s+\d|(?<=[가-힣])\d)")
+
+
+def basic_ingredient_normalized(raw_name: str) -> str | None:
+    """기본재료 판정용 최소 정규화. ETL loader 전체 규칙 아님 — 분량 숫자 제거만."""
+    text = str(raw_name).strip()
+    if not text:
+        return None
+    text = re.sub(r"^[\s?]+", "", text)
+    text = re.sub(r"[\s?]+$", "", text)
+    if not text or text == "?":
+        return None
+    text = _EMBEDDED_QUANTITY.split(text, maxsplit=1)[0].strip()
+    if not text:
+        return None
+    normalized = re.sub(r"\s+", "", text.lower())
+    return normalized or None
+
+
+def is_basic_ingredient(raw_name: str) -> bool:
+    normalized = basic_ingredient_normalized(raw_name)
+    return normalized is not None and normalized in BASIC_INGREDIENT_NORMALIZED_NAMES
 
 
 @dataclass(frozen=True)
