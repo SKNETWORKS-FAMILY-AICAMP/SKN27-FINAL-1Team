@@ -148,7 +148,7 @@ def alarm_agent_node(state: GraphState) -> dict:
         parts = text.split(":")
         if len(parts) >= 2:
             action = parts[1]
-            # mcp_agent_node 로 가야하는 재고 관련 action 이면 여기서 처리 안함
+            # 재고 관련 확인 액션은 Inventory Agent가 처리하므로 여기서 넘기지 않습니다.
             if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
                 pass 
             elif len(parts) >= 4 and action == "add_calendar_event":

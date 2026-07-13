@@ -197,20 +197,6 @@ class ChatService:
             
         return "general"
 
-        def score(item: dict[str, Any]) -> tuple[int, int, int]:
-            title = (item.get("title") or "").replace(" ", "")
-            difficulty = item.get("difficulty") or ""
-            cooking_time = item.get("cooking_time_min") or 9999
-            return (
-                0 if normalized_keyword and normalized_keyword in title else 1,
-                0 if difficulty == "초급" else 1,
-                int(cooking_time),
-            )
-
-        return sorted(items, key=score)
-
-
-
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
         """Guide Agent 공통 응답을 챗봇 말풍선 형식으로 변환합니다."""
         normalized = text.replace(" ", "").lower()
