@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 
-_COOKING_TIME_WORDS = ("에어프라이", "몇분", "몇도", "온도", "조리시간", "굽는시간", "익히는시간")
+from .recipe_utils import _is_cooking_time_question
+
 _RECOMMEND_WORDS = (
     "추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들수", "만들수있는", "만들수있",
     "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거",
@@ -20,12 +21,6 @@ _GOLDEN_CASES = (
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text or "").lower()
-
-
-def _is_cooking_time_question(text: str) -> bool:
-    # ponytail: duplicate of supervisor_utils until P4-a recipe_utils migration
-    normalized = text.replace(" ", "").lower()
-    return any(word in normalized for word in _COOKING_TIME_WORDS)
 
 
 def analyze_recipe_intent(text: str, history: list | None = None) -> str:

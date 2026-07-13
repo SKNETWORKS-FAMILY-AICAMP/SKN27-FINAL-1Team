@@ -186,9 +186,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 ### P4 — 개별 기능 구현
 
-- [ ] **P4-a** `recipe_utils.py` — extract, rank, actions, josa, login guard + `__main__` — `pending`
-- [ ] **P4-b** `handle_recipe_search` (= `_reply_recipe_search` + external) + `__main__` — `pending`
-- [ ] **P4-c** `handle_recipe_recommend` (= 재료 분기 / history LLM / fridge recommend / empty inventory) + `__main__` — `pending`
+- [x] **P4-a** `recipe_utils.py` — extract, rank, actions, josa, login guard + `__main__` — `done`
+- [x] **P4-b** `handle_recipe_search` (= `_reply_recipe_search` + external) + `__main__` — `done`
+- [x] **P4-c** `handle_recipe_recommend` (= 재료 분기 / history LLM / fridge recommend / empty inventory) + `__main__` — `done`
 
 ### P5 — 라우터 연결 + 통합
 
@@ -256,9 +256,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 | 항목 | 값 |
 |------|-----|
-| **현재 Phase** | P4 |
-| **마지막 완료 Todo** | P3-3 |
-| **다음 Todo** | P4-a |
+| **현재 Phase** | P5 |
+| **마지막 완료 Todo** | P4-c |
+| **다음 Todo** | P5-1 |
 | **블로커** | 없음 |
 
 ### 변경 이력
@@ -269,6 +269,7 @@ def recipe_agent_node(state: GraphState) -> dict:
 | 2026-07-13 | P1 shell 완료 (`__init__.py`, `recipe_agent.py`, smoke test) |
 | 2026-07-13 | P2 boundary contract 완료 (`build_recipe_response`, `to_supervisor_state`) |
 | 2026-07-13 | P3 intent router 완료 (`recipe_intents.py`, golden cases) |
+| 2026-07-13 | P4 handlers 완료 (`recipe_utils.py`, `recipe_handlers.py`) |
 
 ---
 
