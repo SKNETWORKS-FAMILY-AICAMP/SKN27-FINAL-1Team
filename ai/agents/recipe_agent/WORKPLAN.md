@@ -173,10 +173,10 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 ### P2 — GraphState boundary + 응답 계약
 
-- [ ] **P2-1** `build_recipe_response()` 구현 — `pending`
-- [ ] **P2-2** `to_supervisor_state()` 구현 — `pending`
-- [ ] **P2-3** `__main__` assert: 출력 키 `response_text` / `actions` / `sources` — `pending`
-- [ ] **P2-4** recipe_agent 모듈에 `GraphState` import 없음 확인 — `pending`
+- [x] **P2-1** `build_recipe_response()` 구현 — `done`
+- [x] **P2-2** `to_supervisor_state()` 구현 — `done`
+- [x] **P2-3** `__main__` assert: 출력 키 `response_text` / `actions` / `sources` — `done`
+- [x] **P2-4** recipe_agent 모듈에 `GraphState` import 없음 확인 — `done`
 
 ### P3 — intent 라우터 (분기 없음)
 
@@ -256,9 +256,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 | 항목 | 값 |
 |------|-----|
-| **현재 Phase** | P2 |
-| **마지막 완료 Todo** | P1-4 |
-| **다음 Todo** | P2-1 |
+| **현재 Phase** | P3 |
+| **마지막 완료 Todo** | P2-4 |
+| **다음 Todo** | P3-1 |
 | **블로커** | 없음 |
 
 ### 변경 이력
@@ -267,6 +267,7 @@ def recipe_agent_node(state: GraphState) -> dict:
 |------|------|
 | 2026-07-13 | WORKPLAN.md 초안 작성 (GraphState boundary 호환, 5 Phase Todo) |
 | 2026-07-13 | P1 shell 완료 (`__init__.py`, `recipe_agent.py`, smoke test) |
+| 2026-07-13 | P2 boundary contract 완료 (`build_recipe_response`, `to_supervisor_state`) |
 
 ---
 
