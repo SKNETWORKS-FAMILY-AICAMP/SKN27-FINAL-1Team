@@ -2119,3 +2119,104 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 ### JSON 스냅샷
 
 `outputs/ablation_report.json` (`experiment: 17_track_b_coldstart`) — Docker run 산출.
+
+---
+
+## 실험 18 — Track B 지표 체계 재정의 (L0~L5) · calibration
+
+**일자:** 2026-07-13  
+**유형:** 평가 사양 확정 + `evaluation.py` L0~L5 + 5-seed calibration (실험 17 설정 동일)  
+**코드:** [`evaluation.py`](evaluation.py), [`METRICS.md`](METRICS.md)  
+**노트북:** `LightFM_Model.ipynb` (`recipe_df`·`seed` → popularity baseline)
+
+### 배경
+
+실험 13의 B2/B3 Spearman ≥ 0.30은 **근거 문서 없이** 고정되어 있었고, 전체 warm Spearman은 ceiling 혼합(§실험 14)으로 **구조적 미달**이었다. 본 회차에서 Cohen (1988) medium effect·추천 baseline 비교를 근거로 **L0~L5** 체계를 확정하고 calibration을 수행한다.
+
+**근거 문서:** [METRICS.md — Spearman 0.30 (Cohen Medium) 기준 선정](METRICS.md)
+
+### Go 판정 (신규)
+
+```
+go = L0_pass AND L1_pass AND L2_pass
+```
+
+| 층 | 조건 | Go |
+|----|------|-----|
+| **L0** | coverage=1.0, score_std>1e-6 | **필수** |
+| **L1** | ρ>0.10, null p<0.05, popularity 대비 **4/5 seed** 우위 | **필수** |
+| **L2** | warm **informative** Spearman **≥ 0.30** | **필수** |
+| L3 | Spearman(ŷ, train) ≥ 0.30 | 진단 |
+| L4 | all warm Spearman (목표 0.30) | **DATASET_EXCEPTION** — Go 아님 |
+| L5 | cold vs popularity | 진단 |
+
+**L2 informative:** `star_varies` ∪ `low_tail` (실험 14 정의). 단일 run `l1_single_pass`는 1 seed 기준; 최종 `L1_pass`는 5-seed 집계.
+
+### B0~B3 → L0~L5 매핑
+
+| 구 | 신 |
+|----|-----|
+| B0 | L0 |
+| B2 (전체 warm) | L4 (예외) |
+| B2 (informative) | **L2 (Go)** |
+| B3 | L3 (진단) |
+| B1′ | L5 |
+| — | **L1 (신규 Go)** |
+
+### 실행 설정 (실험 17 동일)
+
+| 항목 | 값 |
+|------|-----|
+| `TARGET_MODE` | `product_02_row` |
+| 학습 | full interactions (nnz 990) |
+| loss / epochs | WARP 30 |
+| seeds | 42, 123, 456, 789, 1024 |
+
+### calibration — seed × L0~L5
+
+| seed | L0 | L1 single | L2 (ρ inf) | L2 pass | L4 (ρ all) | ρ model | ρ pop | null p | L3 |
+|------|----|-----------|------------|---------|------------|---------|-------|--------|-----|
+| 42 | ✓ | ✗ | **0.555** | ✓ | -0.058 | -0.058 | 0.392 | 0.178 | 0.468 |
+| 123 | ✓ | ✗ | **0.537** | ✓ | -0.046 | -0.046 | 0.478 | 0.273 | 0.558 |
+| 456 | ✓ | ✗ | **0.582** | ✓ | -0.056 | -0.056 | 0.445 | 0.197 | 0.541 |
+| 789 | ✓ | ✗ | **0.604** | ✓ | -0.049 | -0.049 | 0.446 | 0.234 | 0.532 |
+| 1024 | ✓ | ✗ | **0.555** | ✓ | -0.058 | -0.058 | 0.392 | 0.178 | 0.468 |
+
+**subset n (공통):** ceiling 529, star_varies 34, low_tail 37, **informative 49**
+
+**L1 multi-seed:** popularity 대비 우위 **0/5** → `L1_pass` **미달**
+
+### DATASET_EXCEPTION (L4)
+
+| 항목 | 내용 |
+|------|------|
+| 범용 목표 | Cohen medium Spearman **0.30** on all warm |
+| 실측 (5-seed) | ρ ≈ **-0.05 ~ -0.06** |
+| 사유 | warm ~94% ceiling — 관측 bar 분산 부족 (§실험 14) |
+| 대체 Go | **L2 informative** (ρ ≈ 0.54~0.60, 5/5 pass) |
+| 재검토 | ceiling 비율 < 80% 시 L4 Go 재활성화 검토 |
+
+### decision (calibration 집계)
+
+| 항목 | 값 |
+|------|-----|
+| `l0_pass` | **true** (5/5) |
+| `l1_pass` | **false** (0/5 vs popularity) |
+| `l2_pass` | **true** (5/5, informative ρ ≥ 0.30) |
+| `l3_pass` | **true** (5/5, 진단) |
+| **Go** | **false** (`L0 & L1 & L2`) |
+
+### 해석
+
+1. **L2 (Cohen 0.30) on informative:** 실험 16 T1 subset 신호가 **5-seed에서 안정** (mean ρ_inf ≈ **0.57**). 임계값 **0.30 유지** 확정.
+2. **L1 미달:** all-warm Spearman(ŷ, bar)는 **음수**인데 popularity-only는 bar와 **ρ≈0.4+** — 인기 feature가 warm bar와 강하게 정렬되어, 전역 ρ 비교만으로는 모델이 “인기 baseline보다 나쁨”으로 기록됨. **후속:** L1을 informative subset·Top-K vs random으로 보완 검토(실험 19).
+3. **null permutation p:** 5-seed 모두 **p > 0.05** (전역 warm) — L1 single의 유의성 조건도 미달.
+4. **구 B2/B3 대비:** 구 Go(`b0 & b2 & b3`)는 전역 B2 미달; 신 Go는 **L2 통과·L1 미달**로 병목이 **baseline 대비 우위**로 이동.
+
+### 한 줄 결론
+
+> **L0~L5·Cohen 0.30 근거 확정.** calibration: **L0·L2( informative ) 5/5 통과**, **L1 0/5**, L4는 **DATASET_EXCEPTION**. 서비스 Go는 **L1 튜닝 또는 L1 평가 보완 후** 재판정.
+
+### JSON 스냅샷
+
+`outputs/ablation_report.json` (`experiment: 18_metrics_calibration`, `metrics_version: L0-L5`, seed=42).
