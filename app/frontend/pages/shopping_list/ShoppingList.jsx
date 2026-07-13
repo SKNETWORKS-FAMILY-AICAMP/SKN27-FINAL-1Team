@@ -7,8 +7,10 @@ import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
   compareShoppingProducts,
   completeShoppingPurchase,
+  deleteShoppingList,
   deleteShoppingListItem,
   getCurrentShoppingList,
+  getShoppingHistory,
   getShoppingList,
   hasShoppingAuth,
   updateShoppingListItem,
@@ -78,14 +80,67 @@ function formatQuantity(item) {
   return `${quantity}${item.unit || ''}`.trim()
 }
 
+function parseDateOnly(value) {
+  if (!value) {
+    return null
+  }
+
+  const [year, month, day] = String(value).slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) {
+    return null
+  }
+
+  return new Date(year, month - 1, day)
+}
+
+function isOwnedIngredientExpired(item) {
+  if (item?.is_expired || item?.status === 'expired') {
+    return true
+  }
+
+  const expiryDate = parseDateOnly(item?.expiry_date || item?.expiration_date)
+  if (!expiryDate) {
+    return false
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return expiryDate < today
+}
+
+function resolveOwnedIngredients(shoppingList, storedContext, isFallbackList) {
+  if (shoppingList?.recipe_id && !isFallbackList) {
+    return Array.isArray(shoppingList.owned_ingredients) ? shoppingList.owned_ingredients : []
+  }
+
+  if (storedContext?.recipeId && Number(storedContext.recipeId) === Number(shoppingList?.recipe_id)) {
+    return storedContext.ownedIngredients
+  }
+
+  return []
+}
+
 function getRecipeTitle(shoppingList, context) {
   if (context?.recipeId && Number(context.recipeId) === Number(shoppingList?.recipe_id)) {
     return context.recipeTitle
   }
+  if (shoppingList?.recipe_title) {
+    return shoppingList.recipe_title
+  }
   if (shoppingList?.recipe_id) {
-    return `레시피 #${shoppingList.recipe_id}`
+    return '레시피 장보기'
   }
   return '최근 장보기'
+}
+
+function getShoppingListTitle(list) {
+  if (list.recipe_title) {
+    return `${list.recipe_title} 장보기`
+  }
+  if (list.recipe_id) {
+    return '레시피 장보기'
+  }
+  return '직접 장보기'
 }
 
 function buildFallbackShoppingList(context) {
@@ -120,7 +175,18 @@ function buildFallbackShoppingList(context) {
   }
 }
 
-function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBrowse, onLogin }) {
+function getShoppingStatusLabel(list) {
+  if (list.status === 'completed') {
+    return '완료'
+  }
+  return '진행 중'
+}
+
+function getRemainingItemCount(list) {
+  return (list.items || []).filter((item) => !item.is_purchased).length
+}
+
+function ShoppingStart({ isLoggedIn, recentList, historyCount, notice, onContinue, onHistoryBrowse, onRecipeBrowse, onLogin }) {
   return (
     <section className="shopping-page shopping-page--start" aria-labelledby="shopping-title">
       <div className="shopping-hero">
@@ -159,11 +225,14 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
         ) : null}
 
         <article className="shopping-start-card">
-          <span>1순위 흐름</span>
-          <h2>레시피 기준 장보기</h2>
-          <p>레시피 상세에서 냉장고 재료와 비교한 뒤 부족한 재료만 구매 링크로 연결해요.</p>
-          <button className="shopping-soft-action" type="button" onClick={onRecipeBrowse}>
-            레시피 먼저 확인하기
+          <span>장보기 기록</span>
+          <h2>지난 장보기 내역</h2>
+          <p>
+            완료했거나 예전에 만든 장보기 목록을 확인해요.
+            {historyCount > 0 ? ` 최근 내역 ${historyCount}개가 있어요.` : ''}
+          </p>
+          <button className="shopping-soft-action" type="button" onClick={isLoggedIn ? onHistoryBrowse : onLogin}>
+            {isLoggedIn ? '내역 보기' : '로그인하고 보기'}
           </button>
         </article>
 
@@ -180,6 +249,64 @@ function ShoppingStart({ isLoggedIn, recentList, notice, onContinue, onRecipeBro
   )
 }
 
+function ShoppingHistory({ lists, onOpenList, onBackToStart }) {
+  return (
+    <section className="shopping-page shopping-page--history" aria-labelledby="shopping-history-title">
+      <div className="shopping-hero shopping-hero--compact">
+        <div className="shopping-hero__copy">
+          <span className="shopping-eyebrow">장보기 기록</span>
+          <h1 id="shopping-history-title">지난 장보기 내역</h1>
+          <p>최근 장바구니 이전에 만들었던 장보기 목록을 확인해요.</p>
+        </div>
+        <div className="shopping-hero__art" aria-hidden="true">
+          <img src={imageShop} alt="" />
+        </div>
+      </div>
+
+      <section className="shopping-panel shopping-history-panel" aria-label="지난 장보기 목록">
+        <div className="shopping-list-toolbar">
+          <div className="shopping-list-toolbar__title">
+            <h2>내역 목록</h2>
+            <span className="shopping-count-badge">{lists.length}개</span>
+          </div>
+          <button className="shopping-soft-button" type="button" onClick={onBackToStart}>
+            장보기 홈
+          </button>
+        </div>
+
+        {lists.length === 0 ? (
+          <p className="shopping-empty-note">아직 이전 장보기 내역이 없어요.</p>
+        ) : (
+          <div className="shopping-history-list">
+            {lists.map((list) => {
+              const remainingCount = getRemainingItemCount(list)
+              const itemPreview = (list.items || []).slice(0, 4).map((item) => item.name).join(', ')
+
+              return (
+                <article className="shopping-history-card" key={list.id}>
+                  <div>
+                    <span className={`shopping-history-status ${list.status === 'completed' ? 'is-completed' : ''}`}>
+                      {getShoppingStatusLabel(list)}
+                    </span>
+                    <h3>{getShoppingListTitle(list)}</h3>
+                    <p>{itemPreview || '재료 정보 없음'}</p>
+                    <small>
+                      {formatCreatedAt(list.created_at)} · 남은 재료 {remainingCount}개 · 전체 {(list.items || []).length}개
+                    </small>
+                  </div>
+                  <button className="shopping-soft-button" type="button" onClick={() => onOpenList(list.id)}>
+                    상세 보기
+                  </button>
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    </section>
+  )
+}
+
 function ShoppingList() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -187,6 +314,7 @@ function ShoppingList() {
   const [storedContext] = useState(readShoppingContext)
   const [shoppingList, setShoppingList] = useState(null)
   const [recentList, setRecentList] = useState(null)
+  const [historyLists, setHistoryLists] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isMutating, setIsMutating] = useState(false)
   const [error, setError] = useState('')
@@ -195,19 +323,19 @@ function ShoppingList() {
 
   const isLoggedIn = hasShoppingAuth()
   const shoppingListId = searchParams.get('shoppingListId')
+  const isHistoryView = searchParams.get('view') === 'history'
   const recipeTitle = getRecipeTitle(shoppingList, storedContext)
   const items = shoppingList?.items ?? []
   const isFallbackList = Boolean(shoppingList?.isFallback)
   const selectedItems = items.filter((item) => item.is_checked && !item.is_purchased)
-  const ownedItems = storedContext?.recipeId && Number(storedContext.recipeId) === Number(shoppingList?.recipe_id)
-    ? storedContext.ownedIngredients
-    : []
+  const ownedItems = resolveOwnedIngredients(shoppingList, storedContext, isFallbackList)
   const ownedProductQuery = ownedItems.map((item) => item.name).filter(Boolean).join('|')
   const ownedShoppingItems = ownedItems.map((item) => ({
     ...item,
     ...(ownedProductMap[item.name] || {}),
   }))
   const activeItems = items.filter((item) => !item.is_purchased)
+  const previousHistoryLists = historyLists.filter((list) => !recentList?.id || Number(list.id) !== Number(recentList.id))
 
   useEffect(() => {
     let isAlive = true
@@ -220,6 +348,7 @@ function ShoppingList() {
       if (!hasShoppingAuth()) {
         setShoppingList(searchParams.get('source') === 'recipe' ? buildFallbackShoppingList(storedContext) : null)
         setRecentList(null)
+        setHistoryLists([])
         setIsLoading(false)
         return
       }
@@ -237,23 +366,29 @@ function ShoppingList() {
         const data = shoppingListId
           ? await getShoppingList(shoppingListId)
           : await getCurrentShoppingList().then((response) => response.shopping_list)
+        const historyData = !shoppingListId
+          ? await getShoppingHistory().then((response) => response.shopping_lists || [])
+          : []
 
         if (!isAlive) return
 
         setShoppingList(shoppingListId ? data : null)
         setRecentList(shoppingListId ? null : data)
+        setHistoryLists(shoppingListId ? [] : historyData)
       } catch (shoppingError) {
         if (!isAlive) return
 
         if (shoppingError.status === 401) {
           setShoppingList(null)
           setRecentList(null)
+          setHistoryLists([])
           return
         }
 
         if (!shoppingListId) {
           setShoppingList(null)
           setRecentList(null)
+          setHistoryLists([])
           setStartNotice('최근 장보기 목록을 확인하지 못했어요. 레시피를 먼저 확인해 장보기를 시작할 수 있어요.')
           return
         }
@@ -270,7 +405,7 @@ function ShoppingList() {
     return () => {
       isAlive = false
     }
-  }, [shoppingListId])
+  }, [shoppingListId, isHistoryView])
 
   useEffect(() => {
     let isAlive = true
@@ -314,6 +449,14 @@ function ShoppingList() {
   const continueRecentShopping = () => {
     if (!recentList?.id) return
     navigate(`/shopping-list?shoppingListId=${recentList.id}`)
+  }
+
+  const browseShoppingHistory = () => {
+    navigate('/shopping-list?view=history')
+  }
+
+  const openHistoryList = (shoppingHistoryId) => {
+    navigate(`/shopping-list?shoppingListId=${shoppingHistoryId}`)
   }
 
   const updateItemChecked = async (item) => {
@@ -412,6 +555,38 @@ function ShoppingList() {
     }
   }
 
+  const deleteWholeList = async () => {
+    const confirmed = await showConfirm('이 장보기 목록을 삭제할까요? 삭제하면 되돌릴 수 없어요.', {
+      title: '장보기 목록 삭제',
+      confirmText: '삭제',
+      cancelText: '취소',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    if (isFallbackList || !shoppingList?.id) {
+      setShoppingList(null)
+      setRecentList(null)
+      navigate('/shopping-list')
+      return
+    }
+
+    setIsMutating(true)
+    try {
+      await deleteShoppingList(shoppingList.id)
+      setShoppingList(null)
+      setRecentList(null)
+      navigate('/shopping-list')
+    } catch (shoppingError) {
+      await showAlert(shoppingError.message || '장보기 목록을 삭제하지 못했어요.', {
+        title: '목록 삭제 실패',
+      })
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
   const completePurchase = async () => {
     if (isFallbackList) {
       await showAlert('임시 장보기 화면에서는 냉장고 입고 처리를 할 수 없어요. 백엔드 연결 후 장보기 목록을 다시 생성해 주세요.', {
@@ -476,14 +651,29 @@ function ShoppingList() {
     )
   }
 
+  if (!shoppingList && isHistoryView) {
+    return (
+      <>
+        <ShoppingHistory
+          lists={previousHistoryLists}
+          onOpenList={openHistoryList}
+          onBackToStart={() => navigate('/shopping-list')}
+        />
+        {dialogNode}
+      </>
+    )
+  }
+
   if (!shoppingList) {
     return (
       <>
         <ShoppingStart
           isLoggedIn={isLoggedIn}
           recentList={recentList}
+          historyCount={previousHistoryLists.length}
           notice={startNotice}
           onContinue={continueRecentShopping}
+          onHistoryBrowse={browseShoppingHistory}
           onRecipeBrowse={() => navigate('/recipes')}
           onLogin={() => navigate('/login')}
         />
@@ -497,7 +687,7 @@ function ShoppingList() {
       <div className="shopping-hero">
         <div className="shopping-hero__copy">
           <span className="shopping-eyebrow">레시피 기준 장보기</span>
-          <h1 id="shopping-title">{recipeTitle} 부족 재료</h1>
+          <h1 id="shopping-title">{recipeTitle} 만들기,<br />이 재료가 없어요</h1>
           <p>
           냉장고에 있는 재료는 빼고, 부족한 재료만 구매 링크로 연결해요.
           </p>
@@ -534,11 +724,21 @@ function ShoppingList() {
 
           <div className="shopping-item-rows">
             {activeItems.length === 0 ? (
-              <p className="shopping-empty-note">
-                {ownedItems.length > 0
-                  ? '따로 구매할 재료가 없어요. 필요한 재료는 이미 냉장고에 있어요.'
-                  : '구매가 필요한 재료를 모두 냉장고에 입고했어요.'}
-              </p>
+              <div className="shopping-empty-block">
+                <p className="shopping-empty-note">
+                  {ownedItems.length > 0
+                    ? '따로 구매할 재료가 없어요. 필요한 재료는 이미 냉장고에 있어요.'
+                    : '구매가 필요한 재료를 모두 냉장고에 입고했어요.'}
+                </p>
+                <button
+                  className="shopping-delete-list-button"
+                  type="button"
+                  disabled={isMutating}
+                  onClick={deleteWholeList}
+                >
+                  이 장보기 목록 삭제
+                </button>
+              </div>
             ) : (
               activeItems.map((item) => (
                 <div className="shopping-item-row" key={item.id}>
@@ -582,6 +782,9 @@ function ShoppingList() {
                   <div className="shopping-item-row__title">
                     <strong>{item.name}{item.amount ? <span>· {item.amount}</span> : null}</strong>
                     <span className="shopping-owned-badge">보유 재료</span>
+                    {isOwnedIngredientExpired(item) ? (
+                      <span className="shopping-expired-badge">소비기한 지남</span>
+                    ) : null}
                   </div>
                   <small>{item.product_name || '상품 검색 결과 없음'}</small>
                 </div>

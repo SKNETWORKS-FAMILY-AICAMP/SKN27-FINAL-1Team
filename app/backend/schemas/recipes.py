@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -83,6 +84,9 @@ class RecipeIngredientItem(BaseModel):
     name: str = Field(..., description="재료명")
     amount: Optional[str] = Field(None, description="분량 (예: 1대, 100g)")
     ingredient_id: Optional[int] = Field(None, description="식재료 마스터 ID")
+    expiry_date: Optional[date] = Field(None, description="매칭된 냉장고 재료 소비기한")
+    status: Optional[str] = Field(None, description="매칭된 냉장고 재료 상태")
+    is_expired: bool = Field(default=False, description="매칭된 냉장고 재료 소비기한 경과 여부")
 
 
 class MaybeOwnedIngredientItem(BaseModel):
@@ -97,6 +101,9 @@ class MaybeOwnedIngredientItem(BaseModel):
     ingredient_id: Optional[int] = Field(
         None, description="레시피 측 식재료 마스터 ID"
     )
+    expiry_date: Optional[date] = Field(None, description="매칭된 냉장고 재료 소비기한")
+    status: Optional[str] = Field(None, description="매칭된 냉장고 재료 상태")
+    is_expired: bool = Field(default=False, description="매칭된 냉장고 재료 소비기한 경과 여부")
 
 
 class RecipeStepItem(BaseModel):

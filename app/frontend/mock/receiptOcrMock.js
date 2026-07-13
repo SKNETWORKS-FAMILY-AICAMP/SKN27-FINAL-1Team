@@ -7,6 +7,7 @@ import iconTofu from '../assets/extracted/icons/icon_tofu.svg'
 
 export const receiptSteps = [
   '업로드/촬영',
+  '영역 맞추기',
   'AI 분석',
   '재료 확인',
   '냉장고 입고',
