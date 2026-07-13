@@ -8,6 +8,7 @@ from app.backend.schemas.shopping import (
     ShoppingCompareRequest,
     ShoppingCompareResponse,
     ShoppingCurrentResponse,
+    ShoppingHistoryResponse,
     ShoppingListCreateRequest,
     ShoppingListItemUpdateRequest,
     ShoppingListResponse,
@@ -62,6 +63,16 @@ def get_current_shopping_list(
     return {"shopping_list": shopping_service.get_current(db=db, user_id=current_user_id)}
 
 
+@router.get("/history", response_model=ShoppingHistoryResponse)
+def get_shopping_history(
+    limit: int = 20,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """사용자의 장보기 목록 내역을 최신순으로 반환합니다."""
+    return {"shopping_lists": shopping_service.get_history(db=db, user_id=current_user_id, limit=limit)}
+
+
 @router.get("/{shopping_list_id}", response_model=ShoppingListResponse)
 def get_shopping_list(
     shopping_list_id: int,
@@ -70,6 +81,17 @@ def get_shopping_list(
 ):
     """장보기 목록 상세를 반환합니다."""
     return shopping_service.get_list(db=db, user_id=current_user_id, shopping_list_id=shopping_list_id)
+
+
+@router.delete("/{shopping_list_id}", response_model=MessageResponse)
+def delete_shopping_list(
+    shopping_list_id: int,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """장보기 목록 전체를 삭제합니다."""
+    shopping_service.delete_list(db=db, user_id=current_user_id, shopping_list_id=shopping_list_id)
+    return {"message": "장보기 목록을 삭제했어요."}
 
 
 @router.patch("/items/{item_id}", response_model=ShoppingListResponse)

@@ -178,16 +178,21 @@ function RecipeDetail() {
       setIsCooked(false)
 
       const token = window.localStorage.getItem('bobbeori-token')
-      const headers = {}
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
+
+      const requestDetail = (authToken) => fetch(`${API_URL}/api/v1/recipes/${recipeId}`, {
+        signal: controller.signal,
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      })
 
       try {
-        const response = await fetch(`${API_URL}/api/v1/recipes/${recipeId}`, {
-          signal: controller.signal,
-          headers,
-        })
+        let response = await requestDetail(token)
+
+        // 레시피 상세는 비로그인도 열람 가능하므로, 만료/무효 토큰이면
+        // 죽은 토큰을 정리하고 게스트로 다시 조회한다.
+        if (response.status === 401 && token) {
+          window.localStorage.removeItem('bobbeori-token')
+          response = await requestDetail(null)
+        }
 
         if (response.status === 404) {
           setError('레시피를 찾을 수 없습니다.')
@@ -245,6 +250,9 @@ function RecipeDetail() {
       name: item.name,
       amount: item.amount,
       fridge_ingredient_name: item.fridge_ingredient_name,
+      expiry_date: item.expiry_date,
+      status: item.status,
+      is_expired: Boolean(item.is_expired),
     })),
     missingIngredients: missingIngredients.map((item) => ({
       ingredient_id: item.ingredient_id,
