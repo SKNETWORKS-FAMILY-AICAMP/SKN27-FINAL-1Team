@@ -1,8 +1,10 @@
 import asyncio
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from ai.agents.alarm_agent import ALARM_AGENT_TOOLS, apply_human_choice, analyze_intent, arun, build_response, run
+import ai.agents.alarm_agent.alarm_agent as alarm_agent_module
 from ai.agents.alarm_agent import tools as alarm_tools
 from app.backend.api.calendar.calendar_api import _event_key_belongs_to_user
 
@@ -112,6 +114,99 @@ def test_alarm_agent_shopping_schedule_keeps_shopping_title():
     assert result["data"]["payload"]["reminder_type"] == "calendar_event"
 
 
+def test_alarm_agent_confirmation_mentions_time_when_present():
+    result = run("\uc624\ub298 \uc624\ud6c4 7\uc2dc \ud48b\uc0b4 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+
+    assert result["message"] == "\uc624\ub298 \uc624\ud6c4 7\uc2dc \ud48b\uc0b4 \uc77c\uc815 \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert result["data"]["payload"]["hour"] == 19
+    assert result["data"]["payload"]["minute"] == 0
+
+
+def test_alarm_agent_understands_korean_time_context_words():
+    dinner = run("\ub0b4\uc77c \uc800\ub141 7\uc2dc \ud48b\uc0b4 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+    morning = run("\uc624\ub298 \uc544\uce68 8\uc2dc \ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+
+    assert dinner["message"] == "\ub0b4\uc77c \uc624\ud6c4 7\uc2dc \ud48b\uc0b4 \uc77c\uc815 \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert dinner["data"]["payload"]["title"] == "\ud48b\uc0b4"
+    assert dinner["data"]["payload"]["hour"] == 19
+    assert morning["message"] == "\uc624\ub298 \uc624\uc804 8\uc2dc \ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert morning["data"]["payload"]["title"] == "\ub450\ubd80"
+    assert morning["data"]["payload"]["hour"] == 8
+
+
+def test_alarm_agent_understands_relative_delay_text():
+    soon = run("30\ubd84 \ub4a4 \ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+    later = run("1\uc2dc\uac04 \ub4a4 \ud68c\uc758 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+
+    assert soon["message"] == "30\ubd84 \ub4a4 \ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert soon["data"]["payload"]["title"] == "\ub450\ubd80"
+    assert soon["data"]["payload"]["delay_minutes"] == 30
+    assert "hour" not in soon["data"]["payload"]
+    assert later["message"] == "1\uc2dc\uac04 \ub4a4 \ud68c\uc758 \uc77c\uc815 \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert later["data"]["payload"]["title"] == "\ud68c\uc758"
+    assert later["data"]["payload"]["delay_minutes"] == 60
+
+
+def test_alarm_agent_uses_llm_fallback_only_after_rule_parse_fails(monkeypatch):
+    calls = []
+
+    def fake_llm_parser(text):
+        calls.append(text)
+        return {
+            "intent": "calendar.create",
+            "payload": {
+                "title": "\ub450\ubd80",
+                "date_text": "\uc624\ub298",
+                "hour": 18,
+                "minute": 30,
+                "reminder_type": "consume_reminder",
+            },
+        }
+
+    monkeypatch.setattr(alarm_agent_module, "_call_llm_parser", fake_llm_parser)
+
+    result = analyze_intent("\uc800\ub141 \uc804\uc5d0 \ub450\ubd80 \ucc98\ub9ac\ud558\ub77c\uace0 \uc54c\ub824\uc918")
+
+    assert result == {
+        "intent": "calendar.create",
+        "action": "create_event",
+        "payload": {
+            "title": "\ub450\ubd80",
+            "date_text": "\uc624\ub298",
+            "hour": 18,
+            "minute": 30,
+            "reminder_type": "consume_reminder",
+        },
+    }
+    assert calls == ["\uc800\ub141 \uc804\uc5d0 \ub450\ubd80 \ucc98\ub9ac\ud558\ub77c\uace0 \uc54c\ub824\uc918"]
+
+
+def test_alarm_agent_does_not_call_llm_fallback_for_plain_unknown(monkeypatch):
+    monkeypatch.setattr(alarm_agent_module, "_call_llm_parser", lambda text: (_ for _ in ()).throw(AssertionError("should not call llm")))
+
+    result = analyze_intent("\uadf8\ub0e5 \uc7a1\ub2f4\uc774\uc57c")
+
+    assert result["intent"] == "unknown"
+    assert result["action"] == "unknown"
+
+
+def test_alarm_agent_ignores_invalid_llm_fallback(monkeypatch):
+    monkeypatch.setattr(alarm_agent_module, "_call_llm_parser", lambda text: {"intent": "recipe.recommend", "payload": {"title": "\ub450\ubd80"}})
+
+    result = analyze_intent("\ub098\uc911\uc5d0 \ub450\ubd80 \uc54c\ub824\uc918")
+
+    assert result["intent"] == "unknown"
+    assert result["action"] == "unknown"
+
+
+def test_alarm_agent_shopping_alarm_title_does_not_duplicate_type():
+    result = run("\ub450\ubd80 \uad6c\ub9e4 \uc54c\ub9bc \ub0b4\uc77c \ub4f1\ub85d\ud574\uc918")
+
+    assert result["message"] == "\ub0b4\uc77c \ub450\ubd80 \uad6c\ub9e4 \uc54c\ub9bc \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert result["data"]["payload"]["title"] == "\ub450\ubd80"
+    assert result["data"]["payload"]["reminder_type"] == "shopping_reminder"
+
+
 def test_alarm_agent_clarify_button_survives_legacy_supervisor_roundtrip():
     clarify = run("\ub0b4\uc77c \uc6d4\ub4dc\ucef5\uacbd\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
     general_action = clarify["ui"]["actions"][2]
@@ -160,7 +255,7 @@ def test_alarm_agent_accepts_alarm_word():
 
 
 def test_alarm_agent_calendar_create_requires_confirmation():
-    result = run("calendar.create", {"title": "\ub450\ubd80 \uc54c\ub9bc"})
+    result = run("calendar.create", {"title": "\ub450\ubd80 \uc54c\ub9bc", "date_text": "\ub0b4\uc77c"})
 
     assert result["ok"] is True
     assert result["agent"] == "alarm"
@@ -180,7 +275,7 @@ def test_alarm_agent_calls_sync_tool_after_confirmation():
 
     result = run(
         "calendar.create",
-        {"title": "\ub450\ubd80 \uc54c\ub9bc"},
+        {"title": "\ub450\ubd80 \uc54c\ub9bc", "date_text": "\ub0b4\uc77c"},
         confirmed=True,
         tools={"create_event": tool},
         context={"user_id": 7},
@@ -190,7 +285,7 @@ def test_alarm_agent_calls_sync_tool_after_confirmation():
     assert result["requires_confirmation"] is False
     assert result["data"]["event_id"] == "google-event"
     assert result["meta"] == {"human_in_the_loop": True, "stage": "executed", "confirmed": True}
-    assert calls == [({"title": "\ub450\ubd80 \uc54c\ub9bc"}, {"user_id": 7})]
+    assert calls == [({"title": "\ub450\ubd80 \uc54c\ub9bc", "date_text": "\ub0b4\uc77c"}, {"user_id": 7})]
 
 
 def test_alarm_agent_calls_async_tool_after_confirmation():
@@ -219,6 +314,83 @@ def test_alarm_agent_mutating_alarm_actions_require_confirmation():
     assert result["action"] == "register_device_token"
     assert result["requires_confirmation"] is True
     assert result["meta"]["human_in_the_loop"] is True
+
+
+def test_alarm_agent_calendar_create_requires_schedule_before_confirmation():
+    result = run("\ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+
+    assert result["ok"] is True
+    assert result["intent"] == "calendar.create"
+    assert result["action"] == "clarify_time"
+    assert result["requires_confirmation"] is True
+    assert result["message"] == "언제 등록할까요? 오늘 오후 7시, 내일, 30분 뒤처럼 알려주세요."
+    assert result["data"]["payload"] == {"title": "\ub450\ubd80", "reminder_type": "consume_reminder"}
+    assert [action["label"] for action in result["ui"]["actions"]] == ["오늘", "내일", "30분 뒤"]
+
+
+def test_alarm_agent_time_clarification_buttons_preserve_payload_for_legacy_supervisor():
+    clarify = run("\ub450\ubd80 \uba39\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+    tomorrow = clarify["ui"]["actions"][1]["value"]["payload"]
+    calls = []
+
+    def create_tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"event_id": "google-event"}}
+
+    result = run(
+        f"\ud655\uc778:add_calendar_event:{tomorrow['title']}:{tomorrow['date_text']}",
+        payload={"title": tomorrow["title"], "date_text": tomorrow["date_text"]},
+        intent="calendar.create",
+        action="create_event",
+        confirmed=True,
+        tools={"create_event": create_tool},
+        context={"db": MagicMock(), "user_id": 7},
+    )
+
+    assert result["ok"] is True
+    assert calls == [{"title": "\ub450\ubd80", "date_text": "\ub0b4\uc77c", "reminder_type": "consume_reminder"}]
+
+
+def test_alarm_agent_time_clarification_delay_button_survives_legacy_supervisor():
+    clarify = run("\ud68c\uc758 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+    delay = clarify["ui"]["actions"][2]["value"]["payload"]
+    calls = []
+
+    def create_tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"event_id": "google-event"}}
+
+    result = run(
+        f"\ud655\uc778:add_calendar_event:{delay['title']}:{delay['date_text']}",
+        payload={"title": delay["title"], "date_text": delay["date_text"]},
+        intent="calendar.create",
+        action="create_event",
+        confirmed=True,
+        tools={"create_event": create_tool},
+        context={"db": MagicMock(), "user_id": 7},
+    )
+
+    assert result["ok"] is True
+    assert calls == [{"title": "\ud68c\uc758", "date_text": "30\ubd84 \ub4a4", "delay_minutes": 30, "reminder_type": "calendar_event"}]
+
+
+def test_alarm_agent_calendar_create_without_schedule_does_not_execute_tool():
+    calls = []
+
+    def tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"event_id": "bad"}}
+
+    result = run(
+        "calendar.create",
+        {"title": "\ub450\ubd80 \uc54c\ub9bc"},
+        confirmed=True,
+        tools={"create_event": tool},
+        context={"user_id": 7},
+    )
+
+    assert result["action"] == "clarify_time"
+    assert calls == []
 
 
 def test_alarm_agent_wraps_tool_result():
@@ -367,6 +539,21 @@ def test_alarm_agent_real_list_tool_calls_calendar_api(monkeypatch):
     assert result["ok"] is True
     assert result["data"] == {"events": [{"eventKey": "calendar-agent-7-x"}]}
     list_events.assert_awaited_once()
+
+
+def test_alarm_agent_calendar_tools_use_kst_today_for_relative_dates(monkeypatch):
+    monkeypatch.setattr(alarm_tools, "_today", lambda: date(2026, 7, 13))
+
+    assert alarm_tools._target_date("오늘") == date(2026, 7, 13)
+    assert alarm_tools._target_date("내일") == date(2026, 7, 14)
+    assert alarm_tools._target_range("이번주") == (date(2026, 7, 13), date(2026, 7, 20))
+
+
+def test_alarm_agent_calendar_tools_start_at_uses_delay_minutes(monkeypatch):
+    now = datetime(2026, 7, 13, 10, 0, tzinfo=alarm_tools.KST)
+    monkeypatch.setattr(alarm_tools, "_now", lambda: now)
+
+    assert alarm_tools._start_at({"delay_minutes": 30}) == now + timedelta(minutes=30)
 
 
 def test_alarm_agent_tools_include_sync_daily():
