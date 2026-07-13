@@ -17,6 +17,7 @@ def shopping_list_response(**extra):
         "id": 11,
         "user_id": 7,
         "recipe_id": 3,
+        "recipe_title": "두부 김치찌개",
         "source": "recipe",
         "status": "active",
         "total_price": 5900,
@@ -52,6 +53,7 @@ def test_shopping_openapi_exposes_mcp_callable_contract():
 
     assert "/api/v1/shopping-list/from-recipe" in openapi["paths"]
     assert "/api/v1/shopping-list/current" in openapi["paths"]
+    assert "/api/v1/shopping-list/history" in openapi["paths"]
     assert "/api/v1/shopping-list/purchase" in openapi["paths"]
 
 
@@ -130,6 +132,33 @@ def test_current_update_delete_and_purchase_routes_call_service_with_user(monkey
         "update": {"user_id": 7, "item_id": 21, "is_checked": False, "is_purchased": None},
         "delete": {"user_id": 7, "item_id": 21},
         "purchase": {"user_id": 7, "shopping_list_id": 11, "item_ids": [21]},
+    }
+
+
+def test_history_and_delete_list_routes_call_service_with_user(monkeypatch):
+    calls = {}
+
+    def fake_get_history(*, db, user_id, limit):
+        calls["history"] = {"user_id": user_id, "limit": limit}
+        return [shopping_list_response(id=11), shopping_list_response(id=10, status="completed")]
+
+    def fake_delete_list(*, db, user_id, shopping_list_id):
+        calls["delete_list"] = {"user_id": user_id, "shopping_list_id": shopping_list_id}
+
+    monkeypatch.setattr(shopping_api.shopping_service, "get_history", fake_get_history)
+    monkeypatch.setattr(shopping_api.shopping_service, "delete_list", fake_delete_list)
+    client = create_client()
+
+    history = client.get("/api/v1/shopping-list/history?limit=5")
+    deleted = client.delete("/api/v1/shopping-list/11")
+
+    assert history.status_code == 200
+    assert deleted.status_code == 200
+    assert history.json()["shopping_lists"][1]["status"] == "completed"
+    assert deleted.json()["message"] == "장보기 목록을 삭제했어요."
+    assert calls == {
+        "history": {"user_id": 7, "limit": 5},
+        "delete_list": {"user_id": 7, "shopping_list_id": 11},
     }
 
 

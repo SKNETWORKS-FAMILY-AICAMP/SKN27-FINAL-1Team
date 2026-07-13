@@ -68,6 +68,9 @@ def test_alarm_agent_date_lookup_stays_calendar_list():
         "7\uc6d4 8\uc77c \uc77c\uc815 \uc870\ud68c\ud574\uc918": "7\uc6d4 8\uc77c",
         "2026\ub144 7\uc6d4 8\uc77c \uc77c\uc815 \uc54c\ub824\uc918": "2026\ub144 7\uc6d4 8\uc77c",
         "\ub0b4\uc77c \uc77c\uc815 \uc788\uc5b4?": "\ub0b4\uc77c",
+        "\uc5b4\uc81c \uc77c\uc815 \ubb50\uc600\uc9c0?": "\uc5b4\uc81c",
+        "\uc774\ubc88\uc8fc \uc77c\uc815 \uc870\ud68c": "\uc774\ubc88\uc8fc",
+        "\ub2e4\uc74c\uc8fc \uc77c\uc815 \ubb50 \uc788\uc5b4?": "\ub2e4\uc74c\uc8fc",
     }
 
     for text, date_text in cases.items():
@@ -75,6 +78,62 @@ def test_alarm_agent_date_lookup_stays_calendar_list():
         assert result["intent"] == "calendar.list"
         assert result["action"] == "list_events"
         assert result["payload"]["date_text"] == date_text
+
+
+def test_alarm_agent_calendar_list_tool_receives_requested_date_text():
+    calls = []
+
+    def list_tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"events": []}}
+
+    result = run("\uc5b4\uc81c \uc77c\uc815 \ubb50\uc600\uc9c0?", tools={"list_events": list_tool}, context={"db": MagicMock(), "user_id": 7})
+
+    assert result["ok"] is True
+    assert calls[0]["date_text"] == "\uc5b4\uc81c"
+
+
+def test_alarm_agent_calendar_event_confirmation_includes_date_title_and_type():
+    result = run("\ub0b4\uc77c \ud48b\uc0b4\ud558\uae30 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+
+    assert result["message"] == "\ub0b4\uc77c \ud48b\uc0b4\ud558\uae30 \uc77c\uc815 \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert result["data"]["payload"] == {
+        "title": "\ud48b\uc0b4\ud558\uae30",
+        "date_text": "\ub0b4\uc77c",
+        "reminder_type": "calendar_event",
+    }
+
+
+def test_alarm_agent_shopping_schedule_keeps_shopping_title():
+    result = run("\ub0b4\uc77c \uc7a5\ubcf4\uae30 \uc77c\uc815 \ub4f1\ub85d\ud574\uc918")
+
+    assert result["message"] == "\ub0b4\uc77c \uc7a5\ubcf4\uae30 \uc77c\uc815 \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert result["data"]["payload"]["title"] == "\uc7a5\ubcf4\uae30"
+    assert result["data"]["payload"]["reminder_type"] == "calendar_event"
+
+
+def test_alarm_agent_clarify_button_survives_legacy_supervisor_roundtrip():
+    clarify = run("\ub0b4\uc77c \uc6d4\ub4dc\ucef5\uacbd\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+    general_action = clarify["ui"]["actions"][2]
+    legacy_payload = general_action["value"]["payload"]
+    calls = []
+
+    def create_tool(payload, context):
+        calls.append(payload)
+        return {"ok": True, "data": {"event_id": "google-event", "title": payload["title"]}}
+
+    result = run(
+        "\ud655\uc778:add_calendar_event:\uc6d4\ub4dc\ucef5\uacbd\uae30:\ub0b4\uc77c",
+        payload={"title": legacy_payload["title"], "date_text": legacy_payload["date_text"]},
+        intent="calendar.create",
+        action="create_event",
+        confirmed=True,
+        tools={"create_event": create_tool},
+        context={"db": MagicMock(), "user_id": 7},
+    )
+
+    assert result["ok"] is True
+    assert calls == [{"title": "\uc6d4\ub4dc\ucef5\uacbd\uae30", "date_text": "\ub0b4\uc77c", "reminder_type": "calendar_event"}]
 
 
 def test_alarm_agent_applies_human_choice_to_payload():
@@ -172,6 +231,19 @@ def test_alarm_agent_wraps_tool_result():
     assert result["ok"] is True
     assert result["requires_confirmation"] is False
     assert result["data"]["event_id"] == "google-event"
+
+
+def test_alarm_agent_delete_tool_result_requires_deleted_true():
+    result = run(
+        "calendar.delete",
+        {"event_key": "calendar-agent-7-x"},
+        confirmed=True,
+        tool_result={"data": {"event_key": "calendar-agent-7-x", "deleted": False}},
+    )
+
+    assert result["ok"] is False
+    assert result["message"] == "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."
+    assert result["error"]["code"] == "CALENDAR_EVENT_NOT_FOUND"
 
 
 def test_alarm_agent_real_create_tool_calls_calendar_helpers(monkeypatch):

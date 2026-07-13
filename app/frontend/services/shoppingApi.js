@@ -76,6 +76,12 @@ export async function getShoppingList(shoppingListId) {
   })
 }
 
+export async function getShoppingHistory(limit = 20) {
+  return requestJson(`${API_URL}/api/v1/shopping-list/history?limit=${encodeURIComponent(limit)}`, {
+    headers: buildHeaders(),
+  })
+}
+
 export async function updateShoppingListItem(itemId, payload) {
   return requestJson(`${API_URL}/api/v1/shopping-list/items/${itemId}`, {
     method: 'PATCH',
@@ -86,6 +92,13 @@ export async function updateShoppingListItem(itemId, payload) {
 
 export async function deleteShoppingListItem(itemId) {
   return requestJson(`${API_URL}/api/v1/shopping-list/items/${itemId}`, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  })
+}
+
+export async function deleteShoppingList(shoppingListId) {
+  return requestJson(`${API_URL}/api/v1/shopping-list/${shoppingListId}`, {
     method: 'DELETE',
     headers: buildHeaders(),
   })

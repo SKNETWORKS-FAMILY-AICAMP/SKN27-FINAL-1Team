@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import calendar
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -12,16 +13,43 @@ from app.backend.api.calendar import calendar_api
 
 
 KST = timezone(timedelta(hours=9))
+WEEKDAYS = {"월요일": 0, "화요일": 1, "수요일": 2, "목요일": 3, "금요일": 4, "토요일": 5, "일요일": 6}
+
+
+def _add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _month_range(value: date) -> tuple[date, date]:
+    start = date(value.year, value.month, 1)
+    return start, _add_months(start, 1)
 
 
 def _target_date(value: str | None) -> date:
     today = date.today()
-    if value == "내일":
+    compact = re.sub(r"\s+", "", value or "")
+    if compact == "어제":
+        return today - timedelta(days=1)
+    if compact == "내일":
         return today + timedelta(days=1)
-    if value == "모레":
+    if compact == "모레":
         return today + timedelta(days=2)
-    if value in (None, "", "오늘"):
+    if compact in ("", "오늘"):
         return today
+    if compact in ("지난주", "이번주", "다음주"):
+        return _target_range(compact)[0]
+    if compact in ("지난달", "이번달", "다음달"):
+        return _target_range(compact)[0]
+    weekday_match = re.fullmatch(r"(지난주|이번주|다음주)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)", compact)
+    if weekday_match:
+        week_text, weekday = weekday_match.groups()
+        week_offset = {"지난주": -7, "이번주": 0, None: 0, "다음주": 7}[week_text]
+        start = today - timedelta(days=today.weekday()) + timedelta(days=week_offset)
+        return start + timedelta(days=WEEKDAYS[weekday])
     full_match = re.fullmatch(r"\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*", value)
     if full_match:
         year, month, day = map(int, full_match.groups())
@@ -37,6 +65,22 @@ def _target_date(value: str | None) -> date:
         month, day = value.split("/", 1)
         return date(today.year, int(month), int(day))
     return date.fromisoformat(value)
+
+
+def _target_range(value: str | None) -> tuple[date, date]:
+    today = date.today()
+    compact = re.sub(r"\s+", "", value or "")
+    if compact in ("지난주", "이번주", "다음주"):
+        week_offset = {"지난주": -7, "이번주": 0, "다음주": 7}[compact]
+        start = today - timedelta(days=today.weekday()) + timedelta(days=week_offset)
+        return start, start + timedelta(days=7)
+    if compact in ("지난달", "이번달", "다음달"):
+        month_offset = {"지난달": -1, "이번달": 0, "다음달": 1}[compact]
+        return _month_range(_add_months(today, month_offset))
+    if compact in ("방금", "최근"):
+        return today, today + timedelta(days=30)
+    start = _target_date(compact)
+    return start, start + timedelta(days=1)
 
 
 def _start_at(payload: dict[str, Any]) -> datetime:
@@ -135,6 +179,16 @@ async def delete_calendar_event_tool(payload: dict[str, Any], context: dict[str,
     except Exception as exc:
         return {"ok": False, "error": {"code": "CALENDAR_DELETE_FAILED", "message": str(exc)}}
 
+    if result.get("deleted") is not True:
+        return {
+            "ok": False,
+            "error": {
+                "code": "CALENDAR_EVENT_NOT_FOUND",
+                "message": "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요.",
+            },
+            "data": result,
+        }
+
     return {"ok": True, "message": "캘린더 일정을 삭제했어요.", "data": result}
 
 
@@ -147,8 +201,11 @@ async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, 
             "error": {"code": "CALENDAR_LIST_CONTEXT_REQUIRED", "message": "db와 user_id가 필요해요."},
         }
 
-    start_date = _target_date(payload.get("start_date") or payload.get("date_text") or payload.get("date"))
-    end_date = _target_date(payload.get("end_date")) if payload.get("end_date") else start_date + timedelta(days=1)
+    if payload.get("start_date") or payload.get("end_date"):
+        start_date = _target_date(payload.get("start_date") or payload.get("date_text") or payload.get("date"))
+        end_date = _target_date(payload.get("end_date")) if payload.get("end_date") else start_date + timedelta(days=1)
+    else:
+        start_date, end_date = _target_range(payload.get("date_text") or payload.get("date"))
     try:
         result = await calendar_api.list_google_calendar_events(start_date=start_date, end_date=end_date, current_user_id=user_id, db=db)
     except HTTPException as exc:
@@ -193,7 +250,12 @@ async def sync_daily_events_tool(payload: dict[str, Any], context: dict[str, Any
 def list_notifications_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     if not context.get("user_id"):
         return {"ok": False, "error": {"code": "ALARM_CONTEXT_REQUIRED", "message": "user_id가 필요해요."}}
-    return {"ok": True, "message": "알림 목록을 조회했어요.", "data": {"notifications": []}}
+    message = "읽지 않은 알림을 조회했어요." if payload.get("unread_only") else "알림 목록을 조회했어요."
+    return {
+        "ok": True,
+        "message": message,
+        "data": {"notifications": [], "date_text": payload.get("date_text"), "unread_only": bool(payload.get("unread_only"))},
+    }
 
 
 def mark_notification_read_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
