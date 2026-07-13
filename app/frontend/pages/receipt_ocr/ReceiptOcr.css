@@ -1609,9 +1609,10 @@ body.is-receipt-crop-resizing * {
 .receipt-crop-zoom {
   min-width: 0;
   display: grid;
-  grid-template-columns: 20px auto minmax(120px, 1fr) 48px;
+  grid-template-columns: 20px auto minmax(120px, 280px) 48px;
   gap: 10px;
   align-items: center;
+  justify-content: center;
   color: #6f4b36;
   font-size: 13px;
   font-weight: 900;
