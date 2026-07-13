@@ -3,6 +3,8 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+from .recipe_intents import analyze_recipe_intent
+
 AGENT_NAME = "recipe"
 
 
@@ -51,10 +53,11 @@ def run_recipe_agent(
     intent: str | None = None,
 ) -> dict:
     """Recipe Agent 단일 진입점. Supervisor GraphState subset과 boundary 호환."""
-    del text, db, user_id, history, settings_obj  # ponytail: P2 — 시그니처만 고정, handler는 P5
+    del db, user_id, settings_obj  # ponytail: P3 — handler/DB는 P4-P5
+    resolved_intent = intent or analyze_recipe_intent(text, history)
     internal = build_recipe_response(
         message="recipe agent placeholder",
-        intent=intent or "unknown",
+        intent=resolved_intent,
     )
     return to_supervisor_state(internal)
 
@@ -80,6 +83,9 @@ if __name__ == "__main__":
     assert set(result) == {"response_text", "actions", "sources"}
     assert isinstance(result["response_text"], str) and result["response_text"]
     assert result["actions"] == [] and result["sources"] == []
+
+    stub = run_recipe_agent("두부로 뭐 해먹지?", db=None)
+    assert stub["response_text"]
 
     source = inspect.getsource(build_recipe_response) + inspect.getsource(to_supervisor_state)
     assert "GraphState" not in source

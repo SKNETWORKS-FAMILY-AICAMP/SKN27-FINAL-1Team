@@ -180,9 +180,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 ### P3 — intent 라우터 (분기 없음)
 
-- [ ] **P3-1** `recipe_intents.py` — `analyze_recipe_intent(text, history?)` — `pending`
-- [ ] **P3-2** golden cases `__main__` (DB 불필요) — `pending`
-- [ ] **P3-3** `run_recipe_agent`는 아직 stub 응답 (handler 미연결) — `pending`
+- [x] **P3-1** `recipe_intents.py` — `analyze_recipe_intent(text, history?)` — `done`
+- [x] **P3-2** golden cases `__main__` (DB 불필요) — `done`
+- [x] **P3-3** `run_recipe_agent`는 아직 stub 응답 (handler 미연결) — `done`
 
 ### P4 — 개별 기능 구현
 
@@ -256,9 +256,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 | 항목 | 값 |
 |------|-----|
-| **현재 Phase** | P3 |
-| **마지막 완료 Todo** | P2-4 |
-| **다음 Todo** | P3-1 |
+| **현재 Phase** | P4 |
+| **마지막 완료 Todo** | P3-3 |
+| **다음 Todo** | P4-a |
 | **블로커** | 없음 |
 
 ### 변경 이력
@@ -268,6 +268,7 @@ def recipe_agent_node(state: GraphState) -> dict:
 | 2026-07-13 | WORKPLAN.md 초안 작성 (GraphState boundary 호환, 5 Phase Todo) |
 | 2026-07-13 | P1 shell 완료 (`__init__.py`, `recipe_agent.py`, smoke test) |
 | 2026-07-13 | P2 boundary contract 완료 (`build_recipe_response`, `to_supervisor_state`) |
+| 2026-07-13 | P3 intent router 완료 (`recipe_intents.py`, golden cases) |
 
 ---
 
