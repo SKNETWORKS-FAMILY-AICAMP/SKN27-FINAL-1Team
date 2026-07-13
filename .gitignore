@@ -48,6 +48,9 @@ htmlcov/
 # ────────────────────────────────────────
 # 4. Jupyter Notebook (ai/experiments/ 등)
 # ────────────────────────────────────────
+ai/experiments/.env
+ai/recommendation/outputs/ablation_report.json
+ai/recommendation/outputs/exp*.json
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
