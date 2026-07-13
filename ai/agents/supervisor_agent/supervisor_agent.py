@@ -56,6 +56,10 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "alarm.notification"}
     if any(word in normalized for word in ("일정", "캘린더")):
         return {"intent": "alarm.calendar"}
+    # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
+    if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
+        return {"intent": "recipe.pairing"}
+
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
         return {"intent": "inventory.delete"}
@@ -122,6 +126,11 @@ def recipe_search_node(state: GraphState) -> dict:
     """레시피 검색 결과를 안내합니다."""
     reply, actions, sources = state["service"]._reply_recipe_search(state["db"], state["text"])
     return {"response_text": reply, "actions": actions, "sources": sources}
+
+def recipe_pairing_node(state: GraphState) -> dict:
+    """특정 음식과 함께 먹기 좋은 메뉴를 안내합니다."""
+    reply = state["service"]._reply_recipe_pairing(state["text"])
+    return {"response_text": reply}
 
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
@@ -245,6 +254,7 @@ def route_intent(state: GraphState) -> str:
         "ingredient.guide": "guide_agent_node",
         "recipe.recommend": "recipe_recommend_node",
         "recipe.search": "recipe_search_node",
+        "recipe.pairing": "recipe_pairing_node",
         "receipt.guide": "receipt_guide_node",
     }
     return routes.get(intent, "general_node")
@@ -256,6 +266,7 @@ workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_recommend_node", recipe_recommend_node)
 workflow.add_node("recipe_search_node", recipe_search_node)
+workflow.add_node("recipe_pairing_node", recipe_pairing_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
 workflow.add_node("general_node", general_node)
 
@@ -267,6 +278,7 @@ for node_name in (
     "guide_agent_node",
     "recipe_recommend_node",
     "recipe_search_node",
+    "recipe_pairing_node",
     "receipt_guide_node",
     "general_node",
 ):

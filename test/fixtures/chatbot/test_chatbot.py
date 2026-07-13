@@ -40,6 +40,7 @@ def test_route_intent_examples() -> None:
         "먹다남은 감자튀김 어디에 쓸수있을까": "recipe.recommend",
         "바베큐 레시피 알려줘": "recipe.search",
         "김치볶음밥 레시피": "recipe.search",
+        "김치볶음밥이랑 먹기 좋은 음식": "recipe.pairing",
         "감자튀김 에어프라이기 시간": "recipe.search",
         "남은 치킨 에어프라이기 시간 추천": "recipe.search",
     }
@@ -573,6 +574,7 @@ def test_inventory_action_requires_login() -> None:
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
     assert route_intent({"intent": "recipe.search"}) == "recipe_search_node"
+    assert route_intent({"intent": "recipe.pairing"}) == "recipe_pairing_node"
     assert route_intent({"intent": "inventory.action"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"
 
@@ -762,3 +764,11 @@ def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
     for message in messages:
         assert supervisor_service._route_intent_with_llm(message) == "recipe.recommend"
 
+
+
+def test_recipe_pairing_reply() -> None:
+    """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
+    reply = supervisor_service._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
+
+    assert "김치볶음밥에는" in reply
+    assert "계란국" in reply

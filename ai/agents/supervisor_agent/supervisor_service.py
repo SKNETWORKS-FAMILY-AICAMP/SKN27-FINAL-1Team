@@ -142,6 +142,8 @@ class ChatService:
             return "recipe.search"
 
         normalized = text.replace(" ", "").lower()
+        if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
+            return "recipe.pairing"
         guide_words = ('보관', '세척', '씻', '손질', '신선', '가이드', '어떡', '남은', '영양', '영양성분', '칼로리', '열량', '단백질', '탄수화물', '지방', '당류', '나트륨', '제철')
         if any(word in normalized for word in guide_words):
             return "ingredient.guide"
@@ -189,7 +191,7 @@ class ChatService:
             
             response = llm.invoke(messages)
             intent = response.content.strip()
-            valid_intents = ["receipt.guide", "recipe.recommend", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "general"]
+            valid_intents = ["receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "general"]
             
             if intent in valid_intents:
                 return intent
@@ -208,6 +210,8 @@ class ChatService:
             return "inventory.expiring"
         if _is_cooking_time_question(text):
             return "recipe.search"
+        if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
+            return "recipe.pairing"
             
         if "냉장고" in normalized and "재료" in normalized and "요리" in normalized:
             return "recipe.recommend"
@@ -344,6 +348,18 @@ class ChatService:
             summary = content.split(".")[0].strip() + "."
 
         return summary, sources
+
+    def _reply_recipe_pairing(self, text: str) -> str:
+        """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
+        keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
+        keyword = re.sub(r"^(남은|먹다남은)\s*", "", keyword) or "그 메뉴"
+        pairings = {
+            "김치볶음밥": ["계란국", "어묵국", "단무지", "오이무침", "군만두"],
+            "파스타": ["마늘빵", "샐러드", "피클", "구운 채소"],
+            "라면": ["김치", "단무지", "계란말이", "주먹밥"],
+        }
+        items = pairings.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
+        return f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
 
     def _reply_recipe_search(self, db: Session, text: str) -> tuple[str, list[dict[str, Any]], list[dict[str, str]]]:
         """레시피명 또는 재료명 검색 결과를 안내합니다."""
