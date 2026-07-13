@@ -718,7 +718,7 @@ function Fridge() {
                   <article 
                     className={[
                       'fridge-item',
-                      item.is_expiring_soon || item.is_expired ? 'is-urgent' : '',
+                      item.is_expired ? 'is-expired' : item.is_expiring_soon ? 'is-urgent' : '',
                       selectedIds.has(item.id) ? 'is-selected' : '',
                       isRecentlyStocked ? 'is-recent-stocked' : '',
                     ].filter(Boolean).join(' ')}
@@ -761,7 +761,7 @@ function Fridge() {
                         <div>
                           <dt>소비기한</dt>
                           <dd className="fridge-dday-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
-                            <span className={item.is_expiring_soon || item.is_expired ? 'fridge-dday-urgent' : 'fridge-dday-normal'} style={{ whiteSpace: 'nowrap' }}>
+                            <span className={item.is_expired ? 'fridge-dday-expired' : item.is_expiring_soon ? 'fridge-dday-urgent' : 'fridge-dday-normal'} style={{ whiteSpace: 'nowrap' }}>
                               {getDdayLabel(item)}
                             </span>
                             {item.expiration_date ? <small className="fridge-dday-date" style={{ color: '#8b673e', opacity: 0.8, whiteSpace: 'nowrap' }}>({item.expiration_date})</small> : null}

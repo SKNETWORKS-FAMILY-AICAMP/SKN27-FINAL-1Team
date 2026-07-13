@@ -13,6 +13,13 @@ class ProductSearchResult:
     product_image: str | None
     price: int | None
     mall_name: str | None
+    brand: str | None = None
+    maker: str | None = None
+    category1: str | None = None
+    category2: str | None = None
+    category3: str | None = None
+    category4: str | None = None
+    product_type: int | None = None
 
 
 class ShoppingProvider(Protocol):

@@ -13,11 +13,11 @@ from app.backend.services.receipt_ocr_service.receipt_ocr_service import Receipt
 
 
 def test_overall_feature_smoke_contracts():
-    # Chatbot / supervisor-style routing
+    # 챗봇 슈퍼바이저 라우팅
     assert supervisor_agent.route_intent({"intent": "recipe.recommend"}) == "recipe_recommend_node"
-    assert supervisor_agent.route_intent({"intent": "mcp.calendar"}) == "alarm_agent_node"
+    assert supervisor_agent.route_intent({"intent": "alarm.calendar"}) == "alarm_agent_node"
 
-    # Fridge tool surface
+    # 냉장고 MCP 도구 표면
     assert {"get_fridge_items", "add_fridge_item", "consume_fridge_item", "delete_fridge_item"}.issubset(
         FRIDGE_MCP_TOOLS
     )

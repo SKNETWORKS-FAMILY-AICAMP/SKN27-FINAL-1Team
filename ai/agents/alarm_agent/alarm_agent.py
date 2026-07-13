@@ -10,6 +10,7 @@ from typing import Any, Callable
 AGENT_NAME = "alarm"
 ToolMap = dict[str, Callable[[dict[str, Any], dict[str, Any]], Any]]
 REMINDER_TYPES = {"consume_reminder", "shopping_reminder", "calendar_event"}
+_LEGACY_CHOICE_SEP = "__bb_alarm_type__"
 
 MSG_CALENDAR_LIST = "캘린더 일정을 조회했어요."
 MSG_CALENDAR_CREATE = "캘린더 일정을 등록했어요."
@@ -199,7 +200,7 @@ def _clarification(payload: dict[str, Any]) -> dict[str, Any]:
                     "value": {
                         "intent": "calendar.create",
                         "action": "create_event",
-                        "payload": apply_human_choice(payload, "consume_reminder"),
+                        "payload": _pack_legacy_choice(apply_human_choice(payload, "consume_reminder")),
                     },
                 },
                 {
@@ -208,7 +209,7 @@ def _clarification(payload: dict[str, Any]) -> dict[str, Any]:
                     "value": {
                         "intent": "calendar.create",
                         "action": "create_event",
-                        "payload": apply_human_choice(payload, "shopping_reminder"),
+                        "payload": _pack_legacy_choice(apply_human_choice(payload, "shopping_reminder")),
                     },
                 },
                 {
@@ -217,7 +218,7 @@ def _clarification(payload: dict[str, Any]) -> dict[str, Any]:
                     "value": {
                         "intent": "calendar.create",
                         "action": "create_event",
-                        "payload": apply_human_choice(payload, "calendar_event"),
+                        "payload": _pack_legacy_choice(apply_human_choice(payload, "calendar_event")),
                     },
                 },
             ]
@@ -238,6 +239,26 @@ def apply_human_choice(payload: dict[str, Any], choice: str) -> dict[str, Any]:
     return next_payload
 
 
+def _pack_legacy_choice(payload: dict[str, Any]) -> dict[str, Any]:
+    next_payload = deepcopy(payload)
+    choice = next_payload.get("reminder_type")
+    title = next_payload.get("title")
+    if choice in REMINDER_TYPES and title and _LEGACY_CHOICE_SEP not in title:
+        next_payload["title"] = f"{title}{_LEGACY_CHOICE_SEP}{choice}"
+    return next_payload
+
+
+def _unpack_legacy_choice(payload: dict[str, Any]) -> dict[str, Any]:
+    title = payload.get("title")
+    if not isinstance(title, str) or _LEGACY_CHOICE_SEP not in title:
+        return payload
+    clean_title, choice = title.rsplit(_LEGACY_CHOICE_SEP, 1)
+    if choice in REMINDER_TYPES:
+        payload["title"] = clean_title
+        payload.setdefault("reminder_type", choice)
+    return payload
+
+
 def _from_tool_result(intent: str, action: str, message: str, tool_result: dict[str, Any]) -> dict[str, Any]:
     if tool_result.get("ok") is False:
         error = tool_result.get("error") or {"code": "TOOL_FAILED", "message": tool_result.get("message") or MSG_TOOL_FAILED}
@@ -251,6 +272,19 @@ def _from_tool_result(intent: str, action: str, message: str, tool_result: dict[
             ui=tool_result.get("ui"),
             meta=tool_result.get("meta"),
         )
+    if action == "delete_event":
+        data = tool_result.get("data") if "data" in tool_result else tool_result
+        if not isinstance(data, dict) or data.get("deleted") is not True:
+            return build_response(
+                ok=False,
+                action=action,
+                intent=intent,
+                message=MSG_DELETE_NOT_FOUND,
+                data=data if isinstance(data, dict) else {},
+                error={"code": "CALENDAR_EVENT_NOT_FOUND", "message": MSG_DELETE_NOT_FOUND},
+                ui=tool_result.get("ui"),
+                meta=tool_result.get("meta"),
+            )
 
     return build_response(
         ok=True,
@@ -464,7 +498,7 @@ def _resolve_request(
     intent: str | None,
     action: str | None,
 ) -> tuple[str, str, dict[str, Any], str]:
-    payload = deepcopy(payload or {})
+    payload = _unpack_legacy_choice(deepcopy(payload or {}))
     if intent is None and text_or_intent in _INTENT_ACTIONS:
         intent = text_or_intent
     if intent is None:

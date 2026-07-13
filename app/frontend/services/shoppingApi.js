@@ -98,3 +98,13 @@ export async function completeShoppingPurchase(payload) {
     body: JSON.stringify(payload),
   })
 }
+
+export async function compareShoppingProducts(ingredientNames) {
+  return requestJson(`${API_URL}/api/v1/shopping-list/compare`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      missing_ingredients: ingredientNames,
+    }),
+  })
+}

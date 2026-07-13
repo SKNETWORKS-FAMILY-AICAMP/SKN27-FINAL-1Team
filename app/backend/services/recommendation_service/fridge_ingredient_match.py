@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.backend.services.recommendation_service.recommend_config import (
     BASIC_INGREDIENT_IDS,
     BASIC_INGREDIENT_NORMALIZED_NAMES,
+    basic_ingredient_normalized,
 )
 
 MAYBE_OWNED_WEIGHT = 0.5
 MAYBE_MATCH_SCORE = 1.0
-
-# ponytail: 기본재료 판정용 최소 정규화. ETL loader 전체 규칙 아님 — 분량 숫자 제거만.
-_EMBEDDED_QUANTITY = re.compile(r"(?:\s+\d|(?<=[가-힣])\d)")
 
 MatchType = Literal["recipe_in_fridge", "fridge_in_recipe"]
 
@@ -45,21 +42,6 @@ class FridgeMatchResult:
     missing: list[dict[str, Any]]
     match_rate: int
     display_match_rate: int
-
-
-def _basic_ingredient_normalized(raw_name: str) -> str | None:
-    text = str(raw_name).strip()
-    if not text:
-        return None
-    text = re.sub(r"^[\s?]+", "", text)
-    text = re.sub(r"[\s?]+$", "", text)
-    if not text or text == "?":
-        return None
-    text = _EMBEDDED_QUANTITY.split(text, maxsplit=1)[0].strip()
-    if not text:
-        return None
-    normalized = re.sub(r"\s+", "", text.lower())
-    return normalized or None
 
 
 def _clamp_rate(value: float) -> int:
@@ -168,7 +150,7 @@ def classify_fridge_match(
             owned.append(ingredient)
             continue
 
-        normalized = _basic_ingredient_normalized(recipe_name)
+        normalized = basic_ingredient_normalized(recipe_name)
         if normalized and normalized in BASIC_INGREDIENT_NORMALIZED_NAMES:
             owned.append(ingredient)
             continue
