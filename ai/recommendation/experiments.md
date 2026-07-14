@@ -2,7 +2,7 @@
 
 **읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류**, 이력 참고) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17+ = 콜드스타트 Base Score** (현재 축).  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
-**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**).
+**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**) · §실험 **25**(v1 feature 예측 **불가** → 제품 해석 이관).
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -3231,11 +3231,64 @@ report `sample_weight_mode=review_n` 확인.
 | README                       | 변경 없음                                              |
 
 
-**다음 후보 (재학습 전 진단):** v1 ceiling에서 bar 상·하위가 **기존 item feature로 구분되는지** 확인.  
-안 갈리면 L2c 5/5를 데이터 상한에 가깝다고 보고 **제품 해석(슬라이스 신뢰도)** 으로 이관.
+**다음 후보:** → §실험 **25** (v1 feature 예측 진단).
 
 **한 줄:** review_n 가중은 mean ceiling ρ를 조금 올리지만 dual Go 5/5·v1 정렬은 못 열음 → **기각**.
 
 ### JSON
 
 `outputs/exp24_s{seed}.json` — 기록 후 삭제. baseline export는 `SAMPLE_WEIGHT_MODE=none`으로 복구.
+
+---
+
+## 실험 25 — v1 bar vs catalog feature 예측 가능 진단
+
+**일자:** 2026-07-14  
+**유형:** 재학습 없음 — ceiling v=1에서 Ridge 5-fold OOF Spearman(pred, bar)  
+**고정:** Bayesian bar (`review_rank_score`), hybrid 계열 catalog feature, LightFM 미재학습
+
+### 1. 왜
+
+실험 23·24로 v1 ρ≈0·L2c 5/5 미해결. 모델 손잡이 추가 전에 **카탈로그 feature만으로 v1 bar 순위가 설명되는지** 확인.
+
+### 2. 설정
+
+| 항목 | 값 |
+|------|-----|
+| 슬라이스 | ceiling ∩ `review_n=1` (**n=344**) |
+| Y | `review_rank_score` (Bayesian bar) |
+| X | `log1p(view/scrap)`, `others_count`/`basic_count`, one-hot 조리 속성 7종 (빈도&lt;5 → `__other__`) |
+| 제외 | `recipe_name`, `ingredients`, `aliases`, 리뷰/감성 누수 |
+| 모델 | Ridge α=1.0, 열 표준화(train fold), **5-fold OOF** (seed=42) |
+| 판정 | ρ_OOF &lt;0.10 **불가** · 0.10–0.25 약신호 · ≥0.25 가능 |
+
+### 3. 결과
+
+| 측정 | 값 | 비고 |
+|------|-----|------|
+| n / n_features | 344 / 72 | bar uniq% 0.831 |
+| **ρ_OOF (pred, bar)** | **0.020** | **주 지표** |
+| ρ_insample (참고) | 0.238 | 과적합; 판정 미사용 |
+| Spearman(ŷ_lightfm, bar) | 0.041 | 현 베이스라인 export |
+| Spearman(pop, bar) | 0.015 | |
+| Spearman(log view, bar) | −0.031 | |
+| Spearman(log scrap, bar) | 0.045 | |
+
+### 4. 판정
+
+| 항목 | 결과 |
+|------|------|
+| **판정** | **불가 (상한)** — ρ_OOF &lt; 0.10 |
+| 함의 | catalog feature로 v1 품질 bar 순위 **설명 불가** → **모델 ablation 중단** |
+| LightFM/config | 변경 없음 |
+
+**제품·슬라이스 신뢰도 이관 (고정):**  
+Base Score(ŷ)의 ceiling·v=1(만점+리뷰1건) 구간은 카탈로그 feature만으로 리뷰 품질 bar를 재현하기 어렵다. 서비스에서는 informative·v≥2 warm에 더 높은 신뢰, v=1 ceiling은 동점·보조 정렬(인기 등)로 취급하는 해석이 맞다.
+
+**다음:** 리뷰 품질 Go를 v1에 억지로 맞추는 실험 대신, README/운용에 슬라이스 신뢰 문구 반영(후속 문서 작업). L2c 5/5·v1 ρ는 현 데이터·feature로는 상한에 가깝다.
+
+**한 줄:** v1 bar는 catalog feature로 OOF 예측 불가(ρ≈0.02) → 모델 경로 닫고 제품 해석으로 이관.
+
+### JSON
+
+`outputs/exp25_v1_diag.json` — 기록 후 삭제.
