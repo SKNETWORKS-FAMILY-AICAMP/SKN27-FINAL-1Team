@@ -624,6 +624,14 @@
   flex-wrap: wrap;
 }
 
+.receipt-preview__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .receipt-panel__title button,
 .receipt-preview__title button,
 .receipt-preview-tools button {

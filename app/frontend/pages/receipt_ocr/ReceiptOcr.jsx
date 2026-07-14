@@ -691,6 +691,7 @@ function ReceiptOcr() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [analysisStep, setAnalysisStep] = useState(0)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
+  const [lastReceiptSourceFile, setLastReceiptSourceFile] = useState(null)
   const [cropFile, setCropFile] = useState(null)
   const [cropImageUrl, setCropImageUrl] = useState(null)
   const [cropSource, setCropSource] = useState('')
@@ -756,6 +757,16 @@ function ReceiptOcr() {
     setPreviewImageUrl(url)
   }
 
+  const setUploadedPreviewBlob = (blob) => {
+    if (previewImageUrlRef.current) {
+      URL.revokeObjectURL(previewImageUrlRef.current)
+    }
+
+    const url = blob ? URL.createObjectURL(blob) : null
+    previewImageUrlRef.current = url
+    setPreviewImageUrl(url)
+  }
+
   const setCropPreview = (file) => {
     if (cropImageUrlRef.current) {
       URL.revokeObjectURL(cropImageUrlRef.current)
@@ -797,6 +808,25 @@ function ReceiptOcr() {
     }
 
     return true
+  }
+
+  const loadSavedReceiptPreview = async (receiptId, token) => {
+    if (!receiptId || !token) {
+      return
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/receipts/${receiptId}/image`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      return
+    }
+
+    const blob = await response.blob()
+    setUploadedPreviewBlob(blob)
   }
 
   const moveToStep = (nextStep) => {
@@ -846,6 +876,7 @@ function ReceiptOcr() {
     setCropPreview(file)
     setCropFile(file)
     setCropSource(source || 'receipt image')
+    setLastReceiptSourceFile(file)
     setReceiptMeta(null)
     setDetectedRows([])
     setEditingRows({})
@@ -858,7 +889,7 @@ function ReceiptOcr() {
     setSelectedRowIds([])
   }
 
-  const uploadReceiptImage = async (file, source) => {
+  const uploadReceiptImage = async (file, source, options = {}) => {
     if (!isLoggedIn) {
       requestLogin()
       return
@@ -876,9 +907,12 @@ function ReceiptOcr() {
 
     const uploadRunId = uploadRunIdRef.current + 1
     uploadRunIdRef.current = uploadRunId
+    const cropMode = options.cropMode || 'auto'
+    const manualCropSourceFile = options.manualCropSourceFile || file
 
     clearFlowTimers()
     clearCropSelection()
+    setLastReceiptSourceFile(manualCropSourceFile)
     setUploadedPreview(file)
     setReceiptMeta(null)
     setDetectedRows([])
@@ -890,6 +924,7 @@ function ReceiptOcr() {
 
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('crop_mode', cropMode)
 
     try {
       const response = await fetch(`${API_URL}/api/v1/receipts/upload/stream`, {
@@ -948,6 +983,25 @@ function ReceiptOcr() {
         return
       }
 
+      if (data.manual_crop_required) {
+        setUploadedPreview(null)
+        setCropPreview(manualCropSourceFile)
+        setCropFile(manualCropSourceFile)
+        setCropSource(source || 'receipt image')
+        setHasUploaded(false)
+        setIsProcessing(false)
+        setAnalysisStep(0)
+        setActiveStep(STEP.CROP)
+        setDetectedRows([])
+        setEditingRows({})
+        setReceiptMeta(null)
+        await showAlert(data.manual_crop_message || '영수증 영역을 직접 맞춘 뒤 다시 분석해주세요.', {
+          title: '영수증 영역 확인이 필요해요',
+          confirmText: '확인',
+        })
+        return
+      }
+
       if (data.needs_reupload) {
         setHasUploaded(false)
         setActiveStep(STEP.UPLOAD)
@@ -977,6 +1031,7 @@ function ReceiptOcr() {
         totalAmount: data.total_amount,
         confidenceNote: data.confidence_note,
       })
+      await loadSavedReceiptPreview(data.receipt_id, token)
       setAnalysisStep(aiAnalysisSteps.length - 1)
       setActiveStep(STEP.CONFIRM)
     } catch (error) {
@@ -1007,7 +1062,10 @@ function ReceiptOcr() {
 
     try {
       const croppedFile = await createCroppedReceiptFile(cropImageUrl, croppedAreaPixels, cropFile.name)
-      await uploadReceiptImage(croppedFile, cropSource || 'cropped receipt image')
+      await uploadReceiptImage(croppedFile, cropSource || 'cropped receipt image', {
+        cropMode: 'manual',
+        manualCropSourceFile: cropFile,
+      })
     } catch (error) {
       console.error(error)
       setIsCreatingCrop(false)
@@ -1381,6 +1439,7 @@ function ReceiptOcr() {
     setEditingRows(getInitialEditingRows(initialRows))
     setReceiptSource('샘플 영수증')
     setReceiptMeta(null)
+    setLastReceiptSourceFile(null)
     setHasUploaded(false)
     setIsProcessing(false)
     setAnalysisStep(0)
@@ -1396,6 +1455,32 @@ function ReceiptOcr() {
     }
 
     retakeInputRef.current?.click()
+  }
+
+  const openManualCropEditor = async () => {
+    if (isProcessing) {
+      return
+    }
+
+    if (!lastReceiptSourceFile) {
+      await showAlert('영수증 파일 정보가 없어 다시 첨부가 필요해요.', {
+        title: '영역 조정을 시작할 수 없어요',
+        confirmText: '확인',
+      })
+      openRetakePicker()
+      return
+    }
+
+    uploadRunIdRef.current += 1
+    clearFlowTimers()
+    setUploadedPreview(null)
+    setCropPreview(lastReceiptSourceFile)
+    setCropFile(lastReceiptSourceFile)
+    setCropSource('수동 영역 조정')
+    setHasUploaded(false)
+    setIsProcessing(false)
+    setAnalysisStep(0)
+    setActiveStep(STEP.CROP)
   }
 
   const handleRetakeFileChange = (event) => {
@@ -1648,9 +1733,14 @@ function ReceiptOcr() {
             <section className="receipt-panel receipt-preview-panel" aria-labelledby="preview-title">
               <div className="receipt-preview__title">
                 <h2 id="preview-title">업로드한 영수증</h2>
-                <button type="button" disabled={isProcessing} onClick={openRetakePicker}>
-                  다시 촬영
-                </button>
+                <div className="receipt-preview__actions">
+                  <button type="button" disabled={isProcessing || !lastReceiptSourceFile} onClick={openManualCropEditor}>
+                    영역 조정
+                  </button>
+                  <button type="button" disabled={isProcessing} onClick={openRetakePicker}>
+                    다시 촬영
+                  </button>
+                </div>
                 <input
                   ref={retakeInputRef}
                   className="receipt-file-input"
