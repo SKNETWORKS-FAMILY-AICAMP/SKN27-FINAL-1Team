@@ -21,19 +21,66 @@ except ImportError:
     OpenAI = None
 
 
+# =========================================================
+# 1. Guide Agent 설정값
+# =========================================================
+
 GUIDE_INTENT = "ingredient.guide"
 NUTRITION_WORDS = ("영양", "영양성분", "칼로리", "열량", "탄수화물", "단백질", "지방", "당류", "나트륨")
+
+# 자연어 전처리 규칙
 GUIDE_STOPWORDS = (
     "영양성분", "영양", "칼로리", "열량", "탄수화물", "단백질", "지방", "당류", "나트륨",
-    "제철이야", "제철인가요", "제철인가", "맞나요", "맞아",
-    "제철", "보관법", "보관", "손질법", "손질", "세척법", "세척", "신선도", "확인법",
+    "제철시기", "제철이야", "제철인가요", "제철인가", "맞나요", "맞아",
+    "제철", "시기", "보관법", "보관", "손질법", "손질", "세척법", "세척", "신선도", "확인법",
     "설명해줘", "알려줘", "조회해줘", "조회", "식재료", "재료", "가이드", "언제야", "뭐야",
     "에 대해", "대해", "정보",
 )
+
+# 구어체 요청 표현 제거 규칙
+QUERY_REQUEST_PATTERNS = (
+    r"어떻게\s*보관(?:해|하나요|해야\s*해)?",
+    r"어떻게\s*손질(?:해|하나요|해야\s*해)?",
+    r"어떻게\s*세척(?:해|하나요|해야\s*해)?",
+    r"어떻게\s*씻(?:어|나요|어야\s*해)?",
+    r"오래\s*두는\s*법",
+    r"냉동해도\s*괜찮아",
+    r"깨끗하게\s*닦(?:으려면|는\s*법)?",
+    r"물러졌는데\s*괜찮아",
+    r"씻는\s*법",
+    r"먹어도\s*돼",
+    r"먹어도\s*되나요",
+    r"상했는지\s*확인하는\s*법",
+    r"상했는지\s*확인하는\s*방법",
+    r"상한\s*것\s*같아",
+    r"상한\s*건지\s*확인하는\s*법",
+    r"상했는지",
+    r"상한\s*건지",
+    r"몇\s*칼로리(?:야|예요)?",
+    r"칼로리\s*몇(?:이야|인가요)?",
+    r"얼마나\s*들어\s*있어",
+    r"얼마나\s*들었어",
+    r"어떻게\s*해",
+    r"어떻게\s*하나요",
+    r"어떻게\s*해야\s*해",
+)
+
+# 관련 식재료 목록 질문 표현 제거 규칙
+RELATED_QUERY_PATTERNS = (
+    r"뭐가\s*있(?:어|나요)?",
+    r"어떤\s*(?:식재료|재료)",
+    r"무슨\s*(?:식재료|재료)",
+    r"종류가\s*뭐(?:야|예요)?",
+    r"목록\s*보여줘",
+    r"리스트\s*보여줘",
+)
+
 RELATED_LIST_WORDS = (
     "종류", "목록", "분류", "리스트",
     "어떤재료", "무슨재료", "어떤식재료", "무슨식재료",
 )
+
+# 외부 검색 정책
 TRUSTED_WEB_DOMAINS = (
     "foodsafetykorea.go.kr",
     "mfds.go.kr",
@@ -51,9 +98,11 @@ LOW_PRIORITY_BLOCKED_DOMAINS = (
     "instagram.com",
     "facebook.com",
 )
+
 SAFETY_SENSITIVE_GUIDE_TYPES = {
     "freshness",
 }
+
 GUIDE_TYPE_LABELS = {
     "storage": "보관법",
     "prep": "손질법",
@@ -62,6 +111,39 @@ GUIDE_TYPE_LABELS = {
     "seasonality": "제철 정보",
 }
 
+
+# =========================================================
+# 2. Guide Agent 임계값 및 조회 설정
+# =========================================================
+
+QUERY_MAX_LENGTH = 100
+
+GUIDE_SEARCH_PAGE_SIZE = 10
+GUIDE_LIST_PAGE_SIZE = 24
+SEASONAL_PAGE_SIZE = 60
+
+GUIDE_MATCH_MIN_SCORE = 0.88
+FUZZY_CANDIDATE_MIN_SCORE = 0.72
+FUZZY_AUTO_MATCH_SCORE = 0.88
+FUZZY_SCORE_GAP = 0.04
+FUZZY_CANDIDATE_LIMIT = 5
+CONFIRM_CANDIDATE_DISPLAY_LIMIT = 5
+
+NUTRITION_PARTIAL_MATCH_LIMIT = 10
+RELATED_INGREDIENT_LIMIT = 30
+RELATED_CARD_LIMIT = 8
+
+WEB_SEARCH_MAX_RESULTS = 8
+WEB_SOURCE_LIMIT = 3
+WEB_CONTENT_LIMIT = 1800
+WEB_FALLBACK_CONTENT_LIMIT = 600
+WEB_SUMMARY_MAX_SENTENCES = 3
+WEB_SUMMARY_TEMPERATURE = 0.2
+
+
+# =========================================================
+# 3. 응답 생성 함수
+# =========================================================
 
 def build_guide_response(
     *,
@@ -142,6 +224,10 @@ def _source(name: str | None, url: str | None) -> dict[str, str | None] | None:
     return {"title": name, "url": url} if name else None
 
 
+# =========================================================
+# 4. 데이터 변환 및 전처리 함수
+# =========================================================
+
 def _detail_data(detail: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str | None]]]:
     sources = [
         _source(detail.get("seasonal_source_name"), detail.get("seasonal_source_url")),
@@ -204,6 +290,8 @@ def _detail_data(detail: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str,
 def _clean_query_keyword(text_value: str) -> str:
     keyword = re.sub(r"\d{1,2}\s*월", " ", text_value)
     keyword = re.sub(r"(에\s*대해|에\s*대한)", " ", keyword)
+    for pattern in QUERY_REQUEST_PATTERNS:
+        keyword = re.sub(pattern, " ", keyword)
     for word in GUIDE_STOPWORDS:
         keyword = keyword.replace(word, " ")
     keyword = re.sub(r"[?!.,~]", " ", keyword)
@@ -230,9 +318,13 @@ def _is_related_list_query(query: str) -> bool:
 
 def _clean_related_keyword(query: str) -> str:
     keyword = _clean_query_keyword(query)
-    keyword = re.sub(r"[?!.,~]", " ", keyword)
+    for pattern in RELATED_QUERY_PATTERNS:
+        keyword = re.sub(pattern, " ", keyword)
     for word in RELATED_LIST_WORDS:
         keyword = keyword.replace(word, " ")
+    for word in ("어떤", "무슨", "있어", "있나요"):
+        keyword = keyword.replace(word, " ")
+    keyword = re.sub(r"[?!.,~]", " ", keyword)
     keyword = re.sub(r"\s+", " ", keyword).strip()
     return re.sub(r"[은는이가을를에의]$", "", keyword).strip()
 
@@ -264,7 +356,7 @@ def _select_guide_item(
     ingredient: str,
     items: list[dict[str, Any]],
     *,
-    minimum_score: float = 0.88,
+    minimum_score: float = GUIDE_MATCH_MIN_SCORE,
 ) -> dict[str, Any] | None:
     if not items:
         return None
@@ -308,7 +400,7 @@ def _select_guide_item(
     return best_item
 
 
-def _guide_fuzzy_candidates(ingredient: str, *, limit: int = 5) -> list[dict[str, Any]]:
+def _guide_fuzzy_candidates(ingredient: str, *, limit: int = FUZZY_CANDIDATE_LIMIT) -> list[dict[str, Any]]:
     query = """
     MATCH (g)
     WHERE (g:FoodGuide OR g:Ingredient)
@@ -333,7 +425,7 @@ def _guide_fuzzy_candidates(ingredient: str, *, limit: int = 5) -> list[dict[str
                 *(row.get("aliases") or []),
             ]
             score = max(_match_score(ingredient, name) for name in names if name)
-            if score >= 0.72:
+            if score >= FUZZY_CANDIDATE_MIN_SCORE:
                 scored.append(
                     {
                         "code": row.get("code"),
@@ -347,16 +439,53 @@ def _guide_fuzzy_candidates(ingredient: str, *, limit: int = 5) -> list[dict[str
     return sorted(scored, key=lambda item: item["score"], reverse=True)[:limit]
 
 
+def _safe_guide_fuzzy_candidates(
+    ingredient: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    try:
+        return _guide_fuzzy_candidates(ingredient), None
+    except Exception:
+        return [], build_guide_response(
+            message=f"{ingredient} 유사 식재료를 조회하지 못했어요.",
+            error={"code": "GUIDE_FUZZY_ERROR"},
+            meta={"data_source": "neo4j"},
+        )
+
+
 def _needs_confirmation(candidates: list[dict[str, Any]]) -> bool:
     if not candidates:
         return False
-    if candidates[0]["score"] < 0.88:
+    if candidates[0]["score"] < FUZZY_AUTO_MATCH_SCORE:
         return True
-    return len(candidates) > 1 and candidates[0]["score"] - candidates[1]["score"] < 0.04
+    return len(candidates) > 1 and candidates[0]["score"] - candidates[1]["score"] < FUZZY_SCORE_GAP
 
 
-def _confirm_ingredient_response(ingredient: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    candidate_names = [candidate["name"] for candidate in candidates[:5]]
+def _candidate_query_value(candidate_name: str, guide_type: str) -> str:
+    if guide_type == "nutrition":
+        return f"{candidate_name} 영양성분 알려줘"
+    if guide_type == "all":
+        return f"{candidate_name} 알려줘"
+    label = GUIDE_TYPE_LABELS.get(guide_type, "가이드")
+    return f"{candidate_name} {label} 알려줘"
+
+
+def _candidate_display_label(candidate_name: str, guide_type: str) -> str:
+    if guide_type == "nutrition":
+        return f"{candidate_name} 영양성분"
+    if guide_type == "all":
+        return candidate_name
+    label = GUIDE_TYPE_LABELS.get(guide_type, "가이드")
+    return f"{candidate_name} {label}"
+
+
+def _confirm_ingredient_response(
+    ingredient: str,
+    candidates: list[dict[str, Any]],
+    *,
+    guide_type: str = "all",
+    original_query: str | None = None,
+) -> dict[str, Any]:
+    candidate_names = [candidate["name"] for candidate in candidates[:CONFIRM_CANDIDATE_DISPLAY_LIMIT]]
     return build_guide_response(
         action="confirm_ingredient",
         message=(
@@ -368,19 +497,22 @@ def _confirm_ingredient_response(ingredient: str, candidates: list[dict[str, Any
         requires_confirmation=True,
         actions=[
             {
-                "type": "select_candidate",
-                "label": f"{candidate['name']}로 조회",
-                "value": candidate["name"],
+                "type": "select_guide_candidate",
+                "label": _candidate_display_label(candidate["name"], guide_type),
+                "value": _candidate_query_value(candidate["name"], guide_type),
+                "intent": GUIDE_INTENT,
+                "guide_type": guide_type,
+                "original_query": original_query or ingredient,
             }
             for candidate in candidates
         ],
         cards=[
             {
-                "title": candidate["name"],
+                "title": _candidate_display_label(candidate["name"], guide_type),
                 "subtitle": f"유사도 {candidate.get('score', 0):.2f}",
-                "value": candidate["name"],
+                "value": _candidate_query_value(candidate["name"], guide_type),
             }
-            for candidate in candidates[:5]
+            for candidate in candidates[:CONFIRM_CANDIDATE_DISPLAY_LIMIT]
         ],
         meta={
             "result_code": "INGREDIENT_CONFIRMATION_REQUIRED",
@@ -390,8 +522,12 @@ def _confirm_ingredient_response(ingredient: str, candidates: list[dict[str, Any
     )
 
 
+# =========================================================
+# 5. 내부 DB 및 외부 검색 조회 함수
+# =========================================================
+
 def _lookup_guide_detail(ingredient: str) -> tuple[dict[str, Any] | None, list[dict[str, str | None]]]:
-    search = guide_service.search_guides(keyword=ingredient, page=1, page_size=10)
+    search = guide_service.search_guides(keyword=ingredient, page=1, page_size=GUIDE_SEARCH_PAGE_SIZE)
     selected = _select_guide_item(ingredient, search.get("items") or [])
     if not selected:
         return None, []
@@ -464,13 +600,14 @@ def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
                     END,
                     source_priority,
                     food_name
-                LIMIT 10
+                LIMIT :limit
                 """
             ),
             {
                 "name": like_name,
                 "exact_name": keyword,
                 "prefix_name": f"{keyword}%",
+                "limit": NUTRITION_PARTIAL_MATCH_LIMIT,
             },
         ).mappings().all()
         if not rows:
@@ -504,7 +641,7 @@ def _ingredient_from_nutrition(nutrition: dict[str, Any] | None, fallback_name: 
 
 
 def _summarize_web_content(ingredient: str, guide_type: str, content: str) -> str:
-    fallback_content = content[:600]
+    fallback_content = content[:WEB_FALLBACK_CONTENT_LIMIT]
     if OpenAI is None or not app_settings.OPENAI_API_KEY:
         return fallback_content
 
@@ -517,7 +654,7 @@ def _summarize_web_content(ingredient: str, guide_type: str, content: str) -> st
                 {
                     "role": "system",
                     "content": (
-                        "검색 결과 안에서만 한국어로 3문장 이내 요약해. "
+                        f"검색 결과 안에서만 한국어로 {WEB_SUMMARY_MAX_SENTENCES}문장 이내 요약해. "
                         "추측하지 말고, 식품 안전상 단정이 어려우면 보수적으로 말해."
                     ),
                 },
@@ -526,7 +663,7 @@ def _summarize_web_content(ingredient: str, guide_type: str, content: str) -> st
                     "content": f"식재료: {ingredient}\n요청: {label}\n검색 결과:\n{content}",
                 },
             ],
-            temperature=0.2,
+            temperature=WEB_SUMMARY_TEMPERATURE,
         )
         summarized = response.choices[0].message.content
         return summarized.strip() if summarized else fallback_content
@@ -541,7 +678,7 @@ def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tup
     label = GUIDE_TYPE_LABELS.get(guide_type, "식재료 가이드")
     query = f"{ingredient} {label} 식품안전 농촌진흥청 식약처"
     client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
-    result = client.search(query=query, search_depth="basic", max_results=8)
+    result = client.search(query=query, search_depth="basic", max_results=WEB_SEARCH_MAX_RESULTS)
     picked = []
     for item in result.get("results", []):
         url = item.get("url") or ""
@@ -557,9 +694,9 @@ def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tup
 
     sources = [
         {"title": item.get("title") or item.get("url") or "공신력 외부 자료", "url": item.get("url") or ""}
-        for item in picked[:3]
+        for item in picked[:WEB_SOURCE_LIMIT]
     ]
-    content = "\n".join(item.get("content", "") for item in picked[:3] if item.get("content"))[:1800]
+    content = "\n".join(item.get("content", "") for item in picked[:WEB_SOURCE_LIMIT] if item.get("content"))[:WEB_CONTENT_LIMIT]
     if not content:
         return None, sources
 
@@ -584,7 +721,8 @@ def _fallback_guide_response(
             data_source = "general_web"
             source_type = "general_web"
             source_label = "후순위 웹 자료"
-    except Exception:
+    except Exception as exc:
+        print("[Guide Web Fallback 오류]", exc)
         content, sources = None, []
 
     if not content:
@@ -647,17 +785,21 @@ def _fallback_guide_response(
     )
 
 
+# =========================================================
+# 6. 의도 분류 및 응답 필터링 함수
+# =========================================================
+
 def _guide_type_from_query(query: str) -> str:
     normalized = query.replace(" ", "").lower()
     if "제철" in normalized:
         return "seasonality"
+    if any(word in normalized for word in ("신선", "상한", "상했", "먹어도", "물러졌")):
+        return "freshness"
     if "손질" in normalized:
         return "prep"
-    if "세척" in normalized or "씻" in normalized:
+    if "세척" in normalized or "씻" in normalized or "닦" in normalized:
         return "washing"
-    if any(word in normalized for word in ("신선", "상한", "상했", "먹어도")):
-        return "freshness"
-    if "보관" in normalized:
+    if any(word in normalized for word in ("보관", "오래두", "냉동")):
         return "storage"
     return "all"
 
@@ -684,11 +826,17 @@ def _filter_guide_response(result: dict[str, Any], guide_type: str) -> dict[str,
     label = GUIDE_TYPE_LABELS.get(guide_type, "가이드")
 
     if guide_type == "seasonality":
+        seasonality = data.get("seasonality") or {}
+        months = seasonality.get("months") or []
         result["action"] = "lookup_seasonality"
         result["data"] = {
             "ingredient": ingredient,
-            "seasonality": data.get("seasonality"),
+            "seasonality": seasonality,
         }
+        if months:
+            month_text = ", ".join(f"{month}월" for month in months)
+            result["message"] = f"{ingredient_name} 제철은 {month_text}이에요."
+            return result
     else:
         result["action"] = f"lookup_{guide_type}"
         result["data"] = {
@@ -702,15 +850,19 @@ def _filter_guide_response(result: dict[str, Any], guide_type: str) -> dict[str,
     return result
 
 
+# =========================================================
+# 7. 공개 조회 함수
+# =========================================================
+
 def list_guide_ingredients(
     *,
     keyword: str | None = None,
     page: int = 1,
-    page_size: int = 24,
+    page_size: int = GUIDE_LIST_PAGE_SIZE,
     major_category: str | None = None,
     middle_category: str | None = None,
     minor_category: str | None = None,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     """기존 목록 조회를 공통 Guide Agent 응답으로 반환합니다."""
     try:
         data = guide_service.search_guides(
@@ -748,7 +900,7 @@ def list_guide_categories(
         )
 
 
-def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]:
+def list_related_ingredients(keyword: str, *, limit: int = RELATED_INGREDIENT_LIMIT) -> dict[str, Any]:
     """원재료명/별칭/분류명으로 관련 식재료 목록을 조회합니다."""
     keyword = (keyword or "").strip()
     if not keyword:
@@ -839,8 +991,8 @@ def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]
             },
         )
 
-    names = [row["name"] for row in rows[:8]]
-    suffix = " 등이 있어요." if len(rows) > 8 else "가 있어요."
+    names = [row["name"] for row in rows[:RELATED_CARD_LIMIT]]
+    suffix = " 등이 있어요." if len(rows) > RELATED_CARD_LIMIT else "가 있어요."
     return build_guide_response(
         action="list_related_ingredients",
         message=f"{keyword} 관련 식재료로는 {', '.join(names)}{suffix}",
@@ -852,7 +1004,7 @@ def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]
                     value for value in row["category"].values() if value
                 ),
             }
-            for row in rows[:8]
+            for row in rows[:RELATED_CARD_LIMIT]
         ],
         meta={"data_source": "neo4j", "matched_fields": ["name", "alias", "category"]},
     )
@@ -861,7 +1013,7 @@ def list_related_ingredients(keyword: str, *, limit: int = 30) -> dict[str, Any]
 def lookup_ingredient_guide(ingredient: str) -> dict[str, Any]:
     """기존 검색과 상세 조회를 이어 전체 식재료 가이드를 반환합니다."""
     try:
-        search = guide_service.search_guides(keyword=ingredient, page=1, page_size=10)
+        search = guide_service.search_guides(keyword=ingredient, page=1, page_size=GUIDE_SEARCH_PAGE_SIZE)
         selected = _select_guide_item(ingredient, search.get("items") or [])
         if not selected:
             return build_guide_response(
@@ -895,14 +1047,26 @@ def list_seasonal_ingredients(month: int) -> dict[str, Any]:
     """기존 목록 조회 결과에서 지정한 월의 제철 식재료를 반환합니다."""
     if not 1 <= month <= 12:
         return build_guide_response(
-            action="list_seasonal_ingredients",
+            action="request_season_month",
             message="제철 월은 1월부터 12월 사이여야 해요.",
-            error={"code": "INVALID_SEASON_MONTH"},
+            status="needs_input",
+            requires_confirmation=True,
+            actions=[
+                {
+                    "type": "request_input",
+                    "label": "제철 월 입력",
+                    "value": None,
+                }
+            ],
+            meta={
+                "result_code": "INVALID_SEASON_MONTH",
+                "required_parameter": "month",
+            },
         )
     try:
         items, page = [], 1
         while True:
-            result = guide_service.search_guides(page=page, page_size=60)
+            result = guide_service.search_guides(page=page, page_size=SEASONAL_PAGE_SIZE)
             items.extend(item for item in result["items"] if month in (item.get("seasonal_months") or []))
             if not result["has_next"]:
                 break
@@ -974,7 +1138,7 @@ def answer_guide_query(query: str) -> dict[str, Any]:
             "조회할 식재료명을 입력해주세요.",
             "EMPTY_GUIDE_QUERY",
         )
-    if len(query) > 100:
+    if len(query) > QUERY_MAX_LENGTH:
         return _invalid_query_response(
             "질문이 너무 길어요. 식재료명과 궁금한 정보를 짧게 입력해주세요.",
             "GUIDE_QUERY_TOO_LONG",
@@ -991,8 +1155,7 @@ def answer_guide_query(query: str) -> dict[str, Any]:
 
     if _is_related_list_query(query):
         related_keyword = _clean_related_keyword(query)
-        if related_keyword:
-            return list_related_ingredients(related_keyword)
+        return list_related_ingredients(related_keyword)
 
     if not keyword:
         return _invalid_query_response(
@@ -1002,16 +1165,27 @@ def answer_guide_query(query: str) -> dict[str, Any]:
 
     if any(word in query for word in NUTRITION_WORDS):
         result = lookup_ingredient_nutrition(keyword)
+        if result.get("status") == "error":
+            return result
         if result.get("status") == "success":
             return result
 
-        candidates = _guide_fuzzy_candidates(keyword)
+        candidates, fuzzy_error = _safe_guide_fuzzy_candidates(keyword)
+        if fuzzy_error:
+            return fuzzy_error
         if candidates:
             if _needs_confirmation(candidates):
-                return _confirm_ingredient_response(keyword, candidates)
+                return _confirm_ingredient_response(
+                    keyword,
+                    candidates,
+                    guide_type="nutrition",
+                    original_query=query,
+                )
 
             corrected = candidates[0]["name"]
             result = lookup_ingredient_nutrition(corrected)
+            if result.get("status") == "error":
+                return result
             result["meta"].update(
                 {
                     "match_type": "fuzzy_auto",
@@ -1025,6 +1199,8 @@ def answer_guide_query(query: str) -> dict[str, Any]:
 
     ingredient = keyword or query
     result = lookup_ingredient_guide(ingredient)
+    if result.get("status") == "error":
+        return result
     guide_type = _guide_type_from_query(query)
     data = result.get("data", {})
     guide = _get_requested_guide(data, guide_type)
@@ -1035,13 +1211,22 @@ def answer_guide_query(query: str) -> dict[str, Any]:
         result.get("status") == "not_found"
         and (result.get("meta") or {}).get("result_code") == "GUIDE_NOT_FOUND"
     ):
-        candidates = _guide_fuzzy_candidates(ingredient)
+        candidates, fuzzy_error = _safe_guide_fuzzy_candidates(ingredient)
+        if fuzzy_error:
+            return fuzzy_error
         if candidates:
             if _needs_confirmation(candidates):
-                return _confirm_ingredient_response(ingredient, candidates)
+                return _confirm_ingredient_response(
+                    ingredient,
+                    candidates,
+                    guide_type=guide_type,
+                    original_query=query,
+                )
 
             corrected = candidates[0]["name"]
             result = lookup_ingredient_guide(corrected)
+            if result.get("status") == "error":
+                return result
             result["meta"].update(
                 {
                     "match_type": "fuzzy_auto",
@@ -1062,6 +1247,38 @@ def answer_guide_query(query: str) -> dict[str, Any]:
         ingredient_info = _ingredient_from_nutrition(nutrition, ingredient)
 
     fallback_name = (ingredient_info or {}).get("name") or ingredient
+    if guide_type == "all":
+        return build_guide_response(
+            message=(
+                f"{fallback_name} 식재료 가이드를 찾지 못했어요. "
+                "보관법, 손질법, 세척법, 신선도 또는 제철 정보를 구체적으로 질문해주세요."
+            ),
+            status="not_found",
+            data={
+                "ingredient": ingredient_info or {"name": fallback_name},
+            },
+            actions=[
+                {
+                    "type": "suggest_query",
+                    "label": f"{fallback_name} 보관법",
+                    "value": f"{fallback_name} 보관법 알려줘",
+                },
+                {
+                    "type": "suggest_query",
+                    "label": f"{fallback_name} 손질법",
+                    "value": f"{fallback_name} 손질법 알려줘",
+                },
+                {
+                    "type": "suggest_query",
+                    "label": f"{fallback_name} 제철",
+                    "value": f"{fallback_name} 제철 알려줘",
+                },
+            ],
+            meta={
+                "result_code": "GUIDE_NOT_FOUND",
+                "fallback_used": False,
+            },
+        )
     return _fallback_guide_response(fallback_name, guide_type, ingredient_info, nutrition)
 
 
@@ -1120,3 +1337,15 @@ if __name__ == "__main__":
     assert needs_input_result["ok"] is True
     assert needs_input_result["status"] == "needs_input"
     assert needs_input_result["error"] is None
+
+    assert _clean_query_keyword("딸기 5월에 제철이야?") == "딸기"
+    assert _clean_query_keyword("고추 냉동해도 괜찮아?") == "고추"
+    assert _clean_query_keyword("닭고기 상했는지 확인하는 법 알려줘") == "닭고기"
+    assert _clean_query_keyword("닭고기가 상한 것 같아 먹어도 돼?") == "닭고기"
+    assert _clean_related_keyword("어떤 식재료가 있어?") == ""
+    assert _guide_type_from_query("고추 오래 두는 법") == "storage"
+    assert _guide_type_from_query("고추를 깨끗하게 닦으려면?") == "washing"
+    assert _guide_type_from_query("고추가 물러졌는데 괜찮아?") == "freshness"
+    assert _candidate_query_value("닭가슴살", "freshness") == "닭가슴살 신선도 확인법 알려줘"
+    assert _candidate_query_value("닭가슴살", "nutrition") == "닭가슴살 영양성분 알려줘"
+    assert _candidate_display_label("닭가슴살", "freshness") == "닭가슴살 신선도 확인법"
