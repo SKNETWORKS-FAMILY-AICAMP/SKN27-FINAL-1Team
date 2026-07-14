@@ -7,9 +7,12 @@ import pandas as pd
 
 COHEN_SMALL = 0.10
 COHEN_MEDIUM = 0.30
+CEILING_SPEARMAN_GO = 0.25  # L2c; stretch target remains COHEN_MEDIUM
 NULL_PERMUTATIONS = 1000
 L1_POP_WINS_REQUIRED = 4
 L1_POP_SEEDS = 5
+METRICS_VERSION = "L0-L5-dual"
+EXPERIMENT_TAG = "22_eval_recalib"
 
 
 def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = 50) -> float:
@@ -233,6 +236,21 @@ def aggregate_l1_multi_seed(seed_rows: list[dict]) -> dict:
     }
 
 
+def aggregate_l1c_multi_seed(seed_rows: list[dict]) -> dict:
+    """seed_rows: each has l1c_spearman_model, l1c_spearman_pop (ceiling, vs bar)."""
+    wins = sum(
+        1
+        for r in seed_rows
+        if r.get("l1c_spearman_model", 0.0) > r.get("l1c_spearman_pop", 0.0)
+    )
+    n = len(seed_rows)
+    return {
+        "l1c_pop_wins": wins,
+        "l1c_pop_seeds": n,
+        "l1c_pass": wins >= L1_POP_WINS_REQUIRED if n >= L1_POP_SEEDS else False,
+    }
+
+
 def evaluate_track_b(
     y_hat: np.ndarray,
     score_review: np.ndarray,
@@ -324,9 +342,11 @@ def evaluate_track_b_v2(
     subset_rhos: dict[str, float] = {}
     subset_ns: dict[str, int] = {}
     informative_mask = warm_mask
+    ceiling_mask = warm_mask
     if export_df is not None:
         subsets = build_warm_subsets(export_df, warm_mask)
         informative_mask = subsets["informative"]
+        ceiling_mask = subsets["ceiling"]
         for name, mask in subsets.items():
             if name == "warm":
                 continue
@@ -336,8 +356,11 @@ def evaluate_track_b_v2(
 
     l2_rho = subset_rhos.get("l2_spearman_informative", 0.0)
     l2_pass = l2_rho >= spearman_threshold
+    l2c_rho = subset_rhos.get("l2_spearman_ceiling", 0.0)
+    l2c_pass = l2c_rho >= CEILING_SPEARMAN_GO
+    l2c_stretch_pass = l2c_rho >= spearman_threshold
 
-    # L1 Go: informative, Spearman(*, bar)
+    # L1i Go: informative, Spearman(*, bar)
     rho_model, n_inf = _mask_spearman(y_hat, score_review, informative_mask)
     rho_pop, _ = (
         _mask_spearman(pop, score_review, informative_mask) if pop is not None else (0.0, 0)
@@ -355,6 +378,13 @@ def evaluate_track_b_v2(
     l1_single_pass = (
         rho_model > COHEN_SMALL and null_p < 0.05 and rho_model > rho_pop
     )
+
+    # L1c Go: ceiling vs pop (no null gate — slice already rankable post exp21)
+    rho_c_model, n_ceil = _mask_spearman(y_hat, score_review, ceiling_mask)
+    rho_c_pop, _ = (
+        _mask_spearman(pop, score_review, ceiling_mask) if pop is not None else (0.0, 0)
+    )
+    l1c_single_pass = rho_c_model > rho_c_pop
 
     # diagnostic Top-K on informative (not Go)
     top10_model = 0.0
@@ -395,7 +425,7 @@ def evaluate_track_b_v2(
             cold_std = float(np.std(cold_y[np.isfinite(cold_y)]))
 
     return {
-        "metrics_version": "L0-L5",
+        "metrics_version": METRICS_VERSION,
         "coverage": coverage,
         "score_std": score_std,
         "l0_pass": l0_pass,
@@ -406,15 +436,25 @@ def evaluate_track_b_v2(
         "l4_spearman_all_warm": l4_rho,
         "l4_pass": l4_rho >= spearman_threshold,
         "l4_dataset_exception": True,
+        "l4_exception_note": (
+            "all-warm is a mixture of informative+ceiling; not used for Go "
+            "(post-exp21 ceiling is rankable — see L2c)"
+        ),
         "warm_top100_overlap": top100,
         "warm_spearman_review": l4_rho,
-        # L1 Go (informative, vs bar)
+        # L1i Go (informative, vs bar)
         "l1_spearman_model": rho_model,
         "l1_spearman_pop": rho_pop,
         "null_spearman_p": null_p,
         "l1_n_informative": n_inf,
         "l1_single_pass": l1_single_pass,
         "l1_pass": False,
+        # L1c Go (ceiling, vs pop)
+        "l1c_spearman_model": rho_c_model,
+        "l1c_spearman_pop": rho_c_pop,
+        "l1c_n_ceiling": n_ceil,
+        "l1c_single_pass": l1c_single_pass,
+        "l1c_pass": False,
         # legacy all-warm contrast (exp18; not Go)
         "l1_legacy_spearman_model_all": l4_rho,
         "l1_legacy_spearman_pop_all": pop_rho_all,
@@ -423,6 +463,10 @@ def evaluate_track_b_v2(
         "l2_spearman_informative": l2_rho,
         "l2_pass": l2_pass,
         "l2_spearman_threshold": spearman_threshold,
+        "l2c_spearman_ceiling": l2c_rho,
+        "l2c_pass": l2c_pass,
+        "l2c_spearman_threshold": CEILING_SPEARMAN_GO,
+        "l2c_stretch_pass": l2c_stretch_pass,
         "l1_top10_overlap_model": top10_model,
         "l1_top20_overlap_model": top20_model,
         "l1_top10_overlap_pop": top10_pop,
@@ -503,13 +547,20 @@ def build_experiment_report(
         track_b_eval["l0_pass"]
         and track_b_eval["l1_single_pass"]
         and track_b_eval["l2_pass"]
+        and track_b_eval.get("l1c_single_pass", False)
+        and track_b_eval.get("l2c_pass", False)
     )
-    from scoring import MIX_GAMMA, experiment_tag
+    go_legacy = (
+        track_b_eval["l0_pass"]
+        and track_b_eval["l1_single_pass"]
+        and track_b_eval["l2_pass"]
+    )
+    from scoring import MIX_GAMMA
 
     return {
-        "experiment": experiment_tag(),
+        "experiment": EXPERIMENT_TAG,
         "mix_gamma": MIX_GAMMA,
-        "metrics_version": "L0-L5",
+        "metrics_version": METRICS_VERSION,
         "data_files": {name: str(path) for name, path in cfg.data_files.items()},
         "mode": cfg.model_mode,
         "target_mode": cfg.target_mode,
@@ -534,19 +585,23 @@ def build_experiment_report(
         "track_b_eval": track_b_eval,
         "decision": {
             "go": go_single,
+            "go_legacy_informative_only": go_legacy,
             "go_note": (
-                "single-seed; L1 final requires 4/5 "
-                "l1_spearman_model > l1_spearman_pop on informative"
+                "single-seed dual Go; final L1i/L1c each need 4/5 "
+                "rho_model > rho_pop on their slice"
             ),
             "criterion": (
-                "l0_pass and l1_single_pass and l2_pass "
-                "(informative: rho_model>0.10, null p<0.05, rho_model>rho_pop; "
-                "L2 Spearman >= 0.30)"
+                "l0 and L1i_single and L2i(>=0.30) and L1c_single and L2c(>=0.25); "
+                "L4 all-warm is mixture exception"
             ),
             "l0_pass": track_b_eval["l0_pass"],
             "l1_single_pass": track_b_eval["l1_single_pass"],
             "l1_pass": track_b_eval.get("l1_pass", False),
             "l2_pass": track_b_eval["l2_pass"],
+            "l1c_single_pass": track_b_eval.get("l1c_single_pass", False),
+            "l1c_pass": track_b_eval.get("l1c_pass", False),
+            "l2c_pass": track_b_eval.get("l2c_pass", False),
+            "l2c_stretch_pass": track_b_eval.get("l2c_stretch_pass", False),
             "l3_pass": track_b_eval["l3_pass"],
             "l4_pass": track_b_eval["l4_pass"],
             "l4_dataset_exception": track_b_eval["l4_dataset_exception"],
@@ -587,6 +642,8 @@ if __name__ == "__main__":
     assert m["coverage"] == 1.0
     assert m["l0_pass"]
     assert "l1_spearman_model" in m and "l1_spearman_pop" in m
+    assert "l1c_spearman_model" in m and "l1c_spearman_pop" in m
+    assert "l2c_pass" in m and m["l2c_spearman_threshold"] == CEILING_SPEARMAN_GO
     assert "l1_legacy_spearman_pop_all" in m
     cmp_m = warm_obs_pred_metrics(scores, relevance, warm)
     assert cmp_m["warm_r2_linear"] >= 0.0
@@ -594,10 +651,18 @@ if __name__ == "__main__":
         [{"l1_spearman_model": 0.2, "l1_spearman_pop": 0.1}] * 5
     )
     assert agg["l1_pass"]
+    agg_c = aggregate_l1c_multi_seed(
+        [{"l1c_spearman_model": 0.3, "l1c_spearman_pop": 0.1}] * 5
+    )
+    assert agg_c["l1c_pass"]
+    # L2c: rho >= 0.25 passes, below fails
+    assert (0.26 >= CEILING_SPEARMAN_GO) and not (0.24 >= CEILING_SPEARMAN_GO)
     print(
         "evaluation ok",
         m["l1_single_pass"],
         m["l2_pass"],
+        m.get("l1c_single_pass"),
+        m.get("l2c_pass"),
         m["l3_pass"],
         cmp_m["warm_mae_linear"],
     )

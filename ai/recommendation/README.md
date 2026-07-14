@@ -51,16 +51,17 @@
 - **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
-### 1.2 현재 진행 상황 (실험 20 Bayesian bar 채택)
+### 1.2 현재 진행 상황 (실험 22 이축 Go 채택)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` |
-| **Track B v2** | **L0~L5 + Bayesian bar** | `BAR_MODE=bayesian` default |
-| **Go (5-seed)** | **통과** | L2 informative ρ≈0.38~0.46; ceiling ρ≈0.24~0.29 |
-| 베이스라인 | seed 42 | `experiment: 20_bayesian_bar` |
+| **Track B** | **L0~L5-dual + Bayesian bar** | `BAR_MODE=bayesian`; 감성 공식 실험 21 T0 |
+| **Go 헌장** | **이축 채택** | L0∧L1i∧L2i∧L1c∧L2c(≥0.25) |
+| **현 모델** | ceiling Go **경계** | dual single-seed **4/5**; mean ρ_ceil≈0.257 |
+| 베이스라인 태그 | | `experiment: 22_eval_recalib` |
 
-상세 → **[experiments.md §실험 20](experiments.md)**.
+상세 → **[experiments.md §실험 22](experiments.md)** · [METRICS.md](METRICS.md).
 
 ### 1.4 Track A vs Track B
 
@@ -68,12 +69,12 @@
 |---|---------------|-------------------|
 | 과제 | user–item CF hold-out | **전 카탈로그 item 점수** |
 | item | ~563 | **~3,100** |
-| Go | L0 충족; L1/L2 보류 | **L0+L1+L2** (§1.5) **통과** |
+| Go | L0 충족; L1/L2 보류 | **이축** L0+L1i+L2i+L1c+L2c (§1.5) |
 | 노트북 | `item_ids` = review만 | **13b**에서 전체 fit 예정 |
 
-### 1.5 Track B 목표 (L0~L5, 실험 19)
+### 1.5 Track B 목표 (L0~L5-dual, 실험 22)
 
-**상세 근거·용어:** [METRICS.md](METRICS.md) · [experiments.md §실험 19](experiments.md).
+**상세 근거·용어:** [METRICS.md](METRICS.md) · [experiments.md §실험 22](experiments.md).
 
 **점수 정의**
 
@@ -87,23 +88,21 @@
 **1차 Go (서비스 반영)**
 
 ```
-go = L0_pass AND L1_pass AND L2_pass
+go = L0 AND L1i AND L2i AND L1c AND L2c
 ```
 
 | 층 | 이름 | 조건 | 역할 |
 |----|------|------|------|
 | **L0** | Operational | coverage=1.0, score_std>1e-6 | 전 item 유한 ŷ |
-| **L1** | Anti-Random | informative: ρ_model>0.10, null p<0.05; **ρ_model>ρ_pop** **4/5 seed** | 랜덤·인기 대비 |
-| **L2** | Ranking Quality | warm **informative** Spearman **≥ 0.30** | Cohen Medium |
-| L3 | Train Consistency | Spearman(ŷ, train) ≥ 0.30 | 진단 |
-| L4 | Full Warm Spearman | all warm ρ (목표 0.30) | **DATASET_EXCEPTION** — Go 아님 |
-| L5 | Cold Diagnostic | ŷ_cold vs popularity | 진단 |
+| **L1i** | Anti-Random | informative: ρ>0.10, null p<0.05; **ρ>ρ_pop** **4/5** | 소수 구간 |
+| **L2i** | Ranking | informative Spearman **≥ 0.30** | Cohen Medium |
+| **L1c** | Anti-Pop | ceiling: **ρ>ρ_pop** **4/5** | 다수 구간 |
+| **L2c** | Ranking | ceiling Spearman **≥ 0.25** | 비퇴보 바닥; stretch 0.30 |
+| L3 | Train | Spearman(ŷ, train) ≥ 0.30 | 진단 |
+| L4 | Full Warm | all warm ρ (목표 0.30) | **혼합** — Go 아님 |
+| L5 | Cold | ŷ_cold vs popularity | 진단 |
 
-**Spearman 0.30 / L1:** informative (n≈49)에서 L1·L2 공통. ρ_pop = `Spearman(popularity, bar)` (ŷ vs pop 아님). 전체 warm은 L4 예외(§실험 14·18·19).
-
-**구 B0~B3:** B0→L0, B2(informative)→L2, B2(전체)→L4, B3→L3, B1′→L5.
-
-cold는 정답 없음 → **L0 + warm L1/L2**로 간접 검증.
+cold는 정답 없음 → **L0 + warm 이축 Go**로 간접 검증.
 
 ### 1.6 Track A 목표 (2차·보류)
 
@@ -294,7 +293,7 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 
 ---
 
-## 4. 실험 회차 개요 (1~21)
+## 4. 실험 회차 개요 (1~22)
 
 상세 → **[experiments.md](experiments.md)** 해당 §. **1~12 = Track A(보류) / 13~16 = Track B v1 / 17+ = 콜드스타트**
 
@@ -308,18 +307,24 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 | **19** | **L1 informative·bar 정합** | **Go 통과** | 공정 순위 평가 |
 | **20** | **Bayesian average bar** | **채택** (ceiling ρ↑, Go 유지) | m=3 |
 | **21** | **독립 감성 재분석 + 혼합 ablation** | T0 Go·uniq↑; **T1 미채택** | MIX_GAMMA=0 |
+| **22** | **평가 헌장 이축 Go** | **채택** L1c+L2c(0.25) | 모델 ceiling 경계 4/5 |
 
 **스냅샷**
 
-- **Go:** `L0 & L1 & L2` — **통과** (실험 20, Bayesian bar; 실험 21 T0도 유지)
+- **Go:** `L0 ∧ L1i ∧ L2i ∧ L1c ∧ L2c(≥0.25)` — 헌장 **채택** (실험 22)
 - **bar:** WR on `mean(star_02×sentiment_02)`; `BAR_MODE=mean`으로 레거시 mean 가능
-- **원칙:** 절대 점수보다 **상대 순위 구분력** (Spearman·unique/슬라이스). §[METRICS.md](METRICS.md) · §실험 20 인사이트
-- **잔여:** v1 uniq는 실험 21 감성 재분석으로 대폭 해소(24→295); 혼합 패널티는 ceiling ρ 악화로 미채택
-- **다음:** 서비스/ETL 연동 또는 informative ρ 회복 탐색
+- **원칙:** 상대 순위 구분력 (Spearman·unique/슬라이스). §[METRICS.md](METRICS.md)
+- **잔여:** ceiling ρ를 **전 seed ≥0.25**로 안정화 후 stretch **0.30**
+- **다음:** ceiling ρ 개선 (기준 하향 없음)
 
 ---
 
 ## 5. 업데이트 및 수정 이력
+
+### 2026-07-14 (실험 22)
+
+- **Go 헌장:** informative+ceiling **이축** (`L2c≥0.25`, L1c vs pop). [METRICS.md](METRICS.md) · §[experiments.md](experiments.md) 실험 22.
+- **현 모델:** dual single-seed **4/5** (ceiling 경계); stretch 0.30 미달.
 
 ### 2026-07-14 (실험 21)
 
