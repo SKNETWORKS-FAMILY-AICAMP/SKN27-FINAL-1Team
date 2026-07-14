@@ -232,6 +232,8 @@ def transform_numeric_feature(col: str, value, log_numeric_columns: set[str]):
 def recipe_row_to_features(row, excluded: set[str], log_numeric_columns: set[str]):
     features = []
     for col in FIXED_POPULARITY_COLUMNS:
+        if col in excluded:
+            continue
         token = transform_numeric_feature(col, row.get(col), log_numeric_columns)
         if token:
             features.append(token)
@@ -322,4 +324,11 @@ if __name__ == "__main__":
     )
     r, rev = prepare_training_frames(review, recipe, alias)
     assert "star_02" in rev.columns and str(r["recipe_id"].iloc[0]) == "1"
+    # excluded must skip popularity tokens (exp23 ablation)
+    feats = recipe_row_to_features(
+        {"view_count": 10, "scrap_count": 5, "method": "볶음"},
+        excluded={"view_count", "scrap_count", "ingredients"},
+        log_numeric_columns={"view_count", "scrap_count"},
+    )
+    assert not any(t.startswith("view_count") or t.startswith("scrap_count") for t in feats)
     print("preprocess ok")

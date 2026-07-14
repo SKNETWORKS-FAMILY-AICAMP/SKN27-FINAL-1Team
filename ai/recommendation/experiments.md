@@ -2,7 +2,7 @@
 
 **읽는 법:** §실험 1~12 = Track A 개인화 CF (**보류**, 이력 참고) · §13~16 = Track B v1 (전 카탈로그 export·ablation) · **§17+ = 콜드스타트 Base Score** (현재 축).  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
-**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**).
+**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**).
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -2602,3 +2602,75 @@ L1i vs pop **5/5**; L1c vs pop **5/5** (ρ_pop_ceiling≈0.197).
 ### JSON
 
 `outputs/exp22_s{seed}.json` — 기록 후 삭제.
+
+---
+
+## 실험 23 — ceiling ρ 진단 + 인기 피처 ablation
+
+**일자:** 2026-07-14  
+**유형:** 23A 진단(재학습 없음) → 23B `view_count`/`scrap_count` feature 제외 5-seed  
+**고정:** `MIX_GAMMA=0`, Bayesian WR, `product_02_row`, 이축 Go(실험 22)  
+**코드:** [`preprocess.py`](preprocess.py) — `FIXED_POPULARITY_COLUMNS`도 `excluded` 존중
+
+### A. 진단 (baseline export `recipe_lightfm.csv`)
+
+ceiling (`star_norm_avg≥1`, n=529):
+
+| 측정 | 값 | 함의 |
+|------|-----|------|
+| ŷ uniq% | **1.000** (std 0.213) | 예측 붕괴 아님 |
+| bar uniq% | 0.888 (std 0.122) | 정답축 성립 |
+| Spearman(ŷ, bar) | **0.237** | L2c 경계/탈락권 |
+| Spearman(pop, bar) | 0.197 | 인기≠리뷰 bar |
+| Spearman(ŷ, pop) | **0.389** | ŷ이 bar보다 **인기에 더 정렬** |
+| ceiling **v=1** ρ(ŷ,bar) | **0.016** (n=344) | **주 병목** |
+| ceiling **v≥2** ρ | **0.291** (n=185) | 이미 L2c(0.25) 충족권 |
+
+**병목 확정:** v=1 만점 구간의 ŷ–bar 불일치 + ŷ–인기 정렬. target 추가 개선 불필요.
+
+**가설 H1:** item feature의 view/scrap이 ŷ을 인기에 붙여 sentiment bar와 어긋남 → **제외 ablation**.
+
+### B. Ablation — 결과
+
+**개입:** `EXCLUDED_RECIPE_COLUMNS=ingredients,view_count,scrap_count`  
+**대조:** 실험 22 (features에 view/scrap 포함; mean ρ_ceil≈0.257, dual Go 4/5)
+
+| seed | L0 | L1i | L2i ρ | L1c | L2c ρ | go_dual |
+|------|----|-----|-------|-----|-------|---------|
+| 42 | ✓ | ✓ | 0.287 | ✓ | 0.212 | ✗ |
+| 123 | ✓ | ✓ | **0.319** | ✓ | 0.214 | ✗ |
+| 456 | ✓ | ✓ | **0.363** | ✗ | 0.193 | ✗ |
+| 789 | ✓ | ✓ | **0.325** | ✓ | 0.207 | ✗ |
+| 1024 | ✓ | ✓ | 0.223 | ✓ | 0.227 | ✗ |
+
+**집계:** L1i 5/5 · L2i **3/5** · L1c 4/5 · L2c **0/5** · go_dual **0/5**.  
+mean ρ_inf≈0.303 (실험 22: 0.362) · mean ρ_ceil≈**0.211** (실험 22: 0.257, **악화**).  
+`unique_features`/`item_feature_nnz`↓ 확인(제외 적용; nnz 60380 vs 베이스 ~66722).
+
+**슬라이스 진단 (마지막 export, seed 1024, ceiling n=529):**
+
+| 측정 | 실험 23B | 실험 23A 베이스 |
+|------|----------|-----------------|
+| Spearman(ŷ, bar) | 0.227 | 0.237 |
+| Spearman(ŷ, pop) | **0.244** | **0.389** |
+| v=1 ρ(ŷ,bar) | ~0.000 (n=344) | 0.016 |
+| v≥2 ρ | 0.314 (n=185) | 0.291 |
+
+→ ŷ–인기 정렬은 줄었으나 **v1 병목·L2c는 개선 없음**(오히려 L2c·L2i 희생).
+
+### C. 판정
+
+| 항목 | 결과 |
+|------|------|
+| **채택 게이트** | L2c 5/5≥0.25 ∧ L2i 전 seed≥0.30 ∧ L1c 4/5 ∧ L1i 4/5 |
+| **판정** | **기각** — L2c 0/5, L2i 희생, ρ(ŷ,pop)↓만 있고 L2c 무개선/악화 |
+| default `EXCLUDED` | **원복 유지** (`ingredients`만) — config/README 변경 없음 |
+| preprocess | `FIXED_POPULARITY` excluded 존중 수정은 **유지**(ablation 손잡이) |
+
+**다음 후보 (코드 변경은 24+):** interaction `sample_weight ∝ review_n` — v=1 ceiling이 학습 신호에서 과대 대표되는 경로를 약화.
+
+**한 줄:** 인기 item feature 제거는 ŷ–pop만 풀고 ceiling Go는 깨뜨림 → **기각**. 병목은 여전히 v=1; 다음 손잡이는 interaction 가중.
+
+### JSON
+
+`outputs/exp23_s{seed}.json` — 기록 후 삭제. baseline export는 default features로 복구(seed 42).
