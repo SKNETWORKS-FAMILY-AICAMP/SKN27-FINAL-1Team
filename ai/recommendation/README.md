@@ -51,30 +51,30 @@
 - **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
-### 1.2 현재 진행 상황 (실험 22 이축 Go 채택)
+### 1.2 현재 진행 상황 (Track B **지표 동결** · 2026-07-14)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` |
-| **Track B** | **L0~L5-dual + Bayesian bar** | `BAR_MODE=bayesian`; 감성 공식 실험 21 T0 |
-| **Go 헌장** | **이축 채택** | L0∧L1i∧L2i∧L1c∧L2c(≥0.25) |
-| **현 모델** | ceiling Go **경계** | dual single-seed **4/5**; mean ρ_ceil≈0.257 |
-| 베이스라인 태그 | | `experiment: 22_eval_recalib` |
+| **Track B** | **동결** | Bayesian bar · `product_02_row` · `MIX_GAMMA=0` · weight `none` |
+| **Go 헌장** | 실험 22 이축 **유지** | L0∧L1i∧L2i∧L1c∧L2c(≥0.25) — 임계 변경 없음 |
+| **실측** | informative OK · dual Go **4/5** | v≥2 stretch 0.30 **미달**; v1 품질 순위 **비목표** |
+| **다음** | Track A CF **설계** | Base Score = 콜드/폴백; 상세 → **[TRACK_B_STATUS.md](TRACK_B_STATUS.md)** |
 
-상세 → **[experiments.md §실험 22](experiments.md)** · [METRICS.md](METRICS.md).
+베이스라인 태그: `experiment: 22_eval_recalib`. 회차 표 → [experiments.md](experiments.md) §22~26 · 헌장 → [METRICS.md](METRICS.md).
 
 ### 1.4 Track A vs Track B
 
-| | Track A (2차) | Track B (**1차**) |
+| | Track A (2차 · **다음**) | Track B (**1차 · 동결**) |
 |---|---------------|-------------------|
 | 과제 | user–item CF hold-out | **전 카탈로그 item 점수** |
 | item | ~563 | **~3,100** |
-| Go | L0 충족; L1/L2 보류 | **이축** L0+L1i+L2i+L1c+L2c (§1.5) |
-| 노트북 | `item_ids` = review만 | **13b**에서 전체 fit 예정 |
+| Go | L0 충족; L1/L2 보류 | **이축** L0+L1i+L2i+L1c+L2c (§1.5); 슬라이스 신뢰 → STATUS |
+| 노트북 | `item_ids` = review만 | full catalog export |
 
-### 1.5 Track B 목표 (L0~L5-dual, 실험 22)
+### 1.5 Track B 목표 (L0~L5-dual, 실험 22 · **동결**)
 
-**상세 근거·용어:** [METRICS.md](METRICS.md) · [experiments.md §실험 22](experiments.md).
+**상세 근거·용어:** [METRICS.md](METRICS.md) · **상태 보고서:** [TRACK_B_STATUS.md](TRACK_B_STATUS.md) · 실측: [experiments.md](experiments.md) §22~26.
 
 **점수 정의**
 

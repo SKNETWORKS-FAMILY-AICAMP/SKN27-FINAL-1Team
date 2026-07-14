@@ -1,8 +1,10 @@
 # LightFM 실험 기록
 
-**읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류**, 이력 참고) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17+ = 콜드스타트 Base Score** (현재 축).  
+**읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류 → 다음 설계 축**) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17~26 = 콜드스타트 Base Score (**2026-07-14 지표 동결**)**.  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
 **L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**) · §실험 **25**(v1 feature 예측 **불가** → 제품 해석 이관) · §실험 **26**(v≥2 stretch 0.30 **미달**).
+
+**동결 보고서:** [`TRACK_B_STATUS.md`](TRACK_B_STATUS.md) — 채택 설정·슬라이스 신뢰·실측 스냅샷·잠금 규칙.
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 

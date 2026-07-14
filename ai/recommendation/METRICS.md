@@ -1,12 +1,14 @@
 # Track B 평가 지표 (L0~L5 dual)
 
 Track B 콜드스타트 Base Score(ŷ)의 **1차 Go**·진단 지표 정의. 구현: [`evaluation.py`](evaluation.py).  
-**헌장 버전:** 실험 **22** (`L0-L5-dual`) — informative + ceiling **이축 Go**.
+**헌장 버전:** 실험 **22** (`L0-L5-dual`) — informative + ceiling **이축 Go**.  
+**동결:** 2026-07-14 — 헌장·임계 **잠금**. 실측·슬라이스 신뢰·기각 이력 → [`TRACK_B_STATUS.md`](TRACK_B_STATUS.md).
 
 | 문서 | 용도 |
 |------|------|
 | **본 문서** | 지표·임계값·근거 (헌장) |
-| [README.md](README.md) §1.5 | 팀 스냅샷 |
+| [TRACK_B_STATUS.md](TRACK_B_STATUS.md) | **동결 상태 보고서** |
+| [README.md](README.md) §1.2·§1.5 | 팀 스냅샷 |
 | [experiments.md](experiments.md) | 회차별 실측 수치 |
 
 ---
@@ -87,7 +89,7 @@ go = L0
 
 - exp21 T0 mean ceiling ρ ≈ **0.257** → 즉시 Cohen 0.30을 ceiling Go로 걸면 “기준만 올려 탈락”이 됨.  
 - 1차 Go 바닥 = **비퇴보(≥0.25) + L1c(인기 대비)**.  
-- **stretch:** `L2c_target = 0.30` (Cohen Medium) — Go 아님, 개선 과제.
+- **stretch:** `L2c_target = 0.30` (Cohen Medium) — Go 아님. 실험 26에서 ceiling **v≥2** 기준 확인 결과 **미달**(mean ρ≈0.281); Track B 지표 동결 후 재개는 STATUS 합의 후.
 
 ### L4 예외 문구 (개정)
 
