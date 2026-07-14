@@ -636,6 +636,10 @@ function fromDateTimeLocalValue(value) {
   return value ? String(value).replace('T', ' ') : ''
 }
 
+function formatGuideSuggestionCategory(item) {
+  return [item?.major_category, item?.middle_category, item?.minor_category].filter(Boolean).join(' > ')
+}
+
 function toNumber(value, fallback = null) {
   const numericValue = Number(String(value ?? '').replace(/[^\d.-]/g, ''))
 
@@ -676,6 +680,8 @@ function ReceiptOcr() {
   const previewImageUrlRef = useRef(null)
   const cropImageUrlRef = useRef(null)
   const retakeInputRef = useRef(null)
+  const ingredientSuggestionRequestRef = useRef(0)
+  const ingredientSuggestionTimerRef = useRef(null)
   const [isLoggedIn, setIsLoggedIn] = useState(getAuthState)
   const [hasUploaded, setHasUploaded] = useState(false)
   const [activeStep, setActiveStep] = useState(STEP.UPLOAD)
@@ -697,6 +703,13 @@ function ReceiptOcr() {
   const [rowSelectionMode, setRowSelectionMode] = useState(false)
   const [selectedRowIds, setSelectedRowIds] = useState([])
   const [isStocking, setIsStocking] = useState(false)
+  const [ingredientSuggestions, setIngredientSuggestions] = useState({
+    rowId: null,
+    items: [],
+    isOpen: false,
+    focusedIndex: -1,
+    isLoading: false,
+  })
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
@@ -1192,6 +1205,129 @@ function ReceiptOcr() {
     setActiveStep(STEP.CONFIRM)
   }
 
+  const closeIngredientSuggestions = () => {
+    setIngredientSuggestions((prev) => ({
+      ...prev,
+      isOpen: false,
+      focusedIndex: -1,
+      isLoading: false,
+    }))
+  }
+
+  const fetchIngredientSuggestions = async (rowId, keyword) => {
+    const query = String(keyword || '').trim()
+    const requestId = ingredientSuggestionRequestRef.current + 1
+    ingredientSuggestionRequestRef.current = requestId
+
+    if (!query) {
+      setIngredientSuggestions({ rowId, items: [], isOpen: false, focusedIndex: -1, isLoading: false })
+      return
+    }
+
+    setIngredientSuggestions((prev) => ({
+      ...prev,
+      rowId,
+      isOpen: true,
+      isLoading: true,
+      focusedIndex: -1,
+    }))
+
+    try {
+      const token = window.localStorage.getItem('bobbeori-token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const params = new URLSearchParams({
+        keyword: query,
+        page: '1',
+        page_size: '6',
+      })
+      const response = await fetch(`${API_URL}/api/v1/guide?${params.toString()}`, { headers })
+
+      if (!response.ok) {
+        throw new Error('ingredient guide search failed')
+      }
+
+      const data = await response.json()
+      const items = Array.isArray(data?.items) ? data.items.filter((item) => item?.name) : []
+
+      if (ingredientSuggestionRequestRef.current !== requestId) {
+        return
+      }
+
+      setIngredientSuggestions({
+        rowId,
+        items,
+        isOpen: items.length > 0,
+        focusedIndex: items.length > 0 ? 0 : -1,
+        isLoading: false,
+      })
+    } catch (error) {
+      console.error(error)
+      if (ingredientSuggestionRequestRef.current !== requestId) {
+        return
+      }
+      setIngredientSuggestions({ rowId, items: [], isOpen: false, focusedIndex: -1, isLoading: false })
+    }
+  }
+
+  const queueIngredientSuggestionSearch = (rowId, keyword) => {
+    if (ingredientSuggestionTimerRef.current) {
+      window.clearTimeout(ingredientSuggestionTimerRef.current)
+    }
+
+    ingredientSuggestionTimerRef.current = window.setTimeout(() => {
+      fetchIngredientSuggestions(rowId, keyword)
+    }, 180)
+  }
+
+  const updateRowNameField = (rowId, value) => {
+    updateRowField(rowId, 'name', value)
+    queueIngredientSuggestionSearch(rowId, value)
+  }
+
+  const selectIngredientSuggestion = (rowId, suggestion) => {
+    if (!suggestion?.name) {
+      return
+    }
+
+    updateRowField(rowId, 'name', suggestion.name)
+    closeIngredientSuggestions()
+  }
+
+  const handleIngredientSuggestionKeyDown = (event, rowId) => {
+    if (!ingredientSuggestions.isOpen || ingredientSuggestions.rowId !== rowId || ingredientSuggestions.items.length === 0) {
+      return
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setIngredientSuggestions((prev) => ({
+        ...prev,
+        focusedIndex: Math.min(prev.focusedIndex + 1, prev.items.length - 1),
+      }))
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setIngredientSuggestions((prev) => ({
+        ...prev,
+        focusedIndex: Math.max(prev.focusedIndex - 1, 0),
+      }))
+      return
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const selected = ingredientSuggestions.items[ingredientSuggestions.focusedIndex] || ingredientSuggestions.items[0]
+      selectIngredientSuggestion(rowId, selected)
+      return
+    }
+
+    if (event.key === 'Escape') {
+      closeIngredientSuggestions()
+    }
+  }
+
   const updateReceiptMetaField = (field, value) => {
     setReceiptMeta((prev) => {
       if (!prev) {
@@ -1379,6 +1515,9 @@ function ReceiptOcr() {
       }
       if (cropImageUrlRef.current) {
         URL.revokeObjectURL(cropImageUrlRef.current)
+      }
+      if (ingredientSuggestionTimerRef.current) {
+        window.clearTimeout(ingredientSuggestionTimerRef.current)
       }
       window.removeEventListener('bobbeori-auth-change', syncAuthState)
       window.removeEventListener('storage', syncAuthState)
@@ -1571,12 +1710,17 @@ function ReceiptOcr() {
                 </div>
                 {detectedRows.map((row) => {
                   const isEditing = Boolean(editingRows[row.id])
+                  const isShowingIngredientSuggestions =
+                    ingredientSuggestions.isOpen &&
+                    ingredientSuggestions.rowId === row.id &&
+                    ingredientSuggestions.items.length > 0
 
                   return (
                   <div
                     className={[
                       'receipt-mapping-row',
                       isEditing ? 'is-editing' : '',
+                      isShowingIngredientSuggestions ? 'is-suggesting' : '',
                       rowSelectionMode ? 'is-selecting' : '',
                       rowSelectionMode && selectedRowIds.includes(row.id) ? 'is-row-selected' : '',
                     ]
@@ -1592,13 +1736,43 @@ function ReceiptOcr() {
                       <b>
                         <small>원재료명: {row.raw}</small>
                         {isEditing ? (
-                          <input
-                            aria-label={`${row.raw} 표준 재료명`}
-                            className="receipt-inline-input"
-                            type="text"
-                            value={row.name}
-                            onChange={(event) => updateRowField(row.id, 'name', event.target.value)}
-                          />
+                          <div className="receipt-ingredient-autocomplete">
+                            <input
+                              aria-label={`${row.raw} 표준 재료명`}
+                              className="receipt-inline-input"
+                              type="text"
+                              autoComplete="off"
+                              value={row.name}
+                              onChange={(event) => updateRowNameField(row.id, event.target.value)}
+                              onFocus={() => fetchIngredientSuggestions(row.id, row.name)}
+                              onBlur={() => window.setTimeout(closeIngredientSuggestions, 120)}
+                              onKeyDown={(event) => handleIngredientSuggestionKeyDown(event, row.id)}
+                            />
+                            {isShowingIngredientSuggestions ? (
+                              <div className="receipt-ingredient-suggestions" role="listbox">
+                                {ingredientSuggestions.items.map((suggestion, index) => {
+                                  const category = formatGuideSuggestionCategory(suggestion)
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={index === ingredientSuggestions.focusedIndex}
+                                      className={index === ingredientSuggestions.focusedIndex ? 'is-focused' : ''}
+                                      key={suggestion.code || `${suggestion.name}-${index}`}
+                                      onMouseDown={(event) => {
+                                        event.preventDefault()
+                                        selectIngredientSuggestion(row.id, suggestion)
+                                      }}
+                                    >
+                                      <strong>{suggestion.name}</strong>
+                                      {category ? <span>{category}</span> : null}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
                         ) : (
                           row.name
                         )}
