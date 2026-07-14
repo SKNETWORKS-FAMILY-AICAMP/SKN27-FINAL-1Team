@@ -10,13 +10,13 @@ from app.backend.services.inventory_service.inventory_service import inventory_s
 
 
 class FridgeItemsInput(BaseModel):
-    """냉장고 재료 목록 조회 MCP 입력 스키마입니다."""
+    """냉장고 재료 목록 조회 Tool 입력 스키마입니다."""
 
     user_id: int = Field(description="사용자 ID")
 
 
 class AddFridgeItemInput(BaseModel):
-    """냉장고 재료 추가 MCP 입력 스키마입니다."""
+    """냉장고 재료 추가 Tool 입력 스키마입니다."""
 
     user_id: int = Field(description="사용자 ID")
     name: str = Field(description="식재료명")
@@ -28,7 +28,7 @@ class AddFridgeItemInput(BaseModel):
 
 
 class ConsumeFridgeItemInput(BaseModel):
-    """냉장고 재료 소비 MCP 입력 스키마입니다."""
+    """냉장고 재료 소비 Tool 입력 스키마입니다."""
 
     user_id: int = Field(description="사용자 ID")
     name: str = Field(description="식재료명")
@@ -36,31 +36,31 @@ class ConsumeFridgeItemInput(BaseModel):
 
 
 class DeleteFridgeItemInput(BaseModel):
-    """냉장고 재료 폐기 MCP 입력 스키마입니다."""
+    """냉장고 재료 폐기 Tool 입력 스키마입니다."""
 
     user_id: int = Field(description="사용자 ID")
     name: str = Field(description="식재료명")
 
 
 class ExpiringFridgeItemsInput(BaseModel):
-    """소비 임박 재료 조회 MCP 입력 스키마입니다."""
+    """소비 임박 재료 조회 Tool 입력 스키마입니다."""
 
     user_id: int = Field(description="사용자 ID")
     days: int = Field(default=3, ge=0, description="소비 임박 기준 일수")
 
 
 def _ok(message: str, data: Any = None) -> dict[str, Any]:
-    """MCP Tool 공통 성공 응답을 만듭니다."""
+    """Tool 공통 성공 응답을 만듭니다."""
     return {"ok": True, "message": message, "data": data or {}, "error": None}
 
 
 def _fail(message: str, code: str = "FRIDGE_TOOL_ERROR", detail: str | None = None) -> dict[str, Any]:
-    """MCP Tool 공통 실패 응답을 만듭니다."""
+    """Tool 공통 실패 응답을 만듭니다."""
     return {"ok": False, "message": message, "data": None, "error": {"code": code, "detail": detail or message}}
 
 
 def _item_data(item: dict[str, Any]) -> dict[str, Any]:
-    """냉장고 응답 항목을 MCP용 JSON으로 정리합니다."""
+    """냉장고 응답 항목을 Tool용 JSON으로 정리합니다."""
     return {
         "id": item.get("id"),
         "name": item.get("name"),
