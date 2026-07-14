@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
+import numpy as np
 import pandas as pd
 
 from config import ExperimentConfig
+
+BAYESIAN_M_DEFAULT = 3.0
 
 
 def star_02_from_count(star_count: pd.Series) -> pd.Series:
@@ -43,6 +48,24 @@ def add_row_02_columns(df: pd.DataFrame) -> pd.DataFrame:
             raise ValueError("need sentiment or positive/negative for sentiment_02")
     out["row_product_02"] = out["star_02"] * out["sentiment_02"]
     return out
+
+
+def bayesian_average(
+    R: pd.Series | np.ndarray,
+    v: pd.Series | np.ndarray,
+    C: float,
+    m: float = BAYESIAN_M_DEFAULT,
+) -> np.ndarray:
+    """IMDb-style WR = v/(v+m)*R + m/(v+m)*C. R and C on the same scale."""
+    R = np.asarray(R, dtype=np.float64).ravel()
+    v = np.asarray(v, dtype=np.float64).ravel()
+    m = float(m)
+    if m < 0.0:
+        raise ValueError("m must be >= 0")
+    denom = v + m
+    # ponytail: v=0 → WR=C; avoids 0/0
+    w = np.where(denom > 0.0, v / denom, 0.0)
+    return w * R + (1.0 - w) * float(C)
 
 
 def calc_interaction_value(
@@ -87,8 +110,19 @@ def add_interaction_column(review_df: pd.DataFrame, cfg: ExperimentConfig) -> pd
 
 
 def aggregate_review_for_export(
-    review_raw: pd.DataFrame, target_mode: str
+    review_raw: pd.DataFrame,
+    target_mode: str,
+    *,
+    bar_mode: str | None = None,
+    bayesian_m: float = BAYESIAN_M_DEFAULT,
 ) -> tuple[pd.DataFrame, str]:
+    """bar_mode: bayesian (default, exp20) | mean. Override via BAR_MODE env."""
+    if bar_mode is None:
+        # adopted exp20: Bayesian WR default; BAR_MODE=mean for legacy mean bar
+        bar_mode = os.environ.get("BAR_MODE", "bayesian")
+    if bar_mode not in ("mean", "bayesian"):
+        raise ValueError("bar_mode must be mean or bayesian")
+
     review_raw = add_row_02_columns(review_raw)
     review_raw = review_raw.copy()
     review_raw["sentiment_row"] = (
@@ -103,6 +137,7 @@ def aggregate_review_for_export(
             star_norm_avg=("star_norm", "mean"),
             sentiment_avg=("sentiment_row", "mean"),
             row_product_avg=("row_product_02", "mean"),
+            review_n=("recipe_id", "size"),
         )
         .assign(recipe_id=lambda d: d["recipe_id"].astype(str))
     )
@@ -110,8 +145,19 @@ def aggregate_review_for_export(
         review_agg["star_norm_avg"] + review_agg["sentiment_avg"]
     )
     if target_mode == "product_02_row":
-        review_agg["review_rank_score"] = review_agg["row_product_avg"]
-        formula = "mean(star_02 * sentiment_02) per recipe (B3)"
+        R = review_agg["row_product_avg"].to_numpy(dtype=float)
+        C = float(np.nanmean(R))
+        if bar_mode == "bayesian":
+            review_agg["review_rank_score"] = bayesian_average(
+                R, review_agg["review_n"].to_numpy(dtype=float), C, m=bayesian_m
+            )
+            formula = (
+                f"Bayesian WR on mean(star_02*sentiment_02); "
+                f"C={C:.4f}, m={bayesian_m}"
+            )
+        else:
+            review_agg["review_rank_score"] = review_agg["row_product_avg"]
+            formula = "mean(star_02 * sentiment_02) per recipe (B3)"
     else:
         review_agg["review_rank_score"] = review_agg["legacy_review_rank"]
         formula = "star_norm_avg + sentiment_avg (from review_by_llm)"
@@ -131,4 +177,8 @@ if __name__ == "__main__":
         sentiment_02=pd.Series([2.0]),
     )
     assert float(v.iloc[0]) == 2.0
-    print("scoring ok")
+    # same R=max; larger v → WR closer to R (higher when R > C)
+    wr1 = float(bayesian_average([5.0], [1.0], C=4.0, m=3.0)[0])
+    wr10 = float(bayesian_average([5.0], [10.0], C=4.0, m=3.0)[0])
+    assert wr10 > wr1
+    print("scoring ok", wr1, wr10)

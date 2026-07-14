@@ -505,7 +505,7 @@ def build_experiment_report(
         and track_b_eval["l2_pass"]
     )
     return {
-        "experiment": "19_l1_eval_refine",
+        "experiment": "20_bayesian_bar",
         "metrics_version": "L0-L5",
         "data_files": {name: str(path) for name, path in cfg.data_files.items()},
         "mode": cfg.model_mode,

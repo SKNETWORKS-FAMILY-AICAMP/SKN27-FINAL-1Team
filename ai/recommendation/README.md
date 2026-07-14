@@ -33,11 +33,12 @@
 | **Track B 개선** | **16** | interaction·bar 곱 재학습 | bar·학습 정합 |
 | **Track B v2** | **17~** | 콜드스타트 Base Score | full train, `product_02_row` |
 | **Track B v2** | **18** | **L0~L5 지표 재정의** | Go = L0+L1+L2; §[METRICS.md](METRICS.md) |
-| **Track B v2 (현재)** | **19** | **L1 평가 보완** | informative + ρ(pop,bar); **Go 통과** |
+| **Track B v2** | **19** | **L1 평가 보완** | informative + ρ(pop,bar); Go 통과 |
+| **Track B v2 (현재)** | **20** | **Bayesian bar** | ceiling 개수 분리; **채택** |
 
 - **ablation·채택 근거** → §실험 1~11  
 - **왜 Go 기준이 바뀌었는지** → §실험 12 → §실험 13 순  
-- **지표·Go 현황** → §실험 19 · [METRICS.md](METRICS.md) · README §1.5
+- **지표·Go·bar** → §실험 20 · [METRICS.md](METRICS.md) · README §1.5
 
 ---
 
@@ -50,16 +51,16 @@
 - **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
-### 1.2 현재 진행 상황 (실험 19 Go 통과)
+### 1.2 현재 진행 상황 (실험 20 Bayesian bar 채택)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` |
-| **Track B v2** | **L0~L5 평가** | `evaluation.py`, [METRICS.md](METRICS.md) |
-| **Go (5-seed)** | **통과** | L0·L1·L2 5/5; ρ_model≈0.55~0.60 > ρ_pop≈0.38 |
-| 베이스라인 | seed 42 | `experiment: 19_l1_eval_refine` |
+| **Track B v2** | **L0~L5 + Bayesian bar** | `BAR_MODE=bayesian` default |
+| **Go (5-seed)** | **통과** | L2 informative ρ≈0.38~0.46; ceiling ρ≈0.24~0.29 |
+| 베이스라인 | seed 42 | `experiment: 20_bayesian_bar` |
 
-상세 → **[experiments.md §실험 19](experiments.md)** (용어·공정 순위 평가·다음 실험 20).
+상세 → **[experiments.md §실험 20](experiments.md)**.
 
 ### 1.4 Track A vs Track B
 
@@ -79,7 +80,7 @@
 | | 공식 | 비고 |
 |---|------|------|
 | 학습 `y` | `star_02 × sentiment_02` | `product_02_row` (17+) |
-| bar `score_review` | `mean(star_02 × sentiment_02)` | warm 관측 |
+| bar `score_review` | Bayesian WR on `mean(star_02×sentiment_02)` | m=3; `BAR_MODE=mean` 시 단순 mean |
 | export `ŷ` | LightFM predict | cold·warm 공통 |
 | view/scrap | **feature만** | target·bar 미포함 |
 
@@ -135,6 +136,7 @@ cold는 정답 없음 → **L0 + warm L1/L2**로 간접 검증.
 | **17** | 콜드스타트 파이프라인: full train, `product_02_row` default |
 | **18** | L0~L5 평가·[METRICS.md](METRICS.md) |
 | **19** | L1 informative + ρ(pop,bar); Go 통과 |
+| **20** | Bayesian WR bar default (m=3) |
 
 ---
 
@@ -218,6 +220,7 @@ docker compose run --rm jupyter jupyter nbconvert `
 | `EXCLUDED_RECIPE_COLUMNS` | `ingredients` | feature ablation |
 | `STAR_WEIGHT` / `SENTIMENT_WEIGHT` | 1.0 (`ratio_1_2`는 2.0) | interaction 가중 |
 | `TARGET_MODE` | **`product_02_row`** | interaction target |
+| `BAR_MODE` | **`bayesian`** | export bar: WR (m=3); `mean` = 단순 mean |
 
 ### 2.5 노트북 Unit
 
@@ -291,7 +294,7 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 
 ---
 
-## 4. 실험 회차 개요 (1~19)
+## 4. 실험 회차 개요 (1~20)
 
 상세 → **[experiments.md](experiments.md)** 해당 §. **1~12 = Track A(보류) / 13~16 = Track B v1 / 17+ = 콜드스타트**
 
@@ -302,18 +305,25 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 | 13~16 | Track B v1 export·ablation | B0·B3 통과; B2 미달 | 산출물 폐기 |
 | **17** | **콜드스타트 재정의·정리** | 파이프라인 정리 | full train |
 | **18** | **L0~L5·Cohen 0.30 근거** | L0·L2 OK; L1 0/5 (구 축) | calibration |
-| **19** | **L1 informative·bar 정합** | **Go 통과** (L0·L1·L2 5/5) | 평가만 개정 |
+| **19** | **L1 informative·bar 정합** | **Go 통과** | 공정 순위 평가 |
+| **20** | **Bayesian average bar** | **채택** (ceiling ρ↑, Go 유지) | m=3 |
 
 **스냅샷**
 
-- **Go:** `L0 & L1 & L2` — **통과** (실험 19). **공정 순위 평가**(동일 informative·bar축·L2 0.30 유지); 임계 완화 아님.
-- **L1:** informative ρ_model > ρ_pop **5/5**; null p=0.001
-- **L2:** informative Spearman **≥ 0.30** — 5/5 (ρ≈0.55~0.60)
-- **다음 (실험 20):** **ceiling / 5점 포화 추정 구간**에서 순위를 어떻게 살릴지 (L4). 서비스/ETL은 병행 가능.
+- **Go:** `L0 & L1 & L2` — **통과** (실험 20, Bayesian bar)
+- **bar:** WR on `mean(star_02×sentiment_02)`; `BAR_MODE=mean`으로 레거시 mean 가능
+- **원칙:** 절대 점수보다 **상대 순위 구분력** (Spearman·unique/슬라이스). §[METRICS.md](METRICS.md) · §실험 20 인사이트
+- **잔여:** v=1 all5 동점(감성 동일 시) — 다음 정보는 감성/텍스트 쪽
+- **다음:** v=1 군집 분리 또는 서비스/ETL 연동
 
 ---
 
 ## 5. 업데이트 및 수정 이력
+
+### 2026-07-14 (실험 20)
+
+- **bar:** IMDb식 Bayesian average (m=3) on product mean; default `BAR_MODE=bayesian`.
+- **20A/20B:** 라벨 개수 분리 + 재학습 5-seed Go 유지·ceiling ρ≈0.24~0.29. §[experiments.md](experiments.md) 실험 20.
 
 ### 2026-07-14 (실험 19)
 
