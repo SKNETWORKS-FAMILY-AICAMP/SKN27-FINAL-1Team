@@ -255,7 +255,7 @@ def test_alarm_agent_feature_words_route_to_alarm() -> None:
 
 
 def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
-    """알림 조회는 캘린더 조회가 아니라 알림 intent로 알람 에이전트에 넘깁니다."""
+    """알림 조회는 슈퍼바이저가 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
 
     captured = {}
@@ -273,16 +273,21 @@ def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
         "intent": "alarm.notification",
     })
 
-    assert captured["intent"] == "alarm.list"
+    assert captured["intent"] is None
+    assert captured["text_or_intent"] == "알림 조회"
 
-def test_unread_notification_query_is_not_reported_as_full_list(monkeypatch) -> None:
-    """읽지 않은 알림 조회는 전체 알림 조회 성공처럼 응답하지 않습니다."""
+
+def test_unread_notification_query_uses_alarm_agent(monkeypatch) -> None:
+    """읽지 않은 알림 조회는 Alarm Agent의 unread 처리에 맡깁니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
 
-    def fail_run_alarm_agent(**kwargs):
-        raise AssertionError("미확인 알림 조회는 아직 알람 에이전트럼 넘기지 않습니다.")
+    captured = {}
 
-    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fail_run_alarm_agent)
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "읽지 않은 알림 목록이에요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
 
     result = supervisor_agent.alarm_agent_node({
         "db": MagicMock(),
@@ -291,8 +296,9 @@ def test_unread_notification_query_is_not_reported_as_full_list(monkeypatch) -> 
         "intent": "alarm.notification",
     })
 
-    assert "아직 준비 중" in result["response_text"]
-
+    assert captured["intent"] is None
+    assert captured["text_or_intent"] == "읽지 않은 알림 있어?"
+    assert result["response_text"] == "읽지 않은 알림 목록이에요."
 
 def test_alarm_agent_node_does_not_force_notification_create_to_list(monkeypatch) -> None:
     """알림 등록 문장은 알림 목록 조회로 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
