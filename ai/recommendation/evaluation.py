@@ -24,6 +24,13 @@ PREFER_SEED_WINS_REQUIRED = 4
 PREFER_N_FOLDS = 5
 PREFER_AT_K = 20
 
+# exp29 (revised): recommendation-only Go — warm test fold P@K / NDCG / Recall
+REC_METRICS_VERSION = "exp29-recommend-go"
+REC_P20_GO = 0.50
+REC_NDCG20_GO = 0.50
+REC_RECALL20_GO = 0.24
+REC_SEED_WINS_REQUIRED = 4
+
 
 def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = 50) -> float:
     scores = np.asarray(scores, dtype=np.float64).ravel()
@@ -768,6 +775,41 @@ def aggregate_prefer_multi_seed(seed_means: list[dict]) -> dict:
     }
 
 
+def seed_recommend_go_pass(seed_mean: dict) -> bool:
+    p20 = float(seed_mean.get("precision_at_k", 0.0))
+    ndcg = float(seed_mean.get("ndcg_at_k", 0.0))
+    rec = float(seed_mean.get("recall_at_k", 0.0))
+    return (
+        p20 >= REC_P20_GO
+        and ndcg >= REC_NDCG20_GO
+        and rec >= REC_RECALL20_GO
+    )
+
+
+def aggregate_recommend_multi_seed(seed_means: list[dict]) -> dict:
+    n = len(seed_means)
+    wins = sum(1 for m in seed_means if seed_recommend_go_pass(m))
+
+    def _mean(k: str) -> float:
+        vals = [float(m[k]) for m in seed_means if k in m and np.isfinite(m[k])]
+        return float(np.mean(vals)) if vals else float("nan")
+
+    return {
+        "n_seeds": n,
+        "n_wins": wins,
+        "go": wins >= REC_SEED_WINS_REQUIRED and n >= REC_SEED_WINS_REQUIRED,
+        "mean_precision_at_k": _mean("precision_at_k"),
+        "mean_recall_at_k": _mean("recall_at_k"),
+        "mean_ndcg_at_k": _mean("ndcg_at_k"),
+        "mean_roc_auc": _mean("roc_auc"),
+        "mean_f1": _mean("f1"),
+        "mean_specificity": _mean("specificity"),
+        "mean_roc_auc_pop": _mean("roc_auc_pop"),
+        "mean_precision_at_k_pop": _mean("precision_at_k_pop"),
+        "metrics_version": REC_METRICS_VERSION,
+    }
+
+
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 200
@@ -842,3 +884,10 @@ if __name__ == "__main__":
     )
     assert agg_p["go"]
     print("prefer ok", rep["f1"], agg_p["go"])
+    agg_r = aggregate_recommend_multi_seed(
+        [{"precision_at_k": 0.55, "ndcg_at_k": 0.52, "recall_at_k": 0.25}] * 5
+    )
+    assert agg_r["go"] and seed_recommend_go_pass(
+        {"precision_at_k": 0.55, "ndcg_at_k": 0.52, "recall_at_k": 0.25}
+    )
+    print("recommend ok", agg_r["go"])

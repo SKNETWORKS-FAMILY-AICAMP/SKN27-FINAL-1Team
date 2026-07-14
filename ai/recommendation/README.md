@@ -51,15 +51,15 @@
 - **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
-### 1.2 현재 진행 상황 (Track B · 실험 28)
+### 1.2 현재 진행 상황 (Track B · §29 R-Go)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
-| 실행 환경 | 완료 | Docker, `exp28_prefer_threshold.py` |
-| **Track B** | **동결 해제** | y\*=`n_star5≥2` · 기준선 `t*=min(train True s)` |
-| **Go 헌장** | **P0~P3** | Spearman L0~L5 → 레거시 ([METRICS.md](METRICS.md)) |
-| **실측** | §28 **No-Go** (0/5) | AUC≈0.61·pop≈0.78; Spec≈0.11 @ min(s) |
-| **export** | `recipe_prefer_ranked.csv` | `recipe_lightfm.csv` 동결 export 유지 |
+| 실행 환경 | 완료 | `exp29_star_only_prefer.py` |
+| **Go 헌장** | **R0~R3** | P@20·NDCG@20·Recall@20 (warm test fold) |
+| **§28** | No-Go (구 P0~P3) | 레거시 |
+| **§29** | R-Go **No-Go** (0/5×3) | P@20≈0.46·NDCG≈0.49·Recall≈0.23 |
+| **export** | 진단 CSV | `recipe_lightfm.csv` 동결 |
 
 베이스라인 태그: `experiment: 22_eval_recalib`. 회차 표 → [experiments.md](experiments.md) §22~26 · 헌장 → [METRICS.md](METRICS.md).
 

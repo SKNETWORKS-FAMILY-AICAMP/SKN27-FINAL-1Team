@@ -18,7 +18,12 @@ ALLOWED_TARGET_MODES = (
 )
 
 ALLOWED_SAMPLE_WEIGHT_MODES = ("none", "review_n")
-ALLOWED_POSITIVE_MODES = ("all_reviews", "prefer_n_star5_ge2")
+ALLOWED_POSITIVE_MODES = (
+    "all_reviews",
+    "prefer_n_star5_ge2",
+    "prefer_n_star5_ge2_five_star_rows",
+    "five_star_reviews_only",
+)
 
 CATALOG_USER_ID = "__catalog__"
 

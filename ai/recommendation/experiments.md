@@ -2,7 +2,7 @@
 
 **읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류 → 다음 설계 축**) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17~26 = 콜드스타트 Base Score (2026-07-14 지표 동결)**.  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
-**L1 축·Go:** §22~26 Spearman dual (**레거시**) · §**28** 기준선 이진 **P0~P3** (동결 해제).
+**L1 축·Go:** §22~26 Spearman dual (**레거시**) · §**28~29** 기준선 이진 **P0~P3** (동결 해제).
 
 **상태:** [`TRACK_B_STATUS.md`](TRACK_B_STATUS.md) · 헌장 [`METRICS.md`](METRICS.md).
 
@@ -3416,3 +3416,55 @@ n: vge2=185, v1=344 (공통).
 ### JSON
 
 `outputs/exp28_report.json`
+
+---
+
+## 실험 29 — 별점 WARP ablation + **R0~R3 추천 Go** (재구성)
+
+**일자:** 2026-07-14  
+**코드:** [`exp29_star_only_prefer.py`](exp29_star_only_prefer.py) · [`evaluation` R0~R3](evaluation.py)
+
+### 목적
+
+- **학습:** 3-arm WARP (baseline / 29a 5점-only / 29b 전체 5점)
+- **평가 (재구성):** warm test fold **P@20·NDCG@20·Recall@20** — pop beat·AUC·Spec @ `t*` **Go 제외**
+- y\* = `n_star5 ≥ 2` · export `TARGET_MODE=star_only`
+
+### 설정
+
+| Arm | POSITIVE_MODE | matrix |
+|-----|---------------|--------|
+| baseline | `prefer_n_star5_ge2` | y\*=1 레시피 전체 리뷰 |
+| **29a** | `prefer_n_star5_ge2_five_star_rows` | y\*=1 AND star_count==5 |
+| **29b** | `five_star_reviews_only` | warm 전체 5점 |
+
+**Go:** R1 P@20≥0.50 · R2 NDCG@20≥0.50 · R3 Recall@20≥0.24 · ≥4/5 seed + R0
+
+### 결과 (구 헌장 P0~P3 — 참고)
+
+| arm | AUC | Spec | P@20 | pass |
+|-----|-----|------|------|------|
+| baseline | 0.611 | 0.112 | 0.464 | 0/5 |
+| 29a | 0.613 | 0.117 | 0.456 | 0/5 |
+| 29b | 0.608 | 0.099 | 0.462 | 0/5 |
+
+### 결과 (R0~R3 — 재실행)
+
+**판정: No-Go (3 arm 모두 0/5)** · charter `R0-R3`
+
+| arm | P@20 | NDCG@20 | Recall@20 | R-Go |
+|-----|------|---------|-----------|------|
+| baseline | 0.456 | 0.479 | 0.230 | 0/5 |
+| 29a | 0.462 | 0.489 | 0.233 | 0/5 |
+| 29b | 0.458 | 0.485 | 0.231 | 0/5 |
+
+- R1 P@20: 전 arm **0.50 미달** (최고 29a 0.462)
+- R2 NDCG: **0.50 근접** (29a 0.489) — 1~2 seed는 통과 가능하나 4/5 seed 미달
+- R3 Recall: **0.24 근접** (29a 0.233)
+- pop·AUC·Spec: 진단만 — Go 미사용
+
+**다음:** 임계 METRICS 조정 검토 또는 feature/epoch; Spearman·P0~P3·pop beat 복귀 없음
+
+### JSON
+
+`outputs/exp29_report.json` · `recipe_prefer_ranked_{baseline,29a,29b}.csv`

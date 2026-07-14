@@ -1,60 +1,66 @@
 # Track B 평가 지표
 
-**헌장 (1차 Go):** 실험 **28** (`exp28-prefer-threshold`) — **기준선 이진** (Spearman Go **폐기**).  
-구현: [`evaluation.py`](evaluation.py) · 실행: [`exp28_prefer_threshold.py`](exp28_prefer_threshold.py).
+**헌장 (1차 Go):** 실험 **29 (재구성)** — **추천 전용 R0~R3** (`exp29-recommend-go`).  
+구현: [`evaluation.py`](evaluation.py) · 실행: [`exp29_star_only_prefer.py`](exp29_star_only_prefer.py).
 
 | 문서 | 용도 |
 |------|------|
-| **본 문서** | P0~P3·임계·근거 |
+| **본 문서** | R0~R3·임계·근거 |
 | [TRACK_B_STATUS.md](TRACK_B_STATUS.md) | 상태·채택 export |
-| [experiments.md](experiments.md) | §28 실측 |
+| [experiments.md](experiments.md) | §29 실측 |
 | [README.md](README.md) | 팀 스냅샷 |
 
 ---
 
-## 목표 (실험 28+)
+## 목표
 
-메타데이터(hybrid item feature)로 catalog 점수 `s_pref`를 내고, warm에서 **5점 리뷰 ≥2** 클래스의 **기준선 위/아래**를 맞춘다.  
-정확한 bar 순위(Spearman)는 **Go 아님** (진단만).
+warm 레시피(~563) 중 **5점 리뷰 ≥2** (~198)를 **관련 아이템**으로 두고, catalog 점수 `s_pref` **상위 K**에 선호 레시피가 얼마나 오는지 평가한다.
 
 | 용어 | 정의 |
 |------|------|
-| **y\*** | `1` ⟺ 레시피 `n_star5 ≥ 2` / `0` ⟺ warm 나머지 |
-| **s** | LightFM `__catalog__` predict (`s_pref` = `y_hat`) |
-| **t\*** | **train fold True의 `min(s)`** (고정) |
-| **prefer_hat** | `1[s ≥ t*]` |
-| **cold** | y\* 없음 — warm Go 후 `s`·`prefer_hat` export |
+| **y\*** | `1` ⟺ `n_star5 ≥ 2` / warm 나머지 `0` |
+| **s** | LightFM hybrid catalog `s_pref` |
+| **평가 풀** | warm **CV test fold** (~113/fold) |
+| **t\*, prefer_hat** | export·진단용 — **Go 아님** |
 
 ---
 
-## 1차 Go — P0~P3
+## 1차 Go — R0~R3
 
-**프로토콜:** warm recipe stratified **5-fold** CV × seeds `42/123/456/789/1024`.
+**프로토콜:** warm stratified **5-fold** × seeds `42/123/456/789/1024`.
 
 ```
-go = P0 ∧ (P1∧P2∧P3 on ≥4/5 seeds, fold mean)
+go = R0 ∧ (R1∧R2∧R3 on ≥4/5 seeds, fold mean)
 ```
 
 | 층 | 조건 | 통과 |
 |----|------|------|
-| **P0** | catalog `s` 유한·std>0 (3171) | 필수 |
-| **P1** | ROC-AUC(s, y\*) | ≥ **0.70** ∧ **> popularity** |
-| **P2** | F1·Spec @ t* | F1 ≥ **0.55** ∧ Spec ≥ **0.70** |
-| **P3** | P@20 · NDCG@20 | P@20 ≥ **0.75** ∧ **> pop@20** |
+| **R0** | catalog `s` 유한·std>0 (3171 full-fit) | 필수 |
+| **R1** | **P@20**(`s`, y\*) on test fold | ≥ **0.50** |
+| **R2** | **NDCG@20** | ≥ **0.50** |
+| **R3** | **Recall@20** | ≥ **0.24** |
 
-비교군: `log1p(view)+log1p(scrap)`.
+**진단 only (Go 아님):** ROC-AUC, F1, Spec @ `t*`, popularity `log1p(view)+log1p(scrap)`.
 
-**학습:** `POSITIVE_MODE=prefer_n_star5_ge2` — interaction 양성 = y\*=1 리뷰만 (WARP).
+**학습 (§29 ablation):** `POSITIVE_MODE` = baseline / `prefer_n_star5_ge2_five_star_rows`(29a) / `five_star_reviews_only`(29b).
 
 ---
 
-## 레거시 — L0~L5 dual (실험 22~26, 2026-07-14 동결 해제)
+## 레거시 — P0~P3 (§28, 폐기)
 
-Spearman(ŷ, bar) 이축 Go. 실험 28부터 **1차 Go 아님**. 이력·실측 → [experiments.md](experiments.md) §22~26.
+이진 분류 + pop beat. §29 재구성으로 **1차 Go 아님**.
 
-```
-go_legacy = L0 ∧ L1i ∧ L2i(≥0.30) ∧ L1c ∧ L2c(≥0.25)
-```
+| 층 | 요약 |
+|----|------|
+| P1 | AUC≥0.70 ∧ >pop |
+| P2 | F1·Spec @ `t*=min(s)` |
+| P3 | P@20≥0.75 ∧ >pop |
+
+---
+
+## 레거시 — L0~L5 dual (§22~26)
+
+Spearman 이축 Go. 이력 → [experiments.md](experiments.md) §22~26.
 
 ---
 
@@ -62,7 +68,5 @@ go_legacy = L0 ∧ L1i ∧ L2i(≥0.30) ∧ L1c ∧ L2c(≥0.25)
 
 | 일자 | 회차 | 내용 |
 |------|------|------|
-| 2026-07-13 | 18 | L0~L5·Cohen 0.30 |
-| 2026-07-14 | 22 | 이축 Go L1i+L2i+L1c+L2c |
-| 2026-07-14 | 26 | v≥2 stretch 미달 → 동결 |
-| 2026-07-14 | **28** | **P0~P3 기준선 이진 Go**; Spearman 1차 Go 폐기 |
+| 2026-07-14 | 28 | P0~P3 기준선 이진 (후 폐기) |
+| 2026-07-14 | **29** | **R0~R3 추천 Go**; pop beat·t\* 이진 Go 제거 |
