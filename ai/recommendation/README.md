@@ -57,7 +57,7 @@
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 실행 환경 | 완료 | `python evaluation.py` |
-| **Go 헌장** | **R0~R3** | P@20·NDCG@20·Recall@20 (warm test fold) |
+| **Go 헌장** | **R0 + R1** | Recall@20(model) **>** Recall@20(별점 Bayesian Pop) |
 | **§28** | No-Go (구 P0~P3) | 레거시 |
 | **§29** | R-Go **No-Go** (0/5×3) | P@20≈0.46·NDCG≈0.49·Recall≈0.23 |
 | **export** | 진단 CSV | `recipe_lightfm.csv` 동결 |

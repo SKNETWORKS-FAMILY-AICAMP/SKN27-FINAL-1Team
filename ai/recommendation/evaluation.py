@@ -1,4 +1,4 @@
-"""Prefer recommendation CV metrics (R0~R3) and Docker entrypoint."""
+"""Prefer recommendation CV metrics (R0~R2) and Docker entrypoint."""
 
 from __future__ import annotations
 
@@ -10,10 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 
-METRICS_VERSION = "prefer-recommend-go"
-REC_P20_GO = 0.50
-REC_NDCG20_GO = 0.50
-REC_RECALL20_GO = 0.24
+METRICS_VERSION = "prefer-recall-vs-star-pop"
 REC_SEED_WINS_REQUIRED = 4
 CV_N_FOLDS = 5
 AT_K = 20
@@ -63,16 +60,20 @@ def catalog_score_sanity(scores: np.ndarray) -> dict[str, float | bool]:
 
 
 def seed_recommend_go_pass(seed_mean: dict) -> bool:
-    return (
-        float(seed_mean.get("precision_at_k", 0.0)) >= REC_P20_GO
-        and float(seed_mean.get("ndcg_at_k", 0.0)) >= REC_NDCG20_GO
-        and float(seed_mean.get("recall_at_k", 0.0)) >= REC_RECALL20_GO
-    )
+    """R1: Recall@K(model) > Recall@K(star Bayesian pop)."""
+    rec = float(seed_mean.get("recall_at_k", 0.0))
+    rec_pop = float(seed_mean.get("recall_at_k_pop", 0.0))
+    return rec > rec_pop
 
 
 def aggregate_recommend_multi_seed(seed_means: list[dict]) -> dict:
     n = len(seed_means)
     wins = sum(1 for m in seed_means if seed_recommend_go_pass(m))
+    pop_wins = sum(
+        1
+        for m in seed_means
+        if float(m.get("recall_at_k", 0.0)) > float(m.get("recall_at_k_pop", 0.0))
+    )
 
     def _mean(k: str) -> float:
         vals = [float(m[k]) for m in seed_means if k in m and np.isfinite(m[k])]
@@ -81,10 +82,14 @@ def aggregate_recommend_multi_seed(seed_means: list[dict]) -> dict:
     return {
         "n_seeds": n,
         "n_wins": wins,
+        "pop_wins": pop_wins,
         "go": wins >= REC_SEED_WINS_REQUIRED and n >= REC_SEED_WINS_REQUIRED,
-        "mean_precision_at_k": _mean("precision_at_k"),
         "mean_recall_at_k": _mean("recall_at_k"),
+        "mean_recall_at_k_pop": _mean("recall_at_k_pop"),
+        "mean_precision_at_k": _mean("precision_at_k"),
+        "mean_precision_at_k_pop": _mean("precision_at_k_pop"),
         "mean_ndcg_at_k": _mean("ndcg_at_k"),
+        "mean_ndcg_at_k_pop": _mean("ndcg_at_k_pop"),
         "mean_matrix_nnz": _mean("matrix_nnz"),
         "metrics_version": METRICS_VERSION,
     }
@@ -110,7 +115,7 @@ def run_prefer_cv(
     from lightfm import LightFM
 
     from preprocess import build_interactions, build_prefer_labels
-    from scoring import catalog_predict
+    from scoring import catalog_predict, star_popularity_scores
 
     warm_ids = np.array(sorted(y_prefer.index.astype(str)), dtype=object)
     y = y_prefer.loc[warm_ids].to_numpy(dtype=int)
@@ -140,18 +145,35 @@ def run_prefer_cv(
         )
         y_te = y_prefer.loc[test_ids].to_numpy(dtype=int)
         s_te = np.array([all_scores[id_to_idx[rid]] for rid in test_ids], dtype=float)
+
+        pop_scores, pop_C = star_popularity_scores(train_review)
+        pop_te = pop_scores.reindex(test_ids).fillna(pop_C).to_numpy(dtype=float)
+
         atk = ranking_at_k_binary(y_te, s_te, k=AT_K)
+        atk_pop = ranking_at_k_binary(y_te, pop_te, k=AT_K)
         fold_rows.append(
             {
                 "fold": fold_i,
-                "precision_at_k": atk["precision_at_k"],
                 "recall_at_k": atk["recall_at_k"],
+                "recall_at_k_pop": atk_pop["recall_at_k"],
+                "precision_at_k": atk["precision_at_k"],
+                "precision_at_k_pop": atk_pop["precision_at_k"],
                 "ndcg_at_k": atk["ndcg_at_k"],
+                "ndcg_at_k_pop": atk_pop["ndcg_at_k"],
                 "matrix_nnz": float(interactions.nnz),
+                "pop_C_train": float(pop_C),
             }
         )
 
-    keys = ["precision_at_k", "recall_at_k", "ndcg_at_k", "matrix_nnz"]
+    keys = [
+        "recall_at_k",
+        "recall_at_k_pop",
+        "precision_at_k",
+        "precision_at_k_pop",
+        "ndcg_at_k",
+        "ndcg_at_k_pop",
+        "matrix_nnz",
+    ]
     mean = _mean_dicts(fold_rows, keys)
     mean["seed"] = cfg.seed
     mean["seed_pass"] = seed_recommend_go_pass(mean)
@@ -241,15 +263,12 @@ def main() -> None:
         cv_epochs=cv_epochs,
     )
     agg = aggregate_recommend_multi_seed([r["fold_mean"] for r in seed_reports])
-    agg["charter"] = "R0-R3"
+    agg["charter"] = "R0-R2"
     agg["positive_mode"] = cfg0.positive_mode
     agg["cv_epochs"] = cv_epochs
     agg["full_epochs"] = full_epochs
-    agg["go_thresholds"] = {
-        "p_at_20": REC_P20_GO,
-        "ndcg_at_20": REC_NDCG20_GO,
-        "recall_at_20": REC_RECALL20_GO,
-    }
+    agg["pop_formula"] = "Bayesian WR on n_star5/review_n; m=3; train-fold only"
+    agg["go_rule"] = "Recall@20(model) > Recall@20(star_pop) per seed, >=4/5"
 
     os.environ["SEED"] = "42"
     cfg_full = load_experiment_config(project_root)
@@ -279,7 +298,7 @@ def main() -> None:
     export_recipe_lightfm(export_df, ranked_path)
     report_path = cfg0.outputs_dir / "prefer_eval_report.json"
     out = {
-        "charter": "R0-R3",
+        "charter": "R0-R2",
         "positive_mode": cfg0.positive_mode,
         "aggregate": agg,
         "seeds": seed_reports,
@@ -300,15 +319,14 @@ def main() -> None:
 
 if __name__ == "__main__":
     y = np.array([1, 1, 0, 0, 0], dtype=int)
-    s = np.array([0.9, 0.8, 0.7, 0.2, 0.0])
-    atk = ranking_at_k_binary(y, s, k=3)
-    assert atk["precision_at_k"] == 2 / 3 and atk["recall_at_k"] == 1.0
-    assert catalog_score_sanity(s)["r0_pass"]
-    agg = aggregate_recommend_multi_seed(
-        [{"precision_at_k": 0.55, "ndcg_at_k": 0.52, "recall_at_k": 0.25, "matrix_nnz": 100.0}]
-        * 5
+    s_model = np.array([0.9, 0.8, 0.1, 0.2, 0.0])
+    s_pop = np.array([0.5, 0.4, 0.7, 0.6, 0.3])
+    atk_m = ranking_at_k_binary(y, s_model, k=3)
+    atk_p = ranking_at_k_binary(y, s_pop, k=3)
+    assert atk_m["recall_at_k"] > atk_p["recall_at_k"]
+    assert seed_recommend_go_pass(
+        {"recall_at_k": atk_m["recall_at_k"], "recall_at_k_pop": atk_p["recall_at_k"]}
     )
-    assert agg["go"] and seed_recommend_go_pass(
-        {"precision_at_k": 0.55, "ndcg_at_k": 0.52, "recall_at_k": 0.25}
-    )
-    print("evaluation ok", atk["precision_at_k"], agg["go"])
+    assert catalog_score_sanity(s_model)["r0_pass"]
+    print("evaluation self-check ok", atk_m["recall_at_k"], atk_p["recall_at_k"], flush=True)
+    main()

@@ -6,7 +6,42 @@ import numpy as np
 import pandas as pd
 
 from config import CATALOG_USER_ID, ExperimentConfig
-from preprocess import build_interactions
+from preprocess import build_interactions, is_five_star_mask
+
+BAYESIAN_M_DEFAULT = 3.0
+
+
+def bayesian_average(
+    R: pd.Series | np.ndarray,
+    v: pd.Series | np.ndarray,
+    C: float,
+    m: float = BAYESIAN_M_DEFAULT,
+) -> np.ndarray:
+    """IMDb-style WR = v/(v+m)*R + m/(v+m)*C."""
+    R = np.asarray(R, dtype=np.float64).ravel()
+    v = np.asarray(v, dtype=np.float64).ravel()
+    denom = v + float(m)
+    w = np.where(denom > 0.0, v / denom, 0.0)
+    return w * R + (1.0 - w) * float(C)
+
+
+def star_popularity_scores(
+    review_df: pd.DataFrame,
+    *,
+    m: float = BAYESIAN_M_DEFAULT,
+) -> tuple[pd.Series, float]:
+    """recipe_id -> Bayesian WR on 5-star rate (n_star5/review_n). Returns (scores, global_C)."""
+    rid = review_df["recipe_id"].astype(str)
+    is5 = is_five_star_mask(review_df).astype(int)
+    agg = (
+        pd.DataFrame({"recipe_id": rid, "is5": is5})
+        .groupby("recipe_id", as_index=True)
+        .agg(n_star5=("is5", "sum"), review_n=("is5", "size"))
+    )
+    rate = agg["n_star5"] / agg["review_n"].clip(lower=1)
+    C = float(is5.mean()) if len(is5) else 0.0
+    wr = bayesian_average(rate, agg["review_n"], C, m=m)
+    return pd.Series(wr, index=agg.index, name="star_pop"), C
 
 
 def catalog_predict(
@@ -140,15 +175,15 @@ def full_fit_export(
 if __name__ == "__main__":
     toy = pd.DataFrame(
         {
-            "recipe_id": ["a", "a", "b"],
-            "star_count": [5, 4, 3],
-            "star_norm": [1.0, 0.5, 0.0],
-            "positive": [0.8, 0.6, 0.3],
-            "negative": [0.1, 0.2, 0.4],
+            "recipe_id": ["a", "a", "a", "b", "b"],
+            "star_count": [5, 5, 3, 5, 3],
+            "star_norm": [1.0, 1.0, 0.0, 1.0, 0.0],
+            "positive": [0.8, 0.6, 0.3, 0.3, 0.4],
+            "negative": [0.1, 0.2, 0.4, 0.4, 0.2],
         }
     )
     agg, formula = aggregate_review_for_export(toy)
-    assert float(agg.loc[agg["recipe_id"] == "a", "star_norm_avg"].iloc[0]) == 0.75
+    assert float(agg.loc[agg["recipe_id"] == "a", "star_norm_avg"].iloc[0]) == 2 / 3
     y = pd.Series({"a": 1, "b": 0}, name="y_prefer")
     n5 = pd.Series({"a": 2, "b": 0}, name="n_star5")
     recipe = pd.DataFrame({"recipe_id": ["a", "b"], "recipe_name": ["A", "B"]})
@@ -161,4 +196,6 @@ if __name__ == "__main__":
         warm_item_ids={"a", "b"},
     )
     assert df.iloc[0]["recipe_id"] == "a" and int(df.iloc[0]["prefer_rank"]) == 1
-    print("scoring ok", formula, float(df.iloc[0]["t_star"]))
+    pop, c = star_popularity_scores(toy)
+    assert float(pop["a"]) > float(pop["b"]) and c > 0
+    print("scoring ok", formula, float(df.iloc[0]["t_star"]), float(pop["a"]))

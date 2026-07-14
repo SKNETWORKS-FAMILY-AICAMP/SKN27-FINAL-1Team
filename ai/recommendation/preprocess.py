@@ -235,7 +235,11 @@ def build_interactions(
     - five_star_reviews_only: all five-star review rows (y* ignored)
     """
     positive_mode = getattr(cfg, "positive_mode", "prefer_n_star5_ge2")
-    labels = recipe_prefer_labels or build_prefer_labels(review_df)
+    labels = (
+        build_prefer_labels(review_df)
+        if recipe_prefer_labels is None
+        else recipe_prefer_labels
+    )
     review_with_iv = add_prefer_label_column(review_df, labels)
 
     if positive_mode == FIVE_STAR_ONLY_MODE:
