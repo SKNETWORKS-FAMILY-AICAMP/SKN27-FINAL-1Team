@@ -42,8 +42,8 @@ def test_chat_route_table_covers_current_feature_nodes():
         "inventory.list": "inventory_agent_node",
         "inventory.expiring": "inventory_agent_node",
         "ingredient.guide": "guide_agent_node",
-        "recipe.recommend": "recipe_recommend_node",
-        "recipe.search": "recipe_search_node",
+        "recipe.recommend": "recipe_agent_node",
+        "recipe.search": "recipe_agent_node",
         "receipt.guide": "receipt_guide_node",
         "inventory.action": "inventory_agent_node",
     }

@@ -25,3 +25,4 @@ tavily-python
 langchain
 langchain-openai
 langgraph
+langfuse

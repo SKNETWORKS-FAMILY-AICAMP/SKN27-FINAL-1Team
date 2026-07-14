@@ -17,11 +17,12 @@ from ai.agents.inventory_agent.inventory_utils import (
 )
 
 from app.backend.schemas.chat_state import GraphState
+from ai.agents.recipe_agent import run_recipe_agent
 
 from ai.agents.supervisor_agent.supervisor_utils import (
     LOGIN_REQUIRED_REPLY, GENERAL_REPLY,
     CONFIRM_PREFIX, CANCEL_WORDS,
-    _normalize_text, _requires_login
+    _normalize_text
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 
@@ -57,10 +58,13 @@ def router_node(state: GraphState) -> dict:
         return {"intent": "alarm.notification"}
     if any(word in normalized for word in ("일정", "캘린더")):
         return {"intent": "alarm.calendar"}
-
     shopping_intent = analyze_shopping_intent(text)
     if shopping_intent:
         return {"intent": shopping_intent}
+
+    # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
+    if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
+        return {"intent": "recipe.pairing"}
 
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
@@ -116,18 +120,21 @@ def guide_agent_node(state: GraphState) -> dict:
     reply, sources = state["service"]._reply_guide(state["text"])
     return {"response_text": reply, "sources": sources}
 
-def recipe_recommend_node(state: GraphState) -> dict:
-    """냉장고 기반 또는 재료 기반 레시피 추천을 안내합니다."""
-    svc = state["service"]
-    if _requires_login("recipe.recommend", state["text"]) and not state["user_id"]:
-        return {"response_text": LOGIN_REQUIRED_REPLY}
-    reply, actions = svc._reply_recipe_recommend(state["db"], state["user_id"], state["text"], state.get("history", []), state.get("settings_obj"))
-    return {"response_text": reply, "actions": actions}
+def recipe_agent_node(state: GraphState) -> dict:
+    """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
+    return run_recipe_agent(
+        state["text"],
+        db=state["db"],
+        user_id=state.get("user_id"),
+        history=state.get("history", []),
+        settings_obj=state.get("settings_obj"),
+        intent=state.get("intent"),
+    )
 
-def recipe_search_node(state: GraphState) -> dict:
-    """레시피 검색 결과를 안내합니다."""
-    reply, actions, sources = state["service"]._reply_recipe_search(state["db"], state["text"])
-    return {"response_text": reply, "actions": actions, "sources": sources}
+def recipe_pairing_node(state: GraphState) -> dict:
+    """특정 음식과 함께 먹기 좋은 메뉴를 안내합니다."""
+    reply = state["service"]._reply_recipe_pairing(state["text"])
+    return {"response_text": reply}
 
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
@@ -169,7 +176,7 @@ def alarm_agent_node(state: GraphState) -> dict:
         parts = text.split(":")
         if len(parts) >= 2:
             action = parts[1]
-            # mcp_agent_node 로 가야하는 재고 관련 action 이면 여기서 처리 안함
+            # 재고 관련 확인 액션은 Inventory Agent가 처리하므로 여기서 넘기지 않습니다.
             if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
                 pass 
             elif len(parts) >= 4 and action == "add_calendar_event":
@@ -268,8 +275,9 @@ def route_intent(state: GraphState) -> str:
         return "inventory_agent_node"
     routes = {
         "ingredient.guide": "guide_agent_node",
-        "recipe.recommend": "recipe_recommend_node",
-        "recipe.search": "recipe_search_node",
+        "recipe.recommend": "recipe_agent_node",
+        "recipe.search": "recipe_agent_node",
+        "recipe.pairing": "recipe_pairing_node",
         "receipt.guide": "receipt_guide_node",
     }
     return routes.get(intent, "general_node")
@@ -280,8 +288,8 @@ workflow.add_node("inventory_agent_node", inventory_agent_node)
 workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
-workflow.add_node("recipe_recommend_node", recipe_recommend_node)
-workflow.add_node("recipe_search_node", recipe_search_node)
+workflow.add_node("recipe_agent_node", recipe_agent_node)
+workflow.add_node("recipe_pairing_node", recipe_pairing_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
 workflow.add_node("general_node", general_node)
 
@@ -292,8 +300,8 @@ for node_name in (
     "alarm_agent_node",
     "shopping_agent_node",
     "guide_agent_node",
-    "recipe_recommend_node",
-    "recipe_search_node",
+    "recipe_agent_node",
+    "recipe_pairing_node",
     "receipt_guide_node",
     "general_node",
 ):

@@ -29,9 +29,8 @@
 .floating-chatbot__toggle img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: 50% 28%;
-  transform: scale(1.55);
+  object-fit: contain;
+  object-position: center;
 }
 
 .floating-chatbot__panel {
@@ -73,8 +72,8 @@
   flex: 0 0 auto;
   border-radius: 50%;
   background: #ffffff;
-  object-fit: cover;
-  object-position: 50% 28%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .floating-chatbot__profile strong,
@@ -150,8 +149,8 @@
   border: 1px solid #f0dfc5;
   border-radius: 50%;
   background: #fff4e3;
-  object-fit: cover;
-  object-position: 50% 25%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .floating-chatbot__message {
