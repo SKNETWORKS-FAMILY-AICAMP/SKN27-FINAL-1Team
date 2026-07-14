@@ -24,13 +24,14 @@ else:
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "gpt-5-mini"
-SCORE_DECIMAL_PLACES = 4
+MODEL_NAME = "gpt-5.5"
+SCORE_DECIMAL_PLACES = 6
 
 SYSTEM_PROMPT = (
     "당신은 한국어 레시피 리뷰·댓글 감성 분석기입니다.\n"
     "입력 텍스트의 긍정·부정 확률을 0~1 사이 실수로 추정하세요.\n"
-    "두 값의 합은 대략 1이 되도록 하세요.\n"
+    "긍정과 부정은 각각 다른 방향에서 개별 평가되어야 합니다. \n"
+    "같은 긍정이라도 최대한 나눠질 수 있도록 소수점 단위를 최대한 살려주세요 (0.000000~0.999999) \n"
     '반드시 JSON만 반환: {"positive": float, "negative": float}'
 )
 
