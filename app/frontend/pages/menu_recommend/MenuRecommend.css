@@ -12,7 +12,7 @@
   place-items: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 14px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -71,7 +71,7 @@
   box-sizing: border-box;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .menu-recommend-filters {
@@ -139,7 +139,7 @@
   margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   color: #8b673e;
   font-size: 12px;
   font-weight: 800;
@@ -160,7 +160,7 @@
   justify-items: start;
   border: 1.4px solid #efd8b8;
   border-radius: 14px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -198,7 +198,7 @@
   padding: 0 14px;
   border: 1.4px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -233,7 +233,7 @@
   gap: 10px;
   border: 1px solid #f1d9b3;
   border-radius: 14px;
-  background: #fffdf8;
+  background: #fff;
   box-sizing: border-box;
 }
 
@@ -281,7 +281,7 @@
   gap: 2px;
   border: 1.4px solid #efd8b8;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -316,7 +316,7 @@
   padding: 0 10px;
   border: 1.4px solid #efd8b8;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   color: #6d4128;
   font: inherit;
   font-size: 12px;
@@ -366,7 +366,7 @@
   min-width: 0;
   padding: 0 12px;
   border: 1.4px solid #efd8b8;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   white-space: nowrap;
 }
@@ -431,7 +431,7 @@
   align-content: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 16px;
-  background: #fffaf2;
+  background: #fff;
   text-align: center;
 }
 
@@ -483,7 +483,7 @@
   z-index: 3;
   border: 1px solid #efd8b8;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.94);
+  background: rgba(255, 255, 255, 0.94);
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -537,7 +537,7 @@
   position: relative;
   z-index: 1;
   padding: 0 16px 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .menu-recommend-card h3 {
@@ -560,7 +560,7 @@
   padding: 12px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
 }
 
 .menu-recommend-card__body b {
@@ -609,7 +609,7 @@
 
 .menu-recommend-card__actions button {
   border: 1.4px solid #c79a74;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
 }
 
@@ -644,7 +644,7 @@
   padding: 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
 }
 
 .menu-recommend-guide li.is-active {

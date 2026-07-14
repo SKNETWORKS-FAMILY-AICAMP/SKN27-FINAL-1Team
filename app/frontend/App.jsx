@@ -49,6 +49,10 @@ function AppLayout() {
   }, [])
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
+  useEffect(() => {
     const token = localStorage.getItem('bobbeori-token')
 
     // 인증 페이지 및 비로그인은 온보딩 자동 노출 대상에서 제외합니다.

@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import appIcon from '../assets/app_icon.png'
 import logoText from '../assets/logo_text_extracted.png'
 import './Header.css'
+
+const APP_STORE_URL = 'https://play.google.com/store/apps/details?id=com.bobbeori.bobbeori_app'
 
 const navItems = [
   { to: '/fridge', label: '냉장고' },
@@ -27,37 +30,15 @@ function getAuthMode() {
 }
 
 function Header() {
-  const location = useLocation()
-  const { pathname } = location
+  const { pathname } = useLocation()
   const navigate = useNavigate()
   const isRecipeActive = recipeItems.some((item) => item.to === pathname) || pathname.startsWith('/recipes/')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
   const [authMode, setAuthMode] = useState(getAuthMode)
   const isLoggedIn = authMode === 'user'
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false)
-  }
-
-  const handleSearchSubmit = (event) => {
-    event.preventDefault()
-    const query = searchTerm.trim()
-
-    if (pathname.startsWith('/recipes')) {
-      const params = new URLSearchParams(location.search)
-      if (query) {
-        params.set('query', query)
-      } else {
-        params.delete('query')
-      }
-      params.delete('browse')
-      const search = params.toString()
-      navigate(search ? `/recipes?${search}` : '/recipes')
-    } else {
-      navigate(query ? `/recipes?query=${encodeURIComponent(query)}` : '/recipes')
-    }
-    closeMobileMenu()
   }
 
   useEffect(() => {
@@ -80,6 +61,16 @@ function Header() {
 
   return (
     <header className="site-header" aria-label="밥벌이 주요 메뉴">
+      <a
+        className="site-header__app-banner"
+        href={APP_STORE_URL}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Google Play에서 밥벌이 앱 다운로드하기"
+      >
+        <img src={appIcon} alt="" />
+        <span>밥벌이 앱 다운로드하고 냉장고 관리를 더 편하게 시작해보세요!</span>
+      </a>
       <div className="site-header__inner">
         <button
           className="site-header__mobile-icon"
@@ -163,15 +154,6 @@ function Header() {
         </nav>
 
         <div className="site-header__actions">
-          <form className="site-header__search" aria-label="재료명 또는 레시피 검색" onSubmit={handleSearchSubmit}>
-            <span className="site-header__sr-only">재료명 또는 레시피 검색</span>
-            <input
-              type="search"
-              placeholder="레시피 검색"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </form>
           <Link className="site-header__start" to={isLoggedIn ? '/mypage' : '/login'}>
             {isLoggedIn ? '마이페이지' : '로그인'}
           </Link>

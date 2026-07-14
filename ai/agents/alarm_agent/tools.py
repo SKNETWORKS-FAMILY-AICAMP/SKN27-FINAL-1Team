@@ -14,6 +14,7 @@ from app.backend.api.calendar import calendar_api
 
 KST = timezone(timedelta(hours=9))
 WEEKDAYS = {"월요일": 0, "화요일": 1, "수요일": 2, "목요일": 3, "금요일": 4, "토요일": 5, "일요일": 6}
+WEEK_OFFSETS = {"지난주": -7, "저번주": -7, "이번주": 0, "다음주": 7}
 
 
 def _now() -> datetime:
@@ -48,14 +49,14 @@ def _target_date(value: str | None) -> date:
         return today + timedelta(days=2)
     if compact in ("", "오늘"):
         return today
-    if compact in ("지난주", "이번주", "다음주"):
+    if compact in WEEK_OFFSETS:
         return _target_range(compact)[0]
     if compact in ("지난달", "이번달", "다음달"):
         return _target_range(compact)[0]
-    weekday_match = re.fullmatch(r"(지난주|이번주|다음주)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)", compact)
+    weekday_match = re.fullmatch(r"(지난주|저번주|이번주|다음주)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)", compact)
     if weekday_match:
         week_text, weekday = weekday_match.groups()
-        week_offset = {"지난주": -7, "이번주": 0, None: 0, "다음주": 7}[week_text]
+        week_offset = WEEK_OFFSETS.get(week_text, 0)
         start = today - timedelta(days=today.weekday()) + timedelta(days=week_offset)
         return start + timedelta(days=WEEKDAYS[weekday])
     full_match = re.fullmatch(r"\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*", value)
@@ -78,8 +79,8 @@ def _target_date(value: str | None) -> date:
 def _target_range(value: str | None) -> tuple[date, date]:
     today = _today()
     compact = re.sub(r"\s+", "", value or "")
-    if compact in ("지난주", "이번주", "다음주"):
-        week_offset = {"지난주": -7, "이번주": 0, "다음주": 7}[compact]
+    if compact in WEEK_OFFSETS:
+        week_offset = WEEK_OFFSETS[compact]
         start = today - timedelta(days=today.weekday()) + timedelta(days=week_offset)
         return start, start + timedelta(days=7)
     if compact in ("지난달", "이번달", "다음달"):
@@ -101,6 +102,32 @@ def _start_at(payload: dict[str, Any]) -> datetime:
     hour = int(payload.get("hour", 9))
     minute = int(payload.get("minute", 0))
     return datetime.combine(target, time(hour, minute), KST)
+
+
+def _subject_label(payload: dict[str, Any]) -> str:
+    return {
+        "consume_reminder": "먹기 알림",
+        "shopping_reminder": "구매 알림",
+    }.get(payload.get("reminder_type"), "일정")
+
+
+def _join_subject(*parts: Any) -> str:
+    return " ".join(str(part).strip() for part in parts if str(part or "").strip())
+
+
+def _calendar_create_message(payload: dict[str, Any], title: str) -> str:
+    subject = _join_subject(payload.get("date_text") or payload.get("date"), title, _subject_label(payload))
+    return f"{subject}을 등록했어요." if subject else "캘린더 일정을 등록했어요."
+
+
+def _calendar_list_message(payload: dict[str, Any]) -> str:
+    date_text = payload.get("date_text") or payload.get("date") or payload.get("start_date")
+    return f"{date_text} 등록된 일정이에요." if date_text else "등록된 일정이에요."
+
+
+def _calendar_delete_message(payload: dict[str, Any]) -> str:
+    subject = _join_subject(payload.get("date_text") or payload.get("date"), payload.get("title"), "일정")
+    return f"{subject}을 삭제했어요." if subject else "캘린더 일정을 삭제했어요."
 
 
 async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -149,7 +176,7 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
 
     return {
         "ok": True,
-        "message": "캘린더 일정을 등록했어요.",
+        "message": _calendar_create_message(payload, title),
         "data": {
             **result,
             "event_key": event_key,
@@ -199,7 +226,7 @@ async def delete_calendar_event_tool(payload: dict[str, Any], context: dict[str,
             "data": result,
         }
 
-    return {"ok": True, "message": "캘린더 일정을 삭제했어요.", "data": result}
+    return {"ok": True, "message": _calendar_delete_message(payload), "data": result}
 
 
 async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -223,7 +250,7 @@ async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, 
     except Exception as exc:
         return {"ok": False, "error": {"code": "CALENDAR_LIST_FAILED", "message": str(exc)}}
 
-    return {"ok": True, "message": "캘린더 일정을 조회했어요.", "data": result}
+    return {"ok": True, "message": _calendar_list_message(payload), "data": result}
 
 
 async def sync_daily_events_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -260,7 +287,7 @@ async def sync_daily_events_tool(payload: dict[str, Any], context: dict[str, Any
 def list_notifications_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     if not context.get("user_id"):
         return {"ok": False, "error": {"code": "ALARM_CONTEXT_REQUIRED", "message": "user_id가 필요해요."}}
-    message = "읽지 않은 알림을 조회했어요." if payload.get("unread_only") else "알림 목록을 조회했어요."
+    message = "읽지 않은 알림 목록이에요." if payload.get("unread_only") else "등록된 알림 목록이에요."
     return {
         "ok": True,
         "message": message,

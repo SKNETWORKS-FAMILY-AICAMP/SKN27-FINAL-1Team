@@ -54,7 +54,7 @@
   align-items: center;
   border: 1px solid #f1d9b3;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #7b5437;
   font-size: 12px;
   font-weight: 900;
@@ -85,7 +85,7 @@
   box-sizing: border-box;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .shopping-image-slot {
@@ -94,7 +94,7 @@
   place-items: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -171,7 +171,7 @@
   align-items: center;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
   box-sizing: border-box;
 }
 
@@ -211,7 +211,7 @@
   padding: 12px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   box-sizing: border-box;
 }
 
@@ -276,7 +276,7 @@
   padding: 6px 12px 6px 10px;
   border: 1.4px solid var(--figma-card-stroke);
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: var(--figma-sub);
   font: inherit;
   font-size: 13px;
@@ -390,7 +390,7 @@
   padding: 7px 12px;
   border: 1.4px solid var(--figma-card-stroke);
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #7b5437;
   font-size: 12px;
   font-weight: 900;
@@ -463,7 +463,7 @@
   padding: 16px;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .shopping-metric-list {
@@ -529,7 +529,7 @@
 
 .shopping-sidebar__danger {
   border: 1.4px solid var(--figma-coral-stroke);
-  background: #fffdf8;
+  background: #fff;
   color: var(--figma-coral-stroke);
 }
 
@@ -633,7 +633,7 @@
   padding: 0 14px;
   border: 1.4px solid #e7c894;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #7b5437;
   cursor: pointer;
   font: inherit;
@@ -656,7 +656,7 @@
   padding: 0 14px;
   border: 1.4px solid var(--figma-coral-stroke);
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: var(--figma-coral-stroke);
   cursor: pointer;
   font: inherit;
@@ -706,7 +706,7 @@
 .shopping-item {
   min-height: 64px;
   padding: 8px 12px;
-  background: #fffdf8;
+  background: #fff;
   border-top: 1px solid #f1d9b3;
 }
 
@@ -718,7 +718,7 @@
   justify-content: center;
   border: 1.4px solid #e7c894;
   border-radius: 5px;
-  background: #fffdf8;
+  background: #fff;
   cursor: pointer;
   padding: 0;
   line-height: 0;
@@ -802,7 +802,7 @@
   align-items: center;
   border: 1px solid #efd8b8;
   border-radius: 8px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -847,7 +847,7 @@
   align-items: center;
   border: 1.4px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #7b5437;
   cursor: pointer;
   font: inherit;
@@ -863,7 +863,7 @@
   align-items: center;
   border: 1px solid #f1d9b3;
   border-radius: 10px;
-  background: #fffaf2;
+  background: #fff;
 }
 
 .shopping-price-table {
@@ -878,7 +878,7 @@
   grid-template-columns: minmax(110px, 1.2fr) repeat(4, minmax(76px, 1fr));
   align-items: center;
   border-top: 1px solid #f1d9b3;
-  background: #fffdf8;
+  background: #fff;
   color: #3c2a1f;
   font-size: 13px;
   font-weight: 800;
@@ -922,7 +922,7 @@
   gap: 12px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
 }
 
 .shopping-best-box strong {
@@ -936,7 +936,7 @@
   padding: 12px 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
 }
 
 .shopping-service-note strong {
@@ -983,7 +983,7 @@
   align-content: center;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   color: #6f4b36;
   font-size: 12px;
   font-weight: 900;
@@ -1019,7 +1019,7 @@
   align-content: center;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   color: #6f4b36;
   font-size: 12px;
   font-weight: 900;
@@ -1045,7 +1045,7 @@
   place-items: center;
   border: 1.4px solid #f0cfa4;
   border-radius: 50%;
-  background: #fffaf2;
+  background: #fff;
   color: var(--figma-coral);
   font-size: 24px;
   font-style: normal;
@@ -1113,7 +1113,7 @@
   padding: 12px 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   color: #7b5437;
   font-size: 13px;
   font-weight: 900;
@@ -1127,7 +1127,7 @@
   align-items: flex-start;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
   box-sizing: border-box;
 }
 
@@ -1184,7 +1184,7 @@
   gap: 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
   box-sizing: border-box;
 }
 
@@ -1240,7 +1240,7 @@
   justify-content: center;
   border: 1.4px solid #e7c894;
   border-radius: 999px;
-  background: #fffaf2;
+  background: #fff;
   color: #7b5437;
   font-size: 12px;
   font-weight: 900;
@@ -1280,7 +1280,7 @@
   justify-content: center;
   border: 1.4px solid #e7c894;
   border-radius: 999px;
-  background: #fffaf2;
+  background: #fff;
   color: #7b5437;
   font-size: 12px;
   font-weight: 900;
@@ -1310,7 +1310,7 @@
   padding: 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
 }
 
 .shopping-empty-block {
@@ -1332,7 +1332,7 @@
   padding: 0 18px;
   border: 1.4px solid var(--figma-coral-stroke);
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: var(--figma-coral-stroke);
   cursor: pointer;
   font: inherit;
@@ -1373,7 +1373,7 @@
   gap: 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
   box-sizing: border-box;
   cursor: pointer;
   transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
