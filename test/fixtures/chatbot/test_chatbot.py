@@ -166,6 +166,30 @@ class FakeService:
         return self.intent
 
 
+def test_router_node_keeps_llm_payload_slots() -> None:
+    """LLM fallback 라우팅 결과의 slots를 LangGraph state에 남깁니다."""
+
+    class PayloadService:
+        def _route_intent_payload_with_llm(self, text, history):
+            return {
+                "intent": "recipe.recommend",
+                "confidence": 0.9,
+                "slots": {"ingredient": "두부"},
+            }
+
+    result = router_node({"text": "애매한 추천 질문", "service": PayloadService(), "history": []})
+
+    assert result == {
+        "intent": "recipe.recommend",
+        "intent_payload": {
+            "intent": "recipe.recommend",
+            "confidence": 0.9,
+            "slots": {"ingredient": "두부"},
+        },
+        "slots": {"ingredient": "두부"},
+    }
+
+
 def test_inventory_expiry_does_not_route_to_action() -> None:
     """소비기한 질문은 소비 처리 action으로 빠지 않습니다."""
     state = {"text": "소비기한 임박 재료 알려줘", "service": FakeService("inventory.expiring"), "history": []}
@@ -231,7 +255,7 @@ def test_alarm_agent_feature_words_route_to_alarm() -> None:
 
 
 def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
-    """알림 조회는 캘린더 조회가 아니라 알림 intent로 알람 에이전트에 넘깁니다."""
+    """알림 조회는 슈퍼바이저가 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
 
     captured = {}
@@ -249,16 +273,21 @@ def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
         "intent": "alarm.notification",
     })
 
-    assert captured["intent"] == "alarm.list"
+    assert captured["intent"] is None
+    assert captured["text_or_intent"] == "알림 조회"
 
-def test_unread_notification_query_is_not_reported_as_full_list(monkeypatch) -> None:
-    """읽지 않은 알림 조회는 전체 알림 조회 성공처럼 응답하지 않습니다."""
+
+def test_unread_notification_query_uses_alarm_agent(monkeypatch) -> None:
+    """읽지 않은 알림 조회는 Alarm Agent의 unread 처리에 맡깁니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
 
-    def fail_run_alarm_agent(**kwargs):
-        raise AssertionError("미확인 알림 조회는 아직 알람 에이전트럼 넘기지 않습니다.")
+    captured = {}
 
-    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fail_run_alarm_agent)
+    def fake_run_alarm_agent(**kwargs):
+        captured.update(kwargs)
+        return {"message": "읽지 않은 알림 목록이에요."}
+
+    monkeypatch.setattr("ai.agents.alarm_agent.alarm_agent.run", fake_run_alarm_agent)
 
     result = supervisor_agent.alarm_agent_node({
         "db": MagicMock(),
@@ -267,8 +296,9 @@ def test_unread_notification_query_is_not_reported_as_full_list(monkeypatch) -> 
         "intent": "alarm.notification",
     })
 
-    assert "아직 준비 중" in result["response_text"]
-
+    assert captured["intent"] is None
+    assert captured["text_or_intent"] == "읽지 않은 알림 있어?"
+    assert result["response_text"] == "읽지 않은 알림 목록이에요."
 
 def test_alarm_agent_node_does_not_force_notification_create_to_list(monkeypatch) -> None:
     """알림 등록 문장은 알림 목록 조회로 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
@@ -754,6 +784,51 @@ def test_guide_reply_formats_seasonality(monkeypatch) -> None:
     assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
     assert sources == []
 
+
+
+def test_guide_reply_formats_ingredient_seasonality(monkeypatch) -> None:
+    """식재료별 제철 응답을 월 목록으로 보여줍니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "action": "lookup_seasonality",
+            "data": {
+                "ingredient": {"name": "딸기"},
+                "seasonality": {"months": [1, 2, 3]},
+            },
+            "ui": {"sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("딸기 제철 언제야")
+
+    assert reply == "딸기 제철은 1월, 2월, 3월이에요."
+    assert sources == []
+
+
+def test_guide_reply_formats_intake_tip(monkeypatch) -> None:
+    """섭취 팁 응답을 챗봇 말풍선으로 변환합니다."""
+    def fake_answer(query):
+        assert query == "크림치즈"
+        return {
+            "ok": True,
+            "action": "lookup_intake",
+            "data": {
+                "ingredient": {"name": "크림치즈"},
+                "guides": {"intake": {"status": "available", "content": "빵이나 크래커에 발라 먹으면 좋다."}},
+            },
+            "ui": {"sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("크림치즈 맛있게 먹는법")
+
+    assert "크림치즈 섭취 팁이에요." in reply
+    assert "빵이나 크래커" in reply
+    assert sources == []
+
 def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
     """규칙으로 잡힌 레시피 추천은 LLM 분류로 넘기지 않습니다."""
     messages = [
@@ -765,6 +840,19 @@ def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
     for message in messages:
         assert supervisor_service._route_intent_with_llm(message) == "recipe.recommend"
 
+
+
+def test_llm_route_payload_json_parser() -> None:
+    """LLM intent 응답을 JSON 객체로 파싱합니다."""
+    payload = supervisor_service._parse_llm_route_payload(
+        '{"intent":"recipe.recommend","confidence":0.82,"slots":{"ingredient":"두부"}}'
+    )
+
+    assert payload == {
+        "intent": "recipe.recommend",
+        "confidence": 0.82,
+        "slots": {"ingredient": "두부"},
+    }
 
 
 def test_recipe_pairing_reply() -> None:
