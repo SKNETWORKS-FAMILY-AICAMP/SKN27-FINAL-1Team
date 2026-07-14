@@ -98,7 +98,7 @@ def get_expiring_inventory(db: Session, user_id: int, text: str = "") -> str:
         return "D-3 이내로 임박한 재료는 없어요."
 
     summary = [f"{item['name']} {_format_d_day(item['d_day'])}" for item in expiring[:5]]
-    return "소비기한이 가까운 재료는\n" + ", ".join(summary) + "예요."
+    return "소비기한 확인이 필요한 재료예요.\n" + ", ".join(summary)
 
 
 def resolve_ingredient_name(db: Session, name: str) -> str | None:

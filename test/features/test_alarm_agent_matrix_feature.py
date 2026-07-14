@@ -89,7 +89,7 @@ def test_alarm_agent_feature_applies_or_ignores_human_choice(choice, expected):
 @pytest.mark.parametrize(
     ("intent", "action", "payload"),
     [
-        ("calendar.create", "create_event", {"title": "두부 알림"}),
+        ("calendar.create", "create_event", {"title": "두부 알림", "date_text": "내일"}),
         ("calendar.delete", "delete_event", {"title": "두부 알림", "event_key": "calendar-agent-7-x"}),
         ("calendar.sync_daily", "sync_daily_events", {"title": "두부 알림"}),
         ("alarm.read", "mark_notification_read", {"title": "두부 알림"}),

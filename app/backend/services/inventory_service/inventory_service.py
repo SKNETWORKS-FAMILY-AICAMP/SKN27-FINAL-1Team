@@ -472,7 +472,7 @@ class InventoryService:
         return summary
         
     def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
-        """챗봇(MCP)에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
+        """챗봇 Tool에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
         resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
         if not resolved_name:
             return "올바른 식재료명을 입력해주세요."
@@ -533,7 +533,7 @@ class InventoryService:
 
 
     def consume_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
-        """챗봇(MCP)에서 식재료 이름과 소비 수량을 받아 재고를 차감하거나 삭제합니다."""
+        """챗봇 Tool에서 식재료 이름과 소비 수량을 받아 재고를 차감하거나 삭제합니다."""
         # 사용자의 활성 식재료 목록 조회
         items = (
             db.query(FridgeItem, Ingredient)
