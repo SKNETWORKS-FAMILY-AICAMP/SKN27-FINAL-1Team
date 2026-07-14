@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import './Fridge.css'
 
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
@@ -11,16 +10,14 @@ import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 import { API_URL } from '../../utils/api.js'
 
-const FILTER_TYPES = [
-  { label: '전체', tone: '' },
-  { label: '냉장', tone: 'cold' },
-  { label: '냉동', tone: 'frozen' },
-  { label: '실온', tone: 'room' },
-  { label: '소비 임박', tone: 'soon' },
-  { label: '기한 지남', tone: 'expired' },
-]
+const FILTER_TYPES = ['전체', '냉장', '냉동', '실온', '소비 임박', '기한 지남']
 
 const STORAGE_KEYS = ['냉장', '냉동', '실온']
+
+const SORT_OPTIONS = [
+  { value: 'latest', label: '최근 등록순' },
+  { value: 'expiry', label: '소비기한 빠른 순' },
+]
 
 // 보관 위치 배지 색상을 실제 보관 위치 기준으로 고정합니다.
 function getStorageTone(storageMethod = '') {
@@ -139,21 +136,21 @@ function normalizeIngredient(item) {
 // D-day 값을 사용자가 읽기 좋은 문구로 변환합니다.
 function getDdayLabel(item) {
   if (item.d_day === null || item.d_day === undefined) return '-'
+  if (item.is_expiring_soon && !item.is_expired) return '소비 임박'
   if (item.d_day > 0) return `D-${item.d_day}`
   if (item.d_day === 0) return 'D-Day'
-  return `D+${Math.abs(item.d_day)} 지남`
+  return '기한 지남'
 }
 
 // 냉장고 재료 목록과 등록/수정/소비 흐름을 관리하는 페이지 컴포넌트입니다.
 function Fridge() {
-  const navigate = useNavigate()
   const { dialogNode, showAlert } = useAppDialog()
   const [ingredients, setIngredients] = useState([])
   const [summary, setSummary] = useState(buildSummary([]))
   const [activeFilter, setActiveFilter] = useState('전체')
   const [searchQuery, setSearchQuery] = useState('')
-  const [viewMode, setViewMode] = useState('grid')
   const [sortType, setSortType] = useState('latest')
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormData)
@@ -269,12 +266,12 @@ function Fridge() {
   )
 
   const visibleFilters = useMemo(
-    () => FILTER_TYPES.filter((filter) => filter.label === '전체' || filterCounts[filter.label] > 0),
+    () => FILTER_TYPES.filter((filter) => filter === '전체' || filterCounts[filter] > 0),
     [filterCounts],
   )
 
   useEffect(() => {
-    if (!visibleFilters.some((filter) => filter.label === activeFilter)) setActiveFilter('전체')
+    if (!visibleFilters.includes(activeFilter)) setActiveFilter('전체')
   }, [activeFilter, visibleFilters])
 
   const sortedIngredients = useMemo(() => {
@@ -296,27 +293,10 @@ function Fridge() {
     })
 
     return [...filteredIngredients].sort((a, b) => {
-      if (sortType === 'oldest') return a.id - b.id
       if (sortType === 'expiry') return (a.d_day ?? 999) - (b.d_day ?? 999)
       return b.id - a.id
     })
   }, [activeFilter, ingredients, searchQuery, sortType])
-
-  // 현재 정렬 상태의 버튼 라벨을 반환합니다.
-  const getSortLabel = () => {
-    if (sortType === 'oldest') return '등록일 오래된순'
-    if (sortType === 'expiry') return '소비기한 임박순'
-    return '등록일 최신순'
-  }
-
-  // 최신순, 오래된순, 소비기한순 정렬을 순환합니다.
-  const toggleSort = () => {
-    setSortType((prev) => {
-      if (prev === 'latest') return 'oldest'
-      if (prev === 'oldest') return 'expiry'
-      return 'latest'
-    })
-  }
 
   // 입력 폼의 단일 필드 변경을 반영하고, 수정 중 기준값이 바뀌면 소비기한을 자동 재계산 상태로 되돌립니다.
   const handleFormChange = (event) => {
@@ -626,33 +606,16 @@ function Fridge() {
         <div className="fridge-hero__copy">
           <h1 id="fridge-title">냉장고 재료 관리</h1>
           <p>우리 집 재료를 한눈에 관리하고, 소비기한이 가까운 재료를 먼저 확인해요.</p>
-          <label className="fridge-search" aria-label="재료명 검색">
-            <span aria-hidden="true" />
-            <input
-              type="search"
-              placeholder="재료명이나 카테고리로 검색해보세요"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </label>
         </div>
-
-        <div className="fridge-hero__actions">
-          <button className="fridge-hero-card" type="button" onClick={() => navigate('/receipt-ocr')}>
-            <div>
-              <strong>영수증 OCR 입고</strong>
-              <p>영수증 촬영으로 재료를 한 번에 등록해요.</p>
-            </div>
-          </button>
-          <button className="fridge-hero-card fridge-hero-card--add" type="button" onClick={() => navigate('/recipe-fridge')}>
-            <div>
-              <strong>레시피 추천 받기</strong>
-              <p>보유 재료로 만들 수 있는 메뉴를 추천받아요.</p>
-            </div>
-          </button>
-        </div>
-
-        <ImageSlot className="fridge-hero__image" src={imagePutting} />
+        <label className="fridge-search" aria-label="재료명 검색">
+          <span aria-hidden="true" />
+          <input
+            type="search"
+            placeholder="재료명이나 카테고리로 검색해보세요"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </label>
       </div>
 
       <div className="fridge-layout">
@@ -661,19 +624,22 @@ function Fridge() {
             <div className="fridge-filters" aria-label="재료 상태 필터">
               {visibleFilters.map((filter) => (
                 <button
-                  className={['fridge-filter', activeFilter === filter.label ? 'is-active' : '', filter.tone ? `is-${filter.tone}` : '']
-                    .filter(Boolean)
-                    .join(' ')}
-                  key={filter.label}
+                  className={activeFilter === filter ? 'fridge-filter is-active' : 'fridge-filter'}
+                  key={filter}
                   type="button"
-                  onClick={() => setActiveFilter(filter.label)}
+                  onClick={() => setActiveFilter(filter)}
                 >
-                  {filter.label} ({filterCounts[filter.label]})
+                  {filter === '기한 지남' && filterCounts[filter] > 0 ? (
+                    <>
+                      <span className="fridge-filter__warning" aria-hidden="true">!</span>
+                      {filter} {filterCounts[filter]}
+                    </>
+                  ) : `${filter} (${filterCounts[filter]})`}
                 </button>
               ))}
             </div>
 
-            <div className="fridge-view-controls">
+            <div className="fridge-toolbar-controls">
               {ingredients.length > 0 ? (
                 <button
                   type="button"
@@ -683,20 +649,53 @@ function Fridge() {
                     setSelectedIds(new Set())
                   }}
                 >
-                  {isEditMode ? '선택 취소' : '선택 폐기'}
+                  {isEditMode ? '선택 취소' : '일괄 선택'}
                 </button>
               ) : null}
-              <button type="button" onClick={toggleSort}>{getSortLabel()}</button>
-              <button className={viewMode === 'grid' ? 'fridge-view-button is-grid is-active' : 'fridge-view-button is-grid'} type="button" aria-label="그리드 보기" onClick={() => setViewMode('grid')}>
-                <span />
-              </button>
-              <button className={viewMode === 'list' ? 'fridge-view-button is-list is-active' : 'fridge-view-button is-list'} type="button" aria-label="리스트 보기" onClick={() => setViewMode('list')}>
-                <span />
-              </button>
+              <div
+                className="fridge-sort"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setIsSortMenuOpen(false)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setIsSortMenuOpen(false)
+                }}
+              >
+                <button
+                  type="button"
+                  className="fridge-sort-trigger"
+                  aria-haspopup="menu"
+                  aria-expanded={isSortMenuOpen}
+                  onClick={() => setIsSortMenuOpen((isOpen) => !isOpen)}
+                >
+                  {SORT_OPTIONS.find((option) => option.value === sortType)?.label}
+                  <span className="fridge-sort-trigger__arrow" aria-hidden="true" />
+                </button>
+                {isSortMenuOpen ? (
+                  <div className="fridge-sort-menu" role="menu">
+                    {SORT_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        className={`fridge-sort-option${sortType === option.value ? ' is-active' : ''}`}
+                        role="menuitemradio"
+                        aria-checked={sortType === option.value}
+                        key={option.value}
+                        onClick={() => {
+                          setSortType(option.value)
+                          setIsSortMenuOpen(false)
+                        }}
+                      >
+                        <span>{option.label}</span>
+                        {sortType === option.value ? <span aria-hidden="true">✓</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
-          <div className={viewMode === 'list' ? 'fridge-card-grid is-list' : 'fridge-card-grid'}>
+          <div className="fridge-card-grid">
             {ingredients.length === 0 ? (
               <div className="fridge-empty-state">
                 <ImageSlot className="fridge-empty-state__image" src={imagePutting} />
@@ -740,9 +739,6 @@ function Fridge() {
                     )}
                     <div className="fridge-item__left">
                       <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
-                      {item.is_ai_recommended ? (
-                        <span className="fridge-ai-badge is-bottom-left" title="AI가 추천한 소비기한입니다">AI</span>
-                      ) : null}
                     </div>
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
@@ -760,11 +756,13 @@ function Fridge() {
                         </div>
                         <div>
                           <dt>소비기한</dt>
-                          <dd className="fridge-dday-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
-                            <span className={item.is_expired ? 'fridge-dday-expired' : item.is_expiring_soon ? 'fridge-dday-urgent' : 'fridge-dday-normal'} style={{ whiteSpace: 'nowrap' }}>
-                              {getDdayLabel(item)}
+                          <dd className="fridge-dday-wrapper">
+                            <span className="fridge-dday-copy">
+                              <span className={item.is_expired ? 'fridge-dday-expired' : item.is_expiring_soon ? 'fridge-dday-urgent' : 'fridge-dday-normal'}>
+                                {getDdayLabel(item)}
+                              </span>
+                              {item.expiration_date ? <small className="fridge-dday-date">· {item.expiration_date.replace(/-/g, '.')}</small> : null}
                             </span>
-                            {item.expiration_date ? <small className="fridge-dday-date" style={{ color: '#8b673e', opacity: 0.8, whiteSpace: 'nowrap' }}>({item.expiration_date})</small> : null}
                           </dd>
                         </div>
                       </dl>

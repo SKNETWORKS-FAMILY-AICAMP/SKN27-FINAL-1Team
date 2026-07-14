@@ -8,7 +8,7 @@
   background:
     radial-gradient(circle at 15% 12%, rgba(255, 225, 229, 0.56), transparent 28%),
     radial-gradient(circle at 86% 84%, rgba(255, 244, 227, 0.82), transparent 34%),
-    #fffdf8;
+    #fff;
 }
 
 .login-browser {
@@ -19,7 +19,7 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: #fffdf8;
+  background: #fff;
   box-shadow: none;
 }
 
@@ -35,7 +35,7 @@
   gap: 8px;
   border: 1px solid rgba(231, 200, 148, 0.66);
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.72);
+  background: rgba(255, 255, 255, 0.72);
   color: #8b673e;
   font-size: 13px;
   font-weight: 900;
@@ -183,7 +183,7 @@
   gap: 0;
   border: 1px solid #efd6b8;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.72);
+  background: rgba(255, 255, 255, 0.72);
   box-sizing: border-box;
 }
 
@@ -255,7 +255,7 @@
   border-radius: 24px;
   background:
     radial-gradient(circle at 50% 0%, rgba(255, 244, 227, 0.74), transparent 34%),
-    rgba(255, 253, 248, 0.96);
+    rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 60px rgba(103, 64, 35, 0.12);
   box-sizing: border-box;
   text-align: center;
@@ -430,7 +430,7 @@
 
 .login-card__button.calendar {
   border-color: #bfd8c7;
-  background: linear-gradient(90deg, #fffdf8, #e7f5ec);
+  background: linear-gradient(90deg, #fff, #e7f5ec);
 }
 
 .login-card__provider {
@@ -632,7 +632,7 @@
     box-sizing: border-box;
     background:
       radial-gradient(circle at 50% 52%, rgba(255, 226, 230, 0.66), transparent 46%),
-      #fffdf8;
+      #fff;
   }
 
   .login-card__brand-logo {

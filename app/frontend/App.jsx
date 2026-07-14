@@ -30,6 +30,10 @@ function AppLayout() {
   const [onboardingSeenKey, setOnboardingSeenKey] = useState('hasSeenOnboarding_v4')
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
+  useEffect(() => {
     const token = localStorage.getItem('bobbeori-token')
     const authMode = localStorage.getItem('bobbeori-auth-mode')
 

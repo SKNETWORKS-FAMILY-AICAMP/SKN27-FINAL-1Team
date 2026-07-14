@@ -1,7 +1,7 @@
 .site-footer {
   border-top: 1px solid #eadfd1;
   background:
-    linear-gradient(180deg, #fffdf8 0%, #fff8ee 100%);
+    linear-gradient(180deg, #fff 0%, #fff 100%);
   color: var(--figma-text);
 }
 
@@ -64,7 +64,7 @@
   padding: 6px 9px;
   border: 1px solid #f1d9b3;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #8b673e;
   font-size: 11px;
   font-weight: 800;
