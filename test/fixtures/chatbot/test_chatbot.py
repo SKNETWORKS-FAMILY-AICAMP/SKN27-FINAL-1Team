@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 from ai.agents.supervisor_agent import supervisor_utils
+import ai.agents.recipe_agent.recipe_handlers as recipe_handlers
 
 
 def test_route_intent_examples() -> None:
@@ -29,11 +30,18 @@ def test_route_intent_examples() -> None:
         "두부로 뭐 만들수있어?": "recipe.recommend",
         "두부로 뭘 만들지?": "recipe.recommend",
         "이걸로 만들수 있는 메뉴 뭐야": "recipe.recommend",
+        "냉장고 재료로 뭐 만들어 먹지?": "recipe.recommend",
+        "냉장고 재료로 뭐해먹지": "recipe.recommend",
+        "냉장고 재료로 요리 추천해줘": "recipe.recommend",
+        "냉장고속 재료로 요리추천": "recipe.recommend",
+        "냉장고 재료로 만들 요리 알려줘": "recipe.recommend",
+        "냉장고 재료로 뭐만들어먹지?": "recipe.recommend",
         "파 빨리 써야 하는데 뭐하지": "recipe.recommend",
         "감자로 간단하게 만들수 있는거 알려줘": "recipe.recommend",
         "먹다남은 감자튀김 어디에 쓸수있을까": "recipe.recommend",
         "바베큐 레시피 알려줘": "recipe.search",
         "김치볶음밥 레시피": "recipe.search",
+        "김치볶음밥이랑 먹기 좋은 음식": "recipe.pairing",
         "감자튀김 에어프라이기 시간": "recipe.search",
         "남은 치킨 에어프라이기 시간 추천": "recipe.search",
     }
@@ -104,7 +112,7 @@ def test_format_guide_tip() -> None:
 
 def test_cooking_time_question_uses_external_recipe() -> None:
     """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
-    original_external = supervisor_service._reply_external_recipe
+    original_external = recipe_handlers.reply_external_recipe
     called = {"external": False, "query": ""}
 
     def fake_external(keyword: str, query_text: str | None = None):
@@ -112,16 +120,16 @@ def test_cooking_time_question_uses_external_recipe() -> None:
         called["query"] = query_text or ""
         return f"{keyword} 웹 검색", []
 
-    supervisor_service._reply_external_recipe = fake_external
+    recipe_handlers.reply_external_recipe = fake_external
     try:
-        reply, actions, sources = supervisor_service._reply_recipe_search(None, "감자튀김 에어프라이기 시간")
+        reply, actions, sources = recipe_handlers.handle_recipe_search(None, "감자튀김 에어프라이기 시간")
         assert called["external"]
         assert called["query"] == "감자튀김 에어프라이기 시간"
         assert reply == "감자튀김 웹 검색"
         assert actions == []
         assert sources == []
     finally:
-        supervisor_service._reply_external_recipe = original_external
+        recipe_handlers.reply_external_recipe = original_external
 if __name__ == "__main__":
     test_route_intent_examples()
     test_extract_recipe_ingredient()
@@ -566,7 +574,8 @@ def test_inventory_action_requires_login() -> None:
 
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
-    assert route_intent({"intent": "recipe.search"}) == "recipe_search_node"
+    assert route_intent({"intent": "recipe.search"}) == "recipe_agent_node"
+    assert route_intent({"intent": "recipe.pairing"}) == "recipe_pairing_node"
     assert route_intent({"intent": "inventory.action"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"
 
@@ -745,3 +754,22 @@ def test_guide_reply_formats_seasonality(monkeypatch) -> None:
     assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
     assert sources == []
 
+def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
+    """규칙으로 잡힌 레시피 추천은 LLM 분류로 넘기지 않습니다."""
+    messages = [
+        "냉장고 재료로 뭐 만들어 먹지?",
+        "냉장고 재료로 만들 요리 알려줘",
+        "냉장고 재료로 뭐만들어먹지?",
+    ]
+
+    for message in messages:
+        assert supervisor_service._route_intent_with_llm(message) == "recipe.recommend"
+
+
+
+def test_recipe_pairing_reply() -> None:
+    """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
+    reply = supervisor_service._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
+
+    assert "김치볶음밥에는" in reply
+    assert "계란국" in reply

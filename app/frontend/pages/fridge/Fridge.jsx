@@ -17,7 +17,7 @@ const FILTER_TYPES = [
   { label: '냉동', tone: 'frozen' },
   { label: '실온', tone: 'room' },
   { label: '소비 임박', tone: 'soon' },
-  { label: '기한 지남', tone: 'soon' },
+  { label: '기한 지남', tone: 'expired' },
 ]
 
 const STORAGE_KEYS = ['냉장', '냉동', '실온']
