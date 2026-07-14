@@ -11,6 +11,7 @@ from ai.agents.shopping_agent.shopping_handlers import (
     handle_delete_item_confirm,
     handle_delete_item_request,
     handle_history,
+    handle_owned,
     handle_purchase_confirm,
     handle_purchase_request,
 )
@@ -91,6 +92,8 @@ def run_shopping_agent(
     try:
         if resolved_intent == "shopping.current":
             message, actions = handle_current(db, user_id)
+        elif resolved_intent == "shopping.owned":
+            message, actions = handle_owned(db, user_id)
         elif resolved_intent == "shopping.history":
             message, actions = handle_history(db, user_id)
         elif resolved_intent == "shopping.compare":

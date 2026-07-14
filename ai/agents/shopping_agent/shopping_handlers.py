@@ -12,6 +12,7 @@ from ai.agents.shopping_agent.shopping_utils import (
     find_item_by_name,
     format_price,
     shopping_list_action,
+    summarize_owned_ingredients,
     summarize_shopping_list,
 )
 
@@ -20,6 +21,12 @@ def handle_current(db: Session, user_id: int) -> tuple[str, list[dict[str, Any]]
     shopping_list = shopping_service.get_current(db=db, user_id=user_id)
     actions = [shopping_list_action(shopping_list.get("id") if shopping_list else None)]
     return summarize_shopping_list(shopping_list), actions
+
+
+def handle_owned(db: Session, user_id: int) -> tuple[str, list[dict[str, Any]]]:
+    shopping_list = shopping_service.get_current(db=db, user_id=user_id)
+    actions = [shopping_list_action(shopping_list.get("id") if shopping_list else None)]
+    return summarize_owned_ingredients(shopping_list), actions
 
 
 def handle_history(db: Session, user_id: int, limit: int = 5) -> tuple[str, list[dict[str, Any]]]:

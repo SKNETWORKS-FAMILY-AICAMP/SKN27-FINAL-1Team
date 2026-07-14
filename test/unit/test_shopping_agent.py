@@ -19,6 +19,7 @@ def shopping_list_response(**extra):
                 "is_purchased": False,
             }
         ],
+        "owned_ingredients": [{"ingredient_id": 31, "name": "대파", "amount": "2대"}],
     }
     data.update(extra)
     return data
@@ -28,6 +29,7 @@ def test_analyze_shopping_intent_routes_clear_shopping_context():
     assert analyze_shopping_intent("장보기 목록 보여줘") == "shopping.current"
     assert analyze_shopping_intent("두부랑 양파 가격 비교해줘") == "shopping.compare"
     assert analyze_shopping_intent("두부랑 양파 장보기 목록 만들어줘") == "shopping.create"
+    assert analyze_shopping_intent("최근 장보기 목록에서 내가 보유한 재료 목록은 뭐가 있어?") == "shopping.owned"
     assert analyze_shopping_intent("두부 구매했어") is None
 
 
@@ -47,6 +49,26 @@ def test_run_shopping_agent_current_returns_supervisor_contract(monkeypatch):
 
     assert set(result) == {"response_text", "actions", "sources"}
     assert "두부" in result["response_text"]
+    assert result["actions"][0]["url"] == "/shopping-list?shoppingListId=11"
+
+
+def test_run_shopping_agent_owned_returns_owned_ingredients(monkeypatch):
+    monkeypatch.setattr(
+        shopping_handlers.shopping_service,
+        "get_current",
+        lambda *, db, user_id: shopping_list_response(),
+    )
+
+    result = run_shopping_agent(
+        "최근 장보기 목록에서 내가 보유한 재료 목록은 뭐가 있어?",
+        db=object(),
+        user_id=7,
+        intent="shopping.owned",
+    )
+
+    assert "보유한 재료" in result["response_text"]
+    assert "대파 2대" in result["response_text"]
+    assert "두부" not in result["response_text"]
     assert result["actions"][0]["url"] == "/shopping-list?shoppingListId=11"
 
 
