@@ -12,7 +12,7 @@
   place-items: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 14px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -96,7 +96,7 @@
 
 .fridge-recipe-hero__actions button.is-secondary {
   border-color: #c79a74;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   box-shadow: 0 12px 24px rgba(109, 65, 40, 0.1);
 }
@@ -122,7 +122,7 @@
   box-sizing: border-box;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .fridge-recipe-empty {
@@ -226,7 +226,7 @@
   position: relative;
   z-index: 1;
   padding: 0 16px 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .fridge-recipe-card h2 {
@@ -282,7 +282,7 @@
   padding: 12px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
 }
 
 .fridge-recipe-card__reason b {
@@ -308,7 +308,7 @@
 
 .fridge-recipe-card__actions button:last-child {
   border: 1.4px solid #c79a74;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
 }
 

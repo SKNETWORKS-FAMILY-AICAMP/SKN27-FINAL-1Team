@@ -12,7 +12,7 @@
   place-items: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 14px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -72,7 +72,7 @@
   gap: 12px;
   border: 1.4px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   box-shadow: 0 8px 20px rgba(69, 42, 25, 0.06);
 }
 
@@ -172,7 +172,7 @@
   padding: 0 11px;
   border: 1px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #7b5437;
   cursor: pointer;
   font: inherit;
@@ -202,7 +202,7 @@
   padding: 0 36px 0 14px;
   border: 1.4px solid #efd8b8;
   border-radius: 8px;
-  background: #fffdf8;
+  background: #fff;
   color: #5f4635;
   font: inherit;
   font-size: 13px;
@@ -213,7 +213,7 @@
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-color: #fffdf8;
+  background-color: #fff;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237b5437' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
   background-position: right 14px center;
   background-repeat: no-repeat;
@@ -257,7 +257,7 @@
   place-items: center;
   border: 1.4px solid #efd8b8;
   border-radius: 10px;
-  background: #fffdf8;
+  background: #fff;
   color: #7b5437;
   cursor: pointer;
 }
@@ -328,7 +328,7 @@
   min-width: 0;
   border: 1.4px solid #f0d7b1;
   border-radius: 14px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
   cursor: pointer;
   overflow: hidden;
 }
@@ -391,7 +391,7 @@
   z-index: 2;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(255, 255, 255, 0.9);
   color: #9b6d4d;
   cursor: pointer;
   font: inherit;
@@ -458,7 +458,7 @@
   justify-content: center;
   border: 1.4px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
