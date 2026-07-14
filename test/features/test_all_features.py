@@ -14,7 +14,7 @@ from app.backend.services.receipt_ocr_service.receipt_ocr_service import Receipt
 
 def test_overall_feature_smoke_contracts():
     # 챗봇 슈퍼바이저 라우팅
-    assert supervisor_agent.route_intent({"intent": "recipe.recommend"}) == "recipe_recommend_node"
+    assert supervisor_agent.route_intent({"intent": "recipe.recommend"}) == "recipe_agent_node"
     assert supervisor_agent.route_intent({"intent": "alarm.calendar"}) == "alarm_agent_node"
 
     # 냉장고 MCP 도구 표면

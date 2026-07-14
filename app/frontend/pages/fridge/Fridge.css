@@ -231,6 +231,11 @@
   color: #d88720;
 }
 
+.fridge-filter.is-expired {
+  color: #e53935;
+  border-color: #ffc5c9;
+}
+
 .fridge-view-controls {
   display: flex;
   align-items: center;
