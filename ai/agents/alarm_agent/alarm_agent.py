@@ -62,7 +62,7 @@ _DELETE_WORDS = ("삭제", "지워", "취소", "없애")
 _LIST_WORDS = ("조회", "목록", "보여", "확인", "알려", "있어", "있나", "뭐")
 _SYNC_WORDS = ("동기화", "자동 알림", "일일 알림", "오늘알림", "아침 알림")
 _CALENDAR_WORDS = ("캘린더", "일정", "알림", "알람", "리마인더")
-_DATE_WORDS = ("오늘", "어제", "내일", "모레", "지난주", "이번주", "다음주", "지난달", "이번달", "다음달", "방금", "최근")
+_DATE_WORDS = ("오늘", "어제", "내일", "모레", "지난주", "저번주", "이번주", "다음주", "지난달", "이번달", "다음달", "방금", "최근")
 _WEEKDAY_WORDS = ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일")
 _CONSUME_WORDS = ("먹", "사용", "소비", "처리", "요리")
 _SHOPPING_WORDS = ("사", "구매", "장보", "장볼")
@@ -476,7 +476,7 @@ def _extract_date_text(text: str) -> str | None:
         if match:
             return match.group(0)
     compact = re.sub(r"\s+", "", text or "")
-    weekday_match = re.search(r"(지난주|이번주|다음주)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)", compact)
+    weekday_match = re.search(r"(지난주|저번주|이번주|다음주)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)", compact)
     if weekday_match:
         return "".join(part for part in weekday_match.groups() if part)
     return next((word for word in sorted(_DATE_WORDS, key=len, reverse=True) if word in compact), None)

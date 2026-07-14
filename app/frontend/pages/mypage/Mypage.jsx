@@ -301,6 +301,8 @@ function Mypage() {
         window.localStorage.removeItem('bobbeori-token')
         window.localStorage.removeItem('bobbeori-auth-mode')
         window.dispatchEvent(new Event('bobbeori-auth-change'))
+        // 세션 만료 안내는 App의 공용 모달에서 처리합니다
+        window.dispatchEvent(new Event('bobbeori-session-expired'))
         navigate('/login')
       }
     }
