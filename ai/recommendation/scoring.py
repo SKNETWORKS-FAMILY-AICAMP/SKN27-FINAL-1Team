@@ -10,6 +10,15 @@ import pandas as pd
 from config import ExperimentConfig
 
 BAYESIAN_M_DEFAULT = 3.0
+# ponytail: exp21 ablation knob only — T0=0.0, T1=0.5; adopt → fold into formula & delete
+MIX_GAMMA = 0.0
+
+
+def experiment_tag() -> str:
+    # ponytail: mix-on → exp21 t1 tag; mix-off keeps adopted baseline label
+    if MIX_GAMMA != 0.0:
+        return "21_sentiment_t1"
+    return "20_bayesian_bar"
 
 
 def star_02_from_count(star_count: pd.Series) -> pd.Series:
@@ -31,6 +40,22 @@ def sentiment_02(positive: pd.Series, negative: pd.Series) -> pd.Series:
     return sentiment_02_from_sentiment(sentiment)
 
 
+def mix_conflict(positive, negative) -> np.ndarray:
+    """clip(2 * min(p, n), 0, 1) — high when strong+strong."""
+    p = np.asarray(pd.to_numeric(positive, errors="coerce"), dtype=np.float64).ravel()
+    n = np.asarray(pd.to_numeric(negative, errors="coerce"), dtype=np.float64).ravel()
+    return np.clip(2.0 * np.minimum(p, n), 0.0, 1.0)
+
+
+def apply_mix_factor(q, positive, negative, gamma: float | None = None):
+    """q * (1 - gamma * conflict). gamma=None → module MIX_GAMMA."""
+    g = float(MIX_GAMMA if gamma is None else gamma)
+    q_arr = np.asarray(pd.to_numeric(q, errors="coerce"), dtype=np.float64)
+    if g == 0.0:
+        return q_arr
+    return q_arr * (1.0 - g * mix_conflict(positive, negative))
+
+
 def add_row_02_columns(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     if "star_count" in out.columns:
@@ -46,7 +71,10 @@ def add_row_02_columns(df: pd.DataFrame) -> pd.DataFrame:
             out["sentiment_02"] = sentiment_02(out["positive"], out["negative"])
         else:
             raise ValueError("need sentiment or positive/negative for sentiment_02")
-    out["row_product_02"] = out["star_02"] * out["sentiment_02"]
+    q = out["star_02"] * out["sentiment_02"]
+    if {"positive", "negative"}.issubset(out.columns):
+        q = apply_mix_factor(q, out["positive"], out["negative"])
+    out["row_product_02"] = q
     return out
 
 
@@ -152,12 +180,14 @@ def aggregate_review_for_export(
                 R, review_agg["review_n"].to_numpy(dtype=float), C, m=bayesian_m
             )
             formula = (
-                f"Bayesian WR on mean(star_02*sentiment_02); "
-                f"C={C:.4f}, m={bayesian_m}"
+                f"Bayesian WR on mean(star_02*sentiment_02*(1-mix*conflict)); "
+                f"C={C:.4f}, m={bayesian_m}, mix_gamma={MIX_GAMMA}"
             )
         else:
             review_agg["review_rank_score"] = review_agg["row_product_avg"]
-            formula = "mean(star_02 * sentiment_02) per recipe (B3)"
+            formula = (
+                f"mean(star_02*sentiment_02*(1-mix*conflict)); mix_gamma={MIX_GAMMA}"
+            )
     else:
         review_agg["review_rank_score"] = review_agg["legacy_review_rank"]
         formula = "star_norm_avg + sentiment_avg (from review_by_llm)"
@@ -181,4 +211,17 @@ if __name__ == "__main__":
     wr1 = float(bayesian_average([5.0], [1.0], C=4.0, m=3.0)[0])
     wr10 = float(bayesian_average([5.0], [10.0], C=4.0, m=3.0)[0])
     assert wr10 > wr1
-    print("scoring ok", wr1, wr10)
+
+    # mix: gamma=0 identical; gamma=0.5 strong-ambivalent q < weak-ambivalent (same star/valence~)
+    star = 2.0
+    sent_strong = sentiment_02_from_sentiment(pd.Series([0.9 - 0.8])).iloc[0]
+    sent_weak = sentiment_02_from_sentiment(pd.Series([0.2 - 0.1])).iloc[0]
+    q0_s = float(apply_mix_factor([star * sent_strong], [0.9], [0.8], gamma=0.0)[0])
+    q0_w = float(apply_mix_factor([star * sent_weak], [0.2], [0.1], gamma=0.0)[0])
+    assert abs(q0_s - star * sent_strong) < 1e-12
+    assert abs(q0_w - star * sent_weak) < 1e-12
+    q5_s = float(apply_mix_factor([star * sent_strong], [0.9], [0.8], gamma=0.5)[0])
+    q5_w = float(apply_mix_factor([star * sent_weak], [0.2], [0.1], gamma=0.5)[0])
+    assert q5_s < q5_w
+    assert experiment_tag() == "20_bayesian_bar"
+    print("scoring ok", wr1, wr10, q5_s, q5_w)

@@ -504,8 +504,11 @@ def build_experiment_report(
         and track_b_eval["l1_single_pass"]
         and track_b_eval["l2_pass"]
     )
+    from scoring import MIX_GAMMA, experiment_tag
+
     return {
-        "experiment": "20_bayesian_bar",
+        "experiment": experiment_tag(),
+        "mix_gamma": MIX_GAMMA,
         "metrics_version": "L0-L5",
         "data_files": {name: str(path) for name, path in cfg.data_files.items()},
         "mode": cfg.model_mode,

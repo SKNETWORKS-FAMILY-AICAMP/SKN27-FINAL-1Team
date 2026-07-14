@@ -294,7 +294,7 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 
 ---
 
-## 4. 실험 회차 개요 (1~20)
+## 4. 실험 회차 개요 (1~21)
 
 상세 → **[experiments.md](experiments.md)** 해당 §. **1~12 = Track A(보류) / 13~16 = Track B v1 / 17+ = 콜드스타트**
 
@@ -307,18 +307,24 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 | **18** | **L0~L5·Cohen 0.30 근거** | L0·L2 OK; L1 0/5 (구 축) | calibration |
 | **19** | **L1 informative·bar 정합** | **Go 통과** | 공정 순위 평가 |
 | **20** | **Bayesian average bar** | **채택** (ceiling ρ↑, Go 유지) | m=3 |
+| **21** | **독립 감성 재분석 + 혼합 ablation** | T0 Go·uniq↑; **T1 미채택** | MIX_GAMMA=0 |
 
 **스냅샷**
 
-- **Go:** `L0 & L1 & L2` — **통과** (실험 20, Bayesian bar)
+- **Go:** `L0 & L1 & L2` — **통과** (실험 20, Bayesian bar; 실험 21 T0도 유지)
 - **bar:** WR on `mean(star_02×sentiment_02)`; `BAR_MODE=mean`으로 레거시 mean 가능
 - **원칙:** 절대 점수보다 **상대 순위 구분력** (Spearman·unique/슬라이스). §[METRICS.md](METRICS.md) · §실험 20 인사이트
-- **잔여:** v=1 all5 동점(감성 동일 시) — 다음 정보는 감성/텍스트 쪽
-- **다음:** v=1 군집 분리 또는 서비스/ETL 연동
+- **잔여:** v1 uniq는 실험 21 감성 재분석으로 대폭 해소(24→295); 혼합 패널티는 ceiling ρ 악화로 미채택
+- **다음:** 서비스/ETL 연동 또는 informative ρ 회복 탐색
 
 ---
 
 ## 5. 업데이트 및 수정 이력
+
+### 2026-07-14 (실험 21)
+
+- **Goal0:** v1_all5 uniq 24→295 (독립 감성 재분석, 학습 전).
+- **T0/T1:** 5-seed Go 유지; T1은 informative ρ↑·ceiling ρ↓ → **혼합 미채택** (`MIX_GAMMA=0`). §[experiments.md](experiments.md) 실험 21.
 
 ### 2026-07-14 (실험 20)
 

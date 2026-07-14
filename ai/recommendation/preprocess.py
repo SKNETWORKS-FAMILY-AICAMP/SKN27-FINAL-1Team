@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 
 from config import CATALOG_USER_ID
-from scoring import add_interaction_column, sentiment_02_from_sentiment, star_02_from_star
+from scoring import (
+    add_interaction_column,
+    apply_mix_factor,
+    sentiment_02_from_sentiment,
+    star_02_from_star,
+)
 
 if TYPE_CHECKING:
     from config import ExperimentConfig
@@ -54,10 +59,14 @@ def preprocess_review_star(review_df: pd.DataFrame) -> pd.DataFrame:
 
 def preprocess_review_sentiment(review_df: pd.DataFrame) -> pd.DataFrame:
     out = review_df.copy()
-    out["sentiment"] = out["positive"].astype(float) - out["negative"].astype(float)
-    out = out.drop(columns=["positive", "negative", "neutral", "compound"], errors="ignore")
+    pos = out["positive"].astype(float)
+    neg = out["negative"].astype(float)
+    out["sentiment"] = pos - neg
     out["star_02"] = star_02_from_star(out["star"])
-    out["sentiment_02"] = sentiment_02_from_sentiment(out["sentiment"])
+    # bake MIX_GAMMA into sentiment_02 so star_02*sentiment_02 matches export row_product
+    sent_02 = sentiment_02_from_sentiment(out["sentiment"])
+    out["sentiment_02"] = apply_mix_factor(sent_02, pos, neg)
+    out = out.drop(columns=["positive", "negative", "neutral", "compound"], errors="ignore")
     return out
 
 
