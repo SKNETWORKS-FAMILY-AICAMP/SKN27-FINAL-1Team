@@ -1,4 +1,4 @@
-"""DataFrame preprocessing and LightFM feature construction."""
+"""DataFrame preprocessing and LightFM feature construction (prefer WARP)."""
 
 from __future__ import annotations
 
@@ -9,12 +9,6 @@ import numpy as np
 import pandas as pd
 
 from config import CATALOG_USER_ID
-from scoring import (
-    add_interaction_column,
-    apply_mix_factor,
-    sentiment_02_from_sentiment,
-    star_02_from_star,
-)
 
 if TYPE_CHECKING:
     from config import ExperimentConfig
@@ -50,28 +44,17 @@ CATEGORICAL_COLUMNS = [
 ]
 NUMERIC_COLUMNS = ["others_count", "basic_count"]
 
+PREFER_RECIPE_MODES = ("prefer_n_star5_ge2", "prefer_n_star5_ge2_five_star_rows")
+FIVE_STAR_ONLY_MODE = "five_star_reviews_only"
 
-def preprocess_review_star(review_df: pd.DataFrame) -> pd.DataFrame:
+
+def prepare_review_frame(review_df: pd.DataFrame) -> pd.DataFrame:
     out = review_df.copy()
-    out["star"] = out["star_count"].astype(float).apply(lambda x: (x - 3) / 2)
-    return out.drop(columns=["star_count", "star_norm"], errors="ignore")
-
-
-def preprocess_review_sentiment(review_df: pd.DataFrame) -> pd.DataFrame:
-    out = review_df.copy()
-    pos = out["positive"].astype(float)
-    neg = out["negative"].astype(float)
-    out["sentiment"] = pos - neg
-    out["star_02"] = star_02_from_star(out["star"])
-    # bake MIX_GAMMA into sentiment_02 so star_02*sentiment_02 matches export row_product
-    sent_02 = sentiment_02_from_sentiment(out["sentiment"])
-    out["sentiment_02"] = apply_mix_factor(sent_02, pos, neg)
-    out = out.drop(columns=["positive", "negative", "neutral", "compound"], errors="ignore")
-    return out
-
-
-def drop_review_content(review_df: pd.DataFrame) -> pd.DataFrame:
-    return review_df.drop(columns=["content"], errors="ignore")
+    out["star"] = (out["star_count"].astype(float) - 3.0) / 2.0
+    return out.drop(
+        columns=["content", "positive", "negative", "star_norm"],
+        errors="ignore",
+    )
 
 
 def merge_recipe_alias(recipe_df: pd.DataFrame, alias_df: pd.DataFrame) -> pd.DataFrame:
@@ -181,9 +164,7 @@ def prepare_training_frames(
     recipe_df: pd.DataFrame,
     alias_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    review_out = preprocess_review_star(review_df)
-    review_out = preprocess_review_sentiment(review_out)
-    review_out = drop_review_content(review_out)
+    review_out = prepare_review_frame(review_df)
     recipe_out = merge_recipe_alias(recipe_df, alias_df)
     recipe_out = rename_recipe_columns(recipe_out)
     recipe_out = apply_recipe_token_columns(recipe_out)
@@ -239,47 +220,33 @@ def add_prefer_label_column(
     return out
 
 
-PREFER_RECIPE_MODES = ("prefer_n_star5_ge2", "prefer_n_star5_ge2_five_star_rows")
-
-
 def build_interactions(
     review_df: pd.DataFrame,
-    dataset: Dataset,
+    dataset,
     cfg: ExperimentConfig,
     *,
     recipe_prefer_labels: pd.Series | None = None,
 ):
-    """Return (interactions, review_with_iv, sample_weight|None).
+    """Return (interactions, review_with_labels, None).
 
-    prefer_n_star5_ge2: matrix = prefer_label==1 (all reviews on y*=1 recipes).
-    prefer_n_star5_ge2_five_star_rows: matrix = prefer_label==1 AND star_count==5.
-    five_star_reviews_only: matrix = star_count==5 only (y* ignored for WARP).
+    WARP matrix = implicit (user, item) pairs only:
+    - prefer_n_star5_ge2: all reviews on y*=1 recipes
+    - prefer_n_star5_ge2_five_star_rows: five-star rows on y*=1 recipes
+    - five_star_reviews_only: all five-star review rows (y* ignored)
     """
-    positive_mode = getattr(cfg, "positive_mode", "all_reviews")
+    positive_mode = getattr(cfg, "positive_mode", "prefer_n_star5_ge2")
+    labels = recipe_prefer_labels or build_prefer_labels(review_df)
+    review_with_iv = add_prefer_label_column(review_df, labels)
 
-    if positive_mode == "five_star_reviews_only":
-        review_with_iv = review_df.copy()
-        review_with_iv["interaction_value"] = 1.0
+    if positive_mode == FIVE_STAR_ONLY_MODE:
         review_fit = review_with_iv[is_five_star_mask(review_with_iv)].copy()
-    elif positive_mode in PREFER_RECIPE_MODES or recipe_prefer_labels is not None:
-        review_with_iv = add_prefer_label_column(review_df, recipe_prefer_labels)
-        review_with_iv["interaction_value"] = review_with_iv["prefer_label"].astype(float)
+    else:
         review_fit = review_with_iv[review_with_iv["prefer_label"] == 1].copy()
         if positive_mode == "prefer_n_star5_ge2_five_star_rows":
             review_fit = review_fit[is_five_star_mask(review_fit)].copy()
-    else:
-        review_with_iv = add_interaction_column(review_df, cfg)
-        review_fit = review_with_iv
 
     users = review_fit["group_id"].astype(str)
     items = review_fit["recipe_id"].astype(str)
-    mode = getattr(cfg, "sample_weight_mode", "none")
-    if mode == "review_n":
-        review_n = items.map(items.value_counts()).astype(float)
-        interactions, sample_weight = dataset.build_interactions(
-            zip(users, items, review_n)
-        )
-        return interactions, review_with_iv, sample_weight
     interactions, _ = dataset.build_interactions(zip(users, items))
     return interactions, review_with_iv, None
 
@@ -325,7 +292,7 @@ def recipe_row_to_features(row, excluded: set[str], log_numeric_columns: set[str
 def build_item_features(
     recipe_df: pd.DataFrame,
     item_ids: list[str],
-    dataset: Dataset,
+    dataset,
     excluded_recipe_columns: list[str],
 ):
     excluded = set(excluded_recipe_columns)
@@ -379,51 +346,22 @@ if __name__ == "__main__":
         {
             "recipe_id": [1],
             "group_id": ["u1"],
-            "star_count": [4],
+            "star_count": [5],
             "content": ["ok"],
             "positive": [0.8],
             "negative": [0.1],
-            "star_norm": [0.5],
+            "star_norm": [1.0],
         }
     )
     r, rev = prepare_training_frames(review, recipe, alias)
-    assert "star_02" in rev.columns and str(r["recipe_id"].iloc[0]) == "1"
-    # excluded must skip popularity tokens (exp23 ablation)
+    assert "star_count" in rev.columns and str(r["recipe_id"].iloc[0]) == "1"
     feats = recipe_row_to_features(
         {"view_count": 10, "scrap_count": 5, "method": "볶음"},
         excluded={"view_count", "scrap_count", "ingredients"},
         log_numeric_columns={"view_count", "scrap_count"},
     )
     assert not any(t.startswith("view_count") or t.startswith("scrap_count") for t in feats)
-    # exp24: review_n sample_weight — v=1 → 1, multi-review sum > nnz
-    from lightfm.data import Dataset as _Dataset
-    from types import SimpleNamespace
 
-    rev2 = pd.DataFrame(
-        {
-            "group_id": ["u1", "u2", "u3"],
-            "recipe_id": ["a", "a", "b"],
-            "star": [5, 5, 5],
-            "sentiment": [0.5, 0.5, 0.5],
-            "star_02": [2.0, 2.0, 2.0],
-            "sentiment_02": [1.0, 1.0, 1.0],
-        }
-    )
-    ds = _Dataset()
-    ds.fit(users=["u1", "u2", "u3"], items=["a", "b"])
-    cfg_sw = SimpleNamespace(
-        target_mode="product_02_row",
-        star_weight=1.0,
-        sentiment_weight=1.0,
-        sample_weight_mode="review_n",
-    )
-    inter, _, sw = build_interactions(rev2, ds, cfg_sw)
-    assert sw is not None and float(sw.sum()) > inter.nnz
-    # recipe b has one review → weight 1
-    _, _, item_map, _ = ds.mapping()
-    b_col = item_map["b"]
-    b_weights = sw.tocsc()[:, b_col].data
-    assert len(b_weights) == 1 and float(b_weights[0]) == 1.0
     rev3 = pd.DataFrame(
         {"recipe_id": ["p", "p", "q"], "star_count": [5, 5, 5], "group_id": ["u1", "u2", "u3"]}
     )
@@ -431,7 +369,7 @@ if __name__ == "__main__":
     assert int(labels["p"]) == 1 and int(labels["q"]) == 0
     tagged = add_prefer_label_column(rev3, labels)
     assert tagged["prefer_label"].tolist() == [1, 1, 0]
-    # exp29: five-star-only matrix rows ⊆ baseline prefer rows
+
     rev4 = pd.DataFrame(
         {
             "recipe_id": ["p", "p", "p", "q"],
@@ -439,21 +377,10 @@ if __name__ == "__main__":
             "group_id": ["u1", "u2", "u3", "u4"],
         }
     )
-    ds4 = _Dataset()
-    ds4.fit(users=["u1", "u2", "u3", "u4"], items=["p", "q"])
     lbl4 = build_prefer_labels(rev4)
-    cfg_base = SimpleNamespace(
-        target_mode="product_02_row",
-        star_weight=1.0,
-        sentiment_weight=1.0,
-        sample_weight_mode="none",
-        positive_mode="prefer_n_star5_ge2",
-    )
-    cfg_29a = SimpleNamespace(**{**cfg_base.__dict__, "positive_mode": "prefer_n_star5_ge2_five_star_rows"})
-    cfg_29b = SimpleNamespace(**{**cfg_base.__dict__, "positive_mode": "five_star_reviews_only"})
-    i_base, _, _ = build_interactions(rev4, ds4, cfg_base, recipe_prefer_labels=lbl4)
-    i_29a, _, _ = build_interactions(rev4, ds4, cfg_29a, recipe_prefer_labels=lbl4)
-    i_29b, _, _ = build_interactions(rev4, ds4, cfg_29b)
-    assert i_base.nnz == 3 and i_29a.nnz == 2 and i_29b.nnz == 3
-    assert i_29a.nnz < i_base.nnz and i_29a.nnz <= i_29b.nnz
+    tagged4 = add_prefer_label_column(rev4, lbl4)
+    base_fit = tagged4[tagged4["prefer_label"] == 1]
+    assert len(base_fit) == 3
+    five_star_fit = base_fit[is_five_star_mask(base_fit)]
+    assert len(five_star_fit) == 2
     print("preprocess ok")

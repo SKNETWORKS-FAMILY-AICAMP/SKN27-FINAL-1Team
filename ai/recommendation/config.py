@@ -9,17 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-ALLOWED_TARGET_MODES = (
-    "star_sentiment_sum",
-    "sentiment_only",
-    "star_only",
-    "ratio_1_2",
-    "product_02_row",
-)
-
-ALLOWED_SAMPLE_WEIGHT_MODES = ("none", "review_n")
 ALLOWED_POSITIVE_MODES = (
-    "all_reviews",
     "prefer_n_star5_ge2",
     "prefer_n_star5_ge2_five_star_rows",
     "five_star_reviews_only",
@@ -37,12 +27,8 @@ class ExperimentConfig:
     seed: int = 42
     epochs: int = 30
     num_threads: int = 2
-    target_mode: str = "product_02_row"
     excluded_recipe_columns: list[str] = field(default_factory=lambda: ["ingredients"])
-    star_weight: float = 1.0
-    sentiment_weight: float = 1.0
     model_mode: str = "hybrid"
-    sample_weight_mode: str = "none"
     positive_mode: str = "prefer_n_star5_ge2"
 
 
@@ -70,27 +56,10 @@ def load_experiment_config(root: Path | None = None) -> ExperimentConfig:
         "ingredient_alias": data_dir / "recipe_ingredient_alias.csv",
     }
 
-    target_mode = os.environ.get("TARGET_MODE", "product_02_row")
-    if target_mode not in ALLOWED_TARGET_MODES:
-        raise ValueError(f"TARGET_MODE must be one of {ALLOWED_TARGET_MODES}")
-
     if "EXCLUDED_RECIPE_COLUMNS" in os.environ:
         excluded = [c for c in os.environ["EXCLUDED_RECIPE_COLUMNS"].split(",") if c]
     else:
         excluded = ["ingredients"]
-
-    if target_mode == "ratio_1_2":
-        star_weight = float(os.environ.get("STAR_WEIGHT", "1.0"))
-        sentiment_weight = float(os.environ.get("SENTIMENT_WEIGHT", "2.0"))
-    else:
-        star_weight = float(os.environ.get("STAR_WEIGHT", "1.0"))
-        sentiment_weight = float(os.environ.get("SENTIMENT_WEIGHT", "1.0"))
-
-    sample_weight_mode = os.environ.get("SAMPLE_WEIGHT_MODE", "none")
-    if sample_weight_mode not in ALLOWED_SAMPLE_WEIGHT_MODES:
-        raise ValueError(
-            f"SAMPLE_WEIGHT_MODE must be one of {ALLOWED_SAMPLE_WEIGHT_MODES}"
-        )
 
     positive_mode = os.environ.get("POSITIVE_MODE", "prefer_n_star5_ge2")
     if positive_mode not in ALLOWED_POSITIVE_MODES:
@@ -104,11 +73,7 @@ def load_experiment_config(root: Path | None = None) -> ExperimentConfig:
         seed=int(os.environ.get("SEED", "42")),
         epochs=int(os.environ.get("EPOCHS", "30")),
         num_threads=int(os.environ.get("NUM_THREADS", "2")),
-        target_mode=target_mode,
         excluded_recipe_columns=excluded,
-        star_weight=star_weight,
-        sentiment_weight=sentiment_weight,
-        sample_weight_mode=sample_weight_mode,
         positive_mode=positive_mode,
     )
 
@@ -122,6 +87,6 @@ if __name__ == "__main__":
     os.environ.setdefault("PROJECT_ROOT", str(Path(__file__).resolve().parent))
     os.environ.setdefault("LIGHTFM_RUNTIME", "linux-docker")
     cfg = load_experiment_config()
-    assert cfg.target_mode == "product_02_row"
+    assert cfg.positive_mode == "prefer_n_star5_ge2"
     assert cfg.data_files["review"].name == "review_by_llm.csv"
     print("config ok", cfg.seed, cfg.excluded_recipe_columns)

@@ -8,7 +8,7 @@
 | `outputs/` | `recipe_lightfm.csv`, `ablation_report.json` |
 | `LightFM_Model.ipynb` | 실행 노트북 |
 | `evaluation.py`, `scoring.py` | 평가·스코어 유틸 |
-| `METRICS.md` | **L0~L5 지표·임계값·근거** |
+| `METRICS.md` | **R0~R3 추천 Go** · 임계·프로토콜 |
 | `config.py`, `data_io.py`, `preprocess.py` | 실행 설정·IO·전처리 |
 | `experiments.md` | 회차별 상세 로그 |
 
@@ -46,63 +46,36 @@
 
 ### 1.1 목적
 
-- **1차 목표 (Track B):** 전 카탈로그(~3,171) 레시피에 **Base Score(ŷ)** 부여 — 콜드스타트 점수 추정.
-- **LightFM hybrid**(CF + item feature)로 학습·predict. **목표 점수 = 리뷰만**; 조회·스크랩은 **feature**.
-- **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
+- **Track B (1차):** warm 레시피 중 **5점 리뷰 ≥2** 를 선호(y\*)로 두고, catalog **`s_pref`** 로 추천 순위 생성.
+- **LightFM hybrid** (prefer WARP + item feature). 조회·스크랩은 **feature만**.
+- **Go:** `s_pref` 상위 K에 y\*=1이 얼마나 오는지 — **P@20·NDCG@20·Recall@20** ([METRICS.md](METRICS.md)).
+- **Track A (실험 1~12):** hold-out CF — **보류** (이력은 `experiments.md` §1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
 ### 1.2 현재 진행 상황 (Track B · §29 R-Go)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
-| 실행 환경 | 완료 | `exp29_star_only_prefer.py` |
+| 실행 환경 | 완료 | `python evaluation.py` |
 | **Go 헌장** | **R0~R3** | P@20·NDCG@20·Recall@20 (warm test fold) |
 | **§28** | No-Go (구 P0~P3) | 레거시 |
 | **§29** | R-Go **No-Go** (0/5×3) | P@20≈0.46·NDCG≈0.49·Recall≈0.23 |
 | **export** | 진단 CSV | `recipe_lightfm.csv` 동결 |
 
-베이스라인 태그: `experiment: 22_eval_recalib`. 회차 표 → [experiments.md](experiments.md) §22~26 · 헌장 → [METRICS.md](METRICS.md).
+베이스라인 실행: `python evaluation.py`. 회차 표 → [experiments.md](experiments.md) §28~29 · 헌장 → [METRICS.md](METRICS.md).
 
 ### 1.4 Track A vs Track B
 
-| | Track A (2차 · **다음**) | Track B (**1차 · 동결**) |
+| | Track A (2차 · **다음**) | Track B (**1차 · 현재**) |
 |---|---------------|-------------------|
-| 과제 | user–item CF hold-out | **전 카탈로그 item 점수** |
-| item | ~563 | **~3,100** |
-| Go | L0 충족; L1/L2 보류 | **이축** L0+L1i+L2i+L1c+L2c (§1.5); 슬라이스 신뢰 → STATUS |
-| 노트북 | `item_ids` = review만 | full catalog export |
+| 과제 | user–item CF hold-out | **선호 레시피 추천** (y\*=n_star5≥2) |
+| 점수 | personalized predict | catalog **`s_pref`** 정렬 |
+| Go | L0 충족; L1/L2 보류 | **R0~R3** (P@20·NDCG·Recall) |
+| 실행 | 노트북 export | `python evaluation.py` (CV Go) |
 
-### 1.5 Track B 목표 (L0~L5-dual, 실험 22 · **동결**)
+### 1.5 레거시 Track B (§1~26, 폐기)
 
-**상세 근거·용어:** [METRICS.md](METRICS.md) · **상태 보고서:** [TRACK_B_STATUS.md](TRACK_B_STATUS.md) · 실측: [experiments.md](experiments.md) §22~26.
-
-**점수 정의**
-
-| | 공식 | 비고 |
-|---|------|------|
-| 학습 `y` | `star_02 × sentiment_02` | `product_02_row` (17+) |
-| bar `score_review` | Bayesian WR on `mean(star_02×sentiment_02)` | m=3; `BAR_MODE=mean` 시 단순 mean |
-| export `ŷ` | LightFM predict | cold·warm 공통 |
-| view/scrap | **feature만** | target·bar 미포함 |
-
-**1차 Go (서비스 반영)**
-
-```
-go = L0 AND L1i AND L2i AND L1c AND L2c
-```
-
-| 층 | 이름 | 조건 | 역할 |
-|----|------|------|------|
-| **L0** | Operational | coverage=1.0, score_std>1e-6 | 전 item 유한 ŷ |
-| **L1i** | Anti-Random | informative: ρ>0.10, null p<0.05; **ρ>ρ_pop** **4/5** | 소수 구간 |
-| **L2i** | Ranking | informative Spearman **≥ 0.30** | Cohen Medium |
-| **L1c** | Anti-Pop | ceiling: **ρ>ρ_pop** **4/5** | 다수 구간 |
-| **L2c** | Ranking | ceiling Spearman **≥ 0.25** | 비퇴보 바닥; stretch 0.30 |
-| L3 | Train | Spearman(ŷ, train) ≥ 0.30 | 진단 |
-| L4 | Full Warm | all warm ρ (목표 0.30) | **혼합** — Go 아님 |
-| L5 | Cold | ŷ_cold vs popularity | 진단 |
-
-cold는 정답 없음 → **L0 + warm 이축 Go**로 간접 검증.
+Spearman·bar·감성 곱·L0~L5 dual Go는 **코드·헌장에서 제거**. 숫자·맥락만 [experiments.md](experiments.md) §1~26에 보존.
 
 ### 1.6 Track A 목표 (2차·보류)
 
@@ -217,9 +190,8 @@ docker compose run --rm jupyter jupyter nbconvert `
 |------|------|------|
 | `SEED` | 42 | 학습·predict |
 | `EXCLUDED_RECIPE_COLUMNS` | `ingredients` | feature ablation |
-| `STAR_WEIGHT` / `SENTIMENT_WEIGHT` | 1.0 (`ratio_1_2`는 2.0) | interaction 가중 |
-| `TARGET_MODE` | **`product_02_row`** | interaction target |
-| `BAR_MODE` | **`bayesian`** | export bar: WR (m=3); `mean` = 단순 mean |
+| `POSITIVE_MODE` | `prefer_n_star5_ge2` | WARP matrix 필터 (§29 ablation) |
+| `EPOCHS` / `FULL_EPOCHS` | 10 / 30 | CV / full-fit (`evaluation.py`) |
 
 ### 2.5 노트북 Unit
 
@@ -227,27 +199,26 @@ docker compose run --rm jupyter jupyter nbconvert `
 |------|------|
 | 1 | 설정·env |
 | 2~4 | 데이터·Dataset (전 카탈로그) |
-| 5 / 5b | interaction · item features |
-| 6 | full train (`train = interactions`) |
-| 7 | LightFM 학습 |
-| 11 | catalog predict → `outputs/recipe_lightfm.csv` + `evaluation` |
-| 9 | 리포트 JSON (`track_b_eval`, **L0~L5** decision) |
+| 5 | prefer WARP matrix · item features |
+| 6~7 | full train |
+| 11 | catalog `s_pref` export → `recipe_lightfm.csv` |
+| 9 | CV Go: `python evaluation.py` |
 
 ### 2.6 파일
 
 | 파일 | 역할 |
 |------|------|
-| [`LightFM_Model.ipynb`](LightFM_Model.ipynb) | 실행 노트북 |
-| `experiments.md` | **실험 상세 로그** |
+| [`LightFM_Model.ipynb`](LightFM_Model.ipynb) | full-fit export 노트북 |
+| `evaluation.py` | R0~R3 CV · Go (`python evaluation.py`) |
+| `scoring.py` | `s_pref` predict · export DataFrame |
+| `experiments.md` | 실험 상세 로그 (§1~26 레거시 · §28~29 현재) |
 | `README.md` | 본 문서 |
-| `data/*.csv` | 입력 데이터 |
-| `evaluation.py` | Track B **L0~L5**, baselines, subset Spearman |
-| `scoring.py` | 0~2 스케일·interaction target |
+| `METRICS.md` | R0~R3 헌장 |
 | `config.py` | env·시드·경로 |
 | `data_io.py` | CSV load/export·JSON 리포트 |
-| `preprocess.py` | 전처리·LightFM feature |
-| `outputs/recipe_lightfm.csv` | 전 카탈로그 Base Score export |
-| `outputs/ablation_report.json`, `outputs/exp*.json` | 임시 JSON (비커밋) |
+| `preprocess.py` | 전처리·prefer labels·LightFM feature |
+| `outputs/recipe_lightfm.csv` | 전 카탈로그 export (Go 전 동결 가능) |
+| `outputs/prefer_eval_report.json` | CV Go 리포트 |
 
 ---
 
@@ -331,6 +302,13 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 - **Goal0:** v1_all5 uniq 24→295 (독립 감성 재분석, 학습 전).
 - **T0/T1:** 5-seed Go 유지; T1은 informative ρ↑·ceiling ρ↓ → **혼합 미채택** (`MIX_GAMMA=0`). §[experiments.md](experiments.md) 실험 21.
 
+### 2026-07-14 (코드 정리 · §29 축)
+
+- **헌장:** R0~R3만 유지 ([METRICS.md](METRICS.md)). L0~L5·P0~P3·Spearman/bar 코드 **제거**.
+- **core:** `preprocess` prefer WARP · `scoring` predict+export · `evaluation` CV Go.
+- **삭제:** `exp28_prefer_threshold.py`, `exp29_star_only_prefer.py`, `TRACK_B_STATUS.md`.
+- **실행:** Go = `python evaluation.py`; 노트북 = full-fit export.
+
 ### 2026-07-14 (실험 20)
 
 - **bar:** IMDb식 Bayesian average (m=3) on product mean; default `BAR_MODE=bayesian`.
@@ -345,7 +323,7 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 ### 2026-07-13 (실험 18)
 
 - **L0~L5:** [METRICS.md](METRICS.md) — Cohen 0.30 근거, Go = L0+L1+L2, L4 DATASET_EXCEPTION.
-- **`evaluation.py`:** null/popularity baseline, informative subset, `evaluate_track_b_v2`.
+- **`evaluation.py`:** R0~R3 CV (`run_prefer_cv`, `python evaluation.py`).
 - **calibration (5-seed):** L0·L2 통과, L1 0/5 vs popularity → Go false. §[experiments.md](experiments.md) 실험 18.
 
 ### 2026-07-13 (모듈 분리)

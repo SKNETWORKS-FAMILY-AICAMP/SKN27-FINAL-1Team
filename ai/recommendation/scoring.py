@@ -1,227 +1,164 @@
-"""Score scales, interaction targets, review aggregation."""
+"""Catalog prefer scores: predict, export, review observables."""
 
 from __future__ import annotations
-
-import os
 
 import numpy as np
 import pandas as pd
 
-from config import ExperimentConfig
-
-BAYESIAN_M_DEFAULT = 3.0
-# ponytail: exp21 ablation knob only — T0=0.0, T1=0.5; adopt → fold into formula & delete
-MIX_GAMMA = 0.0
+from config import CATALOG_USER_ID, ExperimentConfig
+from preprocess import build_interactions
 
 
-def experiment_tag() -> str:
-    # ponytail: mix-on → exp21 t1 tag; mix-off keeps adopted baseline label
-    if MIX_GAMMA != 0.0:
-        return "21_sentiment_t1"
-    return "20_bayesian_bar"
-
-
-def star_02_from_count(star_count: pd.Series) -> pd.Series:
-    return (pd.to_numeric(star_count, errors="coerce") - 1.0) / 2.0
-
-
-def star_02_from_star(star: pd.Series) -> pd.Series:
-    return pd.to_numeric(star, errors="coerce") + 1.0
-
-
-def sentiment_02_from_sentiment(sentiment: pd.Series) -> pd.Series:
-    return pd.to_numeric(sentiment, errors="coerce").add(1.0).clip(0.0, 2.0)
-
-
-def sentiment_02(positive: pd.Series, negative: pd.Series) -> pd.Series:
-    sentiment = pd.to_numeric(positive, errors="coerce") - pd.to_numeric(
-        negative, errors="coerce"
-    )
-    return sentiment_02_from_sentiment(sentiment)
-
-
-def mix_conflict(positive, negative) -> np.ndarray:
-    """clip(2 * min(p, n), 0, 1) — high when strong+strong."""
-    p = np.asarray(pd.to_numeric(positive, errors="coerce"), dtype=np.float64).ravel()
-    n = np.asarray(pd.to_numeric(negative, errors="coerce"), dtype=np.float64).ravel()
-    return np.clip(2.0 * np.minimum(p, n), 0.0, 1.0)
-
-
-def apply_mix_factor(q, positive, negative, gamma: float | None = None):
-    """q * (1 - gamma * conflict). gamma=None → module MIX_GAMMA."""
-    g = float(MIX_GAMMA if gamma is None else gamma)
-    q_arr = np.asarray(pd.to_numeric(q, errors="coerce"), dtype=np.float64)
-    if g == 0.0:
-        return q_arr
-    return q_arr * (1.0 - g * mix_conflict(positive, negative))
-
-
-def add_row_02_columns(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    if "star_count" in out.columns:
-        out["star_02"] = star_02_from_count(out["star_count"])
-    elif "star" in out.columns:
-        out["star_02"] = star_02_from_star(out["star"])
-    else:
-        raise ValueError("need star_count or star for star_02")
-    if "sentiment_02" not in out.columns:
-        if "sentiment" in out.columns:
-            out["sentiment_02"] = sentiment_02_from_sentiment(out["sentiment"])
-        elif {"positive", "negative"}.issubset(out.columns):
-            out["sentiment_02"] = sentiment_02(out["positive"], out["negative"])
-        else:
-            raise ValueError("need sentiment or positive/negative for sentiment_02")
-    q = out["star_02"] * out["sentiment_02"]
-    if {"positive", "negative"}.issubset(out.columns):
-        q = apply_mix_factor(q, out["positive"], out["negative"])
-    out["row_product_02"] = q
-    return out
-
-
-def bayesian_average(
-    R: pd.Series | np.ndarray,
-    v: pd.Series | np.ndarray,
-    C: float,
-    m: float = BAYESIAN_M_DEFAULT,
+def catalog_predict(
+    model,
+    dataset,
+    item_ids: list[str],
+    item_features,
+    num_threads: int,
 ) -> np.ndarray:
-    """IMDb-style WR = v/(v+m)*R + m/(v+m)*C. R and C on the same scale."""
-    R = np.asarray(R, dtype=np.float64).ravel()
-    v = np.asarray(v, dtype=np.float64).ravel()
-    m = float(m)
-    if m < 0.0:
-        raise ValueError("m must be >= 0")
-    denom = v + m
-    # ponytail: v=0 → WR=C; avoids 0/0
-    w = np.where(denom > 0.0, v / denom, 0.0)
-    return w * R + (1.0 - w) * float(C)
+    user_id_map, _, item_id_map, _ = dataset.mapping()
+    catalog_user_idx = user_id_map[CATALOG_USER_ID]
+    item_internal = np.array([item_id_map[i] for i in item_ids], dtype=np.int32)
+    user_internal = np.full(len(item_ids), catalog_user_idx, dtype=np.int32)
+    return model.predict(
+        user_internal,
+        item_internal,
+        item_features=item_features,
+        num_threads=num_threads,
+    ).astype(float)
 
 
-def calc_interaction_value(
-    star,
-    sentiment,
-    *,
-    target_mode: str,
-    star_weight: float = 1.0,
-    sentiment_weight: float = 1.0,
-    star_02=None,
-    sentiment_02=None,
-):
-    if target_mode == "product_02_row":
-        return pd.to_numeric(star_02, errors="coerce").fillna(0.0) * pd.to_numeric(
-            sentiment_02, errors="coerce"
-        ).fillna(0.0)
-    if target_mode == "sentiment_only":
-        return sentiment_weight * sentiment
-    if target_mode == "star_only":
-        return star_weight * star
-    if target_mode == "ratio_1_2":
-        return star_weight * star + sentiment_weight * sentiment
-    return star_weight * star + sentiment_weight * sentiment
-
-
-def add_interaction_column(review_df: pd.DataFrame, cfg: ExperimentConfig) -> pd.DataFrame:
-    out = review_df.copy()
-    star_s = pd.to_numeric(out["star"], errors="coerce").fillna(0.0)
-    sent_s = pd.to_numeric(out["sentiment"], errors="coerce").fillna(0.0)
-    star_02_s = pd.to_numeric(out["star_02"], errors="coerce").fillna(0.0)
-    sent_02_s = pd.to_numeric(out["sentiment_02"], errors="coerce").fillna(0.0)
-    out["interaction_value"] = calc_interaction_value(
-        star_s,
-        sent_s,
-        target_mode=cfg.target_mode,
-        star_weight=cfg.star_weight,
-        sentiment_weight=cfg.sentiment_weight,
-        star_02=star_02_s,
-        sentiment_02=sent_02_s,
-    )
-    return out
-
-
-def aggregate_review_for_export(
-    review_raw: pd.DataFrame,
-    target_mode: str,
-    *,
-    bar_mode: str | None = None,
-    bayesian_m: float = BAYESIAN_M_DEFAULT,
-) -> tuple[pd.DataFrame, str]:
-    """bar_mode: bayesian (default, exp20) | mean. Override via BAR_MODE env."""
-    if bar_mode is None:
-        # adopted exp20: Bayesian WR default; BAR_MODE=mean for legacy mean bar
-        bar_mode = os.environ.get("BAR_MODE", "bayesian")
-    if bar_mode not in ("mean", "bayesian"):
-        raise ValueError("bar_mode must be mean or bayesian")
-
-    review_raw = add_row_02_columns(review_raw)
-    review_raw = review_raw.copy()
-    review_raw["sentiment_row"] = (
-        review_raw["positive"].astype(float) - review_raw["negative"].astype(float)
-    )
+def aggregate_review_for_export(review_raw: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    out = review_raw.copy()
+    out["recipe_id"] = out["recipe_id"].astype(str)
     review_agg = (
-        review_raw.groupby("recipe_id", as_index=False)
+        out.groupby("recipe_id", as_index=False)
         .agg(
             positive_avg=("positive", "mean"),
             negative_avg=("negative", "mean"),
             star_count_avg=("star_count", "mean"),
             star_norm_avg=("star_norm", "mean"),
-            sentiment_avg=("sentiment_row", "mean"),
-            row_product_avg=("row_product_02", "mean"),
             review_n=("recipe_id", "size"),
         )
         .assign(recipe_id=lambda d: d["recipe_id"].astype(str))
     )
-    review_agg["legacy_review_rank"] = (
-        review_agg["star_norm_avg"] + review_agg["sentiment_avg"]
-    )
-    if target_mode == "product_02_row":
-        R = review_agg["row_product_avg"].to_numpy(dtype=float)
-        C = float(np.nanmean(R))
-        if bar_mode == "bayesian":
-            review_agg["review_rank_score"] = bayesian_average(
-                R, review_agg["review_n"].to_numpy(dtype=float), C, m=bayesian_m
-            )
-            formula = (
-                f"Bayesian WR on mean(star_02*sentiment_02*(1-mix*conflict)); "
-                f"C={C:.4f}, m={bayesian_m}, mix_gamma={MIX_GAMMA}"
-            )
-        else:
-            review_agg["review_rank_score"] = review_agg["row_product_avg"]
-            formula = (
-                f"mean(star_02*sentiment_02*(1-mix*conflict)); mix_gamma={MIX_GAMMA}"
-            )
-    else:
-        review_agg["review_rank_score"] = review_agg["legacy_review_rank"]
-        formula = "star_norm_avg + sentiment_avg (from review_by_llm)"
+    review_agg["review_rank_score"] = review_agg["star_norm_avg"]
+    formula = "star_norm_avg (export observable)"
     return review_agg, formula
 
 
-if __name__ == "__main__":
-    toy = pd.DataFrame({"star_count": [1, 5], "positive": [0.2, 0.9], "negative": [0.8, 0.1]})
-    out = add_row_02_columns(toy)
-    assert float(out.loc[0, "star_02"]) == 0.0
-    assert float(out.loc[1, "star_02"]) == 2.0
-    v = calc_interaction_value(
-        pd.Series([0.0]),
-        pd.Series([0.0]),
-        target_mode="product_02_row",
-        star_02=pd.Series([1.0]),
-        sentiment_02=pd.Series([2.0]),
-    )
-    assert float(v.iloc[0]) == 2.0
-    # same R=max; larger v → WR closer to R (higher when R > C)
-    wr1 = float(bayesian_average([5.0], [1.0], C=4.0, m=3.0)[0])
-    wr10 = float(bayesian_average([5.0], [10.0], C=4.0, m=3.0)[0])
-    assert wr10 > wr1
+def prefer_threshold_min(true_scores: np.ndarray) -> float:
+    s = np.asarray(true_scores, dtype=np.float64).ravel()
+    s = s[np.isfinite(s)]
+    return float(np.min(s)) if s.size else float("nan")
 
-    # mix: gamma=0 identical; gamma=0.5 strong-ambivalent q < weak-ambivalent (same star/valence~)
-    star = 2.0
-    sent_strong = sentiment_02_from_sentiment(pd.Series([0.9 - 0.8])).iloc[0]
-    sent_weak = sentiment_02_from_sentiment(pd.Series([0.2 - 0.1])).iloc[0]
-    q0_s = float(apply_mix_factor([star * sent_strong], [0.9], [0.8], gamma=0.0)[0])
-    q0_w = float(apply_mix_factor([star * sent_weak], [0.2], [0.1], gamma=0.0)[0])
-    assert abs(q0_s - star * sent_strong) < 1e-12
-    assert abs(q0_w - star * sent_weak) < 1e-12
-    q5_s = float(apply_mix_factor([star * sent_strong], [0.9], [0.8], gamma=0.5)[0])
-    q5_w = float(apply_mix_factor([star * sent_weak], [0.2], [0.1], gamma=0.5)[0])
-    assert q5_s < q5_w
-    assert experiment_tag() == "20_bayesian_bar"
-    print("scoring ok", wr1, wr10, q5_s, q5_w)
+
+def _linear_calibration(
+    s_pref: np.ndarray, bar: np.ndarray, warm_mask: np.ndarray
+) -> tuple[float, float]:
+    obs = bar[warm_mask]
+    pred = s_pref[warm_mask]
+    finite = np.isfinite(obs) & np.isfinite(pred)
+    obs, pred = obs[finite], pred[finite]
+    if obs.size < 2:
+        return 0.0, float(obs.mean()) if obs.size else 0.0
+    slope, intercept = np.polyfit(pred, obs, 1)
+    return float(slope), float(intercept)
+
+
+def build_export_dataframe(
+    *,
+    recipe_df: pd.DataFrame,
+    review_agg: pd.DataFrame,
+    s_pref: np.ndarray,
+    y_prefer: pd.Series,
+    n_star5: pd.Series,
+    warm_item_ids: set[str],
+) -> pd.DataFrame:
+    export_df = recipe_df[["recipe_id", "recipe_name"]].copy()
+    export_df["recipe_id"] = export_df["recipe_id"].astype(str)
+    export_df = export_df.merge(review_agg, on="recipe_id", how="left")
+    export_df["y_hat"] = s_pref
+    export_df["s_pref"] = s_pref
+
+    warm_mask = export_df["recipe_id"].isin(warm_item_ids).to_numpy()
+    bar = export_df["review_rank_score"].to_numpy(dtype=float)
+    slope, intercept = _linear_calibration(s_pref, bar, warm_mask)
+    export_df["y_hat_linear"] = slope * s_pref + intercept
+
+    warm_y = export_df.loc[warm_mask, "recipe_id"].map(y_prefer).fillna(0).astype(int).to_numpy()
+    warm_s = export_df.loc[warm_mask, "s_pref"].to_numpy(dtype=float)
+    t_star = prefer_threshold_min(warm_s[warm_y == 1])
+
+    export_df["t_star"] = t_star
+    export_df["prefer_hat"] = (export_df["s_pref"] >= t_star).astype(int)
+    export_df["y_prefer"] = export_df["recipe_id"].map(y_prefer).fillna(-1).astype(int)
+    export_df["n_star5"] = export_df["recipe_id"].map(n_star5).fillna(0).astype(int)
+    return (
+        export_df.sort_values("s_pref", ascending=False, kind="mergesort")
+        .reset_index(drop=True)
+        .assign(prefer_rank=lambda d: np.arange(1, len(d) + 1))
+    )
+
+
+def full_fit_export(
+    cfg: ExperimentConfig,
+    *,
+    recipe_df: pd.DataFrame,
+    review_df: pd.DataFrame,
+    dataset,
+    item_ids: list[str],
+    warm_item_ids: set[str],
+    item_features,
+    y_prefer: pd.Series,
+    review_agg: pd.DataFrame,
+    n_star5: pd.Series,
+) -> pd.DataFrame:
+    from lightfm import LightFM
+
+    interactions, _, _ = build_interactions(
+        review_df, dataset, cfg, recipe_prefer_labels=y_prefer
+    )
+    model = LightFM(loss="warp", random_state=cfg.seed)
+    model.fit(
+        interactions,
+        item_features=item_features,
+        epochs=cfg.epochs,
+        num_threads=cfg.num_threads,
+    )
+    s_pref = catalog_predict(model, dataset, item_ids, item_features, cfg.num_threads)
+    return build_export_dataframe(
+        recipe_df=recipe_df,
+        review_agg=review_agg,
+        s_pref=s_pref,
+        y_prefer=y_prefer,
+        n_star5=n_star5,
+        warm_item_ids=warm_item_ids,
+    )
+
+
+if __name__ == "__main__":
+    toy = pd.DataFrame(
+        {
+            "recipe_id": ["a", "a", "b"],
+            "star_count": [5, 4, 3],
+            "star_norm": [1.0, 0.5, 0.0],
+            "positive": [0.8, 0.6, 0.3],
+            "negative": [0.1, 0.2, 0.4],
+        }
+    )
+    agg, formula = aggregate_review_for_export(toy)
+    assert float(agg.loc[agg["recipe_id"] == "a", "star_norm_avg"].iloc[0]) == 0.75
+    y = pd.Series({"a": 1, "b": 0}, name="y_prefer")
+    n5 = pd.Series({"a": 2, "b": 0}, name="n_star5")
+    recipe = pd.DataFrame({"recipe_id": ["a", "b"], "recipe_name": ["A", "B"]})
+    df = build_export_dataframe(
+        recipe_df=recipe,
+        review_agg=agg,
+        s_pref=np.array([0.9, 0.1]),
+        y_prefer=y,
+        n_star5=n5,
+        warm_item_ids={"a", "b"},
+    )
+    assert df.iloc[0]["recipe_id"] == "a" and int(df.iloc[0]["prefer_rank"]) == 1
+    print("scoring ok", formula, float(df.iloc[0]["t_star"]))

@@ -1,10 +1,8 @@
 # LightFM 실험 기록
 
-**읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류 → 다음 설계 축**) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17~26 = 콜드스타트 Base Score (2026-07-14 지표 동결)**.  
-§13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
-**L1 축·Go:** §22~26 Spearman dual (**레거시**) · §**28~29** 기준선 이진 **P0~P3** (동결 해제).
-
-**상태:** [`TRACK_B_STATUS.md`](TRACK_B_STATUS.md) · 헌장 [`METRICS.md`](METRICS.md).
+**읽는 법:** §1~26 = **레거시** (Track A·Spearman·bar·감성 곱 — 코드에서 제거, 이력만 보존).  
+**현재 축:** §28~29 — y\*=`n_star5≥2`, 추천 점수=`s_pref`, Go=**R0~R3**.  
+헌장: [`METRICS.md`](METRICS.md) · CV: `python evaluation.py` → `outputs/prefer_eval_report.json`.
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -3376,7 +3374,7 @@ n: vge2=185, v1=344 (공통).
 ## 실험 28 — Track B 기준선 이진 (Spearman Go 폐기)
 
 **일자:** 2026-07-14  
-**코드:** [`exp28_prefer_threshold.py`](exp28_prefer_threshold.py) · [`preprocess.build_prefer_labels`](preprocess.py) · [`evaluation` P0~P3](evaluation.py)
+**코드:** [`evaluation.py`](evaluation.py) · [`scoring.py`](scoring.py) · [`preprocess.build_prefer_labels`](preprocess.py) — (당시 `exp28_prefer_threshold.py`, **현재 통합·삭제**)
 
 ### 목적
 
@@ -3422,7 +3420,7 @@ n: vge2=185, v1=344 (공통).
 ## 실험 29 — 별점 WARP ablation + **R0~R3 추천 Go** (재구성)
 
 **일자:** 2026-07-14  
-**코드:** [`exp29_star_only_prefer.py`](exp29_star_only_prefer.py) · [`evaluation` R0~R3](evaluation.py)
+**코드:** [`evaluation.py`](evaluation.py) · [`scoring.py`](scoring.py) — (당시 `exp29_star_only_prefer.py`, **현재 통합·삭제**)
 
 ### 목적
 
@@ -3467,4 +3465,4 @@ n: vge2=185, v1=344 (공통).
 
 ### JSON
 
-`outputs/exp29_report.json` · `recipe_prefer_ranked_{baseline,29a,29b}.csv`
+`outputs/exp29_report.json` (이력) · 재실행 시 `outputs/prefer_eval_report.json`
