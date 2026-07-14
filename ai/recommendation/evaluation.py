@@ -219,11 +219,11 @@ def top_k_overlap(scores_a: np.ndarray, scores_b: np.ndarray, k: int = 100) -> f
 
 
 def aggregate_l1_multi_seed(seed_rows: list[dict]) -> dict:
-    """seed_rows: each has warm_spearman_review, warm_spearman_popularity."""
+    """seed_rows: each has l1_spearman_model, l1_spearman_pop (informative, vs bar)."""
     wins = sum(
         1
         for r in seed_rows
-        if r.get("warm_spearman_review", 0.0) > r.get("warm_spearman_popularity", 0.0)
+        if r.get("l1_spearman_model", 0.0) > r.get("l1_spearman_pop", 0.0)
     )
     n = len(seed_rows)
     return {
@@ -306,26 +306,27 @@ def evaluate_track_b_v2(
     l4_rho, _ = _mask_spearman(y_hat, score_review, warm_mask)
     top100 = top_k_overlap(warm_y_f, warm_review_f, k=100) if warm_y_f.size else 0.0
 
-    null_p = 1.0
-    rho_all_warm = l4_rho
+    # legacy all-warm (exp18 contrast; not Go)
+    null_p_all = 1.0
     if warm_y_f.size >= 2:
-        rho_all_warm, null_p = null_spearman_pvalue(warm_y_f, warm_review_f, seed=null_seed)
+        _, null_p_all = null_spearman_pvalue(warm_y_f, warm_review_f, seed=null_seed)
 
-    pop_rho = 0.0
-    if popularity_scores is not None:
-        pop = np.asarray(popularity_scores, dtype=np.float64).ravel()
-        pop_rho, _ = _mask_spearman(y_hat, pop, warm_mask)
-
-    l1_single_pass = (
-        rho_all_warm > COHEN_SMALL
-        and null_p < 0.05
-        and rho_all_warm > pop_rho
+    pop = (
+        np.asarray(popularity_scores, dtype=np.float64).ravel()
+        if popularity_scores is not None
+        else None
+    )
+    # pop vs bar (same axis as model); not Spearman(y_hat, pop)
+    pop_rho_all, _ = (
+        _mask_spearman(pop, score_review, warm_mask) if pop is not None else (0.0, 0)
     )
 
     subset_rhos: dict[str, float] = {}
     subset_ns: dict[str, int] = {}
+    informative_mask = warm_mask
     if export_df is not None:
         subsets = build_warm_subsets(export_df, warm_mask)
+        informative_mask = subsets["informative"]
         for name, mask in subsets.items():
             if name == "warm":
                 continue
@@ -335,6 +336,43 @@ def evaluate_track_b_v2(
 
     l2_rho = subset_rhos.get("l2_spearman_informative", 0.0)
     l2_pass = l2_rho >= spearman_threshold
+
+    # L1 Go: informative, Spearman(*, bar)
+    rho_model, n_inf = _mask_spearman(y_hat, score_review, informative_mask)
+    rho_pop, _ = (
+        _mask_spearman(pop, score_review, informative_mask) if pop is not None else (0.0, 0)
+    )
+    null_p = 1.0
+    if n_inf >= 2:
+        inf_y = y_hat[informative_mask]
+        inf_bar = score_review[informative_mask]
+        finite_inf = np.isfinite(inf_y) & np.isfinite(inf_bar)
+        if finite_inf.sum() >= 2:
+            rho_model, null_p = null_spearman_pvalue(
+                inf_y[finite_inf], inf_bar[finite_inf], seed=null_seed
+            )
+
+    l1_single_pass = (
+        rho_model > COHEN_SMALL and null_p < 0.05 and rho_model > rho_pop
+    )
+
+    # diagnostic Top-K on informative (not Go)
+    top10_model = 0.0
+    top20_model = 0.0
+    top10_pop = 0.0
+    top20_pop = 0.0
+    if n_inf >= 2:
+        inf_y = y_hat[informative_mask]
+        inf_bar = score_review[informative_mask]
+        finite_inf = np.isfinite(inf_y) & np.isfinite(inf_bar)
+        iy, ib = inf_y[finite_inf], inf_bar[finite_inf]
+        if iy.size >= 2:
+            top10_model = _top_k_subset_overlap(ib, iy, k_obs=10, k_pred=10)
+            top20_model = _top_k_subset_overlap(ib, iy, k_obs=20, k_pred=20)
+            if pop is not None:
+                ip = pop[informative_mask][finite_inf]
+                top10_pop = _top_k_subset_overlap(ib, ip, k_obs=10, k_pred=10)
+                top20_pop = _top_k_subset_overlap(ib, ip, k_obs=20, k_pred=20)
 
     l3_rho = 0.0
     l3_pass = False
@@ -346,9 +384,8 @@ def evaluate_track_b_v2(
 
     l5_rho = 0.0
     cold_std = 0.0
-    if cold_mask is not None and popularity_scores is not None:
+    if cold_mask is not None and pop is not None:
         cold_mask = np.asarray(cold_mask, dtype=bool).ravel()
-        pop = np.asarray(popularity_scores, dtype=np.float64).ravel()
         cold_y = y_hat[cold_mask]
         cold_pop = pop[cold_mask]
         finite_c = np.isfinite(cold_y) & np.isfinite(cold_pop)
@@ -371,13 +408,25 @@ def evaluate_track_b_v2(
         "l4_dataset_exception": True,
         "warm_top100_overlap": top100,
         "warm_spearman_review": l4_rho,
+        # L1 Go (informative, vs bar)
+        "l1_spearman_model": rho_model,
+        "l1_spearman_pop": rho_pop,
         "null_spearman_p": null_p,
-        "warm_spearman_popularity": pop_rho,
+        "l1_n_informative": n_inf,
         "l1_single_pass": l1_single_pass,
         "l1_pass": False,
+        # legacy all-warm contrast (exp18; not Go)
+        "l1_legacy_spearman_model_all": l4_rho,
+        "l1_legacy_spearman_pop_all": pop_rho_all,
+        "l1_legacy_null_p_all": null_p_all,
+        "warm_spearman_popularity": rho_pop,
         "l2_spearman_informative": l2_rho,
         "l2_pass": l2_pass,
         "l2_spearman_threshold": spearman_threshold,
+        "l1_top10_overlap_model": top10_model,
+        "l1_top20_overlap_model": top20_model,
+        "l1_top10_overlap_pop": top10_pop,
+        "l1_top20_overlap_pop": top20_pop,
         **subset_rhos,
         **subset_ns,
         "l3_spearman_train": l3_rho,
@@ -456,7 +505,7 @@ def build_experiment_report(
         and track_b_eval["l2_pass"]
     )
     return {
-        "experiment": "18_metrics_calibration",
+        "experiment": "19_l1_eval_refine",
         "metrics_version": "L0-L5",
         "data_files": {name: str(path) for name, path in cfg.data_files.items()},
         "mode": cfg.model_mode,
@@ -482,8 +531,15 @@ def build_experiment_report(
         "track_b_eval": track_b_eval,
         "decision": {
             "go": go_single,
-            "go_note": "single-seed; L1 final requires 4/5 popularity wins across seeds",
-            "criterion": "l0_pass and l1_single_pass and l2_pass (informative Spearman >= 0.30)",
+            "go_note": (
+                "single-seed; L1 final requires 4/5 "
+                "l1_spearman_model > l1_spearman_pop on informative"
+            ),
+            "criterion": (
+                "l0_pass and l1_single_pass and l2_pass "
+                "(informative: rho_model>0.10, null p<0.05, rho_model>rho_pop; "
+                "L2 Spearman >= 0.30)"
+            ),
             "l0_pass": track_b_eval["l0_pass"],
             "l1_single_pass": track_b_eval["l1_single_pass"],
             "l1_pass": track_b_eval.get("l1_pass", False),
@@ -505,23 +561,40 @@ if __name__ == "__main__":
     scores = relevance + rng.normal(0, 0.1, n)
     warm = np.zeros(n, dtype=bool)
     warm[:80] = True
+    # force some informative rows (star_norm < 1)
+    star = np.ones(n)
+    star[:40] = rng.uniform(0.0, 0.99, 40)
 
     toy_export = pd.DataFrame(
         {
-            "star_norm_avg": np.where(warm, rng.uniform(0, 1, n), 1.0),
+            "star_norm_avg": star,
             "positive_avg": 0.5,
             "negative_avg": 0.2,
         }
     )
+    pop = relevance + rng.normal(0, 0.2, n)
     m = evaluate_track_b_v2(
-        scores, relevance, warm, train_item_signal=relevance * 0.9, export_df=toy_export
+        scores,
+        relevance,
+        warm,
+        train_item_signal=relevance * 0.9,
+        export_df=toy_export,
+        popularity_scores=pop,
     )
     assert m["coverage"] == 1.0
     assert m["l0_pass"]
+    assert "l1_spearman_model" in m and "l1_spearman_pop" in m
+    assert "l1_legacy_spearman_pop_all" in m
     cmp_m = warm_obs_pred_metrics(scores, relevance, warm)
     assert cmp_m["warm_r2_linear"] >= 0.0
     agg = aggregate_l1_multi_seed(
-        [{"warm_spearman_review": 0.2, "warm_spearman_popularity": 0.1}] * 5
+        [{"l1_spearman_model": 0.2, "l1_spearman_pop": 0.1}] * 5
     )
     assert agg["l1_pass"]
-    print("evaluation ok", m["l2_pass"], m["l3_pass"], cmp_m["warm_mae_linear"])
+    print(
+        "evaluation ok",
+        m["l1_single_pass"],
+        m["l2_pass"],
+        m["l3_pass"],
+        cmp_m["warm_mae_linear"],
+    )

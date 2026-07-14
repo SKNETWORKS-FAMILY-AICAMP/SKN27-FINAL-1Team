@@ -31,12 +31,13 @@
 | **Track B 개선** | **14** | target ablation | subset×bar 분해·H1~H4 |
 | **Track B 개선** | **15** | bar-only (0~2 곱) | 천장 std 2×, ρ +0.05 미달 |
 | **Track B 개선** | **16** | interaction·bar 곱 재학습 | bar·학습 정합 |
-| **Track B v2 (현재)** | **17~** | 콜드스타트 Base Score | full train, `product_02_row` |
+| **Track B v2** | **17~** | 콜드스타트 Base Score | full train, `product_02_row` |
 | **Track B v2** | **18** | **L0~L5 지표 재정의** | Go = L0+L1+L2; §[METRICS.md](METRICS.md) |
+| **Track B v2 (현재)** | **19** | **L1 평가 보완** | informative + ρ(pop,bar); **Go 통과** |
 
 - **ablation·채택 근거** → §실험 1~11  
 - **왜 Go 기준이 바뀌었는지** → §실험 12 → §실험 13 순  
-- **지금 무엇을 구현할지** → §실험 18 · [METRICS.md](METRICS.md) · README §1.5
+- **지표·Go 현황** → §실험 19 · [METRICS.md](METRICS.md) · README §1.5
 
 ---
 
@@ -49,16 +50,16 @@
 - **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
-### 1.2 현재 진행 상황 (실험 18 calibration 완료)
+### 1.2 현재 진행 상황 (실험 19 Go 통과)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` |
-| **Track B v2** | **L0~L5 평가** | `evaluation.py` v2, [METRICS.md](METRICS.md) |
-| **Go (5-seed)** | **L0·L2 통과, L1 미달** | L2 informative ρ≈0.55; L1 popularity 0/5 wins |
-| 베이스라인 | seed 42 | `experiment: 18_metrics_calibration` |
+| **Track B v2** | **L0~L5 평가** | `evaluation.py`, [METRICS.md](METRICS.md) |
+| **Go (5-seed)** | **통과** | L0·L1·L2 5/5; ρ_model≈0.55~0.60 > ρ_pop≈0.38 |
+| 베이스라인 | seed 42 | `experiment: 19_l1_eval_refine` |
 
-상세 → **[experiments.md §실험 18](experiments.md)**.
+상세 → **[experiments.md §실험 19](experiments.md)** (용어·공정 순위 평가·다음 실험 20).
 
 ### 1.4 Track A vs Track B
 
@@ -66,12 +67,12 @@
 |---|---------------|-------------------|
 | 과제 | user–item CF hold-out | **전 카탈로그 item 점수** |
 | item | ~563 | **~3,100** |
-| Go | L0 충족; L1/L2 보류 | **L0+L1+L2** (§1.5) |
+| Go | L0 충족; L1/L2 보류 | **L0+L1+L2** (§1.5) **통과** |
 | 노트북 | `item_ids` = review만 | **13b**에서 전체 fit 예정 |
 
-### 1.5 Track B 목표 (L0~L5, 실험 18)
+### 1.5 Track B 목표 (L0~L5, 실험 19)
 
-**상세 근거:** [METRICS.md](METRICS.md) — Spearman 0.30 (Cohen Medium), baseline 비교, DATASET_EXCEPTION.
+**상세 근거·용어:** [METRICS.md](METRICS.md) · [experiments.md §실험 19](experiments.md).
 
 **점수 정의**
 
@@ -91,13 +92,13 @@ go = L0_pass AND L1_pass AND L2_pass
 | 층 | 이름 | 조건 | 역할 |
 |----|------|------|------|
 | **L0** | Operational | coverage=1.0, score_std>1e-6 | 전 item 유한 ŷ |
-| **L1** | Anti-Random | ρ>0.10, null p<0.05; popularity **4/5 seed** 우위 | 랜덤·인기-only 대비 |
+| **L1** | Anti-Random | informative: ρ_model>0.10, null p<0.05; **ρ_model>ρ_pop** **4/5 seed** | 랜덤·인기 대비 |
 | **L2** | Ranking Quality | warm **informative** Spearman **≥ 0.30** | Cohen Medium |
 | L3 | Train Consistency | Spearman(ŷ, train) ≥ 0.30 | 진단 |
 | L4 | Full Warm Spearman | all warm ρ (목표 0.30) | **DATASET_EXCEPTION** — Go 아님 |
 | L5 | Cold Diagnostic | ŷ_cold vs popularity | 진단 |
 
-**Spearman 0.30:** Jacob Cohen 효과 크기 medium — 랜덤을 넘는 **최소 순위 품질**. “Warm Dataset” 문안은 **informative subset**(순위 성립 구간, n≈49)에 적용; 전체 warm 563은 ceiling 혼합으로 L4 예외(§실험 14·18).
+**Spearman 0.30 / L1:** informative (n≈49)에서 L1·L2 공통. ρ_pop = `Spearman(popularity, bar)` (ŷ vs pop 아님). 전체 warm은 L4 예외(§실험 14·18·19).
 
 **구 B0~B3:** B0→L0, B2(informative)→L2, B2(전체)→L4, B3→L3, B1′→L5.
 
@@ -133,6 +134,7 @@ cold는 정답 없음 → **L0 + warm L1/L2**로 간접 검증.
 | **9·10** | target·가중치 확정 (노트북 default 변경 없음) |
 | **17** | 콜드스타트 파이프라인: full train, `product_02_row` default |
 | **18** | L0~L5 평가·[METRICS.md](METRICS.md) |
+| **19** | L1 informative + ρ(pop,bar); Go 통과 |
 
 ---
 
@@ -289,7 +291,7 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 
 ---
 
-## 4. 실험 회차 개요 (1~18)
+## 4. 실험 회차 개요 (1~19)
 
 상세 → **[experiments.md](experiments.md)** 해당 §. **1~12 = Track A(보류) / 13~16 = Track B v1 / 17+ = 콜드스타트**
 
@@ -299,17 +301,25 @@ print(r["track_b_eval"]["l2_spearman_informative"], r["decision"])
 | 11~12 | baseline·평가 분석 | p@5 Go 폐기 | Track A 보류 |
 | 13~16 | Track B v1 export·ablation | B0·B3 통과; B2 미달 | 산출물 폐기 |
 | **17** | **콜드스타트 재정의·정리** | 파이프라인 정리 | full train |
-| **18** | **L0~L5·Cohen 0.30 근거** | **L0·L2 OK; L1 0/5** | 5-seed calibration |
+| **18** | **L0~L5·Cohen 0.30 근거** | L0·L2 OK; L1 0/5 (구 축) | calibration |
+| **19** | **L1 informative·bar 정합** | **Go 통과** (L0·L1·L2 5/5) | 평가만 개정 |
 
 **스냅샷**
 
-- **Go:** `L0 & L1 & L2` — 현재 **L1 병목** (popularity 0/5)
-- **L2:** informative Spearman **≥ 0.30** — 5/5 통과 (ρ≈0.54~0.60)
-- **다음:** L1 튜닝 또는 L1 평가 보완 (§실험 18 해석)
+- **Go:** `L0 & L1 & L2` — **통과** (실험 19). **공정 순위 평가**(동일 informative·bar축·L2 0.30 유지); 임계 완화 아님.
+- **L1:** informative ρ_model > ρ_pop **5/5**; null p=0.001
+- **L2:** informative Spearman **≥ 0.30** — 5/5 (ρ≈0.55~0.60)
+- **다음 (실험 20):** **ceiling / 5점 포화 추정 구간**에서 순위를 어떻게 살릴지 (L4). 서비스/ETL은 병행 가능.
 
 ---
 
 ## 5. 업데이트 및 수정 이력
+
+### 2026-07-14 (실험 19)
+
+- **L1:** informative + `Spearman(popularity, bar)` 정합; 구 `Spearman(ŷ, pop)` 버그 수정.
+- **calibration (5-seed):** L0·L1·L2 통과 → **Go true**. §[experiments.md](experiments.md) 실험 19 — 공정 순위 평가·**다음=ceiling(실험 20)** 명시.
+- **METRICS.md / README:** L1 헌장·스냅샷·해석 범위 갱신.
 
 ### 2026-07-13 (실험 18)
 
