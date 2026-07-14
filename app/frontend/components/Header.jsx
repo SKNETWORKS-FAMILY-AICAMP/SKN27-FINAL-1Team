@@ -20,8 +20,10 @@ function getAuthMode() {
   }
 
   const token = window.localStorage.getItem('bobbeori-token')
-  const mode = window.localStorage.getItem('bobbeori-auth-mode')
-  return token ? 'user' : mode
+  if (!token) {
+    window.localStorage.removeItem('bobbeori-auth-mode')
+  }
+  return token ? 'user' : null
 }
 
 function Header() {
