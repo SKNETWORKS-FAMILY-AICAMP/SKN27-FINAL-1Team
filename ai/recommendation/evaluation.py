@@ -567,6 +567,7 @@ def build_experiment_report(
         "star_weight": cfg.star_weight,
         "sentiment_weight": cfg.sentiment_weight,
         "excluded_recipe_columns": cfg.excluded_recipe_columns,
+        "sample_weight_mode": getattr(cfg, "sample_weight_mode", "none"),
         "seed": cfg.seed,
         "epochs": cfg.epochs,
         "loss": "warp",

@@ -208,16 +208,24 @@ def build_lightfm_ids(
 def build_interactions(
     review_df: pd.DataFrame, dataset: Dataset, cfg: ExperimentConfig
 ):
+    """Return (interactions, review_with_iv, sample_weight|None).
+
+    WARP sees binary positives only unless sample_weight is passed to fit.
+    Do not put interaction_value into sample_weight (exp24: review_n only).
+    """
     review_with_iv = add_interaction_column(review_df, cfg)
-    triples = list(
-        zip(
-            review_with_iv["group_id"].astype(str),
-            review_with_iv["recipe_id"].astype(str),
-            review_with_iv["interaction_value"].astype(float),
+    users = review_with_iv["group_id"].astype(str)
+    items = review_with_iv["recipe_id"].astype(str)
+    mode = getattr(cfg, "sample_weight_mode", "none")
+    if mode == "review_n":
+        review_n = items.map(items.value_counts()).astype(float)
+        interactions, sample_weight = dataset.build_interactions(
+            zip(users, items, review_n)
         )
-    )
-    interactions, _ = dataset.build_interactions(triples)
-    return interactions, review_with_iv
+        return interactions, review_with_iv, sample_weight
+    # pairs only — baseline binary; interaction_value is for bar/export, not WARP
+    interactions, _ = dataset.build_interactions(zip(users, items))
+    return interactions, review_with_iv, None
 
 
 def transform_numeric_feature(col: str, value, log_numeric_columns: set[str]):
@@ -331,4 +339,33 @@ if __name__ == "__main__":
         log_numeric_columns={"view_count", "scrap_count"},
     )
     assert not any(t.startswith("view_count") or t.startswith("scrap_count") for t in feats)
+    # exp24: review_n sample_weight — v=1 → 1, multi-review sum > nnz
+    from lightfm.data import Dataset as _Dataset
+    from types import SimpleNamespace
+
+    rev2 = pd.DataFrame(
+        {
+            "group_id": ["u1", "u2", "u3"],
+            "recipe_id": ["a", "a", "b"],
+            "star": [5, 5, 5],
+            "sentiment": [0.5, 0.5, 0.5],
+            "star_02": [2.0, 2.0, 2.0],
+            "sentiment_02": [1.0, 1.0, 1.0],
+        }
+    )
+    ds = _Dataset()
+    ds.fit(users=["u1", "u2", "u3"], items=["a", "b"])
+    cfg_sw = SimpleNamespace(
+        target_mode="product_02_row",
+        star_weight=1.0,
+        sentiment_weight=1.0,
+        sample_weight_mode="review_n",
+    )
+    inter, _, sw = build_interactions(rev2, ds, cfg_sw)
+    assert sw is not None and float(sw.sum()) > inter.nnz
+    # recipe b has one review → weight 1
+    _, _, item_map, _ = ds.mapping()
+    b_col = item_map["b"]
+    b_weights = sw.tocsc()[:, b_col].data
+    assert len(b_weights) == 1 and float(b_weights[0]) == 1.0
     print("preprocess ok")

@@ -17,6 +17,8 @@ ALLOWED_TARGET_MODES = (
     "product_02_row",
 )
 
+ALLOWED_SAMPLE_WEIGHT_MODES = ("none", "review_n")
+
 CATALOG_USER_ID = "__catalog__"
 
 
@@ -34,6 +36,7 @@ class ExperimentConfig:
     star_weight: float = 1.0
     sentiment_weight: float = 1.0
     model_mode: str = "hybrid"
+    sample_weight_mode: str = "none"
 
 
 def require_docker_runtime() -> None:
@@ -76,6 +79,12 @@ def load_experiment_config(root: Path | None = None) -> ExperimentConfig:
         star_weight = float(os.environ.get("STAR_WEIGHT", "1.0"))
         sentiment_weight = float(os.environ.get("SENTIMENT_WEIGHT", "1.0"))
 
+    sample_weight_mode = os.environ.get("SAMPLE_WEIGHT_MODE", "none")
+    if sample_weight_mode not in ALLOWED_SAMPLE_WEIGHT_MODES:
+        raise ValueError(
+            f"SAMPLE_WEIGHT_MODE must be one of {ALLOWED_SAMPLE_WEIGHT_MODES}"
+        )
+
     return ExperimentConfig(
         project_root=project_root,
         data_dir=data_dir,
@@ -88,6 +97,7 @@ def load_experiment_config(root: Path | None = None) -> ExperimentConfig:
         excluded_recipe_columns=excluded,
         star_weight=star_weight,
         sentiment_weight=sentiment_weight,
+        sample_weight_mode=sample_weight_mode,
     )
 
 
