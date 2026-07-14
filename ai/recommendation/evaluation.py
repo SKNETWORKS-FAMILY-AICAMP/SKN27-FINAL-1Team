@@ -61,7 +61,10 @@ def legacy_review_rank(export_df: pd.DataFrame) -> np.ndarray:
 
 
 def build_warm_subsets(export_df: pd.DataFrame, warm_mask: np.ndarray) -> dict[str, np.ndarray]:
-    """Subset masks on warm rows only (experiment 14 definitions)."""
+    """Subset masks on warm rows only (experiment 14 definitions).
+
+    If export_df has review_n, also emit ceiling_v1 / ceiling_vge2 (exp26).
+    """
     warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
     star_norm = pd.to_numeric(export_df["star_norm_avg"], errors="coerce").fillna(1.0).to_numpy()
     legacy = legacy_review_rank(export_df)
@@ -71,13 +74,27 @@ def build_warm_subsets(export_df: pd.DataFrame, warm_mask: np.ndarray) -> dict[s
     low_tail = warm_mask & (legacy < 1.5)
     informative = star_varies | low_tail
 
-    return {
+    out = {
         "ceiling": ceiling,
         "star_varies": star_varies,
         "low_tail": low_tail,
         "informative": informative,
         "warm": warm_mask,
     }
+    if "review_n" in export_df.columns:
+        review_n = pd.to_numeric(export_df["review_n"], errors="coerce").fillna(0).to_numpy()
+        out["ceiling_v1"] = ceiling & (review_n == 1)
+        out["ceiling_vge2"] = ceiling & (review_n >= 2)
+    return out
+
+
+def recipe_review_counts(review_csv) -> pd.Series:
+    """recipe_id -> review_n from review_by_llm.csv (or DataFrame)."""
+    if isinstance(review_csv, pd.DataFrame):
+        rev = review_csv
+    else:
+        rev = pd.read_csv(review_csv)
+    return rev.groupby(rev["recipe_id"].astype(str)).size().rename("review_n")
 
 
 def popularity_baseline_scores(recipe_df: pd.DataFrame) -> pd.Series:
@@ -359,6 +376,9 @@ def evaluate_track_b_v2(
     l2c_rho = subset_rhos.get("l2_spearman_ceiling", 0.0)
     l2c_pass = l2c_rho >= CEILING_SPEARMAN_GO
     l2c_stretch_pass = l2c_rho >= spearman_threshold
+    # exp26: Cohen-medium stretch on ceiling∩review_n≥2 only (not dual Go)
+    rho_vge2 = subset_rhos.get("l2_spearman_ceiling_vge2", 0.0)
+    l2c_vge2_stretch_pass = rho_vge2 >= spearman_threshold
 
     # L1i Go: informative, Spearman(*, bar)
     rho_model, n_inf = _mask_spearman(y_hat, score_review, informative_mask)
@@ -467,6 +487,8 @@ def evaluate_track_b_v2(
         "l2c_pass": l2c_pass,
         "l2c_spearman_threshold": CEILING_SPEARMAN_GO,
         "l2c_stretch_pass": l2c_stretch_pass,
+        "l2c_vge2_stretch_pass": l2c_vge2_stretch_pass,
+        "l2c_vge2_stretch_threshold": spearman_threshold,
         "l1_top10_overlap_model": top10_model,
         "l1_top20_overlap_model": top20_model,
         "l1_top10_overlap_pop": top10_pop,
@@ -492,6 +514,7 @@ def evaluate_export(
     target_mode: str,
     catalog_user_id: str,
     recipe_df: pd.DataFrame | None = None,
+    review_csv=None,
     seed: int = 42,
 ) -> tuple[dict, pd.DataFrame]:
     warm_mask = export_df["recipe_id"].isin(warm_item_ids).to_numpy()
@@ -502,6 +525,11 @@ def evaluate_export(
     lin_slope, lin_intercept = fit_linear_calibration(y_hat, score_review, warm_mask)
     export_df = export_df.copy()
     export_df["y_hat_linear"] = apply_linear_calibration(y_hat, lin_slope, lin_intercept)
+    if review_csv is not None:
+        counts = recipe_review_counts(review_csv)
+        export_df["review_n"] = (
+            export_df["recipe_id"].astype(str).map(counts).fillna(0).astype(int)
+        )
 
     train_item_signal = np.asarray(train_matrix.sum(axis=0)).ravel().astype(float)
 
@@ -603,6 +631,7 @@ def build_experiment_report(
             "l1c_pass": track_b_eval.get("l1c_pass", False),
             "l2c_pass": track_b_eval.get("l2c_pass", False),
             "l2c_stretch_pass": track_b_eval.get("l2c_stretch_pass", False),
+            "l2c_vge2_stretch_pass": track_b_eval.get("l2c_vge2_stretch_pass", False),
             "l3_pass": track_b_eval["l3_pass"],
             "l4_pass": track_b_eval["l4_pass"],
             "l4_dataset_exception": track_b_eval["l4_dataset_exception"],
@@ -658,6 +687,13 @@ if __name__ == "__main__":
     assert agg_c["l1c_pass"]
     # L2c: rho >= 0.25 passes, below fails
     assert (0.26 >= CEILING_SPEARMAN_GO) and not (0.24 >= CEILING_SPEARMAN_GO)
+    assert "l2c_vge2_stretch_pass" in m
+    toy_export2 = toy_export.copy()
+    toy_export2["review_n"] = np.where(star >= 1.0, 2, 1)
+    m2 = evaluate_track_b_v2(
+        scores, relevance, warm, export_df=toy_export2, popularity_scores=pop
+    )
+    assert "l2_spearman_ceiling_vge2" in m2 and "l2_n_ceiling_vge2" in m2
     print(
         "evaluation ok",
         m["l1_single_pass"],
@@ -666,4 +702,5 @@ if __name__ == "__main__":
         m.get("l2c_pass"),
         m["l3_pass"],
         cmp_m["warm_mae_linear"],
+        m2.get("l2c_vge2_stretch_pass"),
     )

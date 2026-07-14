@@ -2,7 +2,7 @@
 
 **읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류**, 이력 참고) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17+ = 콜드스타트 Base Score** (현재 축).  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
-**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**) · §실험 **25**(v1 feature 예측 **불가** → 제품 해석 이관).
+**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**) · §실험 **25**(v1 feature 예측 **불가** → 제품 해석 이관) · §실험 **26**(v≥2 stretch 0.30 **미달**).
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -3292,3 +3292,59 @@ Base Score(ŷ)의 ceiling·v=1(만점+리뷰1건) 구간은 카탈로그 feature
 ### JSON
 
 `outputs/exp25_v1_diag.json` — 기록 후 삭제.
+
+---
+
+## 실험 26 — 나머지 슬라이스 지표 확인 (stretch v≥2)
+
+**일자:** 2026-07-14  
+**유형:** 확인만 — baseline 5-seed에 ceiling **v1 / v≥2** ρ 공식 기록; 학습·Go 헌장 변경 없음  
+**코드:** [`evaluation.py`](evaluation.py) `review_n` → `ceiling_v1` / `ceiling_vge2` · `l2c_vge2_stretch_pass` (≥0.30)
+
+### 1. 왜
+
+§25로 v1은 품질 목표에서 제외. 남은 확인은 informative·ceiling 바닥 회귀와 **v≥2 Cohen medium(0.30) stretch**.
+
+### 2. 기준
+
+| 슬라이스 | 기준 | 역할 |
+|----------|------|------|
+| informative L2i | ≥0.30 | Go |
+| ceiling L2c | ≥0.25 | Go 바닥 |
+| **ceiling v≥2** | ≥**0.30** | **stretch (이번 판정)** |
+| ceiling v1 | (목표 없음) | §25 재확인 |
+| L1i / L1c | vs pop | 회귀 |
+
+**stretch 달성:** ρ_vge2≥0.30 seed **≥4/5** ∧ mean≥0.30 ∧ L2i 전 seed≥0.30.  
+dual Go / 전체 L2c 5/5는 이번 성공 조건 아님.
+
+### 3. 결과 (`SAMPLE_WEIGHT_MODE=none`)
+
+| seed | L2i ρ | L2c ρ | ρ_vge2 | ρ_v1 | stretch | go_dual |
+|------|-------|-------|--------|------|---------|---------|
+| 42 | **0.360** | **0.264** | 0.261 | 0.043 | ✗ | ✓ |
+| 123 | **0.308** | **0.263** | 0.285 | 0.003 | ✗ | ✓ |
+| 456 | **0.364** | **0.255** | 0.277 | 0.010 | ✗ | ✓ |
+| 789 | **0.391** | **0.263** | 0.290 | 0.024 | ✗ | ✓ |
+| 1024 | **0.396** | 0.230 | 0.291 | 0.008 | ✗ | ✗ (L2c) |
+
+n: vge2=185, v1=344 (공통).  
+**집계:** L2i **5/5** · L1i/L1c **5/5** · L2c 4/5 · stretch **0/5** · mean ρ_vge2≈**0.281** · mean ρ_v1≈0.018.
+
+### 4. 판정
+
+| 항목 | 결과 |
+|------|------|
+| **stretch 0.30** | **미달** — 0/5 seed, mean 0.281 |
+| informative / L1 | 회귀 OK |
+| v1 | ρ≈0 재확인 (§25와 일치) |
+| README | 변경 없음 (달성 시에만) |
+| default 학습 | `none` 유지 |
+
+**다음 후보 (27+):** `SAMPLE_WEIGHT_MODE=review_n`을 **v≥2 게이트**(ρ_vge2≥0.30 4/5 + L2i 유지)로 재평가 — 전체 L2c/v1 Go와 혼합하지 않음.
+
+**한 줄:** 베이스라인 v≥2는 ≈0.28로 Cohen medium에 못 미침 → stretch 미달; 다음이면 weight를 v≥2 전용 게이트로만.
+
+### JSON
+
+`outputs/exp26_s{seed}.json` — 기록 후 삭제.
