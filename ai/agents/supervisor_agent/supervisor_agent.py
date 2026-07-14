@@ -25,6 +25,11 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _normalize_text
 )
 
+def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = None) -> dict:
+    """라우터 결과를 공통 dict 형식으로 반환합니다."""
+    payload = {"intent": intent, "confidence": confidence, "slots": slots or {}}
+    return {"intent": intent, "intent_payload": payload, "slots": payload["slots"]}
+
 def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
     text = state["text"]
@@ -32,48 +37,56 @@ def router_node(state: GraphState) -> dict:
     history = state.get("history", [])
 
     if normalized.startswith(CONFIRM_PREFIX):
-        return {"intent": "action.confirm"}
+        return _route_result("action.confirm")
     if normalized in CANCEL_WORDS:
-        return {"intent": "action.cancel"}
+        return _route_result("action.cancel")
 
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
-            return {"intent": "inventory.pending_add_many"}
+            return _route_result("inventory.pending_add_many")
         if _is_quantity_only_list(text):
-            return {"intent": "inventory.pending_add_many_retry"}
+            return _route_result("inventory.pending_add_many_retry")
     if _pending_add_storage_from_history(history) and _extract_storage(text):
-        return {"intent": "inventory.pending_add_storage"}
+        return _route_result("inventory.pending_add_storage")
     if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
-        return {"intent": "inventory.pending_add"}
+        return _route_result("inventory.pending_add")
     if _pending_consume_from_history(history) and _extract_quantity(text):
-        return {"intent": "inventory.pending_consume"}
+        return _route_result("inventory.pending_consume")
 
     # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
     if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
-        return {"intent": "receipt.guide"}
+        return _route_result("receipt.guide")
 
     # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
     if any(word in normalized for word in ("알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")) and not any(word in normalized for word in ("일정", "캘린더")):
-        return {"intent": "alarm.notification"}
+        return _route_result("alarm.notification")
     if any(word in normalized for word in ("일정", "캘린더")):
-        return {"intent": "alarm.calendar"}
+        return _route_result("alarm.calendar")
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
-        return {"intent": "recipe.pairing"}
+        return _route_result("recipe.pairing")
 
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
-        return {"intent": "inventory.delete"}
+        return _route_result("inventory.delete")
     if any(word in normalized for word in EXPIRING_WORDS):
-        return {"intent": "inventory.expiring"}
+        return _route_result("inventory.expiring")
     if any(word in normalized for word in CONSUME_WORDS):
-        return {"intent": "inventory.action"}
+        return _route_result("inventory.action")
     if any(word in normalized for word in ADD_WORDS):
-        return {"intent": "inventory.action"}
+        return _route_result("inventory.action")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
-        return {"intent": "inventory.list"}
+        return _route_result("inventory.list")
 
-    return {"intent": state["service"]._route_intent_with_llm(text, history)}
+    if hasattr(state["service"], "_route_intent_payload_with_llm"):
+        route_payload = state["service"]._route_intent_payload_with_llm(text, history)
+    else:
+        route_payload = {"intent": state["service"]._route_intent_with_llm(text, history), "slots": {}}
+    return _route_result(
+        route_payload.get("intent", "general"),
+        route_payload.get("confidence", 0.0),
+        route_payload.get("slots", {}),
+    )
 
 
 def _format_calendar_events(data: dict) -> str | None:

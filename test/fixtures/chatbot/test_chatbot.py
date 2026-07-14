@@ -166,6 +166,30 @@ class FakeService:
         return self.intent
 
 
+def test_router_node_keeps_llm_payload_slots() -> None:
+    """LLM fallback 라우팅 결과의 slots를 LangGraph state에 남깁니다."""
+
+    class PayloadService:
+        def _route_intent_payload_with_llm(self, text, history):
+            return {
+                "intent": "recipe.recommend",
+                "confidence": 0.9,
+                "slots": {"ingredient": "두부"},
+            }
+
+    result = router_node({"text": "애매한 추천 질문", "service": PayloadService(), "history": []})
+
+    assert result == {
+        "intent": "recipe.recommend",
+        "intent_payload": {
+            "intent": "recipe.recommend",
+            "confidence": 0.9,
+            "slots": {"ingredient": "두부"},
+        },
+        "slots": {"ingredient": "두부"},
+    }
+
+
 def test_inventory_expiry_does_not_route_to_action() -> None:
     """소비기한 질문은 소비 처리 action으로 빠지 않습니다."""
     state = {"text": "소비기한 임박 재료 알려줘", "service": FakeService("inventory.expiring"), "history": []}
@@ -754,6 +778,51 @@ def test_guide_reply_formats_seasonality(monkeypatch) -> None:
     assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
     assert sources == []
 
+
+
+def test_guide_reply_formats_ingredient_seasonality(monkeypatch) -> None:
+    """식재료별 제철 응답을 월 목록으로 보여줍니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "action": "lookup_seasonality",
+            "data": {
+                "ingredient": {"name": "딸기"},
+                "seasonality": {"months": [1, 2, 3]},
+            },
+            "ui": {"sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("딸기 제철 언제야")
+
+    assert reply == "딸기 제철은 1월, 2월, 3월이에요."
+    assert sources == []
+
+
+def test_guide_reply_formats_intake_tip(monkeypatch) -> None:
+    """섭취 팁 응답을 챗봇 말풍선으로 변환합니다."""
+    def fake_answer(query):
+        assert query == "크림치즈"
+        return {
+            "ok": True,
+            "action": "lookup_intake",
+            "data": {
+                "ingredient": {"name": "크림치즈"},
+                "guides": {"intake": {"status": "available", "content": "빵이나 크래커에 발라 먹으면 좋다."}},
+            },
+            "ui": {"sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    reply, sources = supervisor_service._reply_guide("크림치즈 맛있게 먹는법")
+
+    assert "크림치즈 섭취 팁이에요." in reply
+    assert "빵이나 크래커" in reply
+    assert sources == []
+
 def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
     """규칙으로 잡힌 레시피 추천은 LLM 분류로 넘기지 않습니다."""
     messages = [
@@ -770,7 +839,7 @@ def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
 def test_llm_route_payload_json_parser() -> None:
     """LLM intent 응답을 JSON 객체로 파싱합니다."""
     payload = supervisor_service._parse_llm_route_payload(
-        '{"intent":"recipe.recommend","confidence":0.82,"slots":{"ingredient":"\ub450\ubd80"}}'
+        '{"intent":"recipe.recommend","confidence":0.82,"slots":{"ingredient":"두부"}}'
     )
 
     assert payload == {

@@ -53,7 +53,11 @@ def test_chat_route_table_covers_current_feature_nodes():
 
 
 def test_chat_feature_ab_routes_inventory_and_calendar_requests():
-    assert supervisor_agent.router_node({"text": "두부 1개 샀어", "history": []}) == {"intent": "inventory.action"}
-    assert supervisor_agent.router_node({"text": "내일 캘린더 일정 등록해줘", "history": []}) == {
-        "intent": "alarm.calendar"
-    }
+    """대표 요청이 올바른 에이전트 intent로 라우팅되는지 확인합니다."""
+    inventory_result = supervisor_agent.router_node({"text": "두부 1개 샀어", "history": []})
+    calendar_result = supervisor_agent.router_node({"text": "내일 캘린더 일정 등록해줘", "history": []})
+
+    assert inventory_result["intent"] == "inventory.action"
+    assert inventory_result["intent_payload"]["intent"] == "inventory.action"
+    assert calendar_result["intent"] == "alarm.calendar"
+    assert calendar_result["intent_payload"]["intent"] == "alarm.calendar"
