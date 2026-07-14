@@ -1,10 +1,10 @@
 # LightFM 실험 기록
 
-**읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류 → 다음 설계 축**) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17~26 = 콜드스타트 Base Score (**2026-07-14 지표 동결**)**.  
+**읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류 → 다음 설계 축**) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17~26 = 콜드스타트 Base Score (2026-07-14 지표 동결)**.  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
 **L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**) · §실험 **25**(v1 feature 예측 **불가** → 제품 해석 이관) · §실험 **26**(v≥2 stretch 0.30 **미달**).
 
-**동결 보고서:** [`TRACK_B_STATUS.md`](TRACK_B_STATUS.md) — 채택 설정·슬라이스 신뢰·실측 스냅샷·잠금 규칙.
+**동결 보고서:** `[TRACK_B_STATUS.md](TRACK_B_STATUS.md)` — 채택 설정·슬라이스 신뢰·실측 스냅샷·잠금 규칙.
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -1317,13 +1317,13 @@ LightFM 수치는 **재학습 없이** 실험 10 Phase A `ratio_1_1` p@5 사용.
 ### test set 구조 (seed=42, matrix 821×563)
 
 
-| 항목                    | 값                                            |
-| --------------------- | -------------------------------------------- |
-| interactions (nnz)    | 990                                          |
-| train / test nnz      | 792 / **198**                                |
-| **test에 등장하는 user**   | **179 / 821** (22%)                          |
-| user당 test 정답 수 |R_u| | min 1, max 6, **median 1**, mean **1.11**    |
-| |R_u| 분포              | **1개: 170명**, 2개: 4명, 3개: 3명, 5개: 1명, 6개: 1명 |
+| 항목                  | 값                   |
+| ------------------- | ------------------- |
+| interactions (nnz)  | 990                 |
+| train / test nnz    | 792 / **198**       |
+| **test에 등장하는 user** | **179 / 821** (22%) |
+| user당 test 정답 수     | R_u                 |
+|                     | R_u                 |
 
 
 **함의:** test의 **95% user가 정답 1개** → `recall@5`와 `HR@5`가 거의 동일. MovieLens급 다중 정답 벤치마크와 직접 비교 불가.
@@ -1345,11 +1345,11 @@ LightFM 수치는 **재학습 없이** 실험 10 Phase A `ratio_1_1` p@5 사용.
 **Random (이론 기대값)**
 
 
-| 지표             | 공식                | 값           |
-| -------------- | ----------------- | ----------- |
-| E[precision@5] | mean(|R_u|) / 563 | **0.00196** |
-| E[recall@5]    | 5 / 563           | **0.00888** |
-| E[recall@10]   | 10 / 563          | **0.01776** |
+| 지표             | 공식       | 값           |
+| -------------- | -------- | ----------- |
+| E[precision@5] | mean(    | R_u         |
+| E[recall@5]    | 5 / 563  | **0.00888** |
+| E[recall@10]   | 10 / 563 | **0.01776** |
 
 
 실측(seed=42): p@5 **0.00225**, r@5 **0.01124** (2000 seed 평균 p@5 **0.00199** ± 0.00149, p95 **0.0045**).
@@ -1487,7 +1487,7 @@ LightFM mean     ~0.008  (Mode P, 실험 11)
 **노트북:** `LightFM_Model.ipynb` (Docker nbconvert, Unit 11 추가)  
 **코드:** `evaluation.py` (신규), `recipe_lightfm.csv` (산출물)  
 **입력:** 실험 1~~12 결과,~~ `recipe_fix.csv` ~~3,171 item,~~ `review_by_llm.csv`  
-~~**목적:** Track B 1차 목표 — 전 카탈로그 **추정 리뷰 점수**~~ `ŷ` ~~export 및 B0~~B3 판정
+~~**목적:** Track B 1차 목표 — 전 카탈로그 **추정 리뷰 점수~~** `ŷ` ~~export 및 B0~~B3 판정
 
 ### 실행 설정 (확정 학습 재사용)
 
@@ -3243,6 +3243,8 @@ report `sample_weight_mode=review_n` 확인.
 
 ---
 
+
+
 ## 실험 25 — v1 bar vs catalog feature 예측 가능 진단
 
 **일자:** 2026-07-14  
@@ -3255,34 +3257,44 @@ report `sample_weight_mode=review_n` 확인.
 
 ### 2. 설정
 
-| 항목 | 값 |
-|------|-----|
-| 슬라이스 | ceiling ∩ `review_n=1` (**n=344**) |
-| Y | `review_rank_score` (Bayesian bar) |
-| X | `log1p(view/scrap)`, `others_count`/`basic_count`, one-hot 조리 속성 7종 (빈도&lt;5 → `__other__`) |
-| 제외 | `recipe_name`, `ingredients`, `aliases`, 리뷰/감성 누수 |
-| 모델 | Ridge α=1.0, 열 표준화(train fold), **5-fold OOF** (seed=42) |
-| 판정 | ρ_OOF &lt;0.10 **불가** · 0.10–0.25 약신호 · ≥0.25 가능 |
+
+| 항목   | 값                                                                                        |
+| ---- | ---------------------------------------------------------------------------------------- |
+| 슬라이스 | ceiling ∩ `review_n=1` (**n=344**)                                                       |
+| Y    | `review_rank_score` (Bayesian bar)                                                       |
+| X    | `log1p(view/scrap)`, `others_count`/`basic_count`, one-hot 조리 속성 7종 (빈도<5 → `__other__`) |
+| 제외   | `recipe_name`, `ingredients`, `aliases`, 리뷰/감성 누수                                        |
+| 모델   | Ridge α=1.0, 열 표준화(train fold), **5-fold OOF** (seed=42)                                 |
+| 판정   | ρ_OOF <0.10 **불가** · 0.10–0.25 약신호 · ≥0.25 가능                                            |
+
+
+
 
 ### 3. 결과
 
-| 측정 | 값 | 비고 |
-|------|-----|------|
-| n / n_features | 344 / 72 | bar uniq% 0.831 |
-| **ρ_OOF (pred, bar)** | **0.020** | **주 지표** |
-| ρ_insample (참고) | 0.238 | 과적합; 판정 미사용 |
-| Spearman(ŷ_lightfm, bar) | 0.041 | 현 베이스라인 export |
-| Spearman(pop, bar) | 0.015 | |
-| Spearman(log view, bar) | −0.031 | |
-| Spearman(log scrap, bar) | 0.045 | |
+
+| 측정                       | 값         | 비고              |
+| ------------------------ | --------- | --------------- |
+| n / n_features           | 344 / 72  | bar uniq% 0.831 |
+| **ρ_OOF (pred, bar)**    | **0.020** | **주 지표**        |
+| ρ_insample (참고)          | 0.238     | 과적합; 판정 미사용     |
+| Spearman(ŷ_lightfm, bar) | 0.041     | 현 베이스라인 export  |
+| Spearman(pop, bar)       | 0.015     |                 |
+| Spearman(log view, bar)  | −0.031    |                 |
+| Spearman(log scrap, bar) | 0.045     |                 |
+
+
+
 
 ### 4. 판정
 
-| 항목 | 결과 |
-|------|------|
-| **판정** | **불가 (상한)** — ρ_OOF &lt; 0.10 |
-| 함의 | catalog feature로 v1 품질 bar 순위 **설명 불가** → **모델 ablation 중단** |
-| LightFM/config | 변경 없음 |
+
+| 항목             | 결과                                                           |
+| -------------- | ------------------------------------------------------------ |
+| **판정**         | **불가 (상한)** — ρ_OOF < 0.10                                   |
+| 함의             | catalog feature로 v1 품질 bar 순위 **설명 불가** → **모델 ablation 중단** |
+| LightFM/config | 변경 없음                                                        |
+
 
 **제품·슬라이스 신뢰도 이관 (고정):**  
 Base Score(ŷ)의 ceiling·v=1(만점+리뷰1건) 구간은 카탈로그 feature만으로 리뷰 품질 bar를 재현하기 어렵다. 서비스에서는 informative·v≥2 warm에 더 높은 신뢰, v=1 ceiling은 동점·보조 정렬(인기 등)로 취급하는 해석이 맞다.
@@ -3297,11 +3309,13 @@ Base Score(ŷ)의 ceiling·v=1(만점+리뷰1건) 구간은 카탈로그 feature
 
 ---
 
+
+
 ## 실험 26 — 나머지 슬라이스 지표 확인 (stretch v≥2)
 
 **일자:** 2026-07-14  
 **유형:** 확인만 — baseline 5-seed에 ceiling **v1 / v≥2** ρ 공식 기록; 학습·Go 헌장 변경 없음  
-**코드:** [`evaluation.py`](evaluation.py) `review_n` → `ceiling_v1` / `ceiling_vge2` · `l2c_vge2_stretch_pass` (≥0.30)
+**코드:** `[evaluation.py](evaluation.py)` `review_n` → `ceiling_v1` / `ceiling_vge2` · `l2c_vge2_stretch_pass` (≥0.30)
 
 ### 1. 왜
 
@@ -3309,39 +3323,45 @@ Base Score(ŷ)의 ceiling·v=1(만점+리뷰1건) 구간은 카탈로그 feature
 
 ### 2. 기준
 
-| 슬라이스 | 기준 | 역할 |
-|----------|------|------|
-| informative L2i | ≥0.30 | Go |
-| ceiling L2c | ≥0.25 | Go 바닥 |
+
+| 슬라이스            | 기준        | 역할                  |
+| --------------- | --------- | ------------------- |
+| informative L2i | ≥0.30     | Go                  |
+| ceiling L2c     | ≥0.25     | Go 바닥               |
 | **ceiling v≥2** | ≥**0.30** | **stretch (이번 판정)** |
-| ceiling v1 | (목표 없음) | §25 재확인 |
-| L1i / L1c | vs pop | 회귀 |
+| ceiling v1      | (목표 없음)   | §25 재확인             |
+| L1i / L1c       | vs pop    | 회귀                  |
+
 
 **stretch 달성:** ρ_vge2≥0.30 seed **≥4/5** ∧ mean≥0.30 ∧ L2i 전 seed≥0.30.  
 dual Go / 전체 L2c 5/5는 이번 성공 조건 아님.
 
 ### 3. 결과 (`SAMPLE_WEIGHT_MODE=none`)
 
-| seed | L2i ρ | L2c ρ | ρ_vge2 | ρ_v1 | stretch | go_dual |
-|------|-------|-------|--------|------|---------|---------|
-| 42 | **0.360** | **0.264** | 0.261 | 0.043 | ✗ | ✓ |
-| 123 | **0.308** | **0.263** | 0.285 | 0.003 | ✗ | ✓ |
-| 456 | **0.364** | **0.255** | 0.277 | 0.010 | ✗ | ✓ |
-| 789 | **0.391** | **0.263** | 0.290 | 0.024 | ✗ | ✓ |
-| 1024 | **0.396** | 0.230 | 0.291 | 0.008 | ✗ | ✗ (L2c) |
+
+| seed | L2i ρ     | L2c ρ     | ρ_vge2 | ρ_v1  | stretch | go_dual |
+| ---- | --------- | --------- | ------ | ----- | ------- | ------- |
+| 42   | **0.360** | **0.264** | 0.261  | 0.043 | ✗       | ✓       |
+| 123  | **0.308** | **0.263** | 0.285  | 0.003 | ✗       | ✓       |
+| 456  | **0.364** | **0.255** | 0.277  | 0.010 | ✗       | ✓       |
+| 789  | **0.391** | **0.263** | 0.290  | 0.024 | ✗       | ✓       |
+| 1024 | **0.396** | 0.230     | 0.291  | 0.008 | ✗       | ✗ (L2c) |
+
 
 n: vge2=185, v1=344 (공통).  
 **집계:** L2i **5/5** · L1i/L1c **5/5** · L2c 4/5 · stretch **0/5** · mean ρ_vge2≈**0.281** · mean ρ_v1≈0.018.
 
 ### 4. 판정
 
-| 항목 | 결과 |
-|------|------|
+
+| 항목               | 결과                            |
+| ---------------- | ----------------------------- |
 | **stretch 0.30** | **미달** — 0/5 seed, mean 0.281 |
-| informative / L1 | 회귀 OK |
-| v1 | ρ≈0 재확인 (§25와 일치) |
-| README | 변경 없음 (달성 시에만) |
-| default 학습 | `none` 유지 |
+| informative / L1 | 회귀 OK                         |
+| v1               | ρ≈0 재확인 (§25와 일치)             |
+| README           | 변경 없음 (달성 시에만)                |
+| default 학습       | `none` 유지                     |
+
 
 **다음 후보 (27+):** `SAMPLE_WEIGHT_MODE=review_n`을 **v≥2 게이트**(ρ_vge2≥0.30 4/5 + L2i 유지)로 재평가 — 전체 L2c/v1 Go와 혼합하지 않음.
 
