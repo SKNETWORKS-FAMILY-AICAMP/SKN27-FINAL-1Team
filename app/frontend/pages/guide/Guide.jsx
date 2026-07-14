@@ -8,6 +8,8 @@ import { API_URL } from '../../utils/api.js'
 
 const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 12
+const GUEST_RECOMMENDATION_PAGE_SIZE = 8
+const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
 const GUIDE_RECIPE_VISIBLE_COUNT = 3
 const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
@@ -122,6 +124,16 @@ function buildGuideTips(guide) {
   })
 }
 
+function shouldShowMissingGuideTip(guide, tip) {
+  const major = guide?.major_category || ''
+  const middle = guide?.middle_category || ''
+
+  if (tip.guideType === 'storage' || tip.guideType === 'freshness') return true
+  if (['소스·양념류', '유지류', '음료·당류'].includes(middle)) return false
+  if (tip.guideType === 'washing') return major === '농산물' || major === '수산물'
+  return true
+}
+
 function formatCategory(ingredient) {
   return [ingredient?.major_category, ingredient?.middle_category, ingredient?.minor_category]
     .filter(Boolean)
@@ -129,7 +141,8 @@ function formatCategory(ingredient) {
 }
 
 function formatMonths(months = []) {
-  return months.length ? `${months.join(', ')}월 제철` : '상시 확인'
+  const sortedMonths = [...months].sort((a, b) => Number(a) - Number(b))
+  return sortedMonths.length ? `${sortedMonths.join(', ')}월 제철` : '상시 확인'
 }
 
 function formatCookingTime(minutes) {
@@ -143,6 +156,14 @@ function getGuideIcon(ingredient) {
     ingredient?.representative_name,
     ...(ingredient?.aliases || []),
   )
+}
+
+function getFridgeNameFontSize(name = '') {
+  const length = String(name).replace(/\s/g, '').length
+  if (length > 18) return '10px'
+  if (length > 12) return '12px'
+  if (length > 8) return '14px'
+  return '16px'
 }
 
 function ImageSlot({ src, alt = '', label = '', className = '' }) {
@@ -170,6 +191,7 @@ function Guide() {
   })
   const [page, setPage] = useState(1)
   const [guideItems, setGuideItems] = useState([])
+  const [seasonalGuideItems, setSeasonalGuideItems] = useState([])
   const [totalCount, setTotalCount] = useState(0)
   const [hasNextPage, setHasNextPage] = useState(false)
   const [selectedGuide, setSelectedGuide] = useState(null)
@@ -181,6 +203,9 @@ function Guide() {
   const [isLoggedIn, setIsLoggedIn] = useState(hasLoginToken)
   const [fridgeIngredients, setFridgeIngredients] = useState([])
   const [fridgePage, setFridgePage] = useState(1)
+  const [guestRecommendationPage, setGuestRecommendationPage] = useState(1)
+  const [selectedSeasonalMonth, setSelectedSeasonalMonth] = useState(() => new Date().getMonth() + 1)
+  const [isSeasonalMonthMenuOpen, setIsSeasonalMonthMenuOpen] = useState(false)
   const [isFridgeLoading, setIsFridgeLoading] = useState(false)
   const [fridgeErrorMessage, setFridgeErrorMessage] = useState('')
   const [recipeErrorMessage, setRecipeErrorMessage] = useState('')
@@ -286,7 +311,40 @@ function Guide() {
   }, [page, searchTerm, selectedMajorCategory, selectedMiddleCategory])
 
   useEffect(() => {
+    const controller = new AbortController()
+    async function loadSeasonalRecommendations() {
+      try {
+        const seasonalItems = []
+        for (let nextPage = 1; ; nextPage += 1) {
+          const params = new URLSearchParams({
+            page: String(nextPage),
+            page_size: String(SEASONAL_RECOMMENDATION_SIZE),
+          })
+          const response = await fetch(`${API_URL}/api/v1/guide?${params}`, {
+            headers: getAuthHeaders(),
+            signal: controller.signal,
+          })
+          if (!response.ok) return
+          const data = await response.json()
+          seasonalItems.push(
+            ...(data.items || []).filter((ingredient) => ingredient.seasonal_months?.includes(selectedSeasonalMonth)),
+          )
+          if (!data.has_next) break
+        }
+        setSeasonalGuideItems(seasonalItems)
+        setGuestRecommendationPage(1)
+      } catch (error) {
+        if (error.name !== 'AbortError') setSeasonalGuideItems([])
+      }
+    }
+
+    loadSeasonalRecommendations()
+    return () => controller.abort()
+  }, [selectedSeasonalMonth])
+
+  useEffect(() => {
     setPage(1)
+    setGuestRecommendationPage(1)
   }, [searchTerm, selectedMajorCategory, selectedMiddleCategory])
 
   useEffect(() => {
@@ -399,13 +457,70 @@ function Guide() {
   }, [selectedGuide])
 
   const searchSuggestions = guideItems.slice(0, 6)
+  const currentMonth = selectedSeasonalMonth
+  const seasonalMonthControl = (
+    <div
+      className="guide-seasonal-month-control"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setIsSeasonalMonthMenuOpen(false)
+      }}
+    >
+      <button
+        className="guide-seasonal-month-button"
+        type="button"
+        aria-expanded={isSeasonalMonthMenuOpen}
+        aria-label="제철 식재료 월 선택"
+        onClick={() => setIsSeasonalMonthMenuOpen((isOpen) => !isOpen)}
+      >
+        {currentMonth}월
+        <span aria-hidden="true">⌄</span>
+      </button>
+      {isSeasonalMonthMenuOpen ? (
+        <div className="guide-seasonal-month-menu" role="menu">
+          {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+            <button
+              className={month === selectedSeasonalMonth ? 'is-active' : ''}
+              key={month}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setSelectedSeasonalMonth(month)
+                setIsSeasonalMonthMenuOpen(false)
+              }}
+            >
+              {month}월
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+  const seasonalTotalPages = Math.max(1, Math.ceil(seasonalGuideItems.length / GUEST_RECOMMENDATION_PAGE_SIZE))
+  const seasonalFeaturedIngredients = seasonalGuideItems.slice(
+    (guestRecommendationPage - 1) * GUEST_RECOMMENDATION_PAGE_SIZE,
+    guestRecommendationPage * GUEST_RECOMMENDATION_PAGE_SIZE,
+  )
+  const guestRecommendationItems = seasonalGuideItems
+  const guestTotalPages = Math.max(1, Math.ceil(guestRecommendationItems.length / GUEST_RECOMMENDATION_PAGE_SIZE))
+  const guestSuggestions = guestRecommendationItems.slice(
+    (guestRecommendationPage - 1) * GUEST_RECOMMENDATION_PAGE_SIZE,
+    guestRecommendationPage * GUEST_RECOMMENDATION_PAGE_SIZE,
+  )
   const fridgeTotalPages = Math.max(1, Math.ceil(fridgeIngredients.length / FRIDGE_PAGE_SIZE))
-  const featuredIngredients = isLoggedIn
-    ? fridgeIngredients.slice((fridgePage - 1) * FRIDGE_PAGE_SIZE, fridgePage * FRIDGE_PAGE_SIZE)
-    : searchSuggestions
+  const fridgeFeaturedIngredients = fridgeIngredients.slice(
+    (fridgePage - 1) * FRIDGE_PAGE_SIZE,
+    fridgePage * FRIDGE_PAGE_SIZE,
+  )
+  const featuredTotalPages = isLoggedIn ? fridgeTotalPages : guestTotalPages
+  const canPageFeaturedIngredients = featuredTotalPages > 1
+  const featuredIngredients = isLoggedIn ? fridgeFeaturedIngredients : guestSuggestions
   const totalPages = Math.max(1, Math.ceil(totalCount / GUIDE_PAGE_SIZE))
   const guideTips = useMemo(() => buildGuideTips(selectedGuide), [selectedGuide])
-  const selectedTip = guideTips.find((tip) => tip.title === selectedTipTitle) ?? guideTips[0]
+  const visibleGuideTips = useMemo(
+    () => guideTips.filter((tip) => !tip.isMissing || shouldShowMissingGuideTip(selectedGuide, tip)),
+    [guideTips, selectedGuide],
+  )
+  const selectedTip = visibleGuideTips.find((tip) => tip.title === selectedTipTitle) ?? visibleGuideTips[0]
   const visibleRecommendedRecipes = recommendedRecipes.slice(
     recipeStartIndex,
     recipeStartIndex + GUIDE_RECIPE_VISIBLE_COUNT,
@@ -415,10 +530,14 @@ function Guide() {
   const canShowNextRecipes = recipeStartIndex + GUIDE_RECIPE_VISIBLE_COUNT < recommendedRecipes.length
 
   useEffect(() => {
-    if (!guideTips.some((tip) => tip.title === selectedTipTitle)) {
-      setSelectedTipTitle(guideTips[0].title)
+    setGuestRecommendationPage((current) => Math.min(current, isLoggedIn ? seasonalTotalPages : guestTotalPages))
+  }, [guestTotalPages, isLoggedIn, seasonalTotalPages])
+
+  useEffect(() => {
+    if (!visibleGuideTips.some((tip) => tip.title === selectedTipTitle)) {
+      setSelectedTipTitle(visibleGuideTips[0]?.title ?? TIP_DEFINITIONS[0].title)
     }
-  }, [guideTips, selectedTipTitle])
+  }, [visibleGuideTips, selectedTipTitle])
 
   useEffect(() => {
     setIsSuggestionFormOpen(false)
@@ -468,6 +587,30 @@ function Guide() {
     setSearchTerm(ingredient.name)
     navigate('/guide')
   }
+
+  const renderIngredientButton = (ingredient, { isFridge = false } = {}) => (
+    <button
+      className={`guide-ingredient ${isDetailPage && selectedGuide?.code === ingredient.code ? 'is-active' : ''}`}
+      key={isFridge ? `fridge-${ingredient.id}` : ingredient.code}
+      type="button"
+      onClick={() => (isFridge ? selectFridgeIngredient(ingredient) : selectIngredient(ingredient))}
+    >
+      <ImageSlot
+        alt=""
+        className="guide-ingredient__image"
+        label={ingredient.name}
+        src={getGuideIcon(ingredient)}
+      />
+      <span
+        className={`guide-ingredient__name ${
+          String(ingredient.name || '').replace(/\s/g, '').length <= 5 ? 'is-short' : ''
+        }`}
+        style={{ '--guide-ingredient-name-size': getFridgeNameFontSize(ingredient.name) }}
+      >
+        {ingredient.name}
+      </span>
+    </button>
+  )
 
   const goToPage = (nextPage) => {
     const normalizedPage = Math.min(Math.max(Number(nextPage) || 1, 1), totalPages)
@@ -579,25 +722,37 @@ function Guide() {
 
       {errorMessage ? <p className="guide-error">{errorMessage}</p> : null}
 
-      <section className="guide-panel guide-ingredients" aria-labelledby="guide-ingredients-title">
-        <div className="guide-ingredients__header">
-          <div className="guide-section-title" id="guide-ingredients-title">
-            {isLoggedIn ? '내 냉장고 재료' : '추천 식재료'}
+      <section
+        className={`guide-panel guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}`}
+        aria-labelledby="guide-ingredients-title"
+      >
+          <div className="guide-ingredients__header">
+            <div className="guide-section-title" id="guide-ingredients-title">
+            {isLoggedIn ? '내 냉장고 재료' : `${currentMonth}월 제철 식재료`}
           </div>
-          {isLoggedIn && fridgeTotalPages > 1 ? (
-            <span className="guide-list-summary" aria-current="page">
-              {fridgeIngredients.length}개 · {fridgePage}/{fridgeTotalPages}
-            </span>
-          ) : null}
+          <div className="guide-ingredients__actions">
+            {!isLoggedIn ? seasonalMonthControl : null}
+            {canPageFeaturedIngredients ? (
+              <span className="guide-list-summary" aria-current="page">
+              {isLoggedIn
+                ? `${fridgeIngredients.length}개 · ${fridgePage}/${fridgeTotalPages}`
+                : `${guestRecommendationPage}/${guestTotalPages}`}
+              </span>
+            ) : null}
+          </div>
         </div>
         <div className="guide-fridge-pager">
-          {isLoggedIn && fridgeTotalPages > 1 ? (
+          {canPageFeaturedIngredients ? (
             <button
               className="guide-fridge-page-button is-previous"
               type="button"
-              aria-label="이전 냉장고 재료 페이지"
-              disabled={fridgePage <= 1}
-              onClick={() => setFridgePage((current) => Math.max(1, current - 1))}
+              aria-label={isLoggedIn ? '이전 냉장고 재료 페이지' : '이전 제철 식재료 페이지'}
+              disabled={isLoggedIn ? fridgePage <= 1 : guestRecommendationPage <= 1}
+              onClick={() =>
+                isLoggedIn
+                  ? setFridgePage((current) => Math.max(1, current - 1))
+                  : setGuestRecommendationPage((current) => Math.max(1, current - 1))
+              }
             >
               ‹
             </button>
@@ -606,24 +761,7 @@ function Guide() {
             className="guide-ingredient-list"
             aria-label={isLoggedIn ? '내 냉장고 재료 목록' : '추천 식재료 목록'}
           >
-          {featuredIngredients.map((ingredient) => (
-            <button
-              className={`guide-ingredient ${
-                isDetailPage && selectedGuide?.code === ingredient.code ? 'is-active' : ''
-              }`}
-              key={isLoggedIn ? `fridge-${ingredient.id}` : ingredient.code}
-              type="button"
-              onClick={() => (isLoggedIn ? selectFridgeIngredient(ingredient) : selectIngredient(ingredient))}
-            >
-              <ImageSlot
-                alt=""
-                className="guide-ingredient__image"
-                label={ingredient.name}
-                src={getGuideIcon(ingredient)}
-              />
-              <span>{ingredient.name}</span>
-            </button>
-          ))}
+          {featuredIngredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge: isLoggedIn }))}
           {isLoggedIn && isFridgeLoading ? <p className="guide-empty">냉장고 재료를 불러오는 중입니다.</p> : null}
           {isLoggedIn && !isFridgeLoading && fridgeErrorMessage ? (
             <p className="guide-empty">{fridgeErrorMessage}</p>
@@ -634,23 +772,75 @@ function Guide() {
               <span>냉장고 재료를 등록해주세요.</span>
             </div>
           ) : null}
-          {!isLoggedIn && !isListLoading && searchSuggestions.length === 0 ? (
-            <p className="guide-empty">추천할 식재료가 없습니다.</p>
+          {!isLoggedIn && !isListLoading && guestSuggestions.length === 0 ? (
+            <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
           ) : null}
           </div>
-          {isLoggedIn && fridgeTotalPages > 1 ? (
+          {canPageFeaturedIngredients ? (
             <button
               className="guide-fridge-page-button is-next"
               type="button"
-              aria-label="다음 냉장고 재료 페이지"
-              disabled={fridgePage >= fridgeTotalPages}
-              onClick={() => setFridgePage((current) => Math.min(fridgeTotalPages, current + 1))}
+              aria-label={isLoggedIn ? '다음 냉장고 재료 페이지' : '다음 제철 식재료 페이지'}
+              disabled={isLoggedIn ? fridgePage >= fridgeTotalPages : guestRecommendationPage >= guestTotalPages}
+              onClick={() =>
+                isLoggedIn
+                  ? setFridgePage((current) => Math.min(fridgeTotalPages, current + 1))
+                  : setGuestRecommendationPage((current) => Math.min(guestTotalPages, current + 1))
+              }
             >
               ›
             </button>
           ) : null}
         </div>
       </section>
+
+      {isLoggedIn ? (
+        <section className="guide-panel guide-ingredients guide-ingredients--seasonal" aria-labelledby="guide-seasonal-title">
+          <div className="guide-ingredients__header">
+            <div className="guide-section-title" id="guide-seasonal-title">
+              {currentMonth}월 제철 식재료
+            </div>
+            <div className="guide-ingredients__actions">
+              {seasonalMonthControl}
+              {seasonalTotalPages > 1 ? (
+                <span className="guide-list-summary" aria-current="page">
+                  {guestRecommendationPage}/{seasonalTotalPages}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="guide-fridge-pager">
+            {seasonalTotalPages > 1 ? (
+              <button
+                className="guide-fridge-page-button is-previous"
+                type="button"
+                aria-label="이전 제철 식재료 페이지"
+                disabled={guestRecommendationPage <= 1}
+                onClick={() => setGuestRecommendationPage((current) => Math.max(1, current - 1))}
+              >
+                ‹
+              </button>
+            ) : null}
+            <div className="guide-ingredient-list" aria-label="제철 식재료 목록">
+              {seasonalFeaturedIngredients.map((ingredient) => renderIngredientButton(ingredient))}
+              {!isListLoading && seasonalFeaturedIngredients.length === 0 ? (
+                <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
+              ) : null}
+            </div>
+            {seasonalTotalPages > 1 ? (
+              <button
+                className="guide-fridge-page-button is-next"
+                type="button"
+                aria-label="다음 제철 식재료 페이지"
+                disabled={guestRecommendationPage >= seasonalTotalPages}
+                onClick={() => setGuestRecommendationPage((current) => Math.min(seasonalTotalPages, current + 1))}
+              >
+                ›
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {!isDetailPage ? (
         <section className="guide-panel guide-all" aria-labelledby="guide-all-title">
@@ -796,8 +986,9 @@ function Guide() {
                     className={`guide-tip-grid ${selectedTip.isMissing ? 'is-missing' : ''}`}
                     role="tablist"
                     aria-label="식재료 가이드 종류"
+                    style={{ gridTemplateColumns: `repeat(${visibleGuideTips.length}, minmax(0, 1fr))` }}
                   >
-                    {guideTips.map((tip) => (
+                    {visibleGuideTips.map((tip) => (
                       <section
                         className={`guide-tip-card ${tip.isMissing ? 'is-missing' : ''} ${
                           selectedTip.title === tip.title ? 'is-active' : ''
@@ -823,7 +1014,7 @@ function Guide() {
                   </div>
                   <div className={`guide-tip-body ${selectedTip.isMissing ? 'is-missing' : ''}`}>
                     <div className="guide-tip-copy-stack">
-                      {guideTips.map((tip) => {
+                      {visibleGuideTips.map((tip) => {
                         const isActive = selectedTip.title === tip.title
                         const suggestionTitleId = `guide-suggestion-title-${tip.guideType}`
                         const isSuggestionAccepted =

@@ -24,6 +24,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     CONFIRM_PREFIX, CANCEL_WORDS,
     _normalize_text
 )
+from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 
 def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = None) -> dict:
     """라우터 결과를 공통 dict 형식으로 반환합니다."""
@@ -62,6 +63,10 @@ def router_node(state: GraphState) -> dict:
         return _route_result("alarm.notification")
     if any(word in normalized for word in ("일정", "캘린더")):
         return _route_result("alarm.calendar")
+    shopping_intent = analyze_shopping_intent(text)
+    if shopping_intent:
+        return _route_result(shopping_intent)
+
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
         return _route_result("recipe.pairing")
@@ -150,6 +155,21 @@ def receipt_guide_node(state: GraphState) -> dict:
         "response_text": "영수증은 파일 업로드가 필요해서 아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요.",
         "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
+
+def shopping_agent_node(state: GraphState) -> dict:
+    """장보기 관리를 Shopping Agent로 위임합니다."""
+    from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
+
+    if not state.get("user_id"):
+        return {"response_text": LOGIN_REQUIRED_REPLY}
+
+    return run_shopping_agent(
+        text=state["text"],
+        intent=state.get("intent", ""),
+        history=state.get("history", []),
+        db=state["db"],
+        user_id=state.get("user_id"),
+    )
 
 def alarm_agent_node(state: GraphState) -> dict:
     """캘린더 및 알림 관리를 Alarm Agent로 위임합니다."""
@@ -256,9 +276,13 @@ def route_intent(state: GraphState) -> str:
     intent = state.get("intent") or "general"
     if intent.startswith("alarm."):
         return "alarm_agent_node"
+    if intent.startswith("shopping."):
+        return "shopping_agent_node"
     if intent.startswith("inventory.") or intent.startswith("action."):
         if intent == "action.confirm":
             parts = state["text"].split(":")
+            if len(parts) >= 2 and parts[1] in SHOPPING_CONFIRM_ACTIONS:
+                return "shopping_agent_node"
             if len(parts) >= 2 and parts[1] not in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
                 return "alarm_agent_node"
         return "inventory_agent_node"
@@ -275,6 +299,7 @@ workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)
 workflow.add_node("inventory_agent_node", inventory_agent_node)
 workflow.add_node("alarm_agent_node", alarm_agent_node)
+workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
 workflow.add_node("recipe_pairing_node", recipe_pairing_node)
@@ -286,6 +311,7 @@ workflow.add_conditional_edges("router", route_intent)
 for node_name in (
     "inventory_agent_node",
     "alarm_agent_node",
+    "shopping_agent_node",
     "guide_agent_node",
     "recipe_agent_node",
     "recipe_pairing_node",

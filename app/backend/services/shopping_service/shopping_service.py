@@ -262,15 +262,31 @@ class ShoppingService:
 
         return None, item.unit or (ingredient.default_unit if ingredient else None)
 
+    def _dedupe_owned_ingredients(self, owned_ingredients: list[dict]) -> list[dict]:
+        deduped: list[dict] = []
+        seen_keys: set[str] = set()
+
+        for item in owned_ingredients:
+            name = str(item.get("name") or "").strip().lower()
+            key = f"name:{name}" if name else f"id:{item.get('ingredient_id')}"
+            if not key or key in seen_keys:
+                continue
+            seen_keys.add(key)
+            deduped.append(item)
+
+        return deduped
+
     def _sync_recipe_list(self, db: Session, user_id: int, shopping_list: ShoppingList) -> dict:
         if shopping_list.source != "recipe" or not shopping_list.recipe_id or shopping_list.status != "active":
             return {"changed": False, "owned_ingredients": []}
 
         recipe_detail = recipe_detail_service.get_recipe_detail(db, shopping_list.recipe_id, user_id)
-        owned_ingredients = [
-            *recipe_detail.get("owned_ingredients", []),
-            *recipe_detail.get("maybe_owned_ingredients", []),
-        ]
+        owned_ingredients = self._dedupe_owned_ingredients(
+            [
+                *recipe_detail.get("owned_ingredients", []),
+                *recipe_detail.get("maybe_owned_ingredients", []),
+            ]
+        )
         missing_ingredients = recipe_detail.get("missing_ingredients", [])
 
         desired_by_key = {
