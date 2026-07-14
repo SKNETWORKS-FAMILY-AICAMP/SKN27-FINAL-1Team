@@ -48,6 +48,12 @@ go = R0 ∧ (R1 on ≥4/5 seeds)
 
 ---
 
+## 실험 30 (이력)
+
+외부 축(감성·참여·user holdout) 평가는 콜드스타트 단계에서 과도하다고 판단, **코드는 별점 헌장으로 복귀**. 수치는 [`experiments.md`](experiments.md) §30 참고.
+
+---
+
 ## 레거시
 
-mean(star_count) Pop · view/scrap Pop — 폐기.
+mean(star_count) Pop · view/scrap Pop · external-recall-vs-pop — 폐기.

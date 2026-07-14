@@ -82,7 +82,7 @@ def aggregate_recommend_multi_seed(seed_means: list[dict]) -> dict:
     return {
         "n_seeds": n,
         "n_wins": wins,
-        "pop_wins": pop_wins,
+        "pop_wins": wins,
         "go": wins >= REC_SEED_WINS_REQUIRED and n >= REC_SEED_WINS_REQUIRED,
         "mean_recall_at_k": _mean("recall_at_k"),
         "mean_recall_at_k_pop": _mean("recall_at_k_pop"),

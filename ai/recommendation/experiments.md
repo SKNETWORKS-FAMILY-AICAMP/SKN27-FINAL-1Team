@@ -1,7 +1,7 @@
 # LightFM 실험 기록
 
 **읽는 법:** §1~26 = **레거시** (Track A·Spearman·bar·감성 곱 — 코드에서 제거, 이력만 보존).  
-**현재 축:** §28~29 — y\*=`n_star5≥2`, 추천 점수=`s_pref`, Go=**R0~R3**.  
+**현재 축:** §28~29 — y\*=`n_star5≥2`, 추천 점수=`s_pref`, Go=**R0~R2** (별점 vs star_pop). §30 외부축 시험은 **이력만** (코드 복귀).  
 헌장: [`METRICS.md`](METRICS.md) · CV: `python evaluation.py` → `outputs/prefer_eval_report.json`.
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
@@ -3466,3 +3466,62 @@ n: vge2=185, v1=344 (공통).
 ### JSON
 
 `outputs/exp29_report.json` (이력) · 재실행 시 `outputs/prefer_eval_report.json`
+
+---
+
+## 실험 30 — 외부 축 평가 헌장 (Phase A+B+C)
+
+**일자:** 2026-07-14  
+**코드:** [`evaluation.py`](evaluation.py) · [`scoring.py`](scoring.py) · [`config.py`](config.py) · [`METRICS.md`](METRICS.md)
+
+### 목적
+
+학습 positive(`n_star5≥2`)와 **독립인** 외부 정답으로 Go를 재정의.
+
+| Phase | 내용 |
+|-------|------|
+| A | catalog 3축: sentiment / engagement / star_diagnostic + 축별 Pop |
+| B | fold-safe eval 라벨 (test 레시피만); `label_leakage_rate_star` |
+| C | user holdout HitRate@20 vs user_pop |
+
+### Go (R0~R3)
+
+```
+go = R0 ∧ R1_primary ∧ R3
+```
+
+- R1: Recall@20(model) > Recall@20(primary_pop) · ≥4/5 seed  
+- R3: HitRate@20(model) > HitRate@20(user_pop) · ≥4/5 seed  
+- star y\*: **진단만**
+
+### 30a calibration
+
+- eng_pop를 scrap으로 두면 y_eng와 **동어반복** (P@20_pop=1.0) → **view_count Bayesian**으로 수정
+- Primary 캘리브: **sentiment** (engagement보다 pop 격차 작음; 둘 다 0/5 wins)
+
+### 30b official (`EVAL_PRIMARY_AXIS=sentiment`)
+
+**판정: No-Go** (R0 ✓ · R1 ✗ 0/5 · R3 ✗ 3/5)
+
+| 축 | Recall@20 model | Recall@20 pop | seed wins |
+|----|-----------------|---------------|-----------|
+| **sentiment (primary)** | **0.180** | **0.203** | **0/5** |
+| engagement (y=scrap, pop=view) | 0.244 | 0.317 | 0/5 |
+| star_diagnostic | 0.234 | 0.152 | **5/5** |
+
+| User holdout | HitRate@20 model | pop | wins |
+|--------------|------------------|-----|------|
+| mean | 0.106 | 0.102 | **3/5** |
+
+- fold-safe: `mean_label_leakage_rate_star=0.0`
+- star 진단은 여전히 model>pop → **학습 축 자기일관성은 유지**, 외부 축에서는 룰 베이스 열세
+- `recipe_lightfm.csv` **미교체**
+
+### 복귀 (2026-07-14)
+
+콜드스타트 단계에서 **외부 축 Go(R0~R3)는 과도**하다고 판단.  
+`evaluation.py`·`METRICS.md`는 **별점 Recall@20 vs star_pop (R0~R2)** 로 되돌림. 위 수치는 **참고 이력**으로만 유지.
+
+### JSON
+
+`outputs/prefer_eval_report.json` (실험 30 당시 `external-recall-vs-pop` 스키마; 복귀 후 재생성 시 `prefer-recall-vs-star-pop`)
