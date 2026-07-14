@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import './RecipeDetail.css'
 
-import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrigerator.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import { createRecipeShoppingList, hasShoppingAuth } from '../../services/shoppingApi.js'
@@ -44,9 +43,9 @@ function IngredientCard({ item, variant, showFridgeHint }) {
 
 function formatCookingTime(minutes) {
   if (minutes == null) {
-    return '조리 시간 확인 필요'
+    return '시간 확인 필요'
   }
-  return `조리 시간 ${minutes}분`
+  return `${minutes}분`
 }
 
 function formatServing(count) {
@@ -81,12 +80,11 @@ function RecipeDetail() {
   const navigate = useNavigate()
   const { recipeId } = useParams()
   const { dialogNode, showAlert } = useAppDialog()
-  const stepsRef = useRef(null)
+  const swipeStartX = useRef(null)
   const [recipe, setRecipe] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isSaved, setIsSaved] = useState(false)
-  const [isCooking, setIsCooking] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [isCooked, setIsCooked] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -173,7 +171,6 @@ function RecipeDetail() {
       setIsLoading(true)
       setError(null)
       setRecipe(null)
-      setIsCooking(false)
       setCurrentStep(0)
       setIsCooked(false)
 
@@ -233,8 +230,6 @@ function RecipeDetail() {
     ...maybeOwnedIngredients.map((item) => ({ ...item, ownershipType: 'maybe' })),
   ]
   const steps = recipe?.steps ?? []
-  const totalIngredients = displayOwnedIngredients.length + missingIngredients.length
-  const checkedCount = displayOwnedIngredients.length
   const isLastStep = steps.length > 0 && currentStep >= steps.length - 1
   const servingLabel = recipe?.serving_count != null ? `${recipe.serving_count}인분 기준` : '1인분 기준'
 
@@ -328,13 +323,13 @@ function RecipeDetail() {
   }
 
   const moveCookingStep = (direction) => {
+    setIsCooked(false)
     setCurrentStep((prev) => Math.max(0, Math.min(prev + direction, steps.length - 1)))
   }
 
   const completeStep = () => {
     if (isLastStep) {
       setIsCooked(true)
-      setIsCooking(false)
       if (recipe?.title) {
         window.localStorage.setItem('bobbeori-last-cooked-recipe', recipe.title)
       }
@@ -342,6 +337,15 @@ function RecipeDetail() {
     }
 
     setCurrentStep((prev) => prev + 1)
+  }
+
+  const handleStepSwipeEnd = (event) => {
+    if (swipeStartX.current == null) return
+    const distance = event.changedTouches[0].clientX - swipeStartX.current
+    swipeStartX.current = null
+    if (Math.abs(distance) < 50) return
+    if (distance < 0 && !isLastStep) moveCookingStep(1)
+    if (distance > 0 && currentStep > 0) moveCookingStep(-1)
   }
 
   if (isLoading) {
@@ -376,53 +380,53 @@ function RecipeDetail() {
       </Link>
 
       <div className="recipe-detail-hero">
-        <div className="recipe-detail-gallery">
-          <div className="recipe-detail-main-image">
-            <ImageSlot src={recipe.main_image_url || imageEatRefrigerator} alt={recipe.title} />
-            <button
-              type="button"
-              aria-label="레시피 저장"
-              aria-pressed={isSaved}
-              onClick={() => setIsSaved((prev) => !prev)}
-            >
-              {isSaved ? '♥' : '♡'}
-            </button>
-          </div>
+        <div className="recipe-detail-main-image">
+          <ImageSlot src={recipe.main_image_url || imageEatRefrigerator} alt={recipe.title} />
+          <button
+            type="button"
+            aria-label={isSaved ? '저장한 레시피' : '레시피 저장'}
+            aria-pressed={isSaved}
+            disabled={isSaved || isSaving}
+            onClick={handleSaveRecipe}
+          >
+            {isSaved ? '♥' : '♡'}
+          </button>
         </div>
 
         <div className="recipe-detail-summary">
+          <p className="recipe-detail-eyebrow">{recipe.category || '오늘의 레시피'}</p>
           <h1 id="recipe-detail-title">{recipe.title}</h1>
           <p>{buildDescription(recipe)}</p>
-          <button
-            className="recipe-detail-video-button"
-            type="button"
-            disabled={isSaving}
-            onClick={handleSaveRecipe}
-          >
-            레시피 저장하기
-          </button>
 
           <div className="recipe-detail-meta" aria-label="레시피 정보">
-            <span>{formatCookingTime(recipe.cooking_time_min)}</span>
-            <span>{formatServing(recipe.serving_count)}</span>
-            <span>{formatDifficulty(recipe.difficulty)}</span>
-            <span>재료 확인 {checkedCount}/{totalIngredients}</span>
+            <span><b aria-hidden="true">◷</b>{formatCookingTime(recipe.cooking_time_min)}</span>
+            <span><b aria-hidden="true">♙</b>{formatServing(recipe.serving_count)}</span>
+            <span><b aria-hidden="true">▥</b>{formatDifficulty(recipe.difficulty)}</span>
           </div>
+
+          <button
+            className="recipe-detail-save-button"
+            type="button"
+            disabled={isSaved || isSaving}
+            onClick={handleSaveRecipe}
+          >
+            <span aria-hidden="true">{isSaved ? '♥' : '♡'}</span>
+            {isSaving ? '저장 중...' : isSaved ? '저장한 레시피' : '레시피 저장하기'}
+          </button>
         </div>
       </div>
 
-      <div className="recipe-detail-grid">
-        <section className="recipe-detail-panel recipe-detail-ingredients" aria-labelledby="ingredients-title">
-          <div className="recipe-detail-panel__title">
-            <h2 id="ingredients-title">필요 재료</h2>
-            <span>{servingLabel}</span>
-          </div>
+      <div className="recipe-detail-content">
+        <aside className="recipe-detail-sidebar recipe-detail-sidebar--left">
+          <section className="recipe-detail-panel recipe-detail-ingredients" aria-labelledby="owned-ingredients-title">
+            <div className="recipe-detail-panel__title">
+              <h2 id="owned-ingredients-title"><span className="recipe-detail-title-icon is-owned" aria-hidden="true">✓</span>보유 재료</h2>
+              <span>{displayOwnedIngredients.length}개</span>
+            </div>
 
-          <div className="recipe-detail-ingredient-group">
-            <h3>보유 재료 ({displayOwnedIngredients.length})</h3>
             <div className="recipe-detail-ingredient-list">
               {displayOwnedIngredients.length === 0 ? (
-                <p className="recipe-detail-empty-note">보유 재료가 없어요. 로그인 후 냉장고를 등록하면 확인할 수 있어요.</p>
+                <p className="recipe-detail-empty-note">로그인 후 냉장고 재료를 등록하면 보유 여부를 확인할 수 있어요.</p>
               ) : (
                 displayOwnedIngredients.map((item, index) => {
                   const isMaybe = item.ownershipType === 'maybe'
@@ -442,10 +446,14 @@ function RecipeDetail() {
                 })
               )}
             </div>
-          </div>
+          </section>
 
-          <div className="recipe-detail-ingredient-group is-missing">
-            <h3>부족 재료 ({missingIngredients.length})</h3>
+          <section className="recipe-detail-panel recipe-detail-ingredients is-missing" aria-labelledby="missing-ingredients-title">
+            <div className="recipe-detail-panel__title">
+              <h2 id="missing-ingredients-title"><span className="recipe-detail-title-icon is-missing" aria-hidden="true">＋</span>부족 재료</h2>
+              <span>{missingIngredients.length}개</span>
+            </div>
+
             <div className="recipe-detail-ingredient-list">
               {missingIngredients.length === 0 ? (
                 <p className="recipe-detail-empty-note">부족한 재료가 없어요.</p>
@@ -459,101 +467,91 @@ function RecipeDetail() {
                 ))
               )}
             </div>
-          </div>
-        </section>
-
-        <aside className="recipe-detail-panel recipe-detail-shopping" aria-labelledby="shopping-title">
-          <div>
-            <h2 id="shopping-title">부족 재료 장보기</h2>
-            <p>
-              {missingIngredients.length > 0
-                ? `${missingIngredients.length}가지 부족 재료를 한 번에 구매해요.`
-                : '부족한 재료가 없어요.'}
-            </p>
-          </div>
-          <ImageSlot className="recipe-detail-shopping__image" src={iconBasket} />
-          <ul>
-            {missingIngredients.map((item, index) => (
-              <li key={`shop-${item.ingredient_id ?? item.name}-${index}`}>
-                <span>{item.name}{item.amount ? ` (${item.amount})` : ''}</span>
-                <strong>1개</strong>
-              </li>
-            ))}
-          </ul>
-          <button
-            className="recipe-detail-primary"
-            type="button"
-            disabled={missingIngredients.length === 0 || isShoppingCreating}
-            onClick={goShopping}
-          >
-            {isShoppingCreating ? '장보기 생성 중' : '부족 재료 장보기'}
-          </button>
-          <button
-            className="recipe-detail-secondary"
-            type="button"
-            disabled={missingIngredients.length === 0 || isShoppingCreating}
-            onClick={async () => {
-              const shoppingList = await createShoppingList()
-              if (!shoppingList) return
-              await showAlert('부족 재료를 장보기 목록에 담았어요. 장보기 화면에서 구매 링크를 확인할 수 있어요.', {
-                title: '장보기 목록 저장',
-              })
-            }}
-          >
-            장바구니 담기
-          </button>
+            <button
+              className="recipe-detail-ingredient-shopping-button"
+              type="button"
+              disabled={missingIngredients.length === 0 || isShoppingCreating}
+              onClick={goShopping}
+            >
+              {isShoppingCreating ? '장보기 생성 중' : '장보기 바로가기'}
+            </button>
+          </section>
         </aside>
-      </div>
 
-      <section className="recipe-detail-panel recipe-detail-steps" aria-labelledby="steps-title" ref={stepsRef}>
-        <div className="recipe-detail-panel__title">
-          <h2 id="steps-title">{isCooking ? '조리 진행' : '조리 순서 미리보기'}</h2>
-          <span>전체 {steps.length}단계</span>
-        </div>
-        {steps.length === 0 ? (
-          <p className="recipe-detail-empty-note">등록된 조리 순서가 없어요.</p>
-        ) : (
-          <>
-            <article className={`recipe-detail-current-step ${isCooked ? 'is-complete' : ''}`}>
-              <span>{isCooked ? '완료' : `${currentStep + 1}/${steps.length}`}</span>
-              <div>
-                <h3>{isCooked ? '맛있게 완성했어요' : steps[currentStep].title}</h3>
-                <p>{isCooked ? '조리 기록이 저장됐고, 다음 추천으로 이어갈 수 있어요.' : steps[currentStep].text}</p>
-              </div>
-              <div className="recipe-detail-current-step__actions">
-                <button type="button" disabled={currentStep === 0 || isCooked} onClick={() => moveCookingStep(-1)}>
-                  이전
-                </button>
-                <button type="button" disabled={isCooked} onClick={completeStep}>
-                  {isLastStep ? '요리 완료' : '다음 단계'}
-                </button>
-              </div>
-            </article>
-            <div className="recipe-detail-step-list">
-              {steps.map((step, index) => (
-                <article
-                  className={[
-                    index === currentStep && !isCooked ? 'is-active' : '',
-                    index < currentStep || isCooked ? 'is-done' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  key={`${step.title}-${index}`}
-                  onClick={() => {
-                    setCurrentStep(index)
-                    setIsCooking(true)
-                    setIsCooked(false)
-                  }}
-                >
-                  <span>{index + 1}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
-                </article>
-              ))}
+        <section className="recipe-detail-panel recipe-detail-steps" aria-labelledby="steps-title">
+          <div className="recipe-detail-panel__title">
+            <div>
+              <p className="recipe-detail-section-kicker">COOKING GUIDE</p>
+              <h2 id="steps-title">{steps[currentStep]?.title || '조리 단계'}</h2>
             </div>
-          </>
-        )}
-      </section>
+            {steps.length > 0 ? <span className="recipe-detail-step-count">{currentStep + 1} / {steps.length}</span> : null}
+          </div>
+          {steps.length === 0 ? (
+            <p className="recipe-detail-empty-note">등록된 조리 순서가 없어요.</p>
+          ) : (
+            <div className="recipe-detail-slider-wrap">
+              {isCooked ? (
+                <div className="recipe-detail-complete" role="status">
+                  <span aria-hidden="true">✓</span>
+                  <div><strong>맛있게 완성했어요</strong><p>오늘의 요리를 완성했어요.</p></div>
+                </div>
+              ) : null}
+
+              <div
+                className="recipe-detail-slider"
+                aria-live="polite"
+                onTouchStart={(event) => { swipeStartX.current = event.touches[0].clientX }}
+                onTouchEnd={handleStepSwipeEnd}
+              >
+                <article className="recipe-detail-step-slide" key={currentStep}>
+                  <p>{steps[currentStep].text}</p>
+                  {steps[currentStep].image_url ? (
+                    <ImageSlot
+                      className="recipe-detail-step-slide__image"
+                      src={steps[currentStep].image_url}
+                      alt={`${steps[currentStep].title} 조리 과정`}
+                    />
+                  ) : null}
+                </article>
+              </div>
+
+              <div className="recipe-detail-slider-nav">
+                <button
+                  className="recipe-detail-slider-arrow"
+                  type="button"
+                  disabled={currentStep === 0}
+                  onClick={() => moveCookingStep(-1)}
+                >
+                  <span aria-hidden="true">←</span> 이전
+                </button>
+                <div className="recipe-detail-slider-dots" aria-label="조리 단계 선택">
+                  {steps.map((step, index) => (
+                    <button
+                      type="button"
+                      key={`${step.title}-dot-${index}`}
+                      aria-label={`${index + 1}단계 보기`}
+                      aria-current={index === currentStep ? 'step' : undefined}
+                      onClick={() => {
+                        setCurrentStep(index)
+                        setIsCooked(false)
+                      }}
+                    />
+                  ))}
+                </div>
+                <button
+                  className="recipe-detail-slider-arrow is-next"
+                  type="button"
+                  disabled={isCooked}
+                  onClick={completeStep}
+                >
+                  {isCooked ? '완료' : isLastStep ? '요리 완료' : '다음'} <span aria-hidden="true">→</span>
+                </button>
+              </div>
+              <p className="recipe-detail-swipe-hint">화면을 좌우로 밀어 단계를 넘길 수 있어요.</p>
+            </div>
+          )}
+        </section>
+      </div>
 
       {dialogNode}
     </section>

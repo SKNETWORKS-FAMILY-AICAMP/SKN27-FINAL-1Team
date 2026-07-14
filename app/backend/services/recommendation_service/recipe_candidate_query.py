@@ -80,11 +80,13 @@ def _apply_cooking_time_label_filter(query_recipes: Query, label: str | None) ->
     if not normalized_label or normalized_label == "전체":
         return query_recipes
 
-    if normalized_label == "2시간이상":
-        return query_recipes.filter(
-            Recipe.cooking_time.isnot(None),
-            Recipe.cooking_time >= 120,
-        )
+    if normalized_label.endswith("이상"):
+        min_minutes = _parse_time_label_to_minutes(normalized_label)
+        if min_minutes is not None:
+            return query_recipes.filter(
+                Recipe.cooking_time.isnot(None),
+                Recipe.cooking_time >= min_minutes,
+            )
 
     if normalized_label.endswith("이내"):
         max_minutes = _parse_time_label_to_minutes(normalized_label)
