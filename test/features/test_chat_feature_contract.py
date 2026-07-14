@@ -1,9 +1,11 @@
+import json
 from types import SimpleNamespace
 
 import pytest
 
 pytest.importorskip("langchain_openai")
 
+import ai.agents.alarm_agent.alarm_agent as alarm_agent_module
 from ai.agents.supervisor_agent import supervisor_agent
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 
@@ -104,3 +106,57 @@ def test_supervisor_service_invokes_shopping_agent_from_chat():
     assert result["intent"] == "shopping.create"
     assert "장보기 목록을 만들까요" in result["reply"]
     assert result["actions"][0]["data"]["message"] == "확인:shopping_create:두부|양파"
+
+
+def test_alarm_action_payload_survives_supervisor_adapter(monkeypatch):
+    """Alarm Agent의 action payload가 슈퍼바이저 버튼 메시지에 유지되는지 확인합니다."""
+
+    def fake_run(**kwargs):
+        return {
+            "intent": "calendar.create",
+            "message": "등록할까요?",
+            "ui": {
+                "actions": [
+                    {
+                        "label": "등록",
+                        "value": {
+                            "intent": "calendar.create",
+                            "action": "create_event",
+                            "payload": {
+                                "title": "우유",
+                                "date_text": "내일",
+                                "reminder_type": "shopping_reminder",
+                            },
+                        },
+                    }
+                ]
+            },
+        }
+
+    monkeypatch.setattr(alarm_agent_module, "run", fake_run)
+
+    result = supervisor_agent.alarm_agent_node({"text": "내일 우유 사기 알림 등록해줘", "intent": "alarm.notification", "db": SimpleNamespace(), "user_id": 7})
+    message = result["actions"][0]["data"]["message"]
+    action_payload = json.loads(message.split(":", 2)[2])
+
+    assert message.startswith("확인:alarm:")
+    assert action_payload["payload"]["reminder_type"] == "shopping_reminder"
+
+
+def test_alarm_confirm_payload_returns_to_alarm_agent(monkeypatch):
+    """슈퍼바이저 확인 메시지가 Alarm Agent 실행 인자로 복원되는지 확인합니다."""
+    calls = []
+
+    def fake_run(**kwargs):
+        calls.append(kwargs)
+        return {"intent": "calendar.create", "message": "등록했어요.", "ui": {"actions": []}}
+
+    monkeypatch.setattr(alarm_agent_module, "run", fake_run)
+    payload = {"intent": "calendar.create", "action": "create_event", "payload": {"title": "우유", "date_text": "내일", "reminder_type": "shopping_reminder"}}
+
+    supervisor_agent.alarm_agent_node({"text": "확인:alarm:" + json.dumps(payload, ensure_ascii=False), "intent": "action.confirm", "db": SimpleNamespace(), "user_id": 7})
+
+    assert calls[0]["intent"] == "calendar.create"
+    assert calls[0]["action"] == "create_event"
+    assert calls[0]["payload"]["reminder_type"] == "shopping_reminder"
+    assert calls[0]["confirmed"] is True

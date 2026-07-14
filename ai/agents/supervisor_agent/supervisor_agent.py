@@ -1,3 +1,5 @@
+import json
+
 from langgraph.graph import END, StateGraph
 
 from ai.agents.inventory_agent.inventory_utils import (
@@ -189,17 +191,24 @@ def alarm_agent_node(state: GraphState) -> dict:
     alarm_intent = None
     
     if confirmed:
-        parts = text.split(":")
+        parts = text.split(":", 2)
         if len(parts) >= 2:
             action = parts[1]
             # 재고 관련 확인 액션은 Inventory Agent가 처리하므로 여기서 넘기지 않습니다.
             if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
-                pass 
-            elif len(parts) >= 4 and action == "add_calendar_event":
+                pass
+            elif action == "alarm" and len(parts) == 3:
+                # Alarm Agent의 최신 action payload를 손실 없이 다시 전달합니다.
+                alarm_action = json.loads(parts[2])
+                alarm_intent = alarm_action.get("intent")
+                action = alarm_action.get("action")
+                payload = alarm_action.get("payload") or {}
+            elif len(parts) >= 3 and action == "add_calendar_event":
                 # 기존 레거시 포맷: 확인:add_calendar_event:제목:날짜
+                legacy_parts = text.split(":")
                 action = "create_event"
                 alarm_intent = "calendar.create"
-                payload = {"title": parts[2], "date_text": ":".join(parts[3:])}
+                payload = {"title": legacy_parts[2], "date_text": ":".join(legacy_parts[3:])}
             elif len(parts) >= 3 and action == "delete_event":
                 alarm_intent = "calendar.delete"
                 payload = {"event_key": parts[2]}
@@ -207,15 +216,8 @@ def alarm_agent_node(state: GraphState) -> dict:
                 alarm_intent = "calendar.sync_daily"
                 payload = {}
     elif intent == "alarm.notification":
-        # 미확인 알림 필터는 알람 에이전트에 아직 전용 도구가 없어 성공 응답처럼 보이지 않게 막습니다.
-        if any(word in text for word in ('읽지 않은', '안 읽은', '안읽은', '미확인', '미열람')):
-            return {"response_text": "읽지 않은 알림만 따로 조회하는 기능은 아직 준비 중이에요. 현재는 전체 알림 목록 조회만 가능해요."}
-        if any(word in text for word in ('읽음', '읽었')):
-            alarm_intent = "alarm.read"
-        elif any(word in text for word in ('디바이스', '기기', '푸시토큰')) and any(word in text for word in ('등록', '추가', '설정')):
-            alarm_intent = "alarm.register_device"
-        elif any(word in text for word in ('조회', '있어', '확인', '알려')) and not any(word in text for word in ('등록', '추가', '생성', '예약', '설정', '삭제', '지워', '취소', '없애')):
-            alarm_intent = "alarm.list"
+        # 알림 세부 의도는 Alarm Agent의 최신 분석 로직에 맡깁니다.
+        pass
     elif intent == "alarm.calendar" and any(word in text for word in ("조회", "있어", "확인", "알려")):
         # 등록된 일정 조회 문장이 등록 요청으로 오분류되지 않게 조회 의도를 고정합니다.
         alarm_intent = "calendar.list"
@@ -235,36 +237,21 @@ def alarm_agent_node(state: GraphState) -> dict:
     response_text = response_text or res.get("message", "요청을 처리했습니다.")
     actions = []
     
-    # Alarm agent의 ui 형식을 챗봇 규격으로 변환
+    # Alarm Agent의 ui action을 프론트가 보낼 수 있는 message 문자열로 보존합니다.
     ui = res.get("ui", {})
     if ui and "actions" in ui:
         for a in ui["actions"]:
             label = a.get("label", "")
             val = a.get("value", {})
             if isinstance(val, dict):
-                # 프론트엔드가 요구하는 텍스트 문자열 형태로 직렬화
-                # 취소 버튼
                 if val.get("action") == "cancel":
                     actions.append({"label": label, "data": {"message": "취소"}})
-                # 확인 버튼 (create_event)
-                elif val.get("action") == "create_event":
-                    p = val.get("payload", {})
-                    t = p.get("title", "")
-                    d = p.get("date_text", "")
-                    actions.append({"label": label, "data": {"message": f"확인:add_calendar_event:{t}:{d}"}})
-                elif val.get("action") == "delete_event":
-                    p = val.get("payload", {})
-                    event_key = p.get("event_key", "")
-                    actions.append({"label": label, "data": {"message": f"확인:delete_event:{event_key}"}})
-                elif val.get("action") == "sync_daily_events":
-                    actions.append({"label": label, "data": {"message": "확인:sync_daily_events"}})
                 else:
-                    # 기타 알람 액션
-                    a_name = val.get("action", "")
-                    actions.append({"label": label, "data": {"message": f"확인:{a_name}"}})
+                    message = json.dumps(val, ensure_ascii=False, separators=(",", ":"))
+                    actions.append({"label": label, "data": {"message": f"확인:alarm:{message}"}})
             else:
                 actions.append({"label": label, "data": {"message": str(val)}})
-                
+
     result = {"response_text": response_text}
     if actions:
         result["actions"] = actions
