@@ -1,7 +1,7 @@
 .fridge-page {
   width: var(--layout-container);
   margin: 0 auto;
-  padding: 8px 0 72px;
+  padding: 24px 0 72px;
   color: var(--figma-text);
   word-break: keep-all;
 }
@@ -12,7 +12,7 @@
   place-items: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 14px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -29,43 +29,43 @@
 }
 
 .fridge-hero {
-  min-height: 218px;
   display: grid;
-  grid-template-columns: minmax(360px, 0.88fr) minmax(360px, 0.9fr) 260px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   align-items: center;
-  gap: 26px;
+  gap: 32px;
+  padding: 0 0 20px;
 }
 
 .fridge-hero__copy h1 {
   margin: 0;
   color: var(--figma-text);
-  font-size: clamp(38px, 4vw, 52px);
+  font-size: 32px;
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: 0;
 }
 
 .fridge-hero__copy p {
-  margin: 10px 0 0;
+  margin: 7px 0 0;
   color: #5f4635;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.55;
 }
 
 .fridge-search {
   box-sizing: border-box;
-  width: min(100%, 560px);
-  height: 48px;
-  margin-top: 18px;
+  width: 100%;
+  height: 44px;
+  margin: 0;
   padding: 0 16px;
   display: flex;
   align-items: center;
   gap: 10px;
   border: 1.4px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
-  box-shadow: 0 8px 20px rgba(69, 42, 25, 0.06);
+  background: #fff;
+  box-shadow: none;
 }
 
 .fridge-search span {
@@ -107,60 +107,6 @@
   font-weight: 600;
 }
 
-.fridge-hero__actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.fridge-hero-card {
-  box-sizing: border-box;
-  min-height: 132px;
-  padding: 18px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  border: 1.4px solid #f0d7b1;
-  border-radius: 18px;
-  background: rgba(255, 253, 248, 0.82);
-  color: var(--figma-text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-
-.fridge-hero-card--add {
-  border-color: #ffb8bd;
-  background: #fff4f3;
-}
-
-.fridge-hero-card strong {
-  color: var(--figma-text);
-  font-size: 17px;
-  font-weight: 900;
-  line-height: 1.35;
-}
-
-.fridge-hero-card--add strong {
-  color: var(--figma-coral);
-}
-
-.fridge-hero-card p {
-  margin: 8px 0 0;
-  color: #6f4b36;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.45;
-}
-
-.fridge-hero__image {
-  width: 252px;
-  height: 178px;
-  justify-self: end;
-  filter: drop-shadow(0 16px 22px rgba(69, 42, 25, 0.08));
-}
-
 .fridge-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -173,7 +119,7 @@
   box-sizing: border-box;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .fridge-main {
@@ -181,31 +127,46 @@
 }
 
 .fridge-toolbar {
-  min-height: 70px;
-  padding: 14px 16px;
+  min-height: 64px;
+  padding: 10px 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border: 1.4px solid #f0d7b1;
-  border-bottom: 0;
-  border-radius: 16px 16px 0 0;
-  background: rgba(255, 253, 248, 0.82);
+  border: 0;
+  border-bottom: 1px solid #f1d9b3;
+  border-radius: 0;
+  background: transparent;
   box-sizing: border-box;
 }
 
 .fridge-filters {
+  max-width: 100%;
+  padding: 5px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 2px;
+  overflow-x: auto;
+  border-radius: 18px;
+  background: #fff1f4;
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+.fridge-filters::-webkit-scrollbar {
+  display: none;
 }
 
 .fridge-filter {
-  min-height: 38px;
-  padding: 0 17px;
-  border: 1.4px solid #f0d7b1;
-  border-radius: 999px;
-  background: #fffdf8;
+  min-height: 36px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -213,42 +174,40 @@
   font-weight: 900;
 }
 
+.fridge-filter__warning {
+  width: 14px;
+  height: 14px;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: #c93640;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .fridge-filter.is-active {
-  border-color: var(--figma-coral);
-  background: #fff0f1;
-  color: var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(123, 79, 55, 0.1);
 }
 
-.fridge-filter.is-cold {
-  color: #3d7fa7;
-}
-
-.fridge-filter.is-frozen {
-  color: #7167d9;
-}
-
-.fridge-filter.is-soon {
-  color: #d88720;
-}
-
-.fridge-filter.is-expired {
-  color: #e53935;
-  border-color: #ffc5c9;
-}
-
-.fridge-view-controls {
+.fridge-toolbar-controls {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
 }
 
-.fridge-view-controls button {
-  min-height: 38px;
-  padding: 0 13px;
-  border: 1.4px solid #f0d7b1;
-  border-radius: 999px;
-  background: #fffdf8;
+.fridge-toolbar-controls button {
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -256,87 +215,108 @@
   font-weight: 900;
 }
 
-.fridge-view-controls .fridge-view-button {
-  width: 42px;
-  height: 42px;
-  min-height: 42px;
-  padding: 0;
+.fridge-sort {
+  position: relative;
+}
+
+.fridge-sort-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fridge-sort-trigger__arrow {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.fridge-sort-menu {
+  min-width: 174px;
+  padding: 6px;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  border: 1px solid #f2d9dc;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(109, 65, 40, 0.12);
+}
+
+.fridge-toolbar-controls .fridge-sort-option {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 7px;
+  color: #6d4128;
+  text-align: left;
+}
+
+.fridge-toolbar-controls .fridge-sort-option:hover,
+.fridge-toolbar-controls .fridge-sort-option:focus-visible {
+  outline: 0;
+  background: #fff7f8;
+}
+
+.fridge-toolbar-controls .fridge-sort-option.is-active {
+  background: #fff0f1;
+  color: var(--figma-coral);
+}
+
+.fridge-toolbar-controls .fridge-edit-toggle {
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.fridge-edit-toggle::before {
+  width: 13px;
+  height: 13px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: #fffdf8;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  content: '';
+  font-size: 10px;
+  line-height: 1;
 }
 
-.fridge-view-controls .fridge-view-button.is-active {
-  color: var(--figma-coral);
-  border-color: #ffb8bd;
-  background: #fff0f1;
+.fridge-toolbar-controls .fridge-edit-toggle.is-active {
+  background: var(--figma-coral);
+  color: #fff;
 }
 
-.fridge-view-button span {
-  width: 18px;
-  height: 18px;
-  display: block;
-}
-
-.fridge-view-button.is-grid span {
-  background:
-    radial-gradient(circle, currentColor 0 2.5px, transparent 3px) 0 0 / 9px 9px;
-}
-
-.fridge-view-button.is-list span {
-  position: relative;
-  color: currentColor;
-}
-
-.fridge-view-button.is-list span::before {
-  width: 4px;
-  height: 4px;
-  position: absolute;
-  left: 1px;
-  top: 2px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
-  content: "";
-}
-
-.fridge-view-button.is-list span::after {
-  width: 11px;
-  height: 2px;
-  position: absolute;
-  right: 1px;
-  top: 3px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 6px 0 currentColor, 0 12px 0 currentColor;
-  content: "";
+.fridge-edit-toggle.is-active::before {
+  content: '✓';
 }
 
 .fridge-card-grid {
-  padding: 0 16px 16px;
+  margin-top: 20px;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
   gap: 14px;
-  border: 1.4px solid #f0d7b1;
-  border-top: 0;
-  border-radius: 0 0 16px 16px;
-  background: rgba(255, 253, 248, 0.82);
-}
-
-.fridge-card-grid.is-list {
-  grid-template-columns: 1fr;
-}
-
-.fridge-card-grid.is-list .fridge-item {
-  min-height: 132px;
-  grid-template-columns: 92px minmax(0, 1fr);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .fridge-item {
   min-height: 164px;
   padding: 16px 16px 0;
   display: grid;
+  position: relative;
   grid-template-columns: 84px minmax(0, 1fr);
   grid-template-rows: 1fr 42px;
   gap: 8px 14px;
@@ -350,7 +330,7 @@
 
 .fridge-item.is-expired {
   border-color: #ffc5c9;
-  background: #fff8f6;
+  background: #ffeff1;
 }
 
 .fridge-item.is-recent-stocked {
@@ -389,7 +369,7 @@
   white-space: nowrap;
 }
 
-.fridge-item__title span {
+.fridge-storage-badge {
   min-height: 26px;
   padding: 0 10px;
   display: inline-flex;
@@ -530,7 +510,7 @@
   padding: 0 18px;
   border: 1.4px solid #c79a74;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -549,15 +529,11 @@
 
 @media (max-width: 1120px) {
   .fridge-hero {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
-  }
-
-  .fridge-hero__image {
-    display: none;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
   }
 
   .fridge-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -569,25 +545,13 @@
   .fridge-hero {
     min-height: auto;
     padding: 22px 0 4px;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
     align-items: stretch;
     gap: 18px;
   }
 
-  .fridge-hero__copy h1 {
-    font-size: 38px;
-  }
-
-  .fridge-search {
-    width: min(100%, 560px);
-  }
-
-  .fridge-hero__actions {
+  .fridge-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .fridge-hero-card {
-    min-height: 112px;
   }
 
   .fridge-toolbar {
@@ -595,7 +559,7 @@
     flex-direction: row;
   }
 
-  .fridge-view-controls {
+  .fridge-toolbar-controls {
     width: auto;
     justify-content: flex-end;
   }
@@ -631,31 +595,7 @@
   .fridge-search {
     grid-column: 1 / -1;
     height: 44px;
-    margin-top: 4px;
-  }
-
-  .fridge-hero__actions {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .fridge-hero-card {
-    min-height: 82px;
-    padding: 12px;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fridge-hero-card strong {
-    font-size: 15px;
-  }
-
-  .fridge-hero-card p {
-    display: none;
-  }
-
-  .fridge-hero__image {
-    display: none;
+    margin-top: 0;
   }
 
   .fridge-layout {
@@ -673,26 +613,18 @@
   }
 
   .fridge-filters {
-    margin: 0 -14px;
-    padding: 0 14px 2px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .fridge-filters::-webkit-scrollbar {
-    display: none;
+    width: 100%;
+    margin: 0;
   }
 
   .fridge-filter {
-    min-height: 36px;
     padding: 0 15px;
-    flex: 0 0 auto;
     font-size: 12px;
   }
 
-  .fridge-view-controls {
-    display: none;
+  .fridge-toolbar-controls {
+    margin-top: 12px;
+    justify-content: flex-end;
   }
 
   .fridge-card-grid {
@@ -734,7 +666,7 @@
     font-size: 17px;
   }
 
-  .fridge-item__title span {
+  .fridge-storage-badge {
     min-height: 23px;
     padding: 0 8px;
     font-size: 10px;
@@ -820,7 +752,7 @@
   text-align: center;
   border: 1.4px dashed #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 255, 255, 0.6);
   padding: 40px 20px;
 }
 
@@ -880,7 +812,7 @@
 .fridge-modal-content {
   width: 100%;
   max-width: 480px;
-  background: #fffdf8;
+  background: #fff;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(69, 42, 25, 0.15);
@@ -924,7 +856,7 @@
   display: flex;
   gap: 12px;
   padding: 20px 24px;
-  background: #fffaf2;
+  background: #fff;
   border-top: 1px solid #f1d9b3;
 }
 
@@ -979,7 +911,7 @@
   padding: 6px;
   border: 1px solid #e0cdb2;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
   box-shadow: 0 10px 24px rgba(69, 42, 25, 0.12);
 }
 
@@ -1036,7 +968,7 @@
   padding: 12px 14px;
   border: 1px solid #e0cdb2;
   border-radius: 10px;
-  background: #fffdf8;
+  background: #fff;
   font-size: 14px;
   color: var(--figma-text);
   transition: all 0.2s ease;
@@ -1047,7 +979,7 @@
   appearance: none;
   -webkit-appearance: none;
   padding-right: 42px;
-  background-color: #fffdf8;
+  background-color: #fff;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235f3f2a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 16px center;
@@ -1077,68 +1009,57 @@
    ========================================================================== */
 
 .fridge-dday-urgent {
-  min-width: 86px;
-  padding: 4px 8px;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  background: #ffeba6;
+  display: inline;
   color: #9e6b00 !important;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900 !important;
   line-height: 1.1;
   text-shadow: none;
 }
 
 .fridge-dday-expired {
-  min-width: 86px;
-  padding: 4px 8px;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  background: #ffe0e5;
+  display: inline;
   color: #c62828 !important;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900 !important;
   line-height: 1.1;
   text-shadow: none;
 }
 
 .fridge-dday-normal {
-  min-width: 86px;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  display: inline;
   color: var(--figma-text) !important;
   line-height: 1.1;
 }
 
 .fridge-dday-date {
-  display: block;
-  margin-top: -1px;
-  color: #999;
-  font-size: 11px;
+  display: inline;
+  margin: 0;
+  color: #8b673e;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
   text-shadow: none;
   background: transparent;
+  opacity: 0.72;
   padding: 0;
 }
 
 .fridge-dday-wrapper {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
   margin: 0;
   padding: 0;
+}
+
+.fridge-dday-copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .fridge-ai-badge {
@@ -1164,11 +1085,6 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
-}
-
-.fridge-ai-badge.is-bottom-left {
-  margin: 4px 0 0 4px;
-  align-self: flex-start;
 }
 
 /* ==========================================================================
@@ -1256,30 +1172,9 @@
   }
 }
 
-/* 다중 폐기 (Bulk Delete) 스타일 */
-.fridge-edit-toggle {
-  background-color: var(--figma-coral);
-  color: #fff;
-  font-weight: 900;
-  font-size: 13px;
-  padding: 0 16px;
-  min-height: 38px;
-  border-radius: 999px;
-  border: 1.4px solid var(--figma-coral);
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 6px rgba(255, 99, 71, 0.3);
-}
-.fridge-edit-toggle.is-active {
-  background-color: #333;
-  border-color: #333;
-  color: #fff;
-  box-shadow: none;
-}
-
+/* 다중 선택 스타일 */
 .fridge-item.is-selected {
   border: 2px solid var(--figma-coral);
-  background-color: #fffaf2;
 }
 
 .fridge-item__checkbox {
@@ -1303,7 +1198,7 @@
   width: 90%;
   max-width: 600px;
   background: #fff;
-  border-radius: 100px;
+  border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.15);
   padding: 12px 24px;
   z-index: 100;
@@ -1368,31 +1263,4 @@
 /* 편집 모드일 때 개별 액션 버튼 클릭 이벤트 투과 (시각적으로는 원본 유지) */
 .fridge-item__actions.is-edit-mode {
   pointer-events: none;
-}
-
-/* 선택 폐기 버튼을 그림자 없는 일반 버튼 톤으로 맞춥니다. */
-.fridge-edit-toggle {
-  background: #fffdf8 !important;
-  border-color: #f0d7b1 !important;
-  color: #6d4128 !important;
-  box-shadow: none !important;
-}
-
-.fridge-edit-toggle.is-active {
-  background: #fff0f1 !important;
-  border-color: #ffb8bd !important;
-  color: var(--figma-coral) !important;
-}
-/* 상단 액션 카드 두 개의 배경과 테두리 톤을 통일합니다. */
-.fridge-hero-card--add {
-  border-color: #f0d7b1;
-  background: rgba(255, 253, 248, 0.82);
-}
-
-.fridge-hero-card--add strong {
-  color: var(--figma-text);
-}
-/* 실온 보관 필터 색상을 기존 보관 탭 톤에 맞춥니다. */
-.fridge-filter.is-room {
-  color: #a06b2b;
 }

@@ -72,6 +72,7 @@ def test_alarm_agent_date_lookup_stays_calendar_list():
         "\ub0b4\uc77c \uc77c\uc815 \uc788\uc5b4?": "\ub0b4\uc77c",
         "\uc5b4\uc81c \uc77c\uc815 \ubb50\uc600\uc9c0?": "\uc5b4\uc81c",
         "\uc774\ubc88\uc8fc \uc77c\uc815 \uc870\ud68c": "\uc774\ubc88\uc8fc",
+        "\uc800\ubc88\uc8fc \uc77c\uc815 \uc54c\ub824\uc918": "\uc800\ubc88\uc8fc",
         "\ub2e4\uc74c\uc8fc \uc77c\uc815 \ubb50 \uc788\uc5b4?": "\ub2e4\uc74c\uc8fc",
     }
 
@@ -112,6 +113,24 @@ def test_alarm_agent_shopping_schedule_keeps_shopping_title():
     assert result["message"] == "\ub0b4\uc77c \uc7a5\ubcf4\uae30 \uc77c\uc815 \ub4f1\ub85d\ud560\uae4c\uc694?"
     assert result["data"]["payload"]["title"] == "\uc7a5\ubcf4\uae30"
     assert result["data"]["payload"]["reminder_type"] == "calendar_event"
+
+
+def test_alarm_agent_shopping_alarm_keeps_item_title():
+    result = run("\ub0b4\uc77c \uc6b0\uc720 \uc0ac\uae30 \uc54c\ub9bc \ub4f1\ub85d\ud574\uc918")
+
+    assert result["message"] == "\ub0b4\uc77c \uc6b0\uc720 \uad6c\ub9e4 \uc54c\ub9bc \ub4f1\ub85d\ud560\uae4c\uc694?"
+    assert result["data"]["payload"]["title"] == "\uc6b0\uc720"
+    assert result["data"]["payload"]["reminder_type"] == "shopping_reminder"
+
+
+def test_alarm_agent_splits_alarm_list_from_calendar_list():
+    alarm = analyze_intent("\ub4f1\ub85d\ub41c \uc54c\ub9bc \uc788\uc5b4?")
+    calendar = analyze_intent("\uc77c\uc815 \uc870\ud68c\ud574\uc918")
+
+    assert alarm["intent"] == "alarm.list"
+    assert alarm["action"] == "list_notifications"
+    assert calendar["intent"] == "calendar.list"
+    assert calendar["action"] == "list_events"
 
 
 def test_alarm_agent_confirmation_mentions_time_when_present():
@@ -506,6 +525,31 @@ def test_alarm_agent_delete_without_event_key_resolves_candidate_before_confirm(
     assert calls[0][0]["date_text"] == "\ub0b4\uc77c"
 
 
+def test_alarm_agent_delete_without_event_key_resolves_title_only_candidate():
+    def list_tool(payload, context):
+        return {
+            "ok": True,
+            "data": {
+                "events": [
+                    {"eventKey": "calendar-agent-7-work", "dateKey": "2026-07-13", "title": "\uadfc\ub85c \uc77c\uc815"},
+                ]
+            },
+        }
+
+    result = asyncio.run(
+        arun(
+            "\uadfc\ub85c \uc77c\uc815 \uc0ad\uc81c\ud574\uc918",
+            tools={"list_events": list_tool},
+            context={"db": MagicMock(), "user_id": 7},
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["requires_confirmation"] is True
+    assert result["data"]["payload"]["event_key"] == "calendar-agent-7-work"
+    assert result["data"]["payload"]["title"] == "\uadfc\ub85c \uc77c\uc815"
+
+
 def test_alarm_agent_delete_without_candidate_uses_user_message():
     def list_tool(payload, context):
         return {"ok": True, "data": {"events": []}}
@@ -537,8 +581,21 @@ def test_alarm_agent_real_list_tool_calls_calendar_api(monkeypatch):
     )
 
     assert result["ok"] is True
+    assert result["message"] == "\ub0b4\uc77c \ub4f1\ub85d\ub41c \uc77c\uc815\uc774\uc5d0\uc694."
     assert result["data"] == {"events": [{"eventKey": "calendar-agent-7-x"}]}
     list_events.assert_awaited_once()
+
+
+def test_alarm_agent_real_notification_list_message():
+    result = run(
+        "alarm.list",
+        tools=ALARM_AGENT_TOOLS,
+        context={"user_id": 7},
+    )
+
+    assert result["ok"] is True
+    assert result["message"] == "\ub4f1\ub85d\ub41c \uc54c\ub9bc \ubaa9\ub85d\uc774\uc5d0\uc694."
+    assert result["action"] == "list_notifications"
 
 
 def test_alarm_agent_calendar_tools_use_kst_today_for_relative_dates(monkeypatch):
@@ -547,6 +604,9 @@ def test_alarm_agent_calendar_tools_use_kst_today_for_relative_dates(monkeypatch
     assert alarm_tools._target_date("오늘") == date(2026, 7, 13)
     assert alarm_tools._target_date("내일") == date(2026, 7, 14)
     assert alarm_tools._target_range("이번주") == (date(2026, 7, 13), date(2026, 7, 20))
+    assert alarm_tools._target_range("저번주") == (date(2026, 7, 6), date(2026, 7, 13))
+    assert alarm_tools._target_range("지난주") == (date(2026, 7, 6), date(2026, 7, 13))
+    assert alarm_tools._target_range("다음주") == (date(2026, 7, 20), date(2026, 7, 27))
 
 
 def test_alarm_agent_calendar_tools_start_at_uses_delay_minutes(monkeypatch):

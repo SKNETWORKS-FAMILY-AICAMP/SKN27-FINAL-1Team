@@ -181,7 +181,6 @@ export default function IngredientModal({
             <input
               type="text"
               name="name"
-              disabled={!!editingId}
               autoComplete="off"
               autoFocus
               placeholder="예: 양파, 두부, 우유"

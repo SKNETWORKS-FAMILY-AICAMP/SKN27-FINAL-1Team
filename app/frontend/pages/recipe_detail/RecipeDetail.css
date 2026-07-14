@@ -12,7 +12,7 @@
   place-items: center;
   border: 1.4px dashed #f0cfa4;
   border-radius: 14px;
-  background: #fffaf2;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -83,7 +83,7 @@
   right: 16px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 253, 248, 0.94);
+  background: rgba(255, 255, 255, 0.94);
   color: var(--figma-coral);
   cursor: pointer;
   font: inherit;
@@ -144,7 +144,7 @@
   align-items: center;
   border: 1.4px solid #efd8b8;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   font-size: 13px;
   font-weight: 900;
@@ -154,7 +154,7 @@
   box-sizing: border-box;
   border: 1.4px solid #f0d7b1;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .recipe-detail-panel h2 {
@@ -169,7 +169,7 @@
   min-height: 42px;
   border: 1.4px solid #c79a74;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -232,7 +232,7 @@
   justify-content: center;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
   text-align: center;
 }
 
@@ -345,7 +345,7 @@
   justify-content: space-between;
   border: 1px solid #f1d9b3;
   border-radius: 10px;
-  background: #fffdf8;
+  background: #fff;
   color: #3c2a1f;
   font-size: 13px;
   font-weight: 900;
@@ -438,7 +438,7 @@
   padding: 0 14px;
   border: 1.4px solid #e7c894;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
@@ -471,7 +471,7 @@
   gap: 6px 10px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
   cursor: pointer;
 }
 

@@ -1,7 +1,7 @@
 .home-page {
   width: 100%;
   min-height: calc(100vh - 72px);
-  background: #fffaf2;
+  background: #fff;
   color: var(--figma-text);
   word-break: keep-all;
   overflow-x: hidden;
@@ -13,7 +13,7 @@
   box-sizing: border-box;
   border: 1.4px dashed #e7c894;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fff;
   overflow: hidden;
 }
 
@@ -155,7 +155,7 @@
   align-items: center;
   border: 1px solid #f1d9b3;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #8b673e;
   font-size: 13px;
   font-weight: 900;
@@ -192,7 +192,7 @@
 
 .home-button--secondary {
   border: 1.6px solid #ead8c3;
-  background: #fffdf8;
+  background: #fff;
   color: var(--figma-text);
   box-shadow: 0 10px 22px rgba(69, 42, 25, 0.06);
 }
@@ -271,7 +271,7 @@
 .home-preview-card {
   border: 1.4px solid var(--figma-card-stroke);
   border-radius: 14px;
-  background: #fffdf8;
+  background: #fff;
   box-sizing: border-box;
 }
 
@@ -332,7 +332,7 @@
   gap: 16px;
   border-color: #f0d9bc;
   border-radius: 22px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 18px 32px rgba(69, 42, 25, 0.07);
 }
 
@@ -428,7 +428,7 @@
   gap: 34px;
   border: 1.4px solid #f0d9bc;
   border-radius: 22px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(255, 255, 255, 0.9);
   box-sizing: border-box;
   box-shadow: 0 18px 32px rgba(69, 42, 25, 0.07);
 }
@@ -440,7 +440,7 @@
   align-items: center;
   border: 1px solid #ead8c3;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #8b673e;
   font-size: 12px;
   font-style: normal;
@@ -577,7 +577,7 @@
   position: relative;
   z-index: 1;
   border-radius: 8px;
-  background: #fffdf8;
+  background: #fff;
   color: #3c2a1f;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
   transform: rotate(-4deg);
@@ -624,7 +624,7 @@
   padding: 34px;
   border: 1.4px solid #f0d9bc;
   border-radius: 22px;
-  background: rgba(255, 253, 248, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   box-sizing: border-box;
   box-shadow: 0 18px 32px rgba(69, 42, 25, 0.07);
 }
@@ -693,7 +693,7 @@
   padding: 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
-  background: #fffaf2;
+  background: #fff;
   box-sizing: border-box;
 }
 
@@ -840,7 +840,7 @@
   z-index: 2;
   border: 1.4px solid #f0d9bc;
   border-radius: 26px;
-  background: #fffaf2;
+  background: #fff;
   box-shadow: 0 16px 26px rgba(69, 42, 25, 0.08);
 }
 
@@ -970,7 +970,7 @@
   justify-content: center;
   border: 1.4px solid var(--figma-card-stroke);
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: var(--figma-text);
   font-size: 18px;
   font-weight: 900;
@@ -1019,7 +1019,7 @@
   gap: 54px;
   box-sizing: border-box;
   border-block: 1.4px solid var(--figma-card-stroke);
-  background: linear-gradient(90deg, #fffaf2 0%, #f8faf4 100%);
+  background: linear-gradient(90deg, #fff 0%, #f8faf4 100%);
 }
 
 .image-slot--feature {
@@ -1028,7 +1028,7 @@
   justify-self: center;
   padding: 18px;
   border-radius: 28px;
-  background: #fffaf2;
+  background: #fff;
   box-shadow:
     inset 0 0 0 1px rgba(232, 216, 188, 0.82),
     0 18px 34px rgba(69, 42, 25, 0.08);
@@ -1160,7 +1160,7 @@
   padding: 38px 42px;
   border: 1.4px solid #f0d9bc;
   border-radius: 22px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(255, 255, 255, 0.9);
   box-sizing: border-box;
   box-shadow: 0 18px 32px rgba(69, 42, 25, 0.07);
 }
@@ -1206,7 +1206,7 @@
   align-items: center;
   border: 1px solid #ead8c3;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #fff;
   color: #8b673e;
   font-size: 12px;
   font-style: normal;
@@ -1265,7 +1265,7 @@
   list-style: none;
   border: 1px solid #f1d9b3;
   border-radius: 16px;
-  background: #fffaf2;
+  background: #fff;
 }
 
 .home-ai-score li {
@@ -1381,7 +1381,7 @@
   gap: 16px;
   border: 1.4px solid #f0d9bc;
   border-radius: 18px;
-  background: rgba(255, 253, 248, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   box-sizing: border-box;
   box-shadow: 0 18px 32px rgba(69, 42, 25, 0.07);
 }
@@ -1505,7 +1505,7 @@
 .home-faq-item {
   border: 1.4px solid #f0d9bc;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   box-sizing: border-box;
   overflow: hidden;
   box-shadow: 0 14px 26px rgba(69, 42, 25, 0.04);
@@ -1769,7 +1769,7 @@
     overflow: hidden;
     border: 1.2px solid rgba(232, 216, 188, 0.92);
     border-radius: 18px;
-    background: #fffaf2;
+    background: #fff;
     box-shadow:
       0 14px 26px rgba(69, 42, 25, 0.12),
       0 5px 12px rgba(69, 42, 25, 0.06);
@@ -1811,7 +1811,7 @@
     gap: 5px;
     border: 1.2px solid var(--figma-card-stroke);
     border-radius: 12px;
-    background: #fffdf8;
+    background: #fff;
     color: var(--figma-text);
     cursor: pointer;
     font: inherit;
