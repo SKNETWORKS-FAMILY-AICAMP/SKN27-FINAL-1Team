@@ -59,7 +59,7 @@ def router_node(state: GraphState) -> dict:
         return _route_result("receipt.guide")
 
     # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if any(word in normalized for word in ("알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")) and not any(word in normalized for word in ("일정", "캘린더")):
+    if any(word in normalized for word in ("알림", "알람", "리마인더", "디바이스", "푸시토큰", "읽음", "읽었")) and not any(word in normalized for word in ("일정", "캘린더")):
         return _route_result("alarm.notification")
     if any(word in normalized for word in ("일정", "캘린더")):
         return _route_result("alarm.calendar")
