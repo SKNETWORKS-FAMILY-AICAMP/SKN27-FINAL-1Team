@@ -83,6 +83,7 @@ function Callback() {
         if (data.access_token) {
           window.localStorage.setItem('bobbeori-token', data.access_token)
           window.localStorage.setItem('bobbeori-auth-mode', 'user')
+          window.sessionStorage.removeItem('bobbeori-session-expired-alerted')
           window.dispatchEvent(new Event('bobbeori-auth-change'))
           navigate('/')
         } else {
