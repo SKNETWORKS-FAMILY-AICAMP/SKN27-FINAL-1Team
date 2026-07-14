@@ -1356,17 +1356,52 @@
   padding-top: 12px;
 }
 
+.shopping-history-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .shopping-history-card {
   min-height: 92px;
   padding: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   border: 1px solid #f1d9b3;
   border-radius: 12px;
   background: #fffdf8;
   box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.shopping-history-card:hover,
+.shopping-history-card:focus-visible {
+  border-color: #efbf7d;
+  box-shadow: 0 0 0 3px rgba(255, 100, 113, 0.08);
+  outline: none;
+}
+
+.shopping-history-card.is-recent {
+  border-color: var(--figma-coral);
+  background: #fff8f7;
+}
+
+.shopping-history-card.is-selected {
+  border-color: var(--figma-coral-stroke);
+  background: #fff8f7;
+}
+
+.shopping-history-card .shopping-soft-button {
+  cursor: pointer;
+}
+
+.shopping-history-select {
+  flex: 0 0 auto;
 }
 
 .shopping-history-card h3 {
@@ -1409,6 +1444,11 @@
 .shopping-history-status.is-completed {
   background: #e5f4ea;
   color: #2f7a52;
+}
+
+.shopping-history-status.is-recent {
+  background: #ffe8e8;
+  color: var(--figma-coral);
 }
 
 .shopping-actions--recipe {
@@ -1747,10 +1787,12 @@
   }
 
   .shopping-history-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: flex-start;
   }
 
   .shopping-history-card .shopping-soft-button {
+    grid-column: 1 / -1;
     width: 100%;
   }
 

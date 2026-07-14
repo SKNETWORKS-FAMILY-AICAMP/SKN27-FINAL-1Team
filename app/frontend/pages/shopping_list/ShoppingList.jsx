@@ -120,6 +120,35 @@ function resolveOwnedIngredients(shoppingList, storedContext, isFallbackList) {
   return []
 }
 
+function normalizeIngredientName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function getIngredientDisplayKey(item) {
+  const normalizedName = normalizeIngredientName(item?.name)
+  if (normalizedName) {
+    return `name:${normalizedName}`
+  }
+
+  if (item?.ingredient_id != null) {
+    return `id:${item.ingredient_id}`
+  }
+
+  return ''
+}
+
+function dedupeIngredientsForDisplay(items) {
+  const seenKeys = new Set()
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const key = getIngredientDisplayKey(item)
+    if (!key || seenKeys.has(key)) {
+      return false
+    }
+    seenKeys.add(key)
+    return true
+  })
+}
+
 function getRecipeTitle(shoppingList, context) {
   if (context?.recipeId && Number(context.recipeId) === Number(shoppingList?.recipe_id)) {
     return context.recipeTitle
@@ -186,6 +215,33 @@ function getRemainingItemCount(list) {
   return (list.items || []).filter((item) => !item.is_purchased).length
 }
 
+function getShoppingHistoryGroupKey(list) {
+  if (list?.recipe_id != null) {
+    return `recipe:${list.recipe_id}`
+  }
+
+  if (list?.source === 'recipe' && list?.recipe_title) {
+    return `recipe-title:${list.recipe_title.trim()}`
+  }
+
+  return `list:${list?.id ?? list?.created_at ?? 'unknown'}`
+}
+
+function mergeRecentWithHistory(recentList, historyLists) {
+  const normalizedHistory = Array.isArray(historyLists) ? historyLists : []
+  const mergedLists = recentList ? [recentList, ...normalizedHistory] : normalizedHistory
+  const seenKeys = new Set()
+
+  return mergedLists.filter((list) => {
+    const groupKey = getShoppingHistoryGroupKey(list)
+    if (seenKeys.has(groupKey)) {
+      return false
+    }
+    seenKeys.add(groupKey)
+    return true
+  })
+}
+
 function ShoppingStart({ isLoggedIn, recentList, historyCount, notice, onContinue, onHistoryBrowse, onRecipeBrowse, onLogin }) {
   return (
     <section className="shopping-page shopping-page--start" aria-labelledby="shopping-title">
@@ -249,14 +305,56 @@ function ShoppingStart({ isLoggedIn, recentList, historyCount, notice, onContinu
   )
 }
 
-function ShoppingHistory({ lists, onOpenList, onBackToStart }) {
+function ShoppingHistory({ lists, recentListId, isDeleting, onOpenList, onDeleteSelected, onBackToStart }) {
+  const [selectedListIds, setSelectedListIds] = useState([])
+  const selectedCount = selectedListIds.length
+  const allSelected = lists.length > 0 && selectedCount === lists.length
+
+  useEffect(() => {
+    const validIds = new Set(lists.map((list) => Number(list.id)))
+    setSelectedListIds((prev) => prev.filter((id) => validIds.has(Number(id))))
+  }, [lists])
+
+  const toggleHistorySelect = (listId) => {
+    const normalizedId = Number(listId)
+    setSelectedListIds((prev) => (
+      prev.some((id) => Number(id) === normalizedId)
+        ? prev.filter((id) => Number(id) !== normalizedId)
+        : [...prev, listId]
+    ))
+  }
+
+  const toggleAllHistory = () => {
+    setSelectedListIds(allSelected ? [] : lists.map((list) => list.id))
+  }
+
+  const handleHistoryCardKeyDown = (event, listId) => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return
+    }
+
+    event.preventDefault()
+    toggleHistorySelect(listId)
+  }
+
+  const deleteSelectedHistory = async () => {
+    if (selectedCount === 0) {
+      return
+    }
+
+    const deleted = await onDeleteSelected(selectedListIds)
+    if (deleted) {
+      setSelectedListIds([])
+    }
+  }
+
   return (
     <section className="shopping-page shopping-page--history" aria-labelledby="shopping-history-title">
       <div className="shopping-hero shopping-hero--compact">
         <div className="shopping-hero__copy">
           <span className="shopping-eyebrow">장보기 기록</span>
           <h1 id="shopping-history-title">지난 장보기 내역</h1>
-          <p>최근 장바구니 이전에 만들었던 장보기 목록을 확인해요.</p>
+          <p>최근 장바구니와 이전에 만들었던 장보기 목록을 함께 확인해요.</p>
         </div>
         <div className="shopping-hero__art" aria-hidden="true">
           <img src={imageShop} alt="" />
@@ -269,9 +367,17 @@ function ShoppingHistory({ lists, onOpenList, onBackToStart }) {
             <h2>내역 목록</h2>
             <span className="shopping-count-badge">{lists.length}개</span>
           </div>
-          <button className="shopping-soft-button" type="button" onClick={onBackToStart}>
-            장보기 홈
-          </button>
+          <div className="shopping-history-toolbar-actions">
+            <button className="shopping-soft-button" type="button" onClick={toggleAllHistory} disabled={isDeleting || lists.length === 0}>
+              {allSelected ? '전체 해제' : '전체 선택'}
+            </button>
+            <button className="shopping-delete-list-button" type="button" onClick={deleteSelectedHistory} disabled={isDeleting || selectedCount === 0}>
+              선택 {selectedCount}개 삭제
+            </button>
+            <button className="shopping-soft-button" type="button" onClick={onBackToStart}>
+              장보기 홈
+            </button>
+          </div>
         </div>
 
         {lists.length === 0 ? (
@@ -281,12 +387,26 @@ function ShoppingHistory({ lists, onOpenList, onBackToStart }) {
             {lists.map((list) => {
               const remainingCount = getRemainingItemCount(list)
               const itemPreview = (list.items || []).slice(0, 4).map((item) => item.name).join(', ')
+              const isRecentShopping = recentListId != null && Number(list.id) === Number(recentListId)
+              const isSelected = selectedListIds.some((id) => Number(id) === Number(list.id))
 
               return (
-                <article className="shopping-history-card" key={list.id}>
+                <article
+                  className={`shopping-history-card ${isRecentShopping ? 'is-recent' : ''} ${isSelected ? 'is-selected' : ''}`}
+                  key={list.id}
+                  role="checkbox"
+                  aria-checked={isSelected}
+                  tabIndex={0}
+                  onClick={() => toggleHistorySelect(list.id)}
+                  onKeyDown={(event) => handleHistoryCardKeyDown(event, list.id)}
+                >
+                  <span
+                    className={`shopping-check shopping-history-select ${isSelected ? 'is-checked' : ''}`}
+                    aria-hidden="true"
+                  />
                   <div>
-                    <span className={`shopping-history-status ${list.status === 'completed' ? 'is-completed' : ''}`}>
-                      {getShoppingStatusLabel(list)}
+                    <span className={`shopping-history-status ${list.status === 'completed' ? 'is-completed' : ''} ${isRecentShopping ? 'is-recent' : ''}`}>
+                      {isRecentShopping ? '최근 장바구니' : getShoppingStatusLabel(list)}
                     </span>
                     <h3>{getShoppingListTitle(list)}</h3>
                     <p>{itemPreview || '재료 정보 없음'}</p>
@@ -294,7 +414,14 @@ function ShoppingHistory({ lists, onOpenList, onBackToStart }) {
                       {formatCreatedAt(list.created_at)} · 남은 재료 {remainingCount}개 · 전체 {(list.items || []).length}개
                     </small>
                   </div>
-                  <button className="shopping-soft-button" type="button" onClick={() => onOpenList(list.id)}>
+                  <button
+                    className="shopping-soft-button"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onOpenList(list.id)
+                    }}
+                  >
                     상세 보기
                   </button>
                 </article>
@@ -328,14 +455,14 @@ function ShoppingList() {
   const items = shoppingList?.items ?? []
   const isFallbackList = Boolean(shoppingList?.isFallback)
   const selectedItems = items.filter((item) => item.is_checked && !item.is_purchased)
-  const ownedItems = resolveOwnedIngredients(shoppingList, storedContext, isFallbackList)
+  const ownedItems = dedupeIngredientsForDisplay(resolveOwnedIngredients(shoppingList, storedContext, isFallbackList))
   const ownedProductQuery = ownedItems.map((item) => item.name).filter(Boolean).join('|')
   const ownedShoppingItems = ownedItems.map((item) => ({
     ...item,
     ...(ownedProductMap[item.name] || {}),
   }))
   const activeItems = items.filter((item) => !item.is_purchased)
-  const previousHistoryLists = historyLists.filter((list) => !recentList?.id || Number(list.id) !== Number(recentList.id))
+  const visibleHistoryLists = mergeRecentWithHistory(recentList, historyLists)
 
   useEffect(() => {
     let isAlive = true
@@ -587,6 +714,53 @@ function ShoppingList() {
     }
   }
 
+  const deleteHistoryLists = async (shoppingListIds) => {
+    const targetIds = [...new Set((shoppingListIds || []).map((id) => Number(id)).filter(Boolean))]
+    if (targetIds.length === 0) {
+      return false
+    }
+
+    const confirmed = await showConfirm(`총 ${targetIds.length}개 장보기 내역을 삭제하시겠습니까?`, {
+      title: '선택 내역 삭제',
+      confirmText: '삭제',
+      cancelText: '취소',
+    })
+    if (!confirmed) {
+      return false
+    }
+
+    const deletedIds = []
+    setIsMutating(true)
+    try {
+      for (const id of targetIds) {
+        await deleteShoppingList(id)
+        deletedIds.push(id)
+      }
+
+      const deletedIdSet = new Set(deletedIds)
+      setHistoryLists((prev) => prev.filter((list) => !deletedIdSet.has(Number(list.id))))
+      setRecentList((prev) => (deletedIdSet.has(Number(prev?.id)) ? null : prev))
+      setShoppingList((prev) => (deletedIdSet.has(Number(prev?.id)) ? null : prev))
+      await showAlert(`${deletedIds.length}개 장보기 내역을 삭제했어요.`, {
+        title: '선택 삭제 완료',
+      })
+      return true
+    } catch (shoppingError) {
+      if (deletedIds.length > 0) {
+        const deletedIdSet = new Set(deletedIds)
+        setHistoryLists((prev) => prev.filter((list) => !deletedIdSet.has(Number(list.id))))
+        setRecentList((prev) => (deletedIdSet.has(Number(prev?.id)) ? null : prev))
+        setShoppingList((prev) => (deletedIdSet.has(Number(prev?.id)) ? null : prev))
+      }
+      await showAlert(shoppingError.message || '선택한 장보기 내역을 삭제하지 못했어요.', {
+        title: '선택 삭제 실패',
+      })
+      return false
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
   const completePurchase = async () => {
     if (isFallbackList) {
       await showAlert('임시 장보기 화면에서는 냉장고 입고 처리를 할 수 없어요. 백엔드 연결 후 장보기 목록을 다시 생성해 주세요.', {
@@ -602,9 +776,9 @@ function ShoppingList() {
       return
     }
 
-    const confirmed = await showConfirm(`선택한 ${selectedItems.length}개 재료를 냉장고에 입고하시겠습니까?`, {
+    const confirmed = await showConfirm(`총 ${selectedItems.length}개 재료를 냉장고에 입고하시겠습니까?`, {
       title: '냉장고 입고',
-      confirmText: '입고',
+      confirmText: '입고하기',
       cancelText: '취소',
     })
     if (!confirmed) {
@@ -617,6 +791,27 @@ function ShoppingList() {
         shopping_list_id: shoppingList.id,
         item_ids: selectedItems.map((item) => item.id),
       })
+
+      if (!result.shopping_list || getRemainingItemCount(result.shopping_list) === 0) {
+        try {
+          await deleteShoppingList(shoppingList.id)
+          setShoppingList(null)
+          setRecentList((prev) => (Number(prev?.id) === Number(shoppingList.id) ? null : prev))
+          setHistoryLists((prev) => prev.filter((list) => Number(list.id) !== Number(shoppingList.id)))
+          navigate('/shopping-list')
+          await showAlert(`${result.message || '구매한 재료를 냉장고에 입고했어요.'} 완료된 장보기 목록은 자동으로 삭제됐어요.`, {
+            title: '냉장고 입고 완료',
+          })
+        } catch (deleteError) {
+          setShoppingList(result.shopping_list)
+          await showAlert(
+            `${result.message || '구매한 재료를 냉장고에 입고했어요.'} 다만 완료된 장보기 목록을 자동 삭제하지 못했어요.`,
+            { title: '목록 자동 삭제 실패' },
+          )
+        }
+        return
+      }
+
       setShoppingList(result.shopping_list)
       await showAlert(result.message || '구매한 재료를 냉장고에 입고했어요.', {
         title: '냉장고 입고 완료',
@@ -655,8 +850,11 @@ function ShoppingList() {
     return (
       <>
         <ShoppingHistory
-          lists={previousHistoryLists}
+          lists={visibleHistoryLists}
+          recentListId={recentList?.id}
+          isDeleting={isMutating}
           onOpenList={openHistoryList}
+          onDeleteSelected={deleteHistoryLists}
           onBackToStart={() => navigate('/shopping-list')}
         />
         {dialogNode}
@@ -670,7 +868,7 @@ function ShoppingList() {
         <ShoppingStart
           isLoggedIn={isLoggedIn}
           recentList={recentList}
-          historyCount={previousHistoryLists.length}
+          historyCount={visibleHistoryLists.length}
           notice={startNotice}
           onContinue={continueRecentShopping}
           onHistoryBrowse={browseShoppingHistory}
@@ -689,12 +887,12 @@ function ShoppingList() {
           <span className="shopping-eyebrow">레시피 기준 장보기</span>
           <h1 id="shopping-title">{recipeTitle} 만들기,<br />이 재료가 없어요</h1>
           <p>
-          냉장고에 있는 재료는 빼고, 부족한 재료만 구매 링크로 연결해요.
+            냉장고에 있는 재료와 부족한 재료를 함께 보고, 필요한 재료는 구매 링크로 바로 확인해요.
           </p>
           <div className="shopping-service-badges" aria-label="장보기 기준">
-            <span>{storedContext?.servingLabel ?? '레시피 기준'}</span>
+            <span>{storedContext?.servingLabel ?? '3인분 기준'}</span>
             <span>냉장고 비교</span>
-            <span>부족 재료만</span>
+            <span>구매 링크 제공</span>
             {isFallbackList ? <span>임시 목록</span> : null}
           </div>
         </div>
