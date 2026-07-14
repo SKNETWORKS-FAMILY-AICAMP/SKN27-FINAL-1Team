@@ -1,7 +1,7 @@
 # LightFM 실험 기록
 
 **읽는 법:** §1~26 = **레거시** (Track A·Spearman·bar·감성 곱 — 코드에서 제거, 이력만 보존).  
-**현재 축:** §28~29 — y\*=`n_star5≥2`, 추천 점수=`s_pref`, Go=**R0~R2** (별점 vs star_pop). §30 외부축 시험은 **이력만** (코드 복귀).  
+**현재 축:** §28~31 — y\*=`n_star5≥2`, Go=**R0~R2** (warm-fold CV) · §31 full-catalog 진단. §30 외부축은 **이력만**.  
 헌장: [`METRICS.md`](METRICS.md) · CV: `python evaluation.py` → `outputs/prefer_eval_report.json`.
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
@@ -3525,3 +3525,50 @@ go = R0 ∧ R1_primary ∧ R3
 ### JSON
 
 `outputs/prefer_eval_report.json` (실험 30 당시 `external-recall-vs-pop` 스키마; 복귀 후 재생성 시 `prefer-recall-vs-star-pop`)
+
+---
+
+## 실험 31 — 전체 카탈로그 y_hat + full-catalog 진단
+
+**일자:** 2026-07-14  
+**코드:** [`scoring.py`](scoring.py) (`is_warm`) · [`evaluation.py`](evaluation.py) (`run_full_catalog_eval`)
+
+### 목적
+
+- full-fit **3171** item `y_hat` export (`is_warm` 컬럼 추가)
+- warm-fold Go 유지 + **전체 카탈로그 Top-K 진단** (cold 2608 포함)
+
+### 설정
+
+| 항목 | 값 |
+|------|-----|
+| Go | R0~R2 (warm-fold CV, 변경 없음) |
+| 진단 K | 20 / 50 / 100 |
+| Pop (진단) | `star_pop` on full review |
+
+### 결과
+
+**Go:** 5/5 seed (warm-fold CV, 변경 없음)
+
+| 구분 | Recall@20 | Precision@20 |
+|------|-----------|----------------|
+| warm-fold CV (mean) | 0.236 | 0.468 |
+| full-catalog K=20 | **0.101** | **1.00** (Top-20 전부 y\*=1) |
+| full-catalog K=50 | 0.242 | 0.96 |
+| full-catalog K=100 | 0.424 | 0.84 |
+
+| full-catalog K=20 | model | pop | cold_share |
+|-------------------|-------|-----|------------|
+| Recall / Precision | 0.101 / 1.0 | 0.101 / 1.0 | **0%** |
+
+- Top-20은 cold 없이 warm y\*=1만 채움 → **전역 198개 중 20개만 회수** (Recall≈10%)
+- K↑ 시 cold 2~10% 혼입, Recall은 CV보다 낮거나 pop에 근접 (풀 3171 희석)
+- `recipe_lightfm.csv` 3171행, `is_warm` 컬럼 추가
+
+### JSON
+
+`outputs/prefer_eval_report.json` → `full_catalog_eval`
+
+### 다음
+
+개인화 CF: per-user predict + holdout (catalog baseline = `recipe_lightfm.csv`)

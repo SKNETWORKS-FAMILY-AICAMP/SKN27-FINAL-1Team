@@ -44,7 +44,31 @@ go = R0 ∧ (R1 on ≥4/5 seeds)
 | **R0** | full-fit `s_pref` 유한·std>0 |
 | **R1** | **Recall@20(model) > Recall@20(Pop)** · ≥4/5 seed |
 
-**산출:** `outputs/prefer_eval_report.json` · `recipe_prefer_ranked.csv`
+**산출:** `outputs/prefer_eval_report.json` · `recipe_prefer_ranked.csv` · Go 시 `recipe_lightfm.csv` (3171행, warm+cold `y_hat`)
+
+### Export (`recipe_lightfm.csv`)
+
+| 컬럼 | 설명 |
+|------|------|
+| `y_hat` / `s_pref` | full-fit catalog predict (전 item) |
+| `is_warm` | 1=리뷰 있음(563), 0=cold(2608) |
+| `y_prefer` | warm: 0/1, cold: -1 |
+
+---
+
+## Full-catalog 진단 (Go 제외)
+
+full-fit 후 **전체 3171** 순위에서 warm y\*=1 회수 (cold 희석 관측).  
+리포트: `prefer_eval_report.json` → `full_catalog_eval` (K=20/50/100)
+
+| 지표 | 의미 |
+|------|------|
+| `warm_recall_at_k` | 전역 y\*=1(198) 중 Top-K 포함 비율 |
+| `warm_precision_at_k` | Top-K 중 y\*=1 비율 |
+| `cold_share_at_k` | Top-K 중 cold 비율 |
+| `*_pop` | 동일 풀, `star_pop`(전체 review) 순위 |
+
+warm-fold CV Recall@20보다 **낮을 수 있음** (풀 113 → 3171).
 
 ---
 

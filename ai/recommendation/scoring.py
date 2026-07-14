@@ -129,6 +129,7 @@ def build_export_dataframe(
     export_df["prefer_hat"] = (export_df["s_pref"] >= t_star).astype(int)
     export_df["y_prefer"] = export_df["recipe_id"].map(y_prefer).fillna(-1).astype(int)
     export_df["n_star5"] = export_df["recipe_id"].map(n_star5).fillna(0).astype(int)
+    export_df["is_warm"] = warm_mask.astype(int)
     return (
         export_df.sort_values("s_pref", ascending=False, kind="mergesort")
         .reset_index(drop=True)
@@ -186,16 +187,19 @@ if __name__ == "__main__":
     assert float(agg.loc[agg["recipe_id"] == "a", "star_norm_avg"].iloc[0]) == 2 / 3
     y = pd.Series({"a": 1, "b": 0}, name="y_prefer")
     n5 = pd.Series({"a": 2, "b": 0}, name="n_star5")
-    recipe = pd.DataFrame({"recipe_id": ["a", "b"], "recipe_name": ["A", "B"]})
+    recipe = pd.DataFrame(
+        {"recipe_id": ["a", "b", "c"], "recipe_name": ["A", "B", "C"]}
+    )
     df = build_export_dataframe(
         recipe_df=recipe,
         review_agg=agg,
-        s_pref=np.array([0.9, 0.1]),
+        s_pref=np.array([0.9, 0.1, 0.05]),
         y_prefer=y,
         n_star5=n5,
         warm_item_ids={"a", "b"},
     )
     assert df.iloc[0]["recipe_id"] == "a" and int(df.iloc[0]["prefer_rank"]) == 1
+    assert int(df.loc[df["recipe_id"] == "c", "is_warm"].iloc[0]) == 0
     pop, c = star_popularity_scores(toy)
     assert float(pop["a"]) > float(pop["b"]) and c > 0
     print("scoring ok", formula, float(df.iloc[0]["t_star"]), float(pop["a"]))

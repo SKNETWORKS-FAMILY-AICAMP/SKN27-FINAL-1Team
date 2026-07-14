@@ -59,6 +59,7 @@ EXPORT_COLS_OPTIONAL = [
     "y_prefer",
     "prefer_rank",
     "n_star5",
+    "is_warm",
 ]
 
 

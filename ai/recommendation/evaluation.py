@@ -15,6 +15,7 @@ REC_SEED_WINS_REQUIRED = 4
 CV_N_FOLDS = 5
 AT_K = 20
 CV_SEEDS = (42, 123, 456, 789, 1024)
+FULL_CATALOG_K = (20, 50, 100)
 
 
 def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = AT_K) -> float:
@@ -214,6 +215,53 @@ def run_cv_evaluation(
     return seed_reports
 
 
+def run_full_catalog_eval(
+    export_df: pd.DataFrame,
+    *,
+    y_prefer: pd.Series,
+    warm_item_ids: set[str],
+    review_df: pd.DataFrame,
+    cold_item_ids: list[str],
+) -> dict:
+    """Diagnostic: rank full catalog (warm+cold), measure warm y*=1 vs star_pop."""
+    from scoring import star_popularity_scores
+
+    y = (export_df["y_prefer"] == 1).astype(int).to_numpy()
+    s_model = export_df["s_pref"].to_numpy(dtype=float)
+    is_warm = export_df["is_warm"].to_numpy(dtype=int)
+
+    pop_scores, pop_C = star_popularity_scores(review_df)
+    rid = export_df["recipe_id"].astype(str)
+    s_pop = pop_scores.reindex(rid).fillna(pop_C).to_numpy(dtype=float)
+
+    at_k: dict[str, dict] = {}
+    for k in FULL_CATALOG_K:
+        atk_m = ranking_at_k_binary(y, s_model, k=k)
+        atk_p = ranking_at_k_binary(y, s_pop, k=k)
+        kk = min(int(k), s_model.size)
+        order = np.argsort(-s_model, kind="stable")[:kk]
+        cold_share = float((is_warm[order] == 0).sum()) / kk if kk else 0.0
+        at_k[str(k)] = {
+            "warm_recall_at_k": atk_m["recall_at_k"],
+            "warm_recall_at_k_pop": atk_p["recall_at_k"],
+            "warm_precision_at_k": atk_m["precision_at_k"],
+            "warm_precision_at_k_pop": atk_p["precision_at_k"],
+            "cold_share_at_k": cold_share,
+            "recall_gap_vs_pop": atk_m["recall_at_k"] - atk_p["recall_at_k"],
+            "precision_gap_vs_pop": atk_m["precision_at_k"] - atk_p["precision_at_k"],
+        }
+
+    n_prefer = int((y_prefer == 1).sum())
+    return {
+        "n_total": int(len(export_df)),
+        "n_warm": int(len(warm_item_ids)),
+        "n_cold": int(len(cold_item_ids)),
+        "n_prefer": n_prefer,
+        "pop_formula": "Bayesian WR on n_star5/review_n; m=3; full review",
+        "at_k": at_k,
+    }
+
+
 def main() -> None:
     from config import load_experiment_config, require_docker_runtime, seed_all
     from data_io import export_recipe_lightfm, load_track_b_tables, write_json_report
@@ -294,6 +342,15 @@ def main() -> None:
     agg["n_warm"] = int(len(y_prefer))
     agg["n_cold"] = int(len(cold_item_ids))
 
+    full_catalog_eval = run_full_catalog_eval(
+        export_df,
+        y_prefer=y_prefer,
+        warm_item_ids=warm_item_ids,
+        review_df=review_df,
+        cold_item_ids=cold_item_ids,
+    )
+    print("full_catalog_eval:", json.dumps(full_catalog_eval, ensure_ascii=False), flush=True)
+
     ranked_path = cfg0.outputs_dir / "recipe_prefer_ranked.csv"
     export_recipe_lightfm(export_df, ranked_path)
     report_path = cfg0.outputs_dir / "prefer_eval_report.json"
@@ -301,6 +358,7 @@ def main() -> None:
         "charter": "R0-R2",
         "positive_mode": cfg0.positive_mode,
         "aggregate": agg,
+        "full_catalog_eval": full_catalog_eval,
         "seeds": seed_reports,
         "export_path": str(ranked_path),
     }
@@ -328,5 +386,24 @@ if __name__ == "__main__":
         {"recall_at_k": atk_m["recall_at_k"], "recall_at_k_pop": atk_p["recall_at_k"]}
     )
     assert catalog_score_sanity(s_model)["r0_pass"]
+    toy_export = pd.DataFrame(
+        {
+            "recipe_id": ["a", "b", "c"],
+            "s_pref": [0.9, 0.5, 0.1],
+            "y_prefer": [1, 0, -1],
+            "is_warm": [1, 1, 0],
+        }
+    )
+    toy_rev = pd.DataFrame(
+        {"recipe_id": ["a", "a", "b"], "star_count": [5, 5, 3], "group_id": ["u1", "u2", "u3"]}
+    )
+    fc = run_full_catalog_eval(
+        toy_export,
+        y_prefer=pd.Series({"a": 1, "b": 0}, name="y_prefer"),
+        warm_item_ids={"a", "b"},
+        review_df=toy_rev,
+        cold_item_ids=["c"],
+    )
+    assert fc["n_total"] == 3 and fc["at_k"]["20"]["warm_recall_at_k"] == 1.0
     print("evaluation self-check ok", atk_m["recall_at_k"], atk_p["recall_at_k"], flush=True)
     main()
