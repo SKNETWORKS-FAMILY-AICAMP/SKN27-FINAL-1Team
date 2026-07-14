@@ -71,12 +71,14 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     current_result = supervisor_agent.router_node({"text": "장보기 목록 보여줘", "history": []})
     create_result = supervisor_agent.router_node({"text": "두부랑 양파 장보기 목록 만들어줘", "history": []})
     compare_result = supervisor_agent.router_node({"text": "두부랑 양파 가격 비교해줘", "history": []})
+    price_result = supervisor_agent.router_node({"text": "두부 가격알려줘", "history": []})
     feature_result = supervisor_agent.router_node({"text": "장보기 기능 뭐있어?", "history": []})
 
     assert current_result["intent"] == "shopping.current"
     assert feature_result["intent"] == "shopping.current"
     assert create_result["intent"] == "shopping.create"
     assert compare_result["intent"] == "shopping.compare"
+    assert price_result["intent"] == "shopping.compare"
     assert supervisor_agent.route_intent(current_result) == "shopping_agent_node"
     assert supervisor_agent.route_intent(create_result) == "shopping_agent_node"
     assert supervisor_agent.route_intent(compare_result) == "shopping_agent_node"

@@ -67,6 +67,9 @@ def router_node(state: GraphState) -> dict:
     if shopping_intent:
         return _route_result(shopping_intent)
 
+    # 가격 질문은 장보기 문맥이 없어도 Shopping Agent의 가격 비교로 보냅니다.
+    if any(word in normalized for word in ("가격", "얼마", "최저가")):
+        return _route_result("shopping.compare")
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
         return _route_result("recipe.pairing")
