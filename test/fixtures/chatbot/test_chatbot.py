@@ -767,6 +767,19 @@ def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
 
 
 
+def test_llm_route_payload_json_parser() -> None:
+    """LLM intent 응답을 JSON 객체로 파싱합니다."""
+    payload = supervisor_service._parse_llm_route_payload(
+        '{"intent":"recipe.recommend","confidence":0.82,"slots":{"ingredient":"\ub450\ubd80"}}'
+    )
+
+    assert payload == {
+        "intent": "recipe.recommend",
+        "confidence": 0.82,
+        "slots": {"ingredient": "두부"},
+    }
+
+
 def test_recipe_pairing_reply() -> None:
     """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
     reply = supervisor_service._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")

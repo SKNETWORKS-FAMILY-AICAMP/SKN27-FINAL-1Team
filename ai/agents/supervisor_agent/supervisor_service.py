@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from datetime import date
@@ -118,6 +119,29 @@ class ChatService:
         return {"intent": intent, "reply": reply, "actions": actions, "sources": sources}
 
         
+
+    def _parse_llm_route_payload(self, content: str) -> dict[str, Any]:
+        """LLM이 반환한 JSON 라우팅 결과를 안전한 dict로 변환합니다."""
+        raw = (content or "").strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        slots = payload.get("slots") if isinstance(payload.get("slots"), dict) else {}
+        try:
+            confidence = float(payload.get("confidence", 0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        return {
+            "intent": str(payload.get("intent", "")).strip(),
+            "confidence": max(0.0, min(confidence, 1.0)),
+            "slots": slots,
+        }
+
     def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
         """LangChain LLM을 활용하여 대화 문맥(history)과 현재 메시지로 의도를 파악합니다."""
         if _is_expiring_question(text):
@@ -146,22 +170,47 @@ class ChatService:
             llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
             
             system_prompt = """
-당신은 챗봇의 의도 분류기(Intent Classifier)입니다.
-사용자의 메시지와 이전 대화 맥락을 보고 다음 중 가장 적합한 의도(Intent) 1개만 정확하게 출력하세요. 다른 설명은 절대 붙이지 마세요.
+You are the Supervisor intent router for the Bobbeori food chatbot.
+Return exactly one JSON object. Do not include markdown, code fences, or explanations.
 
-[분류 가능 의도 목록]
-- receipt.guide: 영수증, OCR, 구매내역 등록 관련
-- recipe.recommend: "치킨 추천해줘", "두부로 뭐해먹지", "그거 말고 다른거", "이 재료들로 할 수 있는 요리" 등 요리/레시피 추천
-- recipe.search: "김치볶음밥 레시피", "파스타 요리법" 등 특정 요리 검색
-- ingredient.guide: "치킨 보관법", "남은 재료 어떡해", "두부 손질" 등 식재료 관리/보관
-- inventory.expiring: "상하는 거 뭐 있어", "소비기한 임박", "d-day" 등 임박 재료 확인
-- inventory.list: "냉장고에 뭐 있지?", "내 재료 목록" 등 보유 식재료 단순 확인 (주의: 식재료 '추가'나 '삭제' 요청은 제외)
-- general: 식재료 추가/수정/삭제 요청(예: "마늘 추가해줘", "감자 지워줘") 및 위 어느 것에도 해당하지 않는 일상 대화
+Allowed intents:
+- receipt.guide
+- recipe.recommend
+- recipe.pairing
+- recipe.search
+- ingredient.guide
+- inventory.expiring
+- inventory.list
+- general
 
-[매우 중요한 주의사항]
-사용자가 "그거 말고", "다른 거", "딴거", "사이드 메뉴는?", "더 알려줘" 와 같이 지시대명사나 후속 질문을 던질 경우, 반드시 직전 대화의 챗봇 응답이 어떤 의도였는지 파악하세요. 직전에 레시피를 추천했다면 반드시 'recipe.recommend'를 출력해야 합니다. 'general'로 분류하지 마세요!
-            """
-            
+Response schema:
+{
+  "intent": "one allowed intent",
+  "confidence": 0.0,
+  "slots": {
+    "ingredient": null,
+    "keyword": null,
+    "date": null,
+    "quantity": null,
+    "storage": null
+  }
+}
+
+Rules:
+- recipe.recommend: menu recommendation, fridge ingredient cooking ideas, leftover ingredient use.
+- recipe.search: specific recipe, cooking method, cooking time, air fryer time.
+- recipe.pairing: side dish, pairing food, food that goes well with another dish.
+- ingredient.guide: storage, washing, prep, nutrition, calories, seasonal food.
+- inventory.expiring: expiry, use-by date, expiring ingredients.
+- inventory.list: list current fridge ingredients.
+- receipt.guide: receipt OCR or purchase upload guide.
+- general: anything else.
+
+Safety:
+- For DB-changing requests such as add, consume, delete, update ingredients, return general. Rule-based routing already handles them before this LLM fallback.
+- If uncertain, lower confidence below 0.5.
+"""
+
             messages = [SystemMessage(content=system_prompt)]
             
             if history:
@@ -174,10 +223,11 @@ class ChatService:
             messages.append(HumanMessage(content=text))
             
             response = llm.invoke(messages)
-            intent = response.content.strip()
+            payload = self._parse_llm_route_payload(response.content)
+            intent = payload.get("intent", "")
             valid_intents = ["receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "general"]
-            
-            if intent in valid_intents:
+
+            if intent in valid_intents and payload.get("confidence", 0) >= 0.5:
                 return intent
             return self._route_intent(text)
         except Exception:
