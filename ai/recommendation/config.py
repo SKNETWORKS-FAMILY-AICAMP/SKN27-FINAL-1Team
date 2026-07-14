@@ -18,6 +18,7 @@ ALLOWED_TARGET_MODES = (
 )
 
 ALLOWED_SAMPLE_WEIGHT_MODES = ("none", "review_n")
+ALLOWED_POSITIVE_MODES = ("all_reviews", "prefer_n_star5_ge2")
 
 CATALOG_USER_ID = "__catalog__"
 
@@ -37,6 +38,7 @@ class ExperimentConfig:
     sentiment_weight: float = 1.0
     model_mode: str = "hybrid"
     sample_weight_mode: str = "none"
+    positive_mode: str = "prefer_n_star5_ge2"
 
 
 def require_docker_runtime() -> None:
@@ -85,19 +87,24 @@ def load_experiment_config(root: Path | None = None) -> ExperimentConfig:
             f"SAMPLE_WEIGHT_MODE must be one of {ALLOWED_SAMPLE_WEIGHT_MODES}"
         )
 
+    positive_mode = os.environ.get("POSITIVE_MODE", "prefer_n_star5_ge2")
+    if positive_mode not in ALLOWED_POSITIVE_MODES:
+        raise ValueError(f"POSITIVE_MODE must be one of {ALLOWED_POSITIVE_MODES}")
+
     return ExperimentConfig(
         project_root=project_root,
         data_dir=data_dir,
         outputs_dir=outputs_dir,
         data_files=data_files,
         seed=int(os.environ.get("SEED", "42")),
-        epochs=30,
-        num_threads=2,
+        epochs=int(os.environ.get("EPOCHS", "30")),
+        num_threads=int(os.environ.get("NUM_THREADS", "2")),
         target_mode=target_mode,
         excluded_recipe_columns=excluded,
         star_weight=star_weight,
         sentiment_weight=sentiment_weight,
         sample_weight_mode=sample_weight_mode,
+        positive_mode=positive_mode,
     )
 
 

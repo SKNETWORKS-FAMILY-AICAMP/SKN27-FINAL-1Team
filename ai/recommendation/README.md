@@ -51,15 +51,15 @@
 - **Track A (실험 1~12):** hold-out CF — **보류** (이력은 §실험 1~12).
 - 데이터: `data/review_by_llm.csv`, `data/recipe_fix.csv`, `data/recipe_ingredient_alias.csv`
 
-### 1.2 현재 진행 상황 (Track B **지표 동결** · 2026-07-14)
+### 1.2 현재 진행 상황 (Track B · 실험 28)
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
-| 실행 환경 | 완료 | Docker, `LightFM_Model.ipynb` |
-| **Track B** | **동결** | Bayesian bar · `product_02_row` · `MIX_GAMMA=0` · weight `none` |
-| **Go 헌장** | 실험 22 이축 **유지** | L0∧L1i∧L2i∧L1c∧L2c(≥0.25) — 임계 변경 없음 |
-| **실측** | informative OK · dual Go **4/5** | v≥2 stretch 0.30 **미달**; v1 품질 순위 **비목표** |
-| **다음** | Track A CF **설계** | Base Score = 콜드/폴백; 상세 → **[TRACK_B_STATUS.md](TRACK_B_STATUS.md)** |
+| 실행 환경 | 완료 | Docker, `exp28_prefer_threshold.py` |
+| **Track B** | **동결 해제** | y\*=`n_star5≥2` · 기준선 `t*=min(train True s)` |
+| **Go 헌장** | **P0~P3** | Spearman L0~L5 → 레거시 ([METRICS.md](METRICS.md)) |
+| **실측** | §28 **No-Go** (0/5) | AUC≈0.61·pop≈0.78; Spec≈0.11 @ min(s) |
+| **export** | `recipe_prefer_ranked.csv` | `recipe_lightfm.csv` 동결 export 유지 |
 
 베이스라인 태그: `experiment: 22_eval_recalib`. 회차 표 → [experiments.md](experiments.md) §22~26 · 헌장 → [METRICS.md](METRICS.md).
 

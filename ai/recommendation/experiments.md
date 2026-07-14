@@ -2,9 +2,9 @@
 
 **읽는 법:** §실험 1~~12 = Track A 개인화 CF (**보류 → 다음 설계 축**) · §13~~16 = Track B v1 (전 카탈로그 export·ablation) · **§17~26 = 콜드스타트 Base Score (2026-07-14 지표 동결)**.  
 §13~16의 차트·`runs/`·`samples/`·`figures/` 산출물은 **실험 17에서 폐기** — 수치·표는 본 문서에만 유지.  
-**L1 축·Go:** §실험 18(구) → §실험 19(informative) → §실험 **20**(Bayesian bar) · §실험 **21**(독립 감성) · §실험 **22**(**이축 Go 채택**) · §실험 **23**(view/scrap feature ablation **기각**) · §실험 **24**(sample_weight∝review_n **기각**) · §실험 **25**(v1 feature 예측 **불가** → 제품 해석 이관) · §실험 **26**(v≥2 stretch 0.30 **미달**).
+**L1 축·Go:** §22~26 Spearman dual (**레거시**) · §**28** 기준선 이진 **P0~P3** (동결 해제).
 
-**동결 보고서:** `[TRACK_B_STATUS.md](TRACK_B_STATUS.md)` — 채택 설정·슬라이스 신뢰·실측 스냅샷·잠금 규칙.
+**상태:** [`TRACK_B_STATUS.md`](TRACK_B_STATUS.md) · 헌장 [`METRICS.md`](METRICS.md).
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -3370,3 +3370,49 @@ n: vge2=185, v1=344 (공통).
 ### JSON
 
 `outputs/exp26_s{seed}.json` — 기록 후 삭제.
+
+---
+
+## 실험 28 — Track B 기준선 이진 (Spearman Go 폐기)
+
+**일자:** 2026-07-14  
+**코드:** [`exp28_prefer_threshold.py`](exp28_prefer_threshold.py) · [`preprocess.build_prefer_labels`](preprocess.py) · [`evaluation` P0~P3](evaluation.py)
+
+### 목적
+
+- y\* = `n_star5 ≥ 2` / 나머지 0
+- LightFM hybrid 메타 → `s_pref`; **t\* = min(s \| train y\*=1)`**
+- Go: P0~P3 warm CV (5×5 seed); cold 2608은 Go 후 export
+
+### 설정
+
+| 항목 | 값 |
+|------|-----|
+| POSITIVE_MODE | `prefer_n_star5_ge2` |
+| interaction | `prefer_label==1` 리뷰만 matrix |
+| CV / full epochs | 10 / 30 |
+
+### 결과
+
+**판정: No-Go** (0/5 seed, P0만 통과)
+
+| seed | AUC | AUC_pop | F1 | Spec | P@20 | P@20_pop | pass |
+|------|-----|---------|-----|------|------|----------|------|
+| 42 | 0.621 | 0.774 | 0.531 | 0.096 | 0.48 | 0.62 | ✗ |
+| 123 | 0.617 | 0.777 | 0.524 | 0.101 | 0.45 | 0.65 | ✗ |
+| 456 | 0.618 | 0.779 | 0.528 | 0.115 | 0.48 | 0.63 | ✗ |
+| 789 | 0.589 | 0.784 | 0.529 | 0.134 | 0.48 | 0.70 | ✗ |
+| 1024 | 0.611 | 0.783 | 0.534 | 0.112 | 0.42 | 0.66 | ✗ |
+| **mean** | **0.611** | **0.779** | **0.529** | **0.112** | **0.462** | **0.652** | **0/5** |
+
+- **P1** AUC 0.61 ≪ 0.70, pop(0.78) **우위**
+- **P2** F1≈0.53 (미달), **Spec≈0.11** — `min(s)` 임계가 과도하게 관대(recall↑·Spec↓)
+- **P3** P@20≈0.46, pop≈0.65 **우위**
+- full-fit warm(참고): AUC=0.89이나 threshold 과적합; **CV 기준 No-Go**
+- export: `recipe_prefer_ranked.csv`만 갱신; `recipe_lightfm.csv` **유지**
+
+**다음:** 학습 양성·feature·epoch 재검토; Spearman 헌장 **복귀 없음** (METRICS P0~P3 유지).
+
+### JSON
+
+`outputs/exp28_report.json`

@@ -52,6 +52,14 @@ EXPORT_COLS = [
     "y_hat_linear",
     "review_rank_score",
 ]
+EXPORT_COLS_OPTIONAL = [
+    "s_pref",
+    "t_star",
+    "prefer_hat",
+    "y_prefer",
+    "prefer_rank",
+    "n_star5",
+]
 
 
 def _validate_columns(name: str, frame: pd.DataFrame, cols: list[str]) -> None:
@@ -80,7 +88,9 @@ def load_track_b_tables(
 
 def export_recipe_lightfm(df: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    df[EXPORT_COLS].to_csv(path, index=False, encoding="utf-8-sig")
+    cols = [c for c in EXPORT_COLS if c in df.columns]
+    cols += [c for c in EXPORT_COLS_OPTIONAL if c in df.columns and c not in cols]
+    df[cols].to_csv(path, index=False, encoding="utf-8-sig")
 
 
 def write_json_report(report: dict, path: Path) -> None:

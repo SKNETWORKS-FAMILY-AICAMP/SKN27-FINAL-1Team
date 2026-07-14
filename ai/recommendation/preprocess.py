@@ -205,17 +205,64 @@ def build_lightfm_ids(
     return dataset, item_ids, warm_item_ids, cold_item_ids, user_ids
 
 
+def is_five_star_mask(review_df: pd.DataFrame) -> pd.Series:
+    if "star_count" in review_df.columns:
+        return pd.to_numeric(review_df["star_count"], errors="coerce") == 5
+    if "star" in review_df.columns:
+        return pd.to_numeric(review_df["star"], errors="coerce") >= 0.999
+    raise ValueError("need star_count or star for five-star mask")
+
+
+def build_prefer_labels(review_df: pd.DataFrame) -> pd.Series:
+    """recipe_id -> 1 if n_star5≥2 else 0."""
+    rid = review_df["recipe_id"].astype(str)
+    n5 = is_five_star_mask(review_df).groupby(rid).sum().rename("n_star5")
+    warm = rid.value_counts().rename("review_n")
+    out = pd.DataFrame({"review_n": warm, "n_star5": n5.reindex(warm.index).fillna(0)})
+    return (out["n_star5"] >= 2).astype(int).rename("y_prefer")
+
+
+def recipe_n_star5_counts(review_df: pd.DataFrame) -> pd.Series:
+    rid = review_df["recipe_id"].astype(str)
+    return is_five_star_mask(review_df).groupby(rid).sum().rename("n_star5")
+
+
+def add_prefer_label_column(
+    review_df: pd.DataFrame,
+    recipe_labels: pd.Series | None = None,
+) -> pd.DataFrame:
+    out = review_df.copy()
+    rid = out["recipe_id"].astype(str)
+    if recipe_labels is None:
+        recipe_labels = build_prefer_labels(out)
+    out["prefer_label"] = rid.map(recipe_labels).fillna(0).astype(int)
+    return out
+
+
 def build_interactions(
-    review_df: pd.DataFrame, dataset: Dataset, cfg: ExperimentConfig
+    review_df: pd.DataFrame,
+    dataset: Dataset,
+    cfg: ExperimentConfig,
+    *,
+    recipe_prefer_labels: pd.Series | None = None,
 ):
     """Return (interactions, review_with_iv, sample_weight|None).
 
-    WARP sees binary positives only unless sample_weight is passed to fit.
-    Do not put interaction_value into sample_weight (exp24: review_n only).
+    prefer_n_star5_ge2: interaction_value=prefer_label; matrix = True rows only.
     """
-    review_with_iv = add_interaction_column(review_df, cfg)
-    users = review_with_iv["group_id"].astype(str)
-    items = review_with_iv["recipe_id"].astype(str)
+    positive_mode = getattr(cfg, "positive_mode", "all_reviews")
+    use_prefer = positive_mode == "prefer_n_star5_ge2" or recipe_prefer_labels is not None
+
+    if use_prefer:
+        review_with_iv = add_prefer_label_column(review_df, recipe_prefer_labels)
+        review_with_iv["interaction_value"] = review_with_iv["prefer_label"].astype(float)
+        review_fit = review_with_iv[review_with_iv["prefer_label"] == 1].copy()
+    else:
+        review_with_iv = add_interaction_column(review_df, cfg)
+        review_fit = review_with_iv
+
+    users = review_fit["group_id"].astype(str)
+    items = review_fit["recipe_id"].astype(str)
     mode = getattr(cfg, "sample_weight_mode", "none")
     if mode == "review_n":
         review_n = items.map(items.value_counts()).astype(float)
@@ -223,7 +270,6 @@ def build_interactions(
             zip(users, items, review_n)
         )
         return interactions, review_with_iv, sample_weight
-    # pairs only — baseline binary; interaction_value is for bar/export, not WARP
     interactions, _ = dataset.build_interactions(zip(users, items))
     return interactions, review_with_iv, None
 
@@ -368,4 +414,11 @@ if __name__ == "__main__":
     b_col = item_map["b"]
     b_weights = sw.tocsc()[:, b_col].data
     assert len(b_weights) == 1 and float(b_weights[0]) == 1.0
+    rev3 = pd.DataFrame(
+        {"recipe_id": ["p", "p", "q"], "star_count": [5, 5, 5], "group_id": ["u1", "u2", "u3"]}
+    )
+    labels = build_prefer_labels(rev3)
+    assert int(labels["p"]) == 1 and int(labels["q"]) == 0
+    tagged = add_prefer_label_column(rev3, labels)
+    assert tagged["prefer_label"].tolist() == [1, 1, 0]
     print("preprocess ok")

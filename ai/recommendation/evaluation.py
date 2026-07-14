@@ -14,6 +14,16 @@ L1_POP_SEEDS = 5
 METRICS_VERSION = "L0-L5-dual"
 EXPERIMENT_TAG = "22_eval_recalib"
 
+# exp28: prefer threshold Go (replaces Spearman as 1st-class charter)
+PREFER_METRICS_VERSION = "exp28-prefer-threshold"
+PREFER_AUC_GO = 0.70
+PREFER_F1_GO = 0.55
+PREFER_SPEC_GO = 0.70
+PREFER_P20_GO = 0.75
+PREFER_SEED_WINS_REQUIRED = 4
+PREFER_N_FOLDS = 5
+PREFER_AT_K = 20
+
 
 def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = 50) -> float:
     scores = np.asarray(scores, dtype=np.float64).ravel()
@@ -642,6 +652,122 @@ def build_experiment_report(
     }
 
 
+def prefer_threshold_min(true_scores: np.ndarray) -> float:
+    """t* = min(s) on train True recipes (exp28 charter)."""
+    s = np.asarray(true_scores, dtype=np.float64).ravel()
+    s = s[np.isfinite(s)]
+    if s.size == 0:
+        return float("nan")
+    return float(np.min(s))
+
+
+def prefer_threshold_p05(true_scores: np.ndarray) -> float:
+    """Diagnostic only — not used for Go."""
+    s = np.asarray(true_scores, dtype=np.float64).ravel()
+    s = s[np.isfinite(s)]
+    if s.size == 0:
+        return float("nan")
+    return float(np.quantile(s, 0.05))
+
+
+def binary_threshold_report(
+    y_true: np.ndarray,
+    scores: np.ndarray,
+    *,
+    threshold: float,
+) -> dict[str, float]:
+    from sklearn.metrics import (
+        average_precision_score,
+        confusion_matrix,
+        f1_score,
+        precision_score,
+        recall_score,
+        roc_auc_score,
+    )
+
+    y = np.asarray(y_true, dtype=int).ravel()
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    pred = (s >= threshold).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y, pred, labels=[0, 1]).ravel()
+    spec = float(tn / (tn + fp)) if (tn + fp) else float("nan")
+    try:
+        roc = float(roc_auc_score(y, s))
+    except ValueError:
+        roc = float("nan")
+    try:
+        pr = float(average_precision_score(y, s))
+    except ValueError:
+        pr = float("nan")
+    return {
+        "threshold": float(threshold),
+        "precision": float(precision_score(y, pred, zero_division=0)),
+        "recall": float(recall_score(y, pred, zero_division=0)),
+        "f1": float(f1_score(y, pred, zero_division=0)),
+        "specificity": spec,
+        "accuracy": float((tp + tn) / max(tp + tn + fp + fn, 1)),
+        "roc_auc": roc,
+        "pr_auc": pr,
+        "tp": int(tp),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tn": int(tn),
+    }
+
+
+def ranking_at_k_binary(
+    y_true: np.ndarray, scores: np.ndarray, *, k: int = PREFER_AT_K
+) -> dict[str, float]:
+    y = np.asarray(y_true, dtype=np.float64).ravel()
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    k = min(int(k), s.size)
+    order = np.argsort(-s, kind="stable")[:k]
+    hits = float(y[order].sum())
+    prec = hits / k if k else 0.0
+    rec = hits / float(y.sum()) if y.sum() > 0 else 0.0
+    return {
+        "k": float(k),
+        "precision": prec,
+        "recall": rec,
+        "ndcg": ndcg_at_k(s, y, k=k),
+        "hits": hits,
+    }
+
+
+def seed_prefer_go_pass(seed_mean: dict) -> bool:
+    auc = float(seed_mean.get("roc_auc", 0.0))
+    auc_pop = float(seed_mean.get("roc_auc_pop", 0.0))
+    f1 = float(seed_mean.get("f1", 0.0))
+    spec = float(seed_mean.get("specificity", 0.0))
+    p20 = float(seed_mean.get("precision_at_k", 0.0))
+    p20_pop = float(seed_mean.get("precision_at_k_pop", 0.0))
+    return (
+        auc >= PREFER_AUC_GO
+        and auc > auc_pop
+        and f1 >= PREFER_F1_GO
+        and spec >= PREFER_SPEC_GO
+        and p20 >= PREFER_P20_GO
+        and p20 > p20_pop
+    )
+
+
+def aggregate_prefer_multi_seed(seed_means: list[dict]) -> dict:
+    n = len(seed_means)
+    wins = sum(1 for m in seed_means if seed_prefer_go_pass(m))
+    mean = lambda k: float(np.mean([m[k] for m in seed_means])) if seed_means else 0.0
+    return {
+        "n_seeds": n,
+        "n_wins": wins,
+        "go": wins >= PREFER_SEED_WINS_REQUIRED and n >= PREFER_SEED_WINS_REQUIRED,
+        "mean_roc_auc": mean("roc_auc"),
+        "mean_f1": mean("f1"),
+        "mean_specificity": mean("specificity"),
+        "mean_precision_at_k": mean("precision_at_k"),
+        "mean_roc_auc_pop": mean("roc_auc_pop"),
+        "mean_precision_at_k_pop": mean("precision_at_k_pop"),
+        "metrics_version": PREFER_METRICS_VERSION,
+    }
+
+
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 200
@@ -704,3 +830,15 @@ if __name__ == "__main__":
         cmp_m["warm_mae_linear"],
         m2.get("l2c_vge2_stretch_pass"),
     )
+    y = np.array([1, 1, 0, 0, 0], dtype=int)
+    s = np.array([0.9, 0.8, 0.7, 0.2, 0.0])
+    t = prefer_threshold_min(s[:2])
+    assert t == 0.8
+    rep = binary_threshold_report(y, s, threshold=t)
+    assert rep["roc_auc"] > 0.5
+    agg_p = aggregate_prefer_multi_seed(
+        [{"roc_auc": 0.75, "roc_auc_pop": 0.5, "f1": 0.6, "specificity": 0.75,
+          "precision_at_k": 0.8, "precision_at_k_pop": 0.5}] * 5
+    )
+    assert agg_p["go"]
+    print("prefer ok", rep["f1"], agg_p["go"])
