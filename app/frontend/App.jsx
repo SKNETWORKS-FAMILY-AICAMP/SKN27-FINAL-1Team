@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { API_URL } from './utils/api.js'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
@@ -7,6 +7,7 @@ import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import MobileBottomNav from './components/MobileBottomNav.jsx'
 import OnboardingModal from './components/OnboardingModal.jsx'
+import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import Home from './pages/home/Home.jsx'
 import InfoPage from './pages/info/InfoPage.jsx'
 import Login from './pages/login/Login.jsx'
@@ -22,12 +23,30 @@ import MenuRecommend from './pages/menu_recommend/MenuRecommend.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
 import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
+const SESSION_EXPIRED_EVENT = 'bobbeori-session-expired'
+const SESSION_EXPIRED_KEY = 'bobbeori-session-expired-alerted'
+
 function AppLayout() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const isAuthPage = pathname === '/login' || pathname.startsWith('/auth/callback')
   
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingSeenKey, setOnboardingSeenKey] = useState('hasSeenOnboarding_v4')
+  const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false)
+
+
+  useEffect(() => {
+    // 세션 만료 이벤트를 서비스 디자인 모달로 한 번만 안내합니다
+    const handleSessionExpired = () => {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) return
+      sessionStorage.setItem(SESSION_EXPIRED_KEY, 'true')
+      setIsSessionExpiredOpen(true)
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
+  }, [])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -35,7 +54,6 @@ function AppLayout() {
 
   useEffect(() => {
     const token = localStorage.getItem('bobbeori-token')
-    const authMode = localStorage.getItem('bobbeori-auth-mode')
 
     // 인증 페이지 및 비로그인은 온보딩 자동 노출 대상에서 제외합니다.
     if (isAuthPage || !token) return
@@ -46,7 +64,18 @@ function AppLayout() {
     fetch(`${API_URL}/api/v1/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (res.status === 401) {
+          // 만료된 토큰은 즉시 제거해 게스트 로그인처럼 보이지 않게 합니다.
+          localStorage.removeItem('bobbeori-token')
+          localStorage.removeItem('bobbeori-auth-mode')
+          window.dispatchEvent(new Event('bobbeori-auth-change'))
+          window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+          navigate('/login')
+          return null
+        }
+        return res.ok ? res.json() : null
+      })
       .then((user) => {
         if (!user || isCancelled) return
         const seenKey = `hasSeenOnboarding_v4_${user.id}`
@@ -60,11 +89,22 @@ function AppLayout() {
     return () => {
       isCancelled = true
     }
-  }, [pathname, isAuthPage])
+  }, [pathname, isAuthPage, navigate])
 
   return (
     <div className={isAuthPage ? 'app-shell app-shell--auth' : 'app-shell'}>
       {showOnboarding && <OnboardingModal seenKey={onboardingSeenKey} onClose={() => setShowOnboarding(false)} />}
+
+      <ConfirmModal
+        isOpen={isSessionExpiredOpen}
+        title="로그인 만료"
+        message={`로그인 세션이 만료되었습니다.
+다시 로그인한 뒤 이용해주세요.`}
+        confirmText="확인"
+        showCancel={false}
+        onConfirm={() => setIsSessionExpiredOpen(false)}
+        onClose={() => setIsSessionExpiredOpen(false)}
+      />
       {!isAuthPage && <Header />}
       <main className={isAuthPage ? 'app-main app-main--auth' : 'app-main'}>
         {!isAuthPage && <Breadcrumbs />}
