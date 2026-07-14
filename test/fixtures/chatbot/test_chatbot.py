@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 from ai.agents.supervisor_agent import supervisor_utils
+import ai.agents.recipe_agent.recipe_handlers as recipe_handlers
 
 
 def test_route_intent_examples() -> None:
@@ -111,7 +112,7 @@ def test_format_guide_tip() -> None:
 
 def test_cooking_time_question_uses_external_recipe() -> None:
     """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
-    original_external = supervisor_service._reply_external_recipe
+    original_external = recipe_handlers.reply_external_recipe
     called = {"external": False, "query": ""}
 
     def fake_external(keyword: str, query_text: str | None = None):
@@ -119,16 +120,16 @@ def test_cooking_time_question_uses_external_recipe() -> None:
         called["query"] = query_text or ""
         return f"{keyword} 웹 검색", []
 
-    supervisor_service._reply_external_recipe = fake_external
+    recipe_handlers.reply_external_recipe = fake_external
     try:
-        reply, actions, sources = supervisor_service._reply_recipe_search(None, "감자튀김 에어프라이기 시간")
+        reply, actions, sources = recipe_handlers.handle_recipe_search(None, "감자튀김 에어프라이기 시간")
         assert called["external"]
         assert called["query"] == "감자튀김 에어프라이기 시간"
         assert reply == "감자튀김 웹 검색"
         assert actions == []
         assert sources == []
     finally:
-        supervisor_service._reply_external_recipe = original_external
+        recipe_handlers.reply_external_recipe = original_external
 if __name__ == "__main__":
     test_route_intent_examples()
     test_extract_recipe_ingredient()
@@ -573,7 +574,7 @@ def test_inventory_action_requires_login() -> None:
 
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
-    assert route_intent({"intent": "recipe.search"}) == "recipe_search_node"
+    assert route_intent({"intent": "recipe.search"}) == "recipe_agent_node"
     assert route_intent({"intent": "recipe.pairing"}) == "recipe_pairing_node"
     assert route_intent({"intent": "inventory.action"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"

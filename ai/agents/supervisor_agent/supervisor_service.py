@@ -2,16 +2,11 @@ import os
 import re
 from datetime import date
 from typing import Any
-from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings as app_settings
-from app.backend.services.guide_service.guide_service import guide_service
 from ai.agents.guide_agent import answer_guide_query
-from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
-from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
-from app.backend.services.recommendation_service.recommendation_service import recommendation_service
 
 try:
     from tavily import TavilyClient
@@ -32,22 +27,11 @@ except ImportError:
 
 from ai.agents.supervisor_agent.supervisor_utils import (
     _extract_keyword,
-    _extract_recipe_ingredient,
-    _normalize_recipe_keyword,
-    _recipe_actions,
-    _rank_recipe_items,
-    _apply_josa,
-    _is_guide_result_match,
-    _keyword_tokens,
-    _format_guide_tip
-)
-
-from ai.agents.supervisor_agent.supervisor_utils import (
-    _is_login_status_question,
-    _requires_login,
+    _format_guide_tip,
     _is_cooking_time_question,
     _is_expiring_question,
-    _is_relevant_search_result
+    _is_login_status_question,
+    _is_relevant_search_result,
 )
 
 class ChatService:
@@ -349,6 +333,7 @@ class ChatService:
 
         return summary, sources
 
+
     def _reply_recipe_pairing(self, text: str) -> str:
         """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
         keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
@@ -361,168 +346,5 @@ class ChatService:
         items = pairings.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
         return f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
 
-    def _reply_recipe_search(self, db: Session, text: str) -> tuple[str, list[dict[str, Any]], list[dict[str, str]]]:
-        """레시피명 또는 재료명 검색 결과를 안내합니다."""
-        keyword = _extract_recipe_ingredient(text) or _extract_keyword(text)
-        if _is_cooking_time_question(text):
-            reply, sources = self._reply_external_recipe(keyword, text)
-            return reply, [], sources
-
-        try:
-            # 재료명 질문은 주재료 검색을 먼저 적용해 엉뚱한 제목검색 결과를 줄입니다.
-            result = recipe_search_service.search_recipes(db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=10)
-            items: list[dict[str, Any]] = result["items"]
-            if not items:
-                result = recipe_search_service.search_recipes(db=db, query=keyword, page=1, page_size=10)
-                items = result["items"]
-        except Exception:
-            reply, sources = self._reply_external_recipe(keyword)
-            return reply, [], sources
-
-        if not items:
-            reply, sources = self._reply_external_recipe(keyword)
-            return reply, [], sources
-
-        items = _rank_recipe_items(keyword, items)
-        titles = [item["title"] for item in items[:3]]
-        reply = f"{keyword} 관련 레시피예요.\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles))
-        return reply, _recipe_actions(items), []
-
-    def _reply_external_recipe(self, keyword: str, query_text: str | None = None) -> tuple[str, list[dict[str, str]]]:
-        """내부 레시피가 없을 때 Tavily 검색 결과로 짧게 안내합니다."""
-        if not app_settings.TAVILY_API_KEY or TavilyClient is None:
-            return f"{keyword} 관련 레시피는 아직 우리 DB에 없어요. 웹 검색 답변은 Tavily 설정 후 사용할 수 있어요.", []
-
-        client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
-        try:
-            result = client.search(query=query_text or f"{keyword} 레시피", search_depth="basic", max_results=3)
-        except Exception:
-            return f"{keyword} 레시피는 웹 검색을 시도했지만 지금은 연결이 불안정해요. 잠시 후 다시 시도해주세요.", []
-        results = [item for item in result.get("results", []) if _is_relevant_search_result(keyword, item)][:3]
-        sources = [
-            {"title": item.get("title") or item.get("url", "출처"), "url": item.get("url", "")}
-            for item in results
-            if item.get("url")
-        ]
-        content = "\n".join(item.get("content", "") for item in results if item.get("content"))[:1200]
-        if not content:
-            return f"{keyword} 레시피를 웹에서도 찾지 못했어요.", sources
-
-        if app_settings.OPENAI_API_KEY and OpenAI is not None:
-            try:
-                client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
-                response = client_ai.chat.completions.create(
-                    model=app_settings.OPENAI_MODEL,
-                    messages=[
-                        {"role": "system", "content": "당신은 요리와 냉장고 관리를 도와주는 친절한 비서 챗봇 '밥벌이'입니다. 검색 결과를 바탕으로 사용자의 질문에 다정하게 대답하세요. 특정 요리의 레시피를 묻는다면 핵심 조리 흐름을 3문장 이내로 요약해주고, 메뉴 추천을 원한다면 상황에 어울리는 요리 2~3가지를 다정하게 추천해주세요."},
-                        {"role": "user", "content": f"질문/키워드: {query_text or keyword}\n검색 결과:\n{content}\n\n위 내용을 바탕으로 친절하게 답변해줘."},
-                    ],
-                    temperature=0.2,
-                )
-                summary = response.choices[0].message.content.strip()
-            except Exception:
-                summary = content.split(".")[0].strip() + "."
-        else:
-            summary = content.split(".")[0].strip() + "."
-
-        return summary, sources
-
-    def _reply_recipe_recommend(self, db: Session, user_id: int, text: str, history: list[Any] = None, settings_obj: Any = None) -> tuple[str, list[dict[str, Any]]]:
-        """냉장고 재료 기반 또는 특정 재료 기반 레시피 추천 결과를 안내합니다."""
-        keyword = _extract_recipe_ingredient(text)
-        
-        # 만약 "그거 말고 다른거"처럼 키워드가 없다면 history에서 이전 키워드 유추
-        if not keyword and history:
-            try:
-                from langchain_openai import ChatOpenAI
-                from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-                llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
-                messages = [SystemMessage(content="사용자 대화 맥락을 보고, 요리 추천을 위해 검색할 '핵심 식재료' 또는 '요리 상황/컨셉(예: 비올때, 매운거, 다이어트 등)' 키워드 1개만 단답형으로 출력해. 사용자가 '그거 말고 딴거'처럼 지시대명사를 쓰면 이전 맥락의 키워드를 찾아서 반환해. 절대 부연설명 없이 단어 1개만 출력해. 도저히 찾을 수 없으면 'None' 반환.")]
-                for msg in history[-4:]:
-                    messages.append(HumanMessage(content=msg.text) if msg.role == 'user' else AIMessage(content=msg.text))
-                messages.append(HumanMessage(content=text))
-                res = llm.invoke(messages).content.strip()
-                if res != "None" and res not in ("다른거", "딴거", "그거", "저거", "이거", "다른 거", "딴 거", "내", "나", "제"):
-                    keyword = res
-            except Exception:
-                pass
-        if keyword:
-            past_bot_texts = " ".join([msg.text for msg in history if msg.role == "bot"]) if history else ""
-            try:
-                result = recipe_search_service.search_recipes(
-                    db=db,
-                    ingredient=keyword,
-                    difficulty="초급",
-                    cooking_time_label="30분이내",
-                    main_ingredient_only=True,
-                    page=1,
-                    page_size=10,
-                )
-                raw_items: list[dict[str, Any]] = _rank_recipe_items(keyword, result["items"])
-                is_easy_result = bool(raw_items)
-                if not raw_items:
-                    result = recipe_search_service.search_recipes(db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=10)
-                    raw_items = _rank_recipe_items(keyword, result["items"])
-                
-                # 이미 추천한 레시피는 제외
-                new_items = [item for item in raw_items if item["title"] not in past_bot_texts]
-                if not new_items:
-                    new_items = raw_items
-                items = new_items[:3]
-            except Exception:
-                reply, _sources = self._reply_external_recipe(keyword)
-                return reply, []
-
-            list_action = {
-                "label": f"{keyword} 레시피 더 보기",
-                "url": f"/recipes?ingredient={quote(keyword)}",
-                "data": {"ingredient": keyword},
-            }
-            if not items:
-                reply, _sources = self._reply_external_recipe(keyword)
-                return reply, []
-
-            titles = [item["title"] for item in items]
-            actions = _recipe_actions(items) + [list_action]
-            prefix = f"{_apply_josa(keyword, '이가')} 주재료인 30분 이내 초급 레시피는 " if is_easy_result else f"{_apply_josa(keyword, '이가')} 주재료인 레시피는 "
-            return prefix + "\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), actions
-        from ai.agents.inventory_agent.inventory_agent import is_inventory_empty
-        if is_inventory_empty(db=db, user_id=user_id):
-            return self.EMPTY_INVENTORY_REPLY, []
-
-        try:
-            config = RecipeRecommendConfig.fridge_consume_preset()
-            if settings_obj:
-                if not getattr(settings_obj, 'expiringFirst', True):
-                    config.mode = "fridge_all"
-                if not getattr(settings_obj, 'excludeDislikes', True):
-                    config.exclude_dislikes = False
-
-            result = recommendation_service.recommend_recipes(db, user_id, config)
-        except Exception:
-            return "냉장고 기반 추천을 불러오지 못했어요. 재료명을 넣어서 다시 물어봐주세요.", []
-
-        raw_items = result.get("items", [])
-        sorted_items = sorted(
-            raw_items,
-            key=lambda x: (
-                -x.get("final_score", 0),
-                x.get("missing_ingredient_count", 0),
-                -x.get("owned_ingredient_count", 0),
-            ),
-        )
-
-        items_perfect = [item for item in sorted_items if item.get("missing_ingredient_count", 0) == 0]
-        if items_perfect:
-            items = items_perfect[:3]
-            prefix = "현재 냉장고 재료만으로 완벽하게 만들 수 있는 레시피예요.\n"
-        else:
-            items = sorted_items[:3]
-            if not items or items[0].get("owned_ingredient_count", 0) == 0:
-                return "현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.", []
-            prefix = "소비임박 재료를 우선으로 활용할 수 있는 레시피예요. 부족한 재료는 약간 있을 수 있어요.\n"
-
-        titles = [item["title"] for item in items]
-        return prefix + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), _recipe_actions(items)
 
 supervisor_service = ChatService()
