@@ -65,6 +65,10 @@ def router_node(state: GraphState) -> dict:
         return _route_result("alarm.notification")
     if any(word in normalized for word in ("일정", "캘린더")):
         return _route_result("alarm.calendar")
+    # "장본거" 표현은 냉장고 보유 재료가 아니라 장보기 목록 조회로 처리합니다.
+    if "장본" in normalized:
+        return _route_result("shopping.current")
+
     shopping_intent = analyze_shopping_intent(text)
     if shopping_intent:
         return _route_result(shopping_intent)
