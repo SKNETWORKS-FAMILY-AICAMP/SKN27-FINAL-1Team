@@ -9,6 +9,8 @@ class ChatMessage(BaseModel):
     role: str
     text: str
     intent: str | None = None
+    slots: dict[str, Any] = Field(default_factory=dict, description="이전 응답에서 추출한 문맥 슬롯")
+    pending_action: dict[str, Any] | None = Field(default=None, description="이전 응답의 실행 대기 작업")
 
 class ChatSettings(BaseModel):
     shortAnswer: bool = True
@@ -20,6 +22,7 @@ class ChatRequest(BaseModel):
     """챗봇 메시지 요청 스키마입니다."""
 
     message: str = Field(..., min_length=1, description="사용자 메시지")
+    session_id: str | None = Field(default=None, max_length=100, description="Langfuse 대화 추적 세션 ID")
     history: list[ChatMessage] = Field(default_factory=list, description="이전 대화 내역")
     settings: ChatSettings = Field(default_factory=ChatSettings, description="사용자 설정 값")
 
@@ -46,3 +49,5 @@ class ChatResponse(BaseModel):
     reply: str = Field(..., description="챗봇 응답 메시지")
     actions: list[ChatAction] = Field(default_factory=list, description="응답 액션 목록")
     sources: list[ChatSource] = Field(default_factory=list, description="응답 출처 목록")
+    slots: dict[str, Any] = Field(default_factory=dict, description="다음 대화에 전달할 문맥 슬롯")
+    pending_action: dict[str, Any] | None = Field(default=None, description="사용자 확인을 기다리는 작업")

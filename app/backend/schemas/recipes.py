@@ -39,9 +39,6 @@ class RecipeRecommendRequest(BaseModel):
     category: Optional[str] = Field(None, description="카테고리 필터 (menu_custom)")
     difficulty: Optional[str] = Field(None, description="난이도 필터 (menu_custom)")
     cooking_time_label: Optional[str] = Field(None, description="조리시간 라벨 필터 (menu_custom)")
-    pool_multiplier: int = Field(
-        default=4, ge=1, le=10, description="후보 풀 크기 = limit * pool_multiplier (menu_custom)"
-    )
     min_display_match_rate: Optional[int] = Field(
         None, ge=0, le=100, description="최소 보유 재료 충족률 (menu_custom)"
     )
@@ -67,17 +64,6 @@ class RecipeRecommendResponse(BaseModel):
     items: list[RecipeRecommendItem] = Field(default_factory=list, description="추천 결과")
     returned_count: int = Field(..., description="반환된 결과 수")
     has_more: bool = Field(..., description="같은 풀에서 추가 추천 가능 여부")
-    applied_tier: Literal["strict", "relaxed", "open"] = Field(
-        default="strict", description="적용된 선호 tier"
-    )
-    fallback_used: bool = Field(default=False, description="tier 완화 사용 여부")
-    empty_reason: Literal[
-        "none",
-        "no_sql_match",
-        "no_scorable_recipes",
-        "ownership_blocked",
-        "exhausted",
-    ] = Field(default="none", description="빈 결과 사유")
 
 
 class RecipeIngredientItem(BaseModel):

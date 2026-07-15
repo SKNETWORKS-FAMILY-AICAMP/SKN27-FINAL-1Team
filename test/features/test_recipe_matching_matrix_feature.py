@@ -1,6 +1,6 @@
 import pytest
 
-from app.backend.services.recommendation_service.fridge_ingredient_match import (
+from app.backend.services.recommendation_service.fridge import (
     FridgeItemSnapshot,
     classify_fridge_match,
     compute_match_rates,
@@ -86,20 +86,14 @@ def test_recipe_matching_feature_banned_ingredient_matrix(banned_items, expected
 
 
 @pytest.mark.parametrize(
-    ("limit", "pool_multiplier", "expected_limit", "expected_multiplier"),
-    [
-        (-1, -1, 1, 1),
-        (0, 0, 1, 1),
-        (9, 4, 9, 4),
-        (999, 999, 50, 10),
-    ],
+    ("limit", "expected_limit"),
+    [(-1, 1), (0, 1), (9, 9), (999, 50)],
 )
-def test_recipe_recommend_config_feature_clamp_matrix(limit, pool_multiplier, expected_limit, expected_multiplier):
-    config = RecipeRecommendConfig.menu_custom_preset(limit, pool_multiplier=pool_multiplier)
+def test_recipe_recommend_config_feature_clamp_matrix(limit, expected_limit):
+    config = RecipeRecommendConfig.menu_custom_preset(limit)
 
     assert config.limit == expected_limit
-    assert config.pool_multiplier == expected_multiplier
-    assert config.pool_size == expected_limit * expected_multiplier
+    assert config.pool_size == 100
 
 
 @pytest.mark.parametrize(

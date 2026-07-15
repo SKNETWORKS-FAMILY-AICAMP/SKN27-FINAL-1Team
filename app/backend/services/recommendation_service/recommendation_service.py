@@ -2,37 +2,32 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import date, timedelta
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecommendationResult
-from app.backend.services.recommendation_service.fridge_ingredient_match import (
+from app.backend.services.recommendation_service.fridge import (
+    FridgeExpiryRow,
     FridgeItemSnapshot,
     FridgeMatchResult,
     classify_fridge_match,
     compute_match_rates,
-)
-from app.backend.services.recommendation_service.fridge_loader import (
-    FridgeExpiryRow,
     fetch_fridge_expiry_rows,
     fetch_fridge_snapshots,
 )
-from app.backend.services.recommendation_service.hard_filter import (
+from app.backend.services.recommendation_service.recipe_query import (
+    build_recipe_query,
     filter_candidates_by_id,
     filter_recipes_by_banned,
     load_hard_filter_context,
-)
-from app.backend.services.recommendation_service.recipe_candidate_query import (
-    build_recipe_query,
     load_recipe_ingredients_bulk,
     recipe_to_list_item,
 )
-from app.backend.services.recommendation_service.recipe_graph_service import fetch_review_rank_scores
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommend_model import score_recipes
 
 __all__ = [
     "RecipeRecommendConfig",
@@ -42,18 +37,10 @@ __all__ = [
 
 EXPIRY_WEIGHT_FRIDGE_CONSUME = 1000
 DEFAULT_EXPIRY_FALLBACK_DAYS = 7
-TierName = Literal["strict", "relaxed", "open"]
 
 
-def _empty_recommend_result(empty_reason: str) -> dict[str, Any]:
-    return {
-        "items": [],
-        "returned_count": 0,
-        "has_more": False,
-        "applied_tier": "strict",
-        "fallback_used": False,
-        "empty_reason": empty_reason,
-    }
+def _empty_recommend_result() -> dict[str, Any]:
+    return {"items": [], "returned_count": 0, "has_more": False}
 
 
 def _match_counts(fridge_match: FridgeMatchResult, config: RecipeRecommendConfig) -> dict[str, int]:
@@ -71,29 +58,6 @@ def _match_counts(fridge_match: FridgeMatchResult, config: RecipeRecommendConfig
         "display_match_rate": rates.display_match_rate,
         "match_rate": rates.match_rate,
     }
-
-
-def _preference_passes(
-    fridge_match: FridgeMatchResult,
-    recipe_ingredients: list[dict[str, Any]],
-    config: RecipeRecommendConfig,
-) -> bool:
-    maybe_count = len(fridge_match.maybe_owned) if config.include_maybe_owned else 0
-    owned_count = len(fridge_match.owned)
-
-    if config.require_any_owned and (owned_count + maybe_count) < 1:
-        return False
-
-    if config.min_display_match_rate is not None:
-        rates = compute_match_rates(
-            owned_count,
-            maybe_count,
-            len(recipe_ingredients),
-        )
-        if rates.display_match_rate < config.min_display_match_rate:
-            return False
-
-    return True
 
 
 def _d_day(row: FridgeExpiryRow, today: date) -> int:
@@ -157,84 +121,7 @@ def _build_final_score(mode: str, display_rate: int, expiry_score: int) -> int:
     return display_rate + expiry_score
 
 
-def _tier_configs(config: RecipeRecommendConfig) -> list[tuple[TierName, RecipeRecommendConfig]]:
-    tiers: list[tuple[TierName, RecipeRecommendConfig]] = [("strict", config)]
-    relaxed = replace(config, min_display_match_rate=None)
-    if relaxed != config:
-        tiers.append(("relaxed", relaxed))
-    open_cfg = replace(config, require_any_owned=False, min_display_match_rate=None)
-    if open_cfg != tiers[-1][1]:
-        tiers.append(("open", open_cfg))
-    return tiers
-
-
-def _candidates_for_tier(
-    scored: list[dict[str, Any]],
-    tier_config: RecipeRecommendConfig,
-) -> list[dict[str, Any]]:
-    return [
-        row
-        for row in scored
-        if _preference_passes(row["_fridge_match"], row["_recipe_ingredients"], tier_config)
-    ]
-
-
-def _slice_with_tier_fallback(
-    scored: list[dict[str, Any]],
-    config: RecipeRecommendConfig,
-    limit: int,
-) -> tuple[list[dict[str, Any]], bool, TierName, bool, str]:
-    picked: list[dict[str, Any]] = []
-    picked_ids: set[int] = set()
-    applied_tier: TierName = "strict"
-    fallback_used = False
-    exhausted = False
-
-    for tier_name, tier_config in _tier_configs(config):
-        pool = _candidates_for_tier(scored, tier_config)
-        available = [row for row in pool if row["recipe_id"] not in picked_ids]
-
-        if pool and not available:
-            exhausted = True
-            break
-
-        if len(picked) >= limit:
-            break
-
-        take = available[: limit - len(picked)]
-        if take:
-            if tier_name != "strict":
-                fallback_used = True
-            applied_tier = tier_name
-            picked.extend(take)
-            picked_ids.update(row["recipe_id"] for row in take)
-
-    has_more = False
-    if not exhausted:
-        for _, tier_config in _tier_configs(config):
-            pool = _candidates_for_tier(scored, tier_config)
-            remaining = [row for row in pool if row["recipe_id"] not in picked_ids]
-            if remaining:
-                has_more = True
-                break
-
-    if picked:
-        empty_reason = "none"
-    elif exhausted:
-        empty_reason = "exhausted"
-    else:
-        empty_reason = "ownership_blocked"
-
-    return picked, has_more, applied_tier, fallback_used, empty_reason
-
-
-def _build_recommend_result(
-    items: list[dict[str, Any]],
-    has_more: bool,
-    applied_tier: TierName,
-    fallback_used: bool,
-    empty_reason: str,
-) -> dict[str, Any]:
+def _build_recommend_result(items: list[dict[str, Any]], has_more: bool) -> dict[str, Any]:
     response_items = []
     for row in items:
         base = recipe_to_list_item(row["recipe"])
@@ -254,9 +141,6 @@ def _build_recommend_result(
         "items": response_items,
         "returned_count": len(response_items),
         "has_more": has_more,
-        "applied_tier": applied_tier,
-        "fallback_used": fallback_used,
-        "empty_reason": empty_reason,
     }
 
 
@@ -346,23 +230,23 @@ class RecommendationService:
         hard_ctx = load_hard_filter_context(db, user_id)
         exclude = [] if refresh_pool else (exclude_recipe_ids or [])
 
+        # ── 하드필터: 레시피 ID 확정 ──
         recipes = self._generate_candidates(db, config)
         recipes = filter_candidates_by_id(recipes, exclude)
         if not recipes:
-            return _empty_recommend_result("no_sql_match")
+            return _empty_recommend_result()
 
         ingredients_by_recipe = load_recipe_ingredients_bulk(db, [recipe.id for recipe in recipes])
         recipes = filter_recipes_by_banned(recipes, ingredients_by_recipe, hard_ctx)
         if not recipes:
-            return _empty_recommend_result("no_scorable_recipes")
+            return _empty_recommend_result()
 
         recipes = recipes[: config.pool_size]
 
-        rank_scores = fetch_review_rank_scores([recipe.id for recipe in recipes])
-        recipes = [recipe for recipe in recipes if recipe.id in rank_scores]
-        if not recipes:
-            return _empty_recommend_result("no_scorable_recipes")
+        # ── 추론 ──
+        model_scores = score_recipes([r.id for r in recipes], str(user_id))
 
+        # ── 후처리: fridge 매칭 + 정렬 + 응답 ──
         expiry_rows = fetch_fridge_expiry_rows(db, user_id)
         fridge_snapshots = fetch_fridge_snapshots(db, user_id)
         expiry_by_id = {row.ingredient_id: row for row in expiry_rows}
@@ -378,19 +262,15 @@ class RecommendationService:
             expiry_by_name,
             config,
             date.today(),
-            rank_scores=rank_scores,
+            model_scores=model_scores,
         )
         if not scored:
-            return _empty_recommend_result("no_scorable_recipes")
+            return _empty_recommend_result()
 
-        self._rank_candidates(scored, config)
-
-        items, has_more, applied_tier, fallback_used, empty_reason = _slice_with_tier_fallback(
-            scored,
-            config,
-            config.limit,
-        )
-        return _build_recommend_result(items, has_more, applied_tier, fallback_used, empty_reason)
+        self._rank_candidates(scored)
+        items = scored[: config.limit]
+        has_more = len(scored) > config.limit
+        return _build_recommend_result(items, has_more)
 
     @staticmethod
     def _generate_candidates(db: Session, config: RecipeRecommendConfig) -> list[Recipe]:
@@ -414,7 +294,7 @@ class RecommendationService:
         config: RecipeRecommendConfig,
         today: date,
         *,
-        rank_scores: dict[int, float],
+        model_scores: dict[int, float],
     ) -> list[dict[str, Any]]:
         ranked: list[dict[str, Any]] = []
 
@@ -446,21 +326,18 @@ class RecommendationService:
                     "missing_ingredient_count": counts["missing_ingredient_count"],
                     "expiry_score": expiry_score,
                     "reason": reason,
-                    "_fridge_match": fridge_match,
-                    "_recipe_ingredients": recipe_ingredients,
                     "final_score": final_score,
-                    "review_rank_score": rank_scores[recipe.id],
+                    "model_score": model_scores.get(recipe.id, 0.0),
                 }
             )
 
         return ranked
 
     @staticmethod
-    def _rank_candidates(ranked: list[dict[str, Any]], config: RecipeRecommendConfig) -> None:
-        del config
+    def _rank_candidates(ranked: list[dict[str, Any]]) -> None:
         ranked.sort(
             key=lambda row: (
-                -row["review_rank_score"],
+                -row["model_score"],
                 -row["final_score"],
                 -row["display_match_rate"],
                 -row["recipe_id"],

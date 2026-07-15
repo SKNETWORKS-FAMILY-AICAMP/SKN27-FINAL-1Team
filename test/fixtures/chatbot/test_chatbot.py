@@ -6,8 +6,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
+from ai.agents.supervisor_agent.supervisor_agent import router_node
 from ai.agents.supervisor_agent import supervisor_utils
 import ai.agents.recipe_agent.recipe_handlers as recipe_handlers
+import ai.agents.recipe_agent.recipe_utils as recipe_utils
+
+
+def _route_intent(message: str) -> str:
+    """실제 LangGraph 라우터를 통해 테스트 문장의 의도를 반환합니다."""
+    return router_node({"text": message, "history": [], "service": supervisor_service})["intent"]
 
 
 def test_route_intent_examples() -> None:
@@ -15,30 +22,35 @@ def test_route_intent_examples() -> None:
     cases = {
         "오늘 먼저 먹어야 할 거 뭐야?": "inventory.expiring",
         "재료 기한 다되어 가는거 있어?": "inventory.expiring",
+        "냉장고 재료 중 유통기한 임박 재료": "inventory.expiring",
+        "냉장고 재료 중 유통기한 임박 재료랑 그 재료로 만들 수 있는 레시피 알려줘": "multi_agent",
         "김치 유통기한 언제까지야": "inventory.expiring",
         "내 냉장고 재료 뭐 있어?": "inventory.list",
         "영수증 등록 어디서 해?": "receipt.guide",
         "파 어떻게 보관해?": "ingredient.guide",
         "파 보관법": "ingredient.guide",
+        "파 손질해줘": "ingredient.guide",
+        "감자 세척해줘": "ingredient.guide",
         "아보카도 보관법": "ingredient.guide",
         "남은 피자 보관법": "ingredient.guide",
         "계란 보관 어떻게 해": "ingredient.guide",
-        "먹다 남은 햄버거 어떡하지?": "ingredient.guide",
         "양파 영양성분 알려줘": "ingredient.guide",
         "감자 칼로리 알려줘": "ingredient.guide",
         "7월 제철 음식 뭐야": "ingredient.guide",
-        "두부로 뭐 만들수있어?": "recipe.recommend",
-        "두부로 뭘 만들지?": "recipe.recommend",
-        "이걸로 만들수 있는 메뉴 뭐야": "recipe.recommend",
+        "간장 보관법": "ingredient.guide",
+        "고추가 물러졌는데 괜찮아?": "ingredient.guide",
+        "채소에 뭐가 있어?": "ingredient.guide",
+        "내 냉장고에 채소 뭐 있어?": "inventory.list",
         "냉장고 재료로 뭐 만들어 먹지?": "recipe.recommend",
         "냉장고 재료로 뭐해먹지": "recipe.recommend",
         "냉장고 재료로 요리 추천해줘": "recipe.recommend",
         "냉장고속 재료로 요리추천": "recipe.recommend",
         "냉장고 재료로 만들 요리 알려줘": "recipe.recommend",
+        "현재 냉장고 재료와 감자로 할 수 있는 레시피 알려줘": "recipe.recommend",
+        "냉장고 재료와 양파로 가능한 메뉴 추천": "recipe.recommend",
+        "보유 식재료로 만들 음식 알려줘": "recipe.recommend",
+        "내 재료 기준 레시피 추천": "recipe.recommend",
         "냉장고 재료로 뭐만들어먹지?": "recipe.recommend",
-        "파 빨리 써야 하는데 뭐하지": "recipe.recommend",
-        "감자로 간단하게 만들수 있는거 알려줘": "recipe.recommend",
-        "먹다남은 감자튀김 어디에 쓸수있을까": "recipe.recommend",
         "바베큐 레시피 알려줘": "recipe.search",
         "김치볶음밥 레시피": "recipe.search",
         "김치볶음밥이랑 먹기 좋은 음식": "recipe.pairing",
@@ -47,20 +59,18 @@ def test_route_intent_examples() -> None:
     }
 
     for message, expected in cases.items():
-        assert supervisor_service._route_intent(message) == expected
+        assert _route_intent(message) == expected
 
 
 def test_extract_recipe_ingredient() -> None:
     """특정 재료 레시피 질문에서 재료명만 추출되는지 확인합니다."""
-    assert supervisor_utils._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
-    assert supervisor_utils._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
-    assert supervisor_utils._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
-    assert supervisor_utils._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
-    assert supervisor_utils._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
-    assert supervisor_utils._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
+    assert recipe_utils._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
+    assert recipe_utils._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
+    assert recipe_utils._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
+    assert recipe_utils._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
+    assert recipe_utils._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
+    assert recipe_utils._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
 
-    assert supervisor_utils._extract_keyword("아보카도 보관법") == "아보카도"
-    assert supervisor_utils._extract_keyword("남은 피자 보관법") == "피자"
 
 
 def test_login_status_question() -> None:
@@ -71,37 +81,14 @@ def test_login_status_question() -> None:
 
 def test_guest_chat_login_boundary() -> None:
     """비회원은 개인 냉장고 기능만 막고 일반 레시피/보관법은 허용합니다."""
-    assert supervisor_utils._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
-    assert supervisor_utils._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
-    assert supervisor_utils._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
-    assert supervisor_utils._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
-    assert supervisor_utils._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
-    assert not supervisor_utils._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
-    assert not supervisor_utils._requires_login("recipe.search", "깐풍기 레시피")
-    assert not supervisor_utils._requires_login("ingredient.guide", "양파 보관법")
-
-def test_guide_result_match() -> None:
-    """가이드 검색이 비슷한 이름의 다른 재료를 답하지 않는지 확인합니다."""
-    assert not supervisor_utils._is_guide_result_match("피자", "피자소스")
-    assert not supervisor_utils._is_guide_result_match("치킨", "치킨스톡")
-    assert not supervisor_utils._is_guide_result_match("김", "김치")
-    assert supervisor_utils._is_guide_result_match("파", "대파")
-    assert supervisor_utils._is_guide_result_match("마늘", "깐마늘")
-
-
-def test_search_result_relevance() -> None:
-    """웹 검색 fallback이 질문 핵심어와 무관한 결과를 거르는지 확인합니다."""
-    good = {"title": "남은 치킨 보관법", "content": "치킨은 밀폐 후 냉장 보관", "url": "https://example.com"}
-    bad = {"title": "마늘 양파 보관법", "content": "마늘과 양파는 상온 보관", "url": "https://example.com"}
-    pizza_sauce = {"title": "피자소스 보관법", "content": "피자소스는 개봉 후 냉장 보관", "url": "https://example.com"}
-    url_only = {"title": "마늘 보관법", "content": "마늘은 서늘하게 보관", "url": "https://example.com/chicken"}
-
-    assert supervisor_utils._is_relevant_search_result("먹다남은 치킨", good)
-    assert not supervisor_utils._is_relevant_search_result("먹다남은 치킨", bad)
-    assert not supervisor_utils._is_relevant_search_result("피자", pizza_sauce)
-    assert not supervisor_utils._is_relevant_search_result("보관법", good)
-    assert not supervisor_utils._is_relevant_search_result("치킨", url_only)
-
+    assert recipe_utils._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
+    assert recipe_utils._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
+    assert recipe_utils._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
+    assert recipe_utils._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
+    assert recipe_utils._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
+    assert not recipe_utils._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
+    assert not recipe_utils._requires_login("recipe.search", "깐풍기 레시피")
+    assert not recipe_utils._requires_login("ingredient.guide", "양파 보관법")
 
 def test_format_guide_tip() -> None:
     """긴 보관법 문장을 번호 목록으로 줄여 보여주는지 확인합니다."""
@@ -151,9 +138,10 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node
-from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY
+from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node, shopping_agent_node
+from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY, _normalize_shopping_create_query, _strip_shopping_compare_suffix
 from ai.agents.inventory_agent.inventory_utils import _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _extract_expiry_keyword, _pending_add_from_history
+from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
 
 
 class FakeService:
@@ -162,8 +150,85 @@ class FakeService:
     def __init__(self, intent: str):
         self.intent = intent
 
-    def _route_intent_with_llm(self, text, history):
-        return self.intent
+    def _route_intent_payload_with_llm(self, text, history):
+        """테스트에서 LLM fallback 결과를 공통 dict 형식으로 반환합니다."""
+        return {
+            "intent": self.intent,
+            "confidence": 0.9,
+            "slots": {},
+        }
+
+
+def test_broad_single_words_use_llm_fallback() -> None:
+    """넓은 단일 표현은 규칙으로 확정하지 않고 LLM fallback에 맡깁니다."""
+    service = FakeService("general")
+
+    for message in ("확인", "다른거", "요리"):
+        assert router_node({"text": message, "service": service, "history": []})["intent"] == "general"
+
+
+def test_ambiguous_read_requests_use_llm_fallback() -> None:
+    """여러 의미로 해석할 수 있는 조회 표현은 LLM 분류 결과를 사용합니다."""
+    recipe_service = FakeService("recipe.recommend")
+    guide_service = FakeService("ingredient.guide")
+
+    for message in (
+        "두부로 뭘 만들지?",
+        "두부로 뭐 만들수있어?",
+        "이걸로 만들수 있는 메뉴 뭐야",
+        "파 빨리 써야 하는데 뭐하지",
+        "감자로 간단하게 만들수 있는거 알려줘",
+        "감자로 한 끼 해결하고 싶어",
+        "먹다남은 감자튀김 어디에 쓸수있을까",
+    ):
+        assert router_node({"text": message, "service": recipe_service, "history": []})["intent"] == "recipe.recommend"
+
+    assert router_node({
+        "text": "먹다 남은 햄버거 어떡하지?",
+        "service": guide_service,
+        "history": [],
+    })["intent"] == "ingredient.guide"
+
+
+def test_ambiguous_non_food_request_is_not_forced_to_recipe() -> None:
+    """음식 문맥이 없는 애매한 표현은 레시피 요청으로 단정하지 않습니다."""
+    service = FakeService("general")
+
+    assert router_node({"text": "지금 뭐하지?", "service": service, "history": []})["intent"] == "general"
+
+
+def test_llm_route_history_keeps_explicit_context() -> None:
+    """LLM 문맥에 이전 intent, 슬롯, 실행 대기 작업을 함께 전달합니다."""
+    history = [
+        {"role": "user", "text": "두부 추가해줘"},
+        {
+            "role": "bot",
+            "text": "두부를 몇 개 추가하시겠어요?",
+            "intent": "inventory.action",
+            "slots": {"ingredient": "두부"},
+            "pending_action": {"action": "add_ingredient"},
+        },
+    ]
+
+    assert supervisor_utils._build_llm_route_history(history)[-1] == {
+        "role": "bot",
+        "text": "두부를 몇 개 추가하시겠어요?",
+        "intent": "inventory.action",
+        "slots": {"ingredient": "두부"},
+        "pending_action": {"action": "add_ingredient"},
+    }
+
+
+def test_llm_fallback_excludes_write_intents() -> None:
+    """DB 변경 intent는 LLM fallback 허용 목록에 포함하지 않습니다."""
+    write_intents = {
+        "shopping.create",
+        "shopping.purchase",
+        "shopping.delete_item",
+        "shopping.check_item",
+    }
+
+    assert write_intents.isdisjoint(supervisor_utils._LLM_ROUTE_INTENTS)
 
 
 def test_router_node_keeps_llm_payload_slots() -> None:
@@ -177,7 +242,7 @@ def test_router_node_keeps_llm_payload_slots() -> None:
                 "slots": {"ingredient": "두부"},
             }
 
-    result = router_node({"text": "애매한 추천 질문", "service": PayloadService(), "history": []})
+    result = router_node({"text": "이건 어떻게 하면 좋을까?", "service": PayloadService(), "history": []})
 
     assert result == {
         "intent": "recipe.recommend",
@@ -185,8 +250,10 @@ def test_router_node_keeps_llm_payload_slots() -> None:
             "intent": "recipe.recommend",
             "confidence": 0.9,
             "slots": {"ingredient": "두부"},
+            "tasks": [],
         },
         "slots": {"ingredient": "두부"},
+        "tasks": [],
     }
 
 
@@ -217,6 +284,181 @@ def test_expiring_question_does_not_use_consume_as_ingredient_name() -> None:
     assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("general"), "history": []})["intent"] == "inventory.expiring"
     assert _extract_expiry_keyword("소비기한 임박 재료 있어?") == ""
     assert _extract_expiry_keyword("소비 임박재료 뭐 있어?") == ""
+    assert _extract_expiry_keyword("냉장고 재료 중 유통기한 임박 재료") == ""
+
+
+
+def test_multi_agent_node_runs_tasks_in_order(monkeypatch) -> None:
+    """복합 질문의 작업 목록을 순서대로 실행하고 결과를 합칩니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    calls = []
+
+    def fake_inventory(**kwargs):
+        """테스트용 냉장고 응답을 반환합니다."""
+        calls.append(kwargs["intent"])
+        return {"response_text": "소비기한 확인이 필요한 재료예요. 두부 D-1"}
+
+    def fake_recipe(*args, **kwargs):
+        """테스트용 레시피 응답을 반환합니다."""
+        calls.append((kwargs["intent"], args[0]))
+        return {
+            "response_text": "두부로 만들 수 있는 레시피예요.",
+            "actions": [{"label": "두부조림", "url": "/recipes/1"}],
+        }
+
+    monkeypatch.setattr(inventory_agent, "run_inventory_agent", fake_inventory)
+    monkeypatch.setattr(supervisor_agent, "run_recipe_agent", fake_recipe)
+
+    text = "냉장고 재료 중 유통기한 임박 재료랑 그 재료로 만들 수 있는 레시피 알려줘"
+    routed = supervisor_agent.router_node({"text": text, "history": [], "service": supervisor_service})
+    result = supervisor_agent.multi_agent_node(
+        {
+            "text": text,
+            "history": [],
+            "db": MagicMock(),
+            "user_id": 1,
+            "tasks": routed["tasks"],
+        }
+    )
+
+    assert routed["intent"] == "multi_agent"
+    assert [task["intent"] for task in routed["tasks"]] == ["inventory.expiring", "recipe.recommend"]
+    assert calls == ["inventory.expiring", ("recipe.recommend", "냉장고 재료로 요리 추천해줘")]
+    assert "두부 D-1" in result["response_text"]
+    assert "두부로 만들 수 있는 레시피" in result["response_text"]
+    assert result["actions"][0]["label"] == "두부조림"
+
+def test_multi_agent_node_keeps_success_when_one_task_fails(monkeypatch) -> None:
+    """복합 요청 중 한 Agent가 실패해도 성공한 응답은 사용자에게 반환합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    def fail_guide(state):
+        """실패 격리 확인을 위해 예외를 발생시킵니다."""
+        raise RuntimeError("guide failed")
+
+    def succeed_recipe(state):
+        """실패한 작업과 함께 실행되는 정상 응답을 반환합니다."""
+        return {"response_text": "감자 레시피예요."}
+
+    monkeypatch.setattr(supervisor_agent, "guide_agent_node", fail_guide)
+    monkeypatch.setattr(supervisor_agent, "recipe_agent_node", succeed_recipe)
+
+    result = supervisor_agent.multi_agent_node({
+        "text": "감자 보관법과 레시피",
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+        "tasks": [
+            {"intent": "ingredient.guide", "text": "감자 보관법"},
+            {"intent": "recipe.search", "text": "감자 레시피"},
+        ],
+    })
+
+    assert "감자 레시피예요." in result["response_text"]
+    assert "일부 요청은 처리하지 못했어요." in result["response_text"]
+    assert result["slots"]["completed_intents"] == ["recipe.search"]
+    assert result["slots"]["failed_intents"] == ["ingredient.guide"]
+
+
+def test_merge_agent_results_removes_duplicate_ui_data() -> None:
+    """복합 Agent 응답의 중복 버튼과 출처를 한 번만 반환합니다."""
+    action = {"label": "감자 레시피", "url": "/recipes?ingredient=감자"}
+    source = {"title": "농촌진흥청", "url": "https://example.com"}
+    result = supervisor_utils._merge_agent_results(
+        {"response_text": "첫 번째 응답", "actions": [action], "sources": [source]},
+        {"response_text": "두 번째 응답", "actions": [action], "sources": [source]},
+    )
+
+    assert result["actions"] == [action]
+    assert result["sources"] == [source]
+
+
+def test_guide_and_price_request_builds_multi_agent_tasks() -> None:
+    """보관법과 가격을 함께 물으면 두 조회 작업으로 분해합니다."""
+    result = router_node({
+        "text": "감자 보관법이랑 감자 가격 알려줘",
+        "history": [],
+        "service": supervisor_service,
+    })
+
+    assert result["intent"] == "multi_agent"
+    assert [task["intent"] for task in result["tasks"]] == [
+        "ingredient.guide",
+        "shopping.compare",
+    ]
+    assert result["tasks"][1]["text"] == "감자 가격 알려줘"
+
+
+def test_shopping_follow_up_shows_all_items(monkeypatch) -> None:
+    """장보기 목록의 나머지 요청은 생략 없이 전체 항목을 반환합니다."""
+    from app.backend.services.shopping_service import shopping_service
+
+    shopping_list = {
+        "id": 1,
+        "items": [
+            {"name": f"재료{index}", "quantity": 1, "unit": "개", "price": None, "is_purchased": False}
+            for index in range(1, 8)
+        ],
+    }
+    monkeypatch.setattr(shopping_service, "get_current", lambda **kwargs: shopping_list)
+
+    result = shopping_agent_node({
+        "text": "외2개도 보여줘",
+        "intent": "shopping.current",
+        "db": MagicMock(),
+        "user_id": 1,
+        "history": [],
+    })
+
+    assert "7. 재료7 - 가격 정보 없음" in result["response_text"]
+    assert "외 2개" not in result["response_text"]
+
+
+def test_shopping_create_removes_location_particle() -> None:
+    """장보기 위치 조사를 제거해 상품명에 에/로가 남지 않게 합니다."""
+    first = _normalize_shopping_create_query("냉동 피자 장보기에 넣어줘")
+    second = _normalize_shopping_create_query("장보기에 냉동 치킨 넣어줘")
+
+    assert extract_ingredient_names(first) == ["냉동 피자"]
+    assert extract_ingredient_names(second) == ["냉동 치킨"]
+
+def test_price_explanation_uses_shopping_help() -> None:
+    """가격 정보 없음의 이유를 묻는 후속 질문은 상품명으로 검색하지 않습니다."""
+    routed = router_node({
+        "text": "가격 정보 안나오는 이유?",
+        "history": [],
+        "service": FakeService("general"),
+    })
+
+    assert routed["intent"] == "shopping.price_help"
+    result = shopping_agent_node({"text": "가격 정보 안나오는 이유?", **routed})
+    assert "판매가를 확인하지 못했다" in result["response_text"]
+
+
+def test_expensive_price_question_routes_to_shopping() -> None:
+    """비싸다고 묻는 가격 질문은 식재료 가이드가 아니라 장보기 가격 비교로 보냅니다."""
+    routed = router_node({
+        "text": "바닐라오일 왜 이렇게 비싸?",
+        "history": [],
+        "service": FakeService("general"),
+    })
+
+    assert routed["intent"] == "shopping.compare"
+
+
+def test_expensive_price_question_strips_question_suffix() -> None:
+    """비싸다고 묻는 표현은 상품명에서 제거한 뒤 가격 비교에 전달합니다."""
+    assert _strip_shopping_compare_suffix("바닐라오일 왜 이렇게 비싸?") == "바닐라오일"
+
+
+def test_inventory_add_parses_quantity_and_storage_particle() -> None:
+    """수량과 보관 위치 조사가 포함되어도 재료명만 정확히 추출합니다."""
+    assert _extract_add_items("양파 2개 냉장에 추가해줘") == [
+        {"name": "양파", "quantity": 2.0, "storage": "냉장"}
+    ]
+
 
 
 def test_delete_inventory_item_routes_to_inventory_delete() -> None:
@@ -734,11 +976,14 @@ def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None
 
 
 def test_guide_reply_formats_nutrition(monkeypatch) -> None:
-    """영양성분 응답을 확인합니다."""
+    """Guide Agent 영양성분 데이터를 챗봇 문장으로 변환합니다."""
     def fake_answer(query):
+        assert query == "두부 영양성분"
         return {
             "ok": True,
+            "status": "success",
             "action": "lookup_nutrition",
+            "message": "두부 영양성분을 조회했어요.",
             "data": {
                 "ingredient": {"name": "두부"},
                 "nutrition": {
@@ -750,101 +995,201 @@ def test_guide_reply_formats_nutrition(monkeypatch) -> None:
                     "sodium_mg": 7,
                 },
             },
-            "ui": {"sources": [{"title": "영양DB", "url": None}]},
+            "ui": {"actions": [], "sources": [{"title": "영양DB", "url": None}]},
         }
 
     monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
 
-    reply, sources = supervisor_service._reply_guide("두부 영양성분")
+    result = supervisor_service._reply_guide("두부 영양성분")
 
-    assert "두부 영양성분이에요." in reply
-    assert "기준량: 100g" in reply
-    assert "열량: 80kcal" in reply
-    assert "단백질: 8.1g" in reply
-    assert sources[0]["url"] == ""
+    assert "두부 영양성분이에요." in result["response_text"]
+    assert "기준량: 100g" in result["response_text"]
+    assert "열량: 80kcal" in result["response_text"]
+    assert result["sources"][0]["url"] == ""
+    assert result["slots"] == {"guide_status": "success", "guide_action": "lookup_nutrition"}
 
 
 def test_guide_reply_formats_seasonality(monkeypatch) -> None:
-    """제철 목록 응답을 확인합니다."""
+    """Guide Agent 제철 목록 데이터를 챗봇 문장으로 변환합니다."""
     def fake_answer(query):
         return {
             "ok": True,
+            "status": "success",
             "action": "list_seasonal_ingredients",
+            "message": "7월 제철 식재료를 조회했어요.",
             "data": {
                 "month": 7,
                 "items": [{"name": "수박"}, {"name": "애호박"}, {"name": "옥수수"}],
             },
-            "ui": {"sources": []},
+            "ui": {"actions": [], "sources": []},
         }
 
     monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
 
-    reply, sources = supervisor_service._reply_guide("7월 제철음식")
+    result = supervisor_service._reply_guide("7월 제철음식")
 
-    assert reply == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
-    assert sources == []
-
+    assert result["response_text"] == "7월 제철 식재료는 수박, 애호박, 옥수수이에요."
 
 
-def test_guide_reply_formats_ingredient_seasonality(monkeypatch) -> None:
-    """식재료별 제철 응답을 월 목록으로 보여줍니다."""
+def test_guide_reply_uses_agent_action_instead_of_storage_default(monkeypatch) -> None:
+    """명시된 Guide Agent action을 유지하고 보관법으로 강제하지 않습니다."""
     def fake_answer(query):
+        assert query == "크림치즈 맛있게 먹는법"
         return {
             "ok": True,
-            "action": "lookup_seasonality",
-            "data": {
-                "ingredient": {"name": "딸기"},
-                "seasonality": {"months": [1, 2, 3]},
-            },
-            "ui": {"sources": []},
-        }
-
-    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
-
-    reply, sources = supervisor_service._reply_guide("딸기 제철 언제야")
-
-    assert reply == "딸기 제철은 1월, 2월, 3월이에요."
-    assert sources == []
-
-
-def test_guide_reply_formats_intake_tip(monkeypatch) -> None:
-    """섭취 팁 응답을 챗봇 말풍선으로 변환합니다."""
-    def fake_answer(query):
-        assert query == "크림치즈"
-        return {
-            "ok": True,
+            "status": "success",
             "action": "lookup_intake",
+            "message": "크림치즈 섭취 팁을 조회했어요.",
             "data": {
                 "ingredient": {"name": "크림치즈"},
                 "guides": {"intake": {"status": "available", "content": "빵이나 크래커에 발라 먹으면 좋다."}},
             },
-            "ui": {"sources": []},
+            "ui": {"actions": [], "sources": []},
         }
 
     monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
 
-    reply, sources = supervisor_service._reply_guide("크림치즈 맛있게 먹는법")
+    result = supervisor_service._reply_guide("크림치즈 맛있게 먹는법")
 
-    assert "크림치즈 섭취 팁이에요." in reply
-    assert "빵이나 크래커" in reply
-    assert sources == []
+    assert "크림치즈 섭취 팁이에요." in result["response_text"]
+    assert "빵이나 크래커" in result["response_text"]
 
-def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
-    """규칙으로 잡힌 레시피 추천은 LLM 분류로 넘기지 않습니다."""
-    messages = [
-        "냉장고 재료로 뭐 만들어 먹지?",
-        "냉장고 재료로 만들 요리 알려줘",
-        "냉장고 재료로 뭐만들어먹지?",
-    ]
 
-    for message in messages:
-        assert supervisor_service._route_intent_with_llm(message) == "recipe.recommend"
+def test_guide_reply_keeps_full_ingredient_overview(monkeypatch) -> None:
+    """전체 가이드 질문은 Guide Agent의 lookup_ingredient 응답을 유지합니다."""
+    def fake_answer(query):
+        assert query == "감자 알려줘"
+        return {
+            "ok": True,
+            "status": "success",
+            "action": "lookup_ingredient",
+            "message": "감자 식재료 가이드를 조회했어요.",
+            "data": {"ingredient": {"name": "감자"}, "guides": {}},
+            "ui": {"actions": [], "sources": []},
+        }
 
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    result = supervisor_service._reply_guide("감자 알려줘")
+
+    assert result["response_text"] == "감자 식재료 가이드를 조회했어요."
+    assert "보관법" not in result["response_text"]
+
+
+def test_guide_reply_preserves_candidate_query(monkeypatch) -> None:
+    """후보 선택 버튼에 Guide Agent가 만든 guide_type 포함 질문을 유지합니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "status": "needs_input",
+            "action": "confirm_ingredient",
+            "message": "비슷한 식재료를 찾았어요.",
+            "data": {},
+            "ui": {
+                "actions": [
+                    {
+                        "label": "닭가슴살 신선도 확인법",
+                        "value": "닭가슴살 신선도 확인법 알려줘",
+                        "guide_type": "freshness",
+                    }
+                ],
+                "sources": [],
+            },
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    result = supervisor_service._reply_guide("닭고기 상했는지 확인하는 법 알려줘")
+
+    assert result["actions"][0]["data"]["message"] == "닭가슴살 신선도 확인법 알려줘"
+    assert result["actions"][0]["data"]["guide_type"] == "freshness"
+    assert result["slots"]["guide_status"] == "needs_input"
+
+
+def test_guide_reply_treats_not_found_as_normal_response(monkeypatch) -> None:
+    """Guide Agent의 not_found를 시스템 오류가 아닌 사용자 안내로 전달합니다."""
+    def fake_answer(query):
+        return {
+            "ok": True,
+            "status": "not_found",
+            "action": "lookup_storage",
+            "message": "우동사리 보관법을 찾지 못했어요.",
+            "data": {},
+            "ui": {"actions": [], "sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    result = supervisor_service._reply_guide("우동사리 보관법 알려줘")
+
+    assert result["response_text"] == "우동사리 보관법을 찾지 못했어요."
+    assert result["slots"]["guide_status"] == "not_found"
+
+
+def test_guide_reply_converts_agent_error(monkeypatch) -> None:
+    """Guide Agent 시스템 오류는 공통 오류 문구로 변환합니다."""
+    def fake_answer(query):
+        return {
+            "ok": False,
+            "status": "error",
+            "action": "lookup_storage",
+            "message": "DB 오류",
+            "error": {"code": "GUIDE_LOOKUP_ERROR"},
+            "ui": {"actions": [], "sources": []},
+        }
+
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.answer_guide_query", fake_answer)
+
+    result = supervisor_service._reply_guide("감자 보관법")
+
+    assert result["response_text"] == "가이드 정보를 조회하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
+
+
+
+def test_chat_service_passes_session_metadata_to_graph(monkeypatch) -> None:
+    """채팅 세션 ID와 문맥 개수를 LangGraph 실행 메타데이터로 전달합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_module
+    import ai.agents.supervisor_agent.supervisor_service as service_module
+
+    captured = {}
+
+    def fake_invoke(state, config):
+        """LangGraph 호출 인자를 저장하고 최소 응답 상태를 반환합니다."""
+        captured["config"] = config
+        return {**state, "intent": "general", "response_text": "안내", "actions": [], "sources": []}
+
+    monkeypatch.setattr(supervisor_module.supervisor_agent, "invoke", fake_invoke)
+    monkeypatch.setattr(service_module, "propagate_attributes", None)
+    monkeypatch.setattr(service_module, "LangfuseCallbackHandler", None)
+
+    response = supervisor_service.handle_message(
+        db=MagicMock(),
+        user_id=1,
+        message="안녕",
+        history=[{"role": "user", "text": "이전 질문"}],
+        session_id="chat-session-1",
+    )
+
+    assert response["reply"] == "안내"
+    assert captured["config"]["metadata"] == {
+        "chat_session_id": "chat-session-1",
+        "history_count": 1,
+        "has_pending_action": False,
+    }
+
+
+def test_chat_request_accepts_session_id() -> None:
+    """채팅 요청 스키마가 프론트에서 전달한 세션 ID를 보존합니다."""
+    from app.backend.schemas.chat import ChatRequest
+
+    request = ChatRequest(message="안녕", session_id="chat-session-1")
+
+    assert request.session_id == "chat-session-1"
 
 
 def test_llm_route_payload_json_parser() -> None:
     """LLM intent 응답을 JSON 객체로 파싱합니다."""
-    payload = supervisor_service._parse_llm_route_payload(
+    payload = supervisor_utils._parse_llm_route_payload(
         '{"intent":"recipe.recommend","confidence":0.82,"slots":{"ingredient":"두부"}}'
     )
 
@@ -852,12 +1197,44 @@ def test_llm_route_payload_json_parser() -> None:
         "intent": "recipe.recommend",
         "confidence": 0.82,
         "slots": {"ingredient": "두부"},
+        "tasks": [],
+    }
+
+
+def test_llm_multi_agent_payload_filters_write_tasks() -> None:
+    """LLM 복합 작업에서 조회 전용 intent만 허용합니다."""
+    payload = supervisor_utils._parse_llm_route_payload(
+        '{"intent":"multi_agent","confidence":0.9,"slots":{},"tasks":['
+        '{"intent":"inventory.expiring","text":"임박 재료 알려줘"},'
+        '{"intent":"inventory.action","text":"두부 추가해줘"},'
+        '{"intent":"recipe.recommend","text":"그 재료로 요리 추천해줘"}]}'
+    )
+
+    assert [task["intent"] for task in payload["tasks"]] == [
+        "inventory.expiring",
+        "recipe.recommend",
+    ]
+
+def test_llm_route_payload_rejects_unknown_values() -> None:
+    """LLM 응답에서 허용되지 않은 intent와 슬롯을 제거하고 빈 작업 문장을 보완합니다."""
+    payload = supervisor_utils._parse_llm_route_payload(
+        '{"intent":"system.delete","confidence":2,"slots":'
+        '{"ingredient":"감자","admin":true,"date":null},"tasks":'
+        '[{"intent":"recipe.search","text":""}]}',
+        fallback_text="감자 레시피",
+    )
+
+    assert payload == {
+        "intent": "general",
+        "confidence": 1.0,
+        "slots": {"ingredient": "감자"},
+        "tasks": [{"intent": "recipe.search", "text": "감자 레시피"}],
     }
 
 
 def test_recipe_pairing_reply() -> None:
     """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
-    reply = supervisor_service._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
+    reply = supervisor_utils._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
 
     assert "김치볶음밥에는" in reply
     assert "계란국" in reply

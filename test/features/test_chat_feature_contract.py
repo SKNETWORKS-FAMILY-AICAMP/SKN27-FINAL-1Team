@@ -7,16 +7,18 @@ pytest.importorskip("langchain_openai")
 
 import ai.agents.alarm_agent.alarm_agent as alarm_agent_module
 from ai.agents.supervisor_agent import supervisor_agent
+from ai.agents.supervisor_agent import supervisor_utils
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 
 
 def test_supervisor_service_maps_graph_state_to_chat_response(monkeypatch):
-    def fake_invoke(state):
+    def fake_invoke(state, config=None):
         assert state["text"] == "두부로 뭐 해먹지?"
         assert state["history"][0].role == "user"
         return {
             "intent": "recipe.recommend",
             "response_text": "두부김치를 추천해요.",
+            "slots": {"ingredient": "두부"},
             "actions": [{"label": "레시피 보기", "url": "/recipes/10", "data": {"recipe_id": 10}}],
             "sources": [{"title": "출처", "url": "https://example.com"}],
         }
@@ -36,6 +38,8 @@ def test_supervisor_service_maps_graph_state_to_chat_response(monkeypatch):
         "reply": "두부김치를 추천해요.",
         "actions": [{"label": "레시피 보기", "url": "/recipes/10", "data": {"recipe_id": 10}}],
         "sources": [{"title": "출처", "url": "https://example.com"}],
+        "slots": {"ingredient": "두부"},
+        "pending_action": None,
     }
 
 
@@ -75,6 +79,7 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     create_result = supervisor_agent.router_node({"text": "두부랑 양파 장보기 목록 만들어줘", "history": []})
     compare_result = supervisor_agent.router_node({"text": "두부랑 양파 가격 비교해줘", "history": []})
     price_result = supervisor_agent.router_node({"text": "두부 가격알려줘", "history": []})
+    cheaper_result = supervisor_agent.router_node({"text": "설탕 더 싼곳 없어?", "history": []})
     feature_result = supervisor_agent.router_node({"text": "장보기 기능 뭐있어?", "history": []})
 
     assert current_result["intent"] == "shopping.current"
@@ -83,6 +88,7 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     assert create_result["intent"] == "shopping.create"
     assert compare_result["intent"] == "shopping.compare"
     assert price_result["intent"] == "shopping.compare"
+    assert cheaper_result["intent"] == "shopping.compare"
     assert supervisor_agent.route_intent(current_result) == "shopping_agent_node"
     assert supervisor_agent.route_intent(create_result) == "shopping_agent_node"
     assert supervisor_agent.route_intent(compare_result) == "shopping_agent_node"
@@ -108,7 +114,29 @@ def test_supervisor_service_invokes_shopping_agent_from_chat():
     assert result["intent"] == "shopping.create"
     assert "장보기 목록을 만들까요" in result["reply"]
     assert result["actions"][0]["data"]["message"] == "확인:shopping_create:두부|양파"
+    assert result["pending_action"] == {"command": "확인:shopping_create:두부|양파"}
 
+
+
+def test_shopping_price_follow_up_passes_only_product_name(monkeypatch):
+    """가격 비교 후속 표현은 상품명에서 제거한 뒤 Shopping Agent에 전달합니다."""
+    calls = []
+
+    def fake_run(**kwargs):
+        calls.append(kwargs)
+        return {"response_text": "가격 비교 결과예요.", "actions": [], "sources": []}
+
+    monkeypatch.setattr("ai.agents.shopping_agent.shopping_agent.run_shopping_agent", fake_run)
+
+    supervisor_agent.shopping_agent_node({
+        "text": "설탕 더 싼곳 없어?",
+        "intent": "shopping.compare",
+        "history": [],
+        "db": SimpleNamespace(),
+        "user_id": 7,
+    })
+
+    assert calls[0]["text"] == "설탕"
 
 def test_alarm_action_payload_survives_supervisor_adapter(monkeypatch):
     """Alarm Agent의 action payload가 슈퍼바이저 버튼 메시지에 유지되는지 확인합니다."""
@@ -167,7 +195,7 @@ def test_alarm_confirm_payload_returns_to_alarm_agent(monkeypatch):
 def test_context_switch_replaces_pending_inventory_request():
     """번복 뒤 새 재료 요청은 이전 pending 식재료를 이어받지 않습니다."""
     history = [SimpleNamespace(role="bot", text="두부를 몇 개 추가하시겠어요?", intent="inventory.action")]
-    assert supervisor_agent._rewrite_context_switch("소금 대신 뭐 넣어?") == "소금 대신 뭐 넣어?"
+    assert supervisor_utils._rewrite_context_switch("소금 대신 뭐 넣어?") == "소금 대신 뭐 넣어?"
 
     for message in ("아니다 치즈 넣어줘", "두부말고 치즈 넣어줘", "두부 대신 치즈 넣어줘"):
         result = supervisor_agent.router_node({"text": message, "history": history})
@@ -184,6 +212,45 @@ def test_short_follow_up_inherits_previous_agent_intent():
     result = supervisor_agent.router_node({"text": "외 2개는 뭐야?", "history": history})
 
     assert result["intent"] == "shopping.current"
+
+
+def test_context_follow_up_keeps_previous_agent_domain():
+    """생략된 쓰기 명령은 냉장고 규칙보다 직전 에이전트 문맥을 우선합니다."""
+    shopping_history = [SimpleNamespace(role="bot", text="현재 장보기 목록이에요.", intent="shopping.current", slots={"shown_count": 5})]
+    alarm_history = [SimpleNamespace(role="bot", text="등록된 일정이에요.", intent="alarm.calendar", slots={"date": "내일"})]
+
+    shopping_result = supervisor_agent.router_node({"text": "그거 삭제해줘", "history": shopping_history})
+    alarm_result = supervisor_agent.router_node({"text": "그거 삭제해줘", "history": alarm_history})
+
+    assert shopping_result["intent"] == "shopping.delete_item"
+    assert shopping_result["slots"] == {"shown_count": 5}
+    assert alarm_result["intent"] == "alarm.calendar"
+    assert alarm_result["slots"] == {"date": "내일"}
+
+
+def test_context_follow_up_keeps_previous_slots():
+    """보관 위치처럼 주어가 생략된 질문에도 직전 슬롯을 유지합니다."""
+    history = [SimpleNamespace(role="bot", text="두부 보관법이에요.", intent="ingredient.guide", slots={"ingredient": "두부"})]
+
+    result = supervisor_agent.router_node({"text": "냉동은?", "history": history})
+
+    assert result["intent"] == "ingredient.guide"
+    assert result["slots"] == {"ingredient": "두부"}
+
+
+def test_guide_context_switch_uses_latest_ingredient():
+    """정정한 식재료 질문은 이전 재료명을 제거하고 Guide Agent에 전달합니다."""
+    received = []
+
+    class GuideService:
+        def _reply_guide(self, text):
+            received.append(text)
+            return {"response_text": "양파 보관법이에요.", "actions": [], "sources": []}
+
+    result = supervisor_agent.guide_agent_node({"text": "감자 말고 양파 보관법", "service": GuideService()})
+
+    assert received == ["양파 보관법"]
+    assert result["response_text"] == "양파 보관법이에요."
 
 
 def test_context_switch_cancel_word_stops_pending_request():

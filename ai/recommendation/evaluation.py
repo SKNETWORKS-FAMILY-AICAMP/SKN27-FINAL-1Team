@@ -1,527 +1,285 @@
-"""Track B catalog metrics: L0~L5 gates, baselines, Spearman subsets."""
+"""Prefer recommendation CV metrics (R0~R2) and Docker entrypoint."""
 
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import StratifiedKFold
 
-COHEN_SMALL = 0.10
-COHEN_MEDIUM = 0.30
-NULL_PERMUTATIONS = 1000
-L1_POP_WINS_REQUIRED = 4
-L1_POP_SEEDS = 5
+METRICS_VERSION = "prefer-recall-vs-star-pop"
+REC_SEED_WINS_REQUIRED = 4
+CV_N_FOLDS = 5
+AT_K = 20
+CV_SEEDS = (42, 123, 456, 789, 1024)
+FULL_CATALOG_K = (20, 50, 100)
 
 
-def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = 50) -> float:
+def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = AT_K) -> float:
     scores = np.asarray(scores, dtype=np.float64).ravel()
     relevance = np.asarray(relevance, dtype=np.float64).ravel()
-    if scores.shape != relevance.shape:
-        raise ValueError("scores and relevance must have the same shape")
     if scores.size == 0:
         return 0.0
-
     k = min(k, scores.size)
     order = np.argsort(-scores, kind="stable")[:k]
     gains = np.maximum(relevance[order], 0.0)
     discounts = np.log2(np.arange(2, k + 2, dtype=np.float64))
     dcg = float(np.sum(gains / discounts))
-
-    ideal_order = np.argsort(-relevance, kind="stable")[:k]
-    ideal_gains = np.maximum(relevance[ideal_order], 0.0)
-    idcg = float(np.sum(ideal_gains / discounts))
-    if idcg <= 0.0:
-        return 0.0
-    return dcg / idcg
+    ideal = np.argsort(-relevance, kind="stable")[:k]
+    idcg = float(np.sum(np.maximum(relevance[ideal], 0.0) / discounts))
+    return dcg / idcg if idcg > 0.0 else 0.0
 
 
-def spearman_rho(scores_a: np.ndarray, scores_b: np.ndarray) -> float:
-    a = np.asarray(scores_a, dtype=np.float64).ravel()
-    b = np.asarray(scores_b, dtype=np.float64).ravel()
-    if a.shape != b.shape:
-        raise ValueError("scores_a and scores_b must have the same shape")
-    if a.size < 2:
-        return 0.0
-    from scipy.stats import spearmanr
-
-    rho, _ = spearmanr(a, b)
-    if np.isnan(rho):
-        return 0.0
-    return float(rho)
-
-
-def legacy_review_rank(export_df: pd.DataFrame) -> np.ndarray:
-    star = pd.to_numeric(export_df["star_norm_avg"], errors="coerce").fillna(0.0)
-    sent = pd.to_numeric(export_df["positive_avg"], errors="coerce").fillna(0.0) - pd.to_numeric(
-        export_df["negative_avg"], errors="coerce"
-    ).fillna(0.0)
-    return (star + sent).to_numpy(dtype=float)
-
-
-def build_warm_subsets(export_df: pd.DataFrame, warm_mask: np.ndarray) -> dict[str, np.ndarray]:
-    """Subset masks on warm rows only (experiment 14 definitions)."""
-    warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
-    star_norm = pd.to_numeric(export_df["star_norm_avg"], errors="coerce").fillna(1.0).to_numpy()
-    legacy = legacy_review_rank(export_df)
-
-    ceiling = warm_mask & (star_norm >= 1.0)
-    star_varies = warm_mask & (star_norm < 1.0)
-    low_tail = warm_mask & (legacy < 1.5)
-    informative = star_varies | low_tail
-
+def ranking_at_k_binary(y_true: np.ndarray, scores: np.ndarray, *, k: int = AT_K) -> dict[str, float]:
+    y = np.asarray(y_true, dtype=np.float64).ravel()
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    k = min(int(k), s.size)
+    order = np.argsort(-s, kind="stable")[:k]
+    hits = float(y[order].sum())
     return {
-        "ceiling": ceiling,
-        "star_varies": star_varies,
-        "low_tail": low_tail,
-        "informative": informative,
-        "warm": warm_mask,
+        "precision_at_k": hits / k if k else 0.0,
+        "recall_at_k": hits / float(y.sum()) if y.sum() > 0 else 0.0,
+        "ndcg_at_k": ndcg_at_k(s, y, k=k),
     }
 
 
-def popularity_baseline_scores(recipe_df: pd.DataFrame) -> pd.Series:
-    out = recipe_df[["recipe_id"]].copy()
-    out["recipe_id"] = out["recipe_id"].astype(str)
-    view = pd.to_numeric(recipe_df["view_count"], errors="coerce").fillna(0.0).clip(lower=0.0)
-    scrap = pd.to_numeric(recipe_df["scrap_count"], errors="coerce").fillna(0.0).clip(lower=0.0)
-    out["popularity_score"] = np.log1p(view) + np.log1p(scrap)
-    return out.set_index("recipe_id")["popularity_score"]
+def catalog_score_sanity(scores: np.ndarray) -> dict[str, float | bool]:
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    finite = np.isfinite(s)
+    coverage = float(finite.sum() / s.size) if s.size else 0.0
+    score_std = float(np.std(s[finite])) if finite.any() else 0.0
+    return {"coverage": coverage, "score_std": score_std, "r0_pass": coverage == 1.0 and score_std > 1e-6}
 
 
-def null_spearman_pvalue(
-    y_hat: np.ndarray,
-    bar: np.ndarray,
-    *,
-    n_perm: int = NULL_PERMUTATIONS,
-    seed: int = 42,
-) -> tuple[float, float]:
-    """Return (observed_rho, two-sided permutation p vs null ~0)."""
-    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
-    bar = np.asarray(bar, dtype=np.float64).ravel()
-    obs = spearman_rho(y_hat, bar)
-    if y_hat.size < 2:
-        return obs, 1.0
-    rng = np.random.default_rng(seed)
-    null_rhos = np.empty(n_perm, dtype=np.float64)
-    for i in range(n_perm):
-        null_rhos[i] = spearman_rho(rng.permutation(y_hat), bar)
-    # ponytail: two-sided vs null; ceiling at 1/n_perm
-    p = float(np.mean(np.abs(null_rhos) >= abs(obs)))
-    return obs, max(p, 1.0 / n_perm)
+def seed_recommend_go_pass(seed_mean: dict) -> bool:
+    return float(seed_mean.get("recall_at_k", 0.0)) > float(seed_mean.get("recall_at_k_pop", 0.0))
 
 
-def _mask_spearman(
-    y_hat: np.ndarray, bar: np.ndarray, mask: np.ndarray
-) -> tuple[float, int]:
-    mask = np.asarray(mask, dtype=bool).ravel()
-    y = y_hat[mask]
-    b = bar[mask]
-    finite = np.isfinite(y) & np.isfinite(b)
-    y, b = y[finite], b[finite]
-    n = int(y.size)
-    if n < 2:
-        return 0.0, n
-    return spearman_rho(y, b), n
+def aggregate_recommend_multi_seed(seed_means: list[dict]) -> dict:
+    n = len(seed_means)
+    wins = sum(1 for m in seed_means if seed_recommend_go_pass(m))
 
-
-def fit_linear_calibration(
-    y_hat: np.ndarray, score_review: np.ndarray, warm_mask: np.ndarray
-) -> tuple[float, float]:
-    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
-    score_review = np.asarray(score_review, dtype=np.float64).ravel()
-    warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
-    obs = score_review[warm_mask]
-    pred = y_hat[warm_mask]
-    finite = np.isfinite(obs) & np.isfinite(pred)
-    obs = obs[finite]
-    pred = pred[finite]
-    if obs.size < 2:
-        return 0.0, float(obs.mean()) if obs.size else 0.0
-    slope, intercept = np.polyfit(pred, obs, 1)
-    return float(slope), float(intercept)
-
-
-def apply_linear_calibration(
-    y_hat: np.ndarray, slope: float, intercept: float
-) -> np.ndarray:
-    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
-    return slope * y_hat + intercept
-
-
-def _regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    err = y_true - y_pred
-    mae = float(np.mean(np.abs(err)))
-    rmse = float(np.sqrt(np.mean(err**2)))
-    ss_res = float(np.sum(err**2))
-    ss_tot = float(np.sum((y_true - y_true.mean()) ** 2))
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
-    return {"mae": mae, "rmse": rmse, "r2": r2}
-
-
-def warm_obs_pred_metrics(
-    y_hat: np.ndarray, score_review: np.ndarray, warm_mask: np.ndarray
-) -> dict[str, float]:
-    from scipy.stats import pearsonr
-
-    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
-    score_review = np.asarray(score_review, dtype=np.float64).ravel()
-    warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
-    obs = score_review[warm_mask]
-    pred = y_hat[warm_mask]
-    finite = np.isfinite(obs) & np.isfinite(pred)
-    obs = obs[finite]
-    pred = pred[finite]
-    if obs.size == 0:
-        return {}
-
-    raw = _regression_metrics(obs, pred)
-    slope, intercept = fit_linear_calibration(y_hat, score_review, warm_mask)
-    scaled = apply_linear_calibration(pred, slope, intercept)
-    linear = _regression_metrics(obs, scaled)
-    pearson_raw = float(pearsonr(obs, pred)[0]) if obs.size >= 2 else 0.0
+    def _mean(k: str) -> float:
+        vals = [float(m[k]) for m in seed_means if k in m and np.isfinite(m[k])]
+        return float(np.mean(vals)) if vals else float("nan")
 
     return {
-        "warm_mae_raw": raw["mae"],
-        "warm_rmse_raw": raw["rmse"],
-        "warm_mae_linear": linear["mae"],
-        "warm_rmse_linear": linear["rmse"],
-        "warm_r2_linear": linear["r2"],
-        "warm_pearson_raw": pearson_raw,
-        "warm_spearman_raw": spearman_rho(obs, pred),
-        "warm_spearman_linear": spearman_rho(obs, scaled),
-        "linear_slope": slope,
-        "linear_intercept": intercept,
-        "warm_top50_in_pred_top100": _top_k_subset_overlap(
-            obs, pred, k_obs=50, k_pred=100
-        ),
+        "n_seeds": n, "n_wins": wins, "pop_wins": wins,
+        "go": wins >= REC_SEED_WINS_REQUIRED and n >= REC_SEED_WINS_REQUIRED,
+        "mean_recall_at_k": _mean("recall_at_k"),
+        "mean_recall_at_k_pop": _mean("recall_at_k_pop"),
+        "mean_precision_at_k": _mean("precision_at_k"),
+        "mean_precision_at_k_pop": _mean("precision_at_k_pop"),
+        "mean_ndcg_at_k": _mean("ndcg_at_k"),
+        "mean_ndcg_at_k_pop": _mean("ndcg_at_k_pop"),
+        "mean_matrix_nnz": _mean("matrix_nnz"),
+        "metrics_version": METRICS_VERSION,
     }
 
 
-def _top_k_subset_overlap(
-    obs: np.ndarray, pred: np.ndarray, *, k_obs: int, k_pred: int
-) -> float:
-    k_obs = min(k_obs, obs.size)
-    k_pred = min(k_pred, pred.size)
-    if k_obs == 0:
-        return 0.0
-    top_obs = set(np.argsort(-obs, kind="stable")[:k_obs].tolist())
-    top_pred = set(np.argsort(-pred, kind="stable")[:k_pred].tolist())
-    return len(top_obs & top_pred) / k_obs
+def _mean_dicts(dicts: list[dict], keys: list[str]) -> dict:
+    out = {}
+    for k in keys:
+        vals = [float(d[k]) for d in dicts if k in d and np.isfinite(d[k])]
+        out[k] = float(np.mean(vals)) if vals else float("nan")
+    return out
 
 
-def top_k_overlap(scores_a: np.ndarray, scores_b: np.ndarray, k: int = 100) -> float:
-    a = np.asarray(scores_a, dtype=np.float64).ravel()
-    b = np.asarray(scores_b, dtype=np.float64).ravel()
-    k = min(k, a.size, b.size)
-    if k == 0:
-        return 0.0
-    top_a = set(np.argsort(-a, kind="stable")[:k].tolist())
-    top_b = set(np.argsort(-b, kind="stable")[:k].tolist())
-    return len(top_a & top_b) / k
+def run_prefer_cv(cfg, *, review_df, dataset, item_ids, item_features, y_prefer) -> dict:
+    from lightfm import LightFM
+
+    from pipeline import build_interactions, build_prefer_labels, catalog_predict, star_popularity_scores
+
+    warm_ids = np.array(sorted(y_prefer.index.astype(str)), dtype=object)
+    y = y_prefer.loc[warm_ids].to_numpy(dtype=int)
+    skf = StratifiedKFold(n_splits=CV_N_FOLDS, shuffle=True, random_state=cfg.seed)
+    fold_rows = []
+    id_to_idx = {rid: i for i, rid in enumerate(item_ids)}
+    rid_str = review_df["recipe_id"].astype(str)
+
+    for fold_i, (tr_ix, te_ix) in enumerate(skf.split(warm_ids, y)):
+        train_ids = set(warm_ids[tr_ix].tolist())
+        test_ids = warm_ids[te_ix]
+        train_review = review_df[rid_str.isin(train_ids)].copy()
+        y_train = build_prefer_labels(train_review)
+
+        interactions = build_interactions(train_review, dataset, recipe_prefer_labels=y_train)
+        model = LightFM(loss="warp", random_state=cfg.seed + fold_i)
+        model.fit(interactions, item_features=item_features, epochs=cfg.epochs, num_threads=cfg.num_threads)
+        all_scores = catalog_predict(model, dataset, item_ids, item_features, cfg.num_threads)
+        y_te = y_prefer.loc[test_ids].to_numpy(dtype=int)
+        s_te = np.array([all_scores[id_to_idx[rid]] for rid in test_ids], dtype=float)
+
+        pop_scores, pop_C = star_popularity_scores(train_review)
+        pop_te = pop_scores.reindex(test_ids).fillna(pop_C).to_numpy(dtype=float)
+
+        atk = ranking_at_k_binary(y_te, s_te, k=AT_K)
+        atk_pop = ranking_at_k_binary(y_te, pop_te, k=AT_K)
+        fold_rows.append({
+            "fold": fold_i,
+            "recall_at_k": atk["recall_at_k"], "recall_at_k_pop": atk_pop["recall_at_k"],
+            "precision_at_k": atk["precision_at_k"], "precision_at_k_pop": atk_pop["precision_at_k"],
+            "ndcg_at_k": atk["ndcg_at_k"], "ndcg_at_k_pop": atk_pop["ndcg_at_k"],
+            "matrix_nnz": float(interactions.nnz), "pop_C_train": float(pop_C),
+        })
+
+    keys = ["recall_at_k", "recall_at_k_pop", "precision_at_k", "precision_at_k_pop", "ndcg_at_k", "ndcg_at_k_pop", "matrix_nnz"]
+    mean = _mean_dicts(fold_rows, keys)
+    mean["seed"] = cfg.seed
+    mean["seed_pass"] = seed_recommend_go_pass(mean)
+    return {"seed": cfg.seed, "fold_mean": mean, "folds": fold_rows}
 
 
-def aggregate_l1_multi_seed(seed_rows: list[dict]) -> dict:
-    """seed_rows: each has warm_spearman_review, warm_spearman_popularity."""
-    wins = sum(
-        1
-        for r in seed_rows
-        if r.get("warm_spearman_review", 0.0) > r.get("warm_spearman_popularity", 0.0)
-    )
-    n = len(seed_rows)
+def run_cv_evaluation(*, cfg0, review_df, dataset, item_ids, item_features, y_prefer, cv_epochs) -> list[dict]:
+    from config import load_experiment_config, seed_all
+
+    project_root = cfg0.project_root
+    seed_reports = []
+    for seed in CV_SEEDS:
+        os.environ["SEED"] = str(seed)
+        cfg = load_experiment_config(project_root)
+        cfg.epochs = cv_epochs
+        seed_all(cfg.seed)
+        print(f"--- seed {seed} ---", flush=True)
+        rep = run_prefer_cv(cfg, review_df=review_df, dataset=dataset, item_ids=item_ids, item_features=item_features, y_prefer=y_prefer)
+        seed_reports.append(rep)
+        print(rep["fold_mean"], flush=True)
+    return seed_reports
+
+
+def run_full_catalog_eval(export_df, *, y_prefer, warm_item_ids, review_df, cold_item_ids) -> dict:
+    from pipeline import star_popularity_scores
+
+    y = (export_df["y_prefer"] == 1).astype(int).to_numpy()
+    s_model = export_df["s_pref"].to_numpy(dtype=float)
+    is_warm = export_df["is_warm"].to_numpy(dtype=int)
+
+    pop_scores, pop_C = star_popularity_scores(review_df)
+    rid = export_df["recipe_id"].astype(str)
+    s_pop = pop_scores.reindex(rid).fillna(pop_C).to_numpy(dtype=float)
+
+    at_k: dict[str, dict] = {}
+    for k in FULL_CATALOG_K:
+        atk_m = ranking_at_k_binary(y, s_model, k=k)
+        atk_p = ranking_at_k_binary(y, s_pop, k=k)
+        kk = min(int(k), s_model.size)
+        order = np.argsort(-s_model, kind="stable")[:kk]
+        cold_share = float((is_warm[order] == 0).sum()) / kk if kk else 0.0
+        at_k[str(k)] = {
+            "warm_recall_at_k": atk_m["recall_at_k"], "warm_recall_at_k_pop": atk_p["recall_at_k"],
+            "warm_precision_at_k": atk_m["precision_at_k"], "warm_precision_at_k_pop": atk_p["precision_at_k"],
+            "cold_share_at_k": cold_share,
+            "recall_gap_vs_pop": atk_m["recall_at_k"] - atk_p["recall_at_k"],
+            "precision_gap_vs_pop": atk_m["precision_at_k"] - atk_p["precision_at_k"],
+        }
+
     return {
-        "l1_pop_wins": wins,
-        "l1_pop_seeds": n,
-        "l1_pass": wins >= L1_POP_WINS_REQUIRED if n >= L1_POP_SEEDS else False,
+        "n_total": int(len(export_df)), "n_warm": int(len(warm_item_ids)),
+        "n_cold": int(len(cold_item_ids)), "n_prefer": int((y_prefer == 1).sum()),
+        "pop_formula": "Bayesian WR on n_star5/review_n; m=3; full review", "at_k": at_k,
     }
 
 
-def evaluate_track_b(
-    y_hat: np.ndarray,
-    score_review: np.ndarray,
-    warm_mask: np.ndarray,
-    train_item_signal: np.ndarray | None = None,
-    *,
-    ndcg_k: int = 50,
-    spearman_threshold: float = COHEN_MEDIUM,
-) -> dict[str, float | bool | int]:
-    """Legacy B0~B3 fields; prefer evaluate_track_b_v2."""
-    v2 = evaluate_track_b_v2(
-        y_hat,
-        score_review,
-        warm_mask,
-        train_item_signal=train_item_signal,
-        ndcg_k=ndcg_k,
-        spearman_threshold=spearman_threshold,
+def main() -> None:
+    from lightfm import LightFM
+
+    from config import load_experiment_config, require_docker_runtime, seed_all, export_recipe_lightfm, load_track_b_tables, write_json_report
+    from pipeline import (
+        aggregate_review_for_export, build_export_dataframe, build_interactions,
+        build_item_features, build_lightfm_ids, build_prefer_labels,
+        catalog_predict, prepare_training_frames, recipe_n_star5_counts,
     )
-    return {
-        "coverage": v2["coverage"],
-        "score_std": v2["score_std"],
-        "b0_pass": v2["l0_pass"],
-        "warm_n": v2["warm_n"],
-        "cold_n": v2["cold_n"],
-        "warm_ndcg50_yhat": v2["warm_ndcg50_yhat"],
-        "warm_ndcg50_review": v2["warm_ndcg50_review"],
-        "warm_spearman_review": v2["l4_spearman_all_warm"],
-        "b2_pass": v2["l2_pass"],
-        "warm_spearman_train": v2["l3_spearman_train"],
-        "b3_pass": v2["l3_pass"],
-        "warm_top100_overlap": v2["warm_top100_overlap"],
+
+    project_root = Path(os.environ.get("PROJECT_ROOT", Path(__file__).resolve().parent))
+    cv_epochs = int(os.environ.get("EPOCHS", "10"))
+    full_epochs = int(os.environ.get("FULL_EPOCHS", "30"))
+    require_docker_runtime()
+
+    cfg0 = load_experiment_config(project_root)
+    cfg0.epochs = cv_epochs
+
+    review_raw, recipe_raw, alias_df = load_track_b_tables(cfg0.data_dir)
+    recipe_df, review_df = prepare_training_frames(review_raw, recipe_raw, alias_df)
+    dataset, item_ids, warm_item_ids, cold_item_ids, _ = build_lightfm_ids(review_df, recipe_df)
+    item_features, _ = build_item_features(recipe_df, item_ids, dataset, cfg0.excluded_recipe_columns)
+
+    y_prefer = build_prefer_labels(review_df)
+    n_star5 = recipe_n_star5_counts(review_df)
+    review_agg = aggregate_review_for_export(pd.read_csv(cfg0.data_files["review"]))
+
+    print(f"y*=n_star5>=2: {(y_prefer==1).sum()}/{len(y_prefer)} warm, mode=prefer_n_star5_ge2, CV ep={cv_epochs}", flush=True)
+
+    seed_reports = run_cv_evaluation(
+        cfg0=cfg0, review_df=review_df, dataset=dataset,
+        item_ids=item_ids, item_features=item_features, y_prefer=y_prefer, cv_epochs=cv_epochs,
+    )
+    agg = aggregate_recommend_multi_seed([r["fold_mean"] for r in seed_reports])
+    agg["charter"] = "R0-R2"
+    agg["positive_mode"] = "prefer_n_star5_ge2"
+    agg["cv_epochs"] = cv_epochs
+    agg["full_epochs"] = full_epochs
+    agg["pop_formula"] = "Bayesian WR on n_star5/review_n; m=3; train-fold only"
+    agg["go_rule"] = "Recall@20(model) > Recall@20(star_pop) per seed, >=4/5"
+
+    # Full-fit for export (inlined full_fit_export)
+    os.environ["SEED"] = "42"
+    cfg_full = load_experiment_config(project_root)
+    cfg_full.epochs = full_epochs
+    seed_all(42)
+
+    interactions = build_interactions(review_df, dataset, recipe_prefer_labels=y_prefer)
+    model = LightFM(loss="warp", random_state=cfg_full.seed)
+    model.fit(interactions, item_features=item_features, epochs=cfg_full.epochs, num_threads=cfg_full.num_threads)
+    s_pref = catalog_predict(model, dataset, item_ids, item_features, cfg_full.num_threads)
+    export_df = build_export_dataframe(
+        recipe_df=recipe_df, review_agg=review_agg, s_pref=s_pref,
+        y_prefer=y_prefer, n_star5=n_star5, warm_item_ids=warm_item_ids,
+    )
+
+    sanity = catalog_score_sanity(export_df["s_pref"].to_numpy(dtype=float))
+    agg["r0_pass"] = bool(sanity["r0_pass"])
+    agg["go"] = bool(agg["go"] and agg["r0_pass"])
+    agg["n_prefer"] = int((y_prefer == 1).sum())
+    agg["n_warm"] = int(len(y_prefer))
+    agg["n_cold"] = int(len(cold_item_ids))
+
+    full_catalog_eval = run_full_catalog_eval(
+        export_df, y_prefer=y_prefer, warm_item_ids=warm_item_ids,
+        review_df=review_df, cold_item_ids=cold_item_ids,
+    )
+    print("full_catalog_eval:", json.dumps(full_catalog_eval, ensure_ascii=False), flush=True)
+
+    ranked_path = cfg0.outputs_dir / "recipe_prefer_ranked.csv"
+    export_recipe_lightfm(export_df, ranked_path)
+    report_path = cfg0.outputs_dir / "prefer_eval_report.json"
+    out = {
+        "charter": "R0-R2", "positive_mode": "prefer_n_star5_ge2",
+        "aggregate": agg, "full_catalog_eval": full_catalog_eval,
+        "seeds": seed_reports, "export_path": str(ranked_path),
     }
+    write_json_report(out, report_path)
 
+    print(json.dumps(agg, ensure_ascii=False, indent=2), flush=True)
+    print(f"report: {report_path}", flush=True)
 
-def evaluate_track_b_v2(
-    y_hat: np.ndarray,
-    score_review: np.ndarray,
-    warm_mask: np.ndarray,
-    train_item_signal: np.ndarray | None = None,
-    *,
-    export_df: pd.DataFrame | None = None,
-    popularity_scores: np.ndarray | None = None,
-    cold_mask: np.ndarray | None = None,
-    ndcg_k: int = 50,
-    spearman_threshold: float = COHEN_MEDIUM,
-    null_seed: int = 42,
-) -> dict[str, float | bool | int]:
-    y_hat = np.asarray(y_hat, dtype=np.float64).ravel()
-    score_review = np.asarray(score_review, dtype=np.float64).ravel()
-    warm_mask = np.asarray(warm_mask, dtype=bool).ravel()
-    n_all = y_hat.size
-
-    finite = np.isfinite(y_hat)
-    coverage = float(finite.sum() / n_all) if n_all else 0.0
-    score_std = float(np.std(y_hat[finite])) if finite.any() else 0.0
-    l0_pass = coverage == 1.0 and score_std > 1e-6
-
-    warm_n = int(warm_mask.sum())
-    cold_n = int((~warm_mask).sum()) if cold_mask is None else int(np.asarray(cold_mask).sum())
-
-    warm_y = y_hat[warm_mask]
-    warm_review = score_review[warm_mask]
-    warm_finite = np.isfinite(warm_review)
-    warm_y_f = warm_y[warm_finite]
-    warm_review_f = warm_review[warm_finite]
-
-    ndcg_yhat = ndcg_at_k(warm_y_f, warm_review_f, k=ndcg_k) if warm_y_f.size else 0.0
-    ndcg_review = (
-        ndcg_at_k(warm_review_f, warm_review_f, k=ndcg_k) if warm_review_f.size else 0.0
-    )
-    l4_rho, _ = _mask_spearman(y_hat, score_review, warm_mask)
-    top100 = top_k_overlap(warm_y_f, warm_review_f, k=100) if warm_y_f.size else 0.0
-
-    null_p = 1.0
-    rho_all_warm = l4_rho
-    if warm_y_f.size >= 2:
-        rho_all_warm, null_p = null_spearman_pvalue(warm_y_f, warm_review_f, seed=null_seed)
-
-    pop_rho = 0.0
-    if popularity_scores is not None:
-        pop = np.asarray(popularity_scores, dtype=np.float64).ravel()
-        pop_rho, _ = _mask_spearman(y_hat, pop, warm_mask)
-
-    l1_single_pass = (
-        rho_all_warm > COHEN_SMALL
-        and null_p < 0.05
-        and rho_all_warm > pop_rho
-    )
-
-    subset_rhos: dict[str, float] = {}
-    subset_ns: dict[str, int] = {}
-    if export_df is not None:
-        subsets = build_warm_subsets(export_df, warm_mask)
-        for name, mask in subsets.items():
-            if name == "warm":
-                continue
-            rho, n = _mask_spearman(y_hat, score_review, mask)
-            subset_rhos[f"l2_spearman_{name}"] = rho
-            subset_ns[f"l2_n_{name}"] = n
-
-    l2_rho = subset_rhos.get("l2_spearman_informative", 0.0)
-    l2_pass = l2_rho >= spearman_threshold
-
-    l3_rho = 0.0
-    l3_pass = False
-    if train_item_signal is not None:
-        signal = np.asarray(train_item_signal, dtype=np.float64).ravel()[warm_mask][warm_finite]
-        if signal.size >= 2:
-            l3_rho = spearman_rho(warm_y_f, signal)
-            l3_pass = l3_rho >= spearman_threshold
-
-    l5_rho = 0.0
-    cold_std = 0.0
-    if cold_mask is not None and popularity_scores is not None:
-        cold_mask = np.asarray(cold_mask, dtype=bool).ravel()
-        pop = np.asarray(popularity_scores, dtype=np.float64).ravel()
-        cold_y = y_hat[cold_mask]
-        cold_pop = pop[cold_mask]
-        finite_c = np.isfinite(cold_y) & np.isfinite(cold_pop)
-        if finite_c.sum() >= 2:
-            l5_rho = spearman_rho(cold_y[finite_c], cold_pop[finite_c])
-        if cold_y.size:
-            cold_std = float(np.std(cold_y[np.isfinite(cold_y)]))
-
-    return {
-        "metrics_version": "L0-L5",
-        "coverage": coverage,
-        "score_std": score_std,
-        "l0_pass": l0_pass,
-        "warm_n": warm_n,
-        "cold_n": cold_n,
-        "warm_ndcg50_yhat": ndcg_yhat,
-        "warm_ndcg50_review": ndcg_review,
-        "l4_spearman_all_warm": l4_rho,
-        "l4_pass": l4_rho >= spearman_threshold,
-        "l4_dataset_exception": True,
-        "warm_top100_overlap": top100,
-        "warm_spearman_review": l4_rho,
-        "null_spearman_p": null_p,
-        "warm_spearman_popularity": pop_rho,
-        "l1_single_pass": l1_single_pass,
-        "l1_pass": False,
-        "l2_spearman_informative": l2_rho,
-        "l2_pass": l2_pass,
-        "l2_spearman_threshold": spearman_threshold,
-        **subset_rhos,
-        **subset_ns,
-        "l3_spearman_train": l3_rho,
-        "l3_pass": l3_pass,
-        "l5_spearman_cold_popularity": l5_rho,
-        "cold_score_std": cold_std,
-        "b0_pass": l0_pass,
-        "b2_pass": l2_pass,
-        "b3_pass": l3_pass,
-        "warm_spearman_train": l3_rho,
-    }
-
-
-def evaluate_export(
-    export_df: pd.DataFrame,
-    warm_item_ids: set[str],
-    train_matrix,
-    *,
-    target_mode: str,
-    catalog_user_id: str,
-    recipe_df: pd.DataFrame | None = None,
-    seed: int = 42,
-) -> tuple[dict, pd.DataFrame]:
-    warm_mask = export_df["recipe_id"].isin(warm_item_ids).to_numpy()
-    cold_mask = ~warm_mask
-    score_review = export_df["review_rank_score"].to_numpy(dtype=float)
-    y_hat = export_df["y_hat"].to_numpy(dtype=float)
-
-    lin_slope, lin_intercept = fit_linear_calibration(y_hat, score_review, warm_mask)
-    export_df = export_df.copy()
-    export_df["y_hat_linear"] = apply_linear_calibration(y_hat, lin_slope, lin_intercept)
-
-    train_item_signal = np.asarray(train_matrix.sum(axis=0)).ravel().astype(float)
-
-    pop_scores = None
-    if recipe_df is not None:
-        pop_series = popularity_baseline_scores(recipe_df)
-        pop_scores = export_df["recipe_id"].astype(str).map(pop_series).to_numpy(dtype=float)
-
-    track_b_eval = evaluate_track_b_v2(
-        y_hat,
-        score_review,
-        warm_mask,
-        train_item_signal=train_item_signal,
-        export_df=export_df,
-        popularity_scores=pop_scores,
-        cold_mask=cold_mask,
-        null_seed=seed,
-    )
-    track_b_eval.update(warm_obs_pred_metrics(y_hat, score_review, warm_mask))
-    track_b_eval["target"] = "review_only"
-    track_b_eval["y_train"] = target_mode
-    track_b_eval["linear_formula"] = (
-        f"review_rank_score ~= {lin_slope:.6f} * y_hat + {lin_intercept:.6f} (warm fit)"
-    )
-    track_b_eval["catalog_user"] = catalog_user_id
-    track_b_eval["export_csv"] = "outputs/recipe_lightfm.csv"
-    return track_b_eval, export_df
-
-
-def build_experiment_report(
-    cfg,
-    track_b_eval: dict,
-    *,
-    interactions,
-    train,
-    item_features,
-    all_feature_names: set,
-    warm_item_ids: set,
-    cold_item_ids: list,
-    log_numeric_columns: list[str],
-) -> dict:
-    go_single = (
-        track_b_eval["l0_pass"]
-        and track_b_eval["l1_single_pass"]
-        and track_b_eval["l2_pass"]
-    )
-    return {
-        "experiment": "18_metrics_calibration",
-        "metrics_version": "L0-L5",
-        "data_files": {name: str(path) for name, path in cfg.data_files.items()},
-        "mode": cfg.model_mode,
-        "target_mode": cfg.target_mode,
-        "star_weight": cfg.star_weight,
-        "sentiment_weight": cfg.sentiment_weight,
-        "excluded_recipe_columns": cfg.excluded_recipe_columns,
-        "seed": cfg.seed,
-        "epochs": cfg.epochs,
-        "loss": "warp",
-        "train": "full_interactions",
-        "log_numeric_columns": log_numeric_columns,
-        "matrix": {
-            "num_users": int(interactions.shape[0]),
-            "num_items": int(interactions.shape[1]),
-            "nnz": int(interactions.nnz),
-            "train_nnz": int(train.nnz),
-            "item_feature_nnz": int(item_features.nnz),
-            "unique_features": len(all_feature_names),
-            "warm_items": len(warm_item_ids),
-            "cold_items": len(cold_item_ids),
-        },
-        "track_b_eval": track_b_eval,
-        "decision": {
-            "go": go_single,
-            "go_note": "single-seed; L1 final requires 4/5 popularity wins across seeds",
-            "criterion": "l0_pass and l1_single_pass and l2_pass (informative Spearman >= 0.30)",
-            "l0_pass": track_b_eval["l0_pass"],
-            "l1_single_pass": track_b_eval["l1_single_pass"],
-            "l1_pass": track_b_eval.get("l1_pass", False),
-            "l2_pass": track_b_eval["l2_pass"],
-            "l3_pass": track_b_eval["l3_pass"],
-            "l4_pass": track_b_eval["l4_pass"],
-            "l4_dataset_exception": track_b_eval["l4_dataset_exception"],
-            "b0_pass": track_b_eval["l0_pass"],
-            "b2_pass": track_b_eval["l2_pass"],
-            "b3_pass": track_b_eval["l3_pass"],
-        },
-    }
+    if agg["go"]:
+        main_path = cfg0.outputs_dir / "recipe_lightfm.csv"
+        export_recipe_lightfm(export_df, main_path)
+        print(f"GO — replaced {main_path}")
+    else:
+        print("NO-GO — recipe_lightfm.csv unchanged")
 
 
 if __name__ == "__main__":
-    rng = np.random.default_rng(0)
-    n = 200
-    relevance = rng.random(n)
-    scores = relevance + rng.normal(0, 0.1, n)
-    warm = np.zeros(n, dtype=bool)
-    warm[:80] = True
-
-    toy_export = pd.DataFrame(
-        {
-            "star_norm_avg": np.where(warm, rng.uniform(0, 1, n), 1.0),
-            "positive_avg": 0.5,
-            "negative_avg": 0.2,
-        }
-    )
-    m = evaluate_track_b_v2(
-        scores, relevance, warm, train_item_signal=relevance * 0.9, export_df=toy_export
-    )
-    assert m["coverage"] == 1.0
-    assert m["l0_pass"]
-    cmp_m = warm_obs_pred_metrics(scores, relevance, warm)
-    assert cmp_m["warm_r2_linear"] >= 0.0
-    agg = aggregate_l1_multi_seed(
-        [{"warm_spearman_review": 0.2, "warm_spearman_popularity": 0.1}] * 5
-    )
-    assert agg["l1_pass"]
-    print("evaluation ok", m["l2_pass"], m["l3_pass"], cmp_m["warm_mae_linear"])
+    y = np.array([1, 1, 0, 0, 0], dtype=int)
+    s_model = np.array([0.9, 0.8, 0.1, 0.2, 0.0])
+    s_pop = np.array([0.5, 0.4, 0.7, 0.6, 0.3])
+    atk_m = ranking_at_k_binary(y, s_model, k=3)
+    atk_p = ranking_at_k_binary(y, s_pop, k=3)
+    assert atk_m["recall_at_k"] > atk_p["recall_at_k"]
+    assert catalog_score_sanity(s_model)["r0_pass"]
+    print("evaluation self-check ok", atk_m["recall_at_k"], atk_p["recall_at_k"], flush=True)
+    main()
