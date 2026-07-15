@@ -57,7 +57,7 @@ def recommend_recipes(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """레시피 추천. fridge_consume은 limit 9 고정, menu_custom은 request limit 사용."""
+    """레시피 추천. fridge_consume은 limit 3 고정, menu_custom은 request limit 사용."""
     if request_data.mode == "menu_custom":
         config = RecipeRecommendConfig.menu_custom_preset(
             request_data.limit,

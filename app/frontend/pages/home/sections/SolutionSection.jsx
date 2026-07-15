@@ -28,7 +28,7 @@ const flowSteps = [
   },
   {
     label: '소비 임박 확인',
-    caption: '유통기한 알림',
+    caption: '소비기한 알림',
     icon: iconTime,
   },
   {
@@ -42,7 +42,7 @@ const flowSteps = [
     icon: iconCart,
   },
   {
-    label: '유통기한 알림',
+    label: '소비기한 알림',
     caption: '먹기 좋은 타이밍',
     icon: iconAlarm,
   },
@@ -62,7 +62,7 @@ const features = [
   {
     label: '냉장고',
     icon: imagePutting,
-    summary: '보관 중인 재료를 위치, 수량, 유통기한 기준으로 관리합니다.',
+    summary: '보관 중인 재료를 위치, 수량, 소비기한 기준으로 관리합니다.',
     description: [
       '냉장, 냉동, 실온 보관 위치를 나눠 재료 상태를 빠르게 확인합니다.',
       '소비 임박 재료를 우선 표시해 버리기 전에 쓸 수 있게 도와줍니다.',
@@ -114,7 +114,7 @@ const features = [
     icon: imageAlarm,
     summary: '먹어야 할 재료와 확인이 필요한 재료를 놓치지 않게 알려줍니다.',
     description: [
-      '유통기한과 소비 시점을 기준으로 오늘 확인할 재료를 구분합니다.',
+      '소비기한과 소비 시점을 기준으로 오늘 확인할 재료를 구분합니다.',
       '임박 재료, 소비 추천 재료, 확인 필요 재료를 다른 상태로 보여줍니다.',
       'Calendar, Discord, Gmail 등 원하는 채널로 알림을 받을 수 있게 확장합니다.',
     ],
@@ -150,7 +150,7 @@ const recommendationScores = [
 
 const recommendationReasons = [
   '보유 재료를 최대한 활용',
-  '유통기한이 가까운 재료 우선',
+  '소비기한이 가까운 재료 우선',
   '사용자 취향과 조리 시간 반영',
   '추가 구매 품목과 비용 최소화',
 ]
@@ -311,7 +311,7 @@ function SolutionSection() {
                 추천 이유까지 보여줘요
               </h2>
             </div>
-            <span>단순 인기순이 아니라 재료, 유통기한, 구매량, 취향을 함께 계산합니다.</span>
+            <span>단순 인기순이 아니라 재료, 소비기한, 구매량, 취향을 함께 계산합니다.</span>
           </div>
 
           <div className="home-ai-grid">
