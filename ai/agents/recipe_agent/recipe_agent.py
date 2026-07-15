@@ -192,6 +192,16 @@ def exclude_previous_tool(items: list[dict[str, Any]], history: list) -> ToolRes
         return ToolResult(ok=False, error=str(e), source="exclude_previous")
 
 
+def build_actions_tool(items: list[dict[str, Any]]) -> ToolResult:
+    """레시피 후보에서 프론트엔드 Action 목록을 생성한다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    try:
+        from .recipe_utils import _recipe_actions
+        actions = _recipe_actions(items)
+        return ToolResult(ok=True, data={"actions": actions, "total": len(actions)}, source="build_actions")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="build_actions")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -281,6 +291,7 @@ if __name__ == "__main__":
         assert callable(recommend_recipe_tool)
         assert callable(sort_candidates_tool)
         assert callable(exclude_previous_tool)
+        assert callable(build_actions_tool)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
