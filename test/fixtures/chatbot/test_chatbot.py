@@ -746,6 +746,20 @@ def test_inventory_add_sentence_asks_storage_without_llm(monkeypatch) -> None:
 
 
 
+def test_completed_pending_action_does_not_reactivate() -> None:
+    """완료 응답 뒤에는 과거 실행 대기 작업을 다시 사용하지 않습니다."""
+    history = [
+        MagicMock(
+            role="bot",
+            text="두부 1개를 냉장에 추가할까요?",
+            pending_action={"command": "확인:add_ingredient:두부:1:냉장"},
+        ),
+        MagicMock(role="user", text="확인", pending_action=None),
+        MagicMock(role="bot", text="두부를 추가했어요.", pending_action=None),
+    ]
+
+    assert supervisor_utils._latest_bot_pending_action(history) is None
+
 def test_pending_add_cancel_word_routes_to_cancel() -> None:
     """추가 대기 상태에서 거절 표현은 새 추가 요청으로 보지 않습니다."""
     class Message:
@@ -1057,7 +1071,7 @@ def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> Non
     })
 
     assert result["response_text"] == "올바른 식재료명을 입력해주세요."
-    assert "actions" not in result
+    assert result["actions"] == []
 
 
 def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None:
@@ -1301,6 +1315,7 @@ def test_llm_route_payload_json_parser() -> None:
     assert payload == {
         "intent": "recipe.recommend",
         "confidence": 0.82,
+        "is_follow_up": False,
         "slots": {"ingredient": "두부"},
         "tasks": [],
     }
@@ -1332,10 +1347,129 @@ def test_llm_route_payload_rejects_unknown_values() -> None:
     assert payload == {
         "intent": "general",
         "confidence": 0.0,
+        "is_follow_up": False,
         "slots": {"ingredient": "감자"},
         "tasks": [{"intent": "recipe.search", "text": "감자 레시피"}],
     }
 
+
+def test_follow_up_inherits_only_same_intent_context() -> None:
+    """후속 질문은 같은 Agent intent의 허용 슬롯만 이어받습니다."""
+    class FollowUpService:
+        """후속 가이드 분류 결과를 반환하는 테스트 대역입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """식재료명이 생략된 후속 가이드 결과를 반환합니다."""
+            return {
+                "intent": "ingredient.guide",
+                "confidence": 0.9,
+                "is_follow_up": True,
+                "slots": {"guide_type": "washing"},
+                "tasks": [],
+            }
+
+    history = [
+        MagicMock(
+            role="bot",
+            text="감자 보관법이에요.",
+            intent="ingredient.guide",
+            slots={"ingredient": "감자", "guide_type": "storage", "shopping_product": "양파"},
+            pending_action=None,
+        )
+    ]
+
+    result = router_node({"text": "세척은?", "service": FollowUpService(), "history": history})
+
+    assert result["intent"] == "ingredient.guide"
+    assert result["slots"] == {"ingredient": "감자", "guide_type": "washing"}
+
+
+def test_agent_result_contract_normalizes_status_and_ui() -> None:
+    """Agent의 message·ui·status 응답을 Supervisor 공통 계약으로 변환합니다."""
+    result = supervisor_utils._normalize_agent_result(
+        {
+            "ok": True,
+            "status": "needs_input",
+            "action": "confirm_ingredient",
+            "message": "어떤 재료인지 선택해주세요.",
+            "ui": {
+                "actions": [{"label": "감자", "data": {"message": "감자"}}],
+                "sources": [{"title": "출처", "url": "https://example.com"}],
+            },
+        },
+        inherited_slots={"ingredient": "감"},
+    )
+
+    assert result["response_text"] == "어떤 재료인지 선택해주세요."
+    assert result["actions"][0]["label"] == "감자"
+    assert result["sources"][0]["title"] == "출처"
+    assert result["slots"] == {
+        "ingredient": "감",
+        "agent_status": "needs_input",
+        "agent_action": "confirm_ingredient",
+    }
+
+
+def test_food_general_guard_corrects_misclassified_read_intents() -> None:
+    """명확한 식품 비교와 재가열 질문은 잘못된 Guide·Recipe 분류를 보정합니다."""
+    comparison = router_node({
+        "text": "동물성 휘핑크림과 식물성은 뭐가 달라?",
+        "service": FakeService("ingredient.guide"),
+        "history": [],
+    })
+    reheating = router_node({
+        "text": "남은 치킨 데우는 방법은?",
+        "service": FakeService("recipe.search"),
+        "history": [],
+    })
+
+    assert comparison["intent"] == "food.general"
+    assert reheating["intent"] == "food.general"
+
+def test_food_general_prompt_separates_comparison_and_reheating() -> None:
+    """식재료 비교와 남은 음식 재가열 질문을 food.general로 분류하도록 계약합니다."""
+    prompt = supervisor_utils._LLM_ROUTE_SYSTEM_PROMPT
+
+    assert '동물성 휘핑크림과 식물성은 뭐가 달라?' in prompt
+    assert '남은 치킨 데우는 방법은?' in prompt
+    assert 'must be food.general' in prompt
+
+def test_food_fallback_routes_without_receiving_db_actions(monkeypatch) -> None:
+    """일반 요리 지식은 fallback으로 보내고 DB 변경 intent와 분리합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    monkeypatch.setattr(
+        "ai.agents.fallback_agent.run_food_fallback",
+        lambda text, history=None: {"response_text": "설탕 5g은 일반적으로 약 1작은술이에요."},
+    )
+    routed = router_node({
+        "text": "설탕 5g은 몇 티스푼이야?",
+        "service": FakeService("food.general"),
+        "history": [],
+    })
+    result = supervisor_agent.fallback_agent_node({
+        **routed,
+        "text": "설탕 5g은 몇 티스푼이야?",
+        "history": [],
+        "slots": {},
+    })
+
+    assert routed["intent"] == "food.general"
+    assert result["response_text"].startswith("설탕 5g")
+    assert result["actions"] == []
+    assert "inventory" not in routed["intent"]
+
+
+def test_non_food_request_stays_out_of_fallback() -> None:
+    """음식과 관계없는 질문은 fallback Agent로 보내지 않습니다."""
+    routed = router_node({
+        "text": "파이썬으로 구구단 코드 짜줘",
+        "service": FakeService("general"),
+        "history": [],
+    })
+
+    assert routed["intent"] == "general"
+    assert route_intent(routed) == "general_node"
 
 def test_recipe_pairing_reply() -> None:
     """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
