@@ -6,15 +6,25 @@
 
 ## Quick Start
 
-### 학습 실행 (Docker)
+### 학습 + 모델 저장 + 검증 (Docker)
+
+```powershell
+cd ai\experiments
+docker compose run --rm jupyter python train.py
+```
+
+- 학습 → `model/` 저장 → `outputs/recipe_lightfm.csv` export → Go 지표 출력
+- 산출물: `model/*.pkl`, `outputs/recipe_lightfm.csv`, `outputs/train_report.json`
+
+### 평가만 별도 실행 (선택)
 
 ```powershell
 cd ai\experiments
 docker compose run --rm jupyter python evaluation.py
 ```
 
-- Go 판정 (R0~R2 warm-fold CV) + full-catalog 진단 + export 실행
-- 산출물: `outputs/recipe_lightfm.csv`, `outputs/prefer_eval_report.json`
+- Go 판정 (R0~R2 warm-fold CV) + full-catalog 진단
+- 산출물: `outputs/prefer_eval_report.json`
 
 ### 노트북 실행 (대화형)
 
@@ -24,26 +34,19 @@ docker compose up --build
 # http://localhost:8888 → LightFM_Model.ipynb
 ```
 
-### 환경 검증 (스모크 테스트)
-
-```powershell
-cd ai\experiments
-docker compose run --rm jupyter python -c "from lightfm import LightFM; print('ok')"
-```
-
 ---
 
 ## 폴더 구조
 
 ```
 ai/recommendation/
-├── config.py              # 설정 (seed, epochs, paths, env override)
-├── data_io.py             # CSV 로드/저장, JSON 리포트
-├── preprocess.py          # 전처리, interactions, item features 구축
-├── scoring.py             # catalog predict, export DataFrame 생성
+├── train.py               # 학습→모델저장→export→검증 오케스트레이션
+├── config.py              # 설정, data I/O, 모델 persistence
+├── pipeline.py            # 전처리, interactions, item features, scoring
 ├── evaluation.py          # CV Go (R0~R2) + full-catalog 진단
-├── LightFM_Model.ipynb    # full-fit export 오케스트레이션 노트북
+├── LightFM_Model.ipynb    # 대화형 탐색 노트북
 ├── data/                  # 입력 CSV (review_by_llm, recipe_fix, alias)
+├── model/                 # 학습된 모델 아티팩트 (*.pkl)
 ├── outputs/               # 산출물 (recipe_lightfm.csv, JSON 리포트)
 └── docs/                  # 문서
     ├── EXPERIMENTS.md     # 실험 §1~31 상세 기록
@@ -94,21 +97,13 @@ CV Go 결과 + full-catalog 진단 수치.
 | `SEED` | 42 | 학습·predict |
 | `EPOCHS` | 30 | full-fit epoch 수 |
 | `NUM_THREADS` | 2 | LightFM 병렬 |
-| `POSITIVE_MODE` | `prefer_n_star5_ge2` | WARP matrix 필터 |
 | `EXCLUDED_RECIPE_COLUMNS` | `ingredients` | feature 제외 컬럼 |
 
 ---
 
 ## 서비스 연동 (다음 단계)
 
-### 1. 학습 파이프라인 스크립트화
-
-노트북 → `train.py`로 전환. 모델 아티팩트 저장:
-- `model.pkl` (LightFM 임베딩)
-- `item_features.pkl` (cold item 점수용)
-- `id_maps.pkl` (recipe_id ↔ 내부 인덱스)
-
-### 2. 추론 서비스 모듈
+### 1. 추론 서비스 모듈
 
 ```python
 # inference.py 개요
@@ -118,7 +113,7 @@ model + maps + features 로드 → predict(user_idx, item_idxs) → Top-K
 - cold user → catalog (`__catalog__` user) 점수
 - warm user → 해당 `group_id`로 개인화 predict
 
-### 3. 개인화 CF
+### 2. 개인화 CF
 
 유저 선호 데이터 축적 → 기존 데이터에 추가 → 배치 재학습 → per-user predict.  
 catalog `y_hat`은 fallback으로 유지.
