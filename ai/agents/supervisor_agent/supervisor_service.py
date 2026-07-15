@@ -35,6 +35,20 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _is_relevant_search_result,
 )
 
+def _extract_pending_action(final_state: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """에이전트 결과나 확인 버튼에서 실행 대기 작업을 추출합니다."""
+    pending = final_state.get("pending_action")
+    if isinstance(pending, dict):
+        return pending
+    if pending:
+        return {"action": str(pending)}
+    for action in actions:
+        command = (action.get("data") or {}).get("message")
+        if isinstance(command, str) and command.startswith("확인:"):
+            return {"command": command}
+    return None
+
+
 class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
 
@@ -47,7 +61,7 @@ class ChatService:
         # 로그인 상태 체크 (기존 로직 유지)
         if _is_login_status_question(text):
             reply = "현재 로그인된 상태예요." if user_id else "현재 비로그인 상태예요. 보관법이나 일반 레시피 검색은 이용할 수 있어요."
-            return {"intent": "auth.status", "reply": reply, "actions": [], "sources": []}
+            return {"intent": "auth.status", "reply": reply, "actions": [], "sources": [], "slots": {}, "pending_action": None}
             
         # 초기 상태(GraphState) 구성
         from ai.agents.supervisor_agent.supervisor_agent import supervisor_agent
@@ -61,6 +75,7 @@ class ChatService:
             "intent": None,
             "intent_payload": {},
             "slots": {},
+            "pending_action": None,
             "keyword": None,
             "response_text": None,
             "actions": [],
@@ -94,12 +109,16 @@ class ChatService:
             reply = final_state.get("response_text", "")
             actions = final_state.get("actions") or []
             sources = final_state.get("sources") or []
+            slots = final_state.get("slots") or {}
+            pending_action = _extract_pending_action(final_state, actions)
         except Exception as e:
             print(f"[ChatService] graph failed: {type(e).__name__}: {e}")
             intent = "error"
             reply = "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
             actions = []
             sources = []
+            slots = {}
+            pending_action = None
             
         # LLM 단답형 요약 (사용자 설정)
         if user_settings and getattr(user_settings, 'shortAnswer', False) and len(reply) > 50:
@@ -118,7 +137,14 @@ class ChatService:
                 except Exception:
                     pass
 
-        return {"intent": intent, "reply": reply, "actions": actions, "sources": sources}
+        return {
+            "intent": intent,
+            "reply": reply,
+            "actions": actions,
+            "sources": sources,
+            "slots": slots,
+            "pending_action": pending_action,
+        }
 
         
 

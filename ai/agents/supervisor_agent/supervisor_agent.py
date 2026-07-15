@@ -29,7 +29,6 @@ from ai.agents.supervisor_agent.supervisor_utils import (
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 
-_CONTEXT_INTENT_PREFIXES = ("shopping.", "recipe.", "alarm.")
 _CONTEXT_INTENTS = {"ingredient.guide", "inventory.list", "inventory.expiring"}
 
 
@@ -40,6 +39,26 @@ def _latest_bot_intent(history) -> str | None:
         intent = message.get("intent") if isinstance(message, dict) else getattr(message, "intent", None)
         if role == "bot" and intent:
             return intent
+    return None
+
+
+def _latest_bot_slots(history) -> dict:
+    """이전 봇 응답에 저장된 마지막 슬롯을 반환합니다."""
+    for message in reversed(history or []):
+        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
+        slots = message.get("slots") if isinstance(message, dict) else getattr(message, "slots", None)
+        if role == "bot" and isinstance(slots, dict):
+            return slots
+    return {}
+
+
+def _latest_bot_pending_action(history) -> dict | None:
+    """이전 봇 응답에 저장된 실행 대기 작업을 반환합니다."""
+    for message in reversed(history or []):
+        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
+        pending = message.get("pending_action") if isinstance(message, dict) else getattr(message, "pending_action", None)
+        if role == "bot" and isinstance(pending, dict):
+            return pending
     return None
 
 
@@ -59,7 +78,8 @@ def _is_context_follow_up(text: str) -> bool:
     normalized = _normalize_text(text)
     return (
         bool(re.match(r"^외\d+개", normalized))
-        or any(word in normalized for word in ("나머지", "그중", "그거", "그건", "더알려", "더보여", "전부", "다말해", "다보여"))
+        or bool(re.fullmatch(r"(?:냉장|냉동|실온)(?:은|는|으로|에)?", normalized.rstrip("?")))
+        or any(word in normalized for word in ("나머지", "그중", "그거", "그걸", "그건", "이거", "이걸", "이건", "첫번째", "두번째", "더알려", "더보여", "전부", "다말해", "다보여"))
     )
 
 def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = None) -> dict:
@@ -76,6 +96,7 @@ def router_node(state: GraphState) -> dict:
         or _pending_add_storage_from_history(history)
         or _pending_add_from_history(history)
         or _pending_consume_from_history(history)
+        or _latest_bot_pending_action(history)
     )
     text = _rewrite_context_switch(original_text, has_pending)
 
@@ -122,11 +143,24 @@ def router_node(state: GraphState) -> dict:
         return _route_result(shopping_intent)
 
     # 가격 질문은 장보기 문맥이 없어도 Shopping Agent의 가격 비교로 보냅니다.
-    if any(word in normalized for word in ("가격", "얼마", "최저가")):
+    if any(word in normalized for word in ("가격", "얼마", "최저가", "싼곳", "싼데", "저렴한곳", "저렴한데")):
         return _route_result("shopping.compare")
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
         return _route_result("recipe.pairing")
+
+    # 생략된 후속 명령은 일반 냉장고 쓰기 규칙보다 직전 에이전트 문맥을 우선합니다.
+    previous_intent = _latest_bot_intent(history)
+    if previous_intent and _is_context_follow_up(text):
+        previous_slots = _latest_bot_slots(history)
+        if previous_intent.startswith("shopping."):
+            return _route_result(analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
+        if previous_intent.startswith("alarm."):
+            return _route_result(previous_intent, slots=previous_slots)
+        if not any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS)) and (
+            previous_intent.startswith("recipe.") or previous_intent in _CONTEXT_INTENTS
+        ):
+            return _route_result(previous_intent, slots=previous_slots)
 
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
@@ -139,15 +173,6 @@ def router_node(state: GraphState) -> dict:
         return _route_result("inventory.action")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return _route_result("inventory.list")
-
-    # 생략된 후속 질문은 직전 에이전트 intent를 이어받습니다.
-    previous_intent = _latest_bot_intent(history)
-    if (
-        previous_intent
-        and _is_context_follow_up(text)
-        and (previous_intent.startswith(_CONTEXT_INTENT_PREFIXES) or previous_intent in _CONTEXT_INTENTS)
-    ):
-        return _route_result(previous_intent)
 
     if hasattr(state["service"], "_route_intent_payload_with_llm"):
         route_payload = state["service"]._route_intent_payload_with_llm(text, history)
@@ -196,7 +221,9 @@ def inventory_agent_node(state: GraphState) -> dict:
 
 def guide_agent_node(state: GraphState) -> dict:
     """식재료 보관/손질 가이드 에이전트를 안내합니다."""
-    reply, sources = state["service"]._reply_guide(state["text"])
+    # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
+    query = re.sub(r"^.+?(?:말고|대신)\s+", "", state["text"]).strip()
+    reply, sources = state["service"]._reply_guide(query)
     return {"response_text": reply, "sources": sources}
 
 def recipe_agent_node(state: GraphState) -> dict:
@@ -229,8 +256,12 @@ def shopping_agent_node(state: GraphState) -> dict:
     if not state.get("user_id"):
         return {"response_text": LOGIN_REQUIRED_REPLY}
 
+    # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
+    text = state["text"]
+    compare_text = re.sub(r"\s*더\s*(?:싼|저렴한)\s*(?:곳|데)(?:은|는)?(?:\s*없어(?:요)?)?\s*\??$", "", text).strip()
+
     return run_shopping_agent(
-        text=state["text"],
+        text=compare_text or text,
         intent=state.get("intent", ""),
         history=state.get("history", []),
         db=state["db"],
