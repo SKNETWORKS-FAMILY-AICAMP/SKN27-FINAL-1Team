@@ -40,6 +40,7 @@ class RecipeRecommendConfig:
     LIMIT_MIN = 1
     LIMIT_MAX = 50
     DEFAULT_POOL_MULTIPLIER = 10
+    MENU_CUSTOM_POOL_MULTIPLIER = 4
     POOL_MULTIPLIER_MIN = 1
     POOL_MULTIPLIER_MAX = 10
 
@@ -77,7 +78,7 @@ class RecipeRecommendConfig:
 
     @classmethod
     def menu_custom_preset(cls, limit: int, **filters: Any) -> RecipeRecommendConfig:
-        pool_multiplier = filters.pop("pool_multiplier", cls.DEFAULT_POOL_MULTIPLIER)
+        pool_multiplier = filters.pop("pool_multiplier", cls.MENU_CUSTOM_POOL_MULTIPLIER)
         return cls(
             mode="menu_custom",
             include_maybe_owned=True,
