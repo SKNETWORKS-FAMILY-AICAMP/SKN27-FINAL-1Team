@@ -42,6 +42,12 @@ class RecipeExecutionState:
     intermediate: dict[str, Any] = field(default_factory=dict)
 
 
+TEMPLATE_RECIPE_SEARCH = "RECIPE_SEARCH"
+TEMPLATE_INGREDIENT_RECOMMEND = "INGREDIENT_RECOMMEND"
+TEMPLATE_FRIDGE_RECOMMEND = "FRIDGE_RECOMMEND"
+TEMPLATE_RECIPE_PAIRING = "RECIPE_PAIRING"
+
+
 def build_recipe_response(
     *,
     message: str,
@@ -172,6 +178,9 @@ if __name__ == "__main__":
         assert state.template is None
         assert state.steps_done == []
         assert state.intermediate == {}
+
+        templates = {TEMPLATE_RECIPE_SEARCH, TEMPLATE_INGREDIENT_RECOMMEND, TEMPLATE_FRIDGE_RECOMMEND, TEMPLATE_RECIPE_PAIRING}
+        assert len(templates) == 4
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
