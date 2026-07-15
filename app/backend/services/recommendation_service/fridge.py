@@ -1,9 +1,14 @@
+"""냉장고 조회 + 재료 매칭 (추천·상세 공통)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Literal
 
+from sqlalchemy.orm import Session
+
+from app.backend.db.models import FridgeItem, Ingredient
 from app.backend.services.recommendation_service.recommend_config import (
     BASIC_INGREDIENT_IDS,
     BASIC_INGREDIENT_NORMALIZED_NAMES,
@@ -16,11 +21,23 @@ MAYBE_MATCH_SCORE = 1.0
 MatchType = Literal["recipe_in_fridge", "fridge_in_recipe"]
 
 
+# ── 데이터 클래스 ──
+
+
 @dataclass(frozen=True)
 class FridgeItemSnapshot:
     ingredient_id: int | None
     fridge_name: str
     expiry_date: date | None = None
+    status: str | None = None
+
+
+@dataclass(frozen=True)
+class FridgeExpiryRow:
+    ingredient_id: int
+    fridge_name: str
+    expiry_date: date | None
+    purchased_date: date | None
     status: str | None = None
 
 
@@ -49,6 +66,59 @@ class FridgeMatchResult:
     display_match_rate: int
 
 
+# ── DB 조회 ──
+
+
+def _fetch_fridge_rows(
+    db: Session,
+    user_id: int,
+    statuses: tuple[str, ...] = ("normal",),
+) -> list[FridgeExpiryRow]:
+    rows = (
+        db.query(FridgeItem, Ingredient)
+        .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
+        .filter(
+            FridgeItem.user_id == user_id,
+            FridgeItem.status.in_(statuses),
+        )
+        .all()
+    )
+
+    return [
+        FridgeExpiryRow(
+            ingredient_id=int(fridge_item.ingredient_id),
+            fridge_name=fridge_item.display_name or ingredient.name,
+            expiry_date=fridge_item.expiry_date,
+            purchased_date=fridge_item.purchased_date,
+            status=fridge_item.status,
+        )
+        for fridge_item, ingredient in rows
+    ]
+
+
+def fetch_fridge_snapshots(
+    db: Session,
+    user_id: int,
+    statuses: tuple[str, ...] = ("normal",),
+) -> list[FridgeItemSnapshot]:
+    return [
+        FridgeItemSnapshot(
+            ingredient_id=row.ingredient_id,
+            fridge_name=row.fridge_name,
+            expiry_date=row.expiry_date,
+            status=row.status,
+        )
+        for row in _fetch_fridge_rows(db, user_id, statuses=statuses)
+    ]
+
+
+def fetch_fridge_expiry_rows(db: Session, user_id: int) -> list[FridgeExpiryRow]:
+    return _fetch_fridge_rows(db, user_id)
+
+
+# ── 매칭 ──
+
+
 def _clamp_rate(value: float) -> int:
     return max(0, min(100, int(round(value))))
 
@@ -64,7 +134,6 @@ def _is_expired_snapshot(item: FridgeItemSnapshot | MaybeMatch | None) -> bool:
 def _fridge_status_payload(item: FridgeItemSnapshot | MaybeMatch | None) -> dict[str, Any]:
     if item is None:
         return {}
-
     return {
         "expiry_date": item.expiry_date,
         "status": item.status,
@@ -199,13 +268,6 @@ def classify_fridge_match(
             owned.append(ingredient)
             continue
         # ponytail: 수식어+기본재료(뜨거운 물 등) — 오탐·범위 검토 후 재활성화
-        # cleaned = text before normalize in _basic_ingredient_normalized
-        # if any(
-        #     len(parts := cleaned.split()) >= 2 and parts[-1] == basic_name
-        #     for basic_name in BASIC_INGREDIENT_NORMALIZED_NAMES
-        # ):
-        #     owned.append(ingredient)
-        #     continue
         if not ingredient_matches_refs(ingredient, fridge_items):
             missing.append(ingredient)
             continue
