@@ -89,6 +89,11 @@ class LegacyRecipeEngine:
         )
 
 
+def _select_engine(intent: str) -> LegacyRecipeEngine:
+    """intent에 따라 실행기를 선택한다. ponytail: 현재 모든 intent가 Legacy를 반환. 신규 Orchestrator 추가 시 여기에 분기."""
+    return LegacyRecipeEngine()
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -105,7 +110,8 @@ def run_recipe_agent(
         settings_obj=settings_obj,
         intent=intent or analyze_recipe_intent(text, history),
     )
-    result = LegacyRecipeEngine().run(req)
+    engine = _select_engine(req.intent)
+    result = engine.run(req)
     return to_supervisor_state(result)
 
 
@@ -149,6 +155,9 @@ if __name__ == "__main__":
 
         engine = LegacyRecipeEngine()
         assert hasattr(engine, "run")
+
+        selected = _select_engine("recipe.search")
+        assert isinstance(selected, LegacyRecipeEngine)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
