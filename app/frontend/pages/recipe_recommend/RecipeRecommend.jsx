@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 function RecipeRecommend({
   title = '레시피 추천',
-  description = '냉장고 재료 기반 추천과 취향 기반 메뉴 추천 중 원하는 흐름을 선택해보세요.',
+  description = '냉장고에 있는 재료로 만들 수 있는 레시피를 확인해보세요.',
 }) {
   return (
     <div className="page-container">
@@ -11,7 +11,6 @@ function RecipeRecommend({
       <p>{description}</p>
       <div className="page-container__actions">
         <Link to="/recipe-fridge">냉장고파먹기 추천</Link>
-        <Link to="/menu-recommend">메뉴 추천 받기</Link>
       </div>
     </div>
   )

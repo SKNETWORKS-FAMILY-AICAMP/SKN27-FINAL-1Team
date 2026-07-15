@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import mascot from '../assets/mascot_avatar.png'
+import mascot from '../assets/mascot_avatar.webp'
 import { API_URL } from '../utils/api.js'
 import ChatWelcome from './ChatWelcome'
 import './FloatingChatbot.css'

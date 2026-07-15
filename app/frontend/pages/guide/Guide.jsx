@@ -1,17 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './Guide.css'
 
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
-import imageGuide from '../../assets/extracted/images/image_guide_v2.png'
+import imageGuide from '../../assets/extracted/images/image_guide_v2.webp'
 import { API_URL } from '../../utils/api.js'
 
 const GUIDE_PAGE_SIZE = 12
-const FRIDGE_PAGE_SIZE = 12
+const FRIDGE_PAGE_SIZE = 16
 const GUEST_RECOMMENDATION_PAGE_SIZE = 8
 const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
-const GUIDE_RECIPE_VISIBLE_COUNT = 3
 const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
 
 function normalizeIngredientImageName(name = '') {
@@ -166,11 +165,18 @@ function getFridgeNameFontSize(name = '') {
   return '16px'
 }
 
-function ImageSlot({ src, alt = '', label = '', className = '' }) {
-  const fallback = label?.trim()?.[0] || '?'
+function ImageSlot({ src, alt = '', className = '' }) {
   return (
-    <span className={`guide-image-slot ${src ? 'is-filled' : ''} ${className}`}>
-      {src ? <img src={src} alt={alt} /> : <span className="guide-image-slot__text">{fallback}</span>}
+    <span className={`guide-image-slot is-filled ${src ? '' : 'is-placeholder'} ${className}`}>
+      {src ? (
+        <img src={src} alt={alt} decoding="async" />
+      ) : (
+        <span className="guide-image-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <path d="M10 34h28M14 31a10 10 0 0 1 20 0M21 18h6M24 18v3" />
+          </svg>
+        </span>
+      )}
     </span>
   )
 }
@@ -196,7 +202,10 @@ function Guide() {
   const [hasNextPage, setHasNextPage] = useState(false)
   const [selectedGuide, setSelectedGuide] = useState(null)
   const [recommendedRecipes, setRecommendedRecipes] = useState([])
-  const [recipeStartIndex, setRecipeStartIndex] = useState(0)
+  const [recipeSlideIndex, setRecipeSlideIndex] = useState(0)
+  const [recipeSlideDirection, setRecipeSlideDirection] = useState('next')
+  const recipeDragStartY = useRef(null)
+  const recipeDidDrag = useRef(false)
   const [isListLoading, setIsListLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isRecipeLoading, setIsRecipeLoading] = useState(false)
@@ -416,6 +425,8 @@ function Guide() {
   useEffect(() => {
     const ingredientName =
       selectedGuide?.raw_name || selectedGuide?.name || selectedGuide?.representative_name || ''
+    setRecipeSlideIndex(0)
+    setRecipeSlideDirection('next')
 
     if (!ingredientName) {
       setRecommendedRecipes([])
@@ -440,11 +451,9 @@ function Guide() {
         if (!response.ok) throw new Error('추천 레시피를 불러오지 못했습니다.')
         const data = await response.json()
         setRecommendedRecipes(data.items || [])
-        setRecipeStartIndex(0)
       } catch (error) {
         if (error.name !== 'AbortError') {
           setRecommendedRecipes([])
-          setRecipeStartIndex(0)
           setRecipeErrorMessage(error.message)
         }
       } finally {
@@ -455,6 +464,54 @@ function Guide() {
     loadRecommendedRecipes()
     return () => controller.abort()
   }, [selectedGuide])
+
+  const currentRecommendedRecipe = recommendedRecipes[recipeSlideIndex]
+  const slideRecommendedRecipe = (direction) => {
+    setRecipeSlideDirection(direction)
+    setRecipeSlideIndex((current) => (
+      current + (direction === 'next' ? 1 : -1) + recommendedRecipes.length
+    ) % recommendedRecipes.length)
+  }
+
+  useEffect(() => {
+    if (recommendedRecipes.length <= 1) return undefined
+
+    const intervalId = window.setInterval(() => {
+      if (document.hidden || recipeDragStartY.current != null) return
+      setRecipeSlideDirection('next')
+      setRecipeSlideIndex((current) => (current + 1) % recommendedRecipes.length)
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [recommendedRecipes.length])
+
+  const resetRecipeDragVisual = (target) => {
+    target.classList.remove('is-dragging')
+    target.querySelector('.guide-recipe-card')?.style.removeProperty('transform')
+  }
+  const handleRecipeDragStart = (event) => {
+    if (recommendedRecipes.length <= 1 || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
+    recipeDragStartY.current = event.clientY
+    recipeDidDrag.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  const handleRecipeDragMove = (event) => {
+    if (recipeDragStartY.current == null) return
+    const distance = event.clientY - recipeDragStartY.current
+    if (Math.abs(distance) > 6) recipeDidDrag.current = true
+    event.currentTarget.classList.toggle('is-dragging', recipeDidDrag.current)
+    const card = event.currentTarget.querySelector('.guide-recipe-card')
+    if (card) card.style.transform = `translateY(${Math.max(-80, Math.min(80, distance))}px)`
+  }
+  const handleRecipeDragEnd = (event) => {
+    if (recipeDragStartY.current == null) return
+    const distance = event.clientY - recipeDragStartY.current
+    recipeDragStartY.current = null
+    resetRecipeDragVisual(event.currentTarget)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    if (Math.abs(distance) >= 48) slideRecommendedRecipe(distance < 0 ? 'next' : 'previous')
+    window.setTimeout(() => { recipeDidDrag.current = false }, 0)
+  }
 
   const searchSuggestions = guideItems.slice(0, 6)
   const currentMonth = selectedSeasonalMonth
@@ -470,10 +527,12 @@ function Guide() {
         type="button"
         aria-expanded={isSeasonalMonthMenuOpen}
         aria-label="제철 식재료 월 선택"
-        onClick={() => setIsSeasonalMonthMenuOpen((isOpen) => !isOpen)}
-      >
-        {currentMonth}월
-        <span aria-hidden="true">⌄</span>
+      onClick={() => setIsSeasonalMonthMenuOpen((isOpen) => !isOpen)}
+    >
+      {currentMonth}월
+      <svg aria-hidden="true" viewBox="0 0 12 12">
+        <path d="m3 4.5 3 3 3-3" />
+      </svg>
       </button>
       {isSeasonalMonthMenuOpen ? (
         <div className="guide-seasonal-month-menu" role="menu">
@@ -521,14 +580,6 @@ function Guide() {
     [guideTips, selectedGuide],
   )
   const selectedTip = visibleGuideTips.find((tip) => tip.title === selectedTipTitle) ?? visibleGuideTips[0]
-  const visibleRecommendedRecipes = recommendedRecipes.slice(
-    recipeStartIndex,
-    recipeStartIndex + GUIDE_RECIPE_VISIBLE_COUNT,
-  )
-  const canSlideRecipes = recommendedRecipes.length > GUIDE_RECIPE_VISIBLE_COUNT
-  const canShowPreviousRecipes = recipeStartIndex > 0
-  const canShowNextRecipes = recipeStartIndex + GUIDE_RECIPE_VISIBLE_COUNT < recommendedRecipes.length
-
   useEffect(() => {
     setGuestRecommendationPage((current) => Math.min(current, isLoggedIn ? seasonalTotalPages : guestTotalPages))
   }, [guestTotalPages, isLoggedIn, seasonalTotalPages])
@@ -617,11 +668,6 @@ function Guide() {
     setPage(normalizedPage)
   }
 
-  const slideRecipes = (step) => {
-    const maxStartIndex = Math.max(0, recommendedRecipes.length - GUIDE_RECIPE_VISIBLE_COUNT)
-    setRecipeStartIndex((current) => Math.min(Math.max(current + step, 0), maxStartIndex))
-  }
-
   const openSuggestionForm = () => {
     setSuggestionMessage('')
     if (!isLoggedIn) {
@@ -672,7 +718,13 @@ function Guide() {
   }
 
   return (
-    <section className="guide-page" aria-labelledby="guide-title">
+    <section
+      className={`guide-page${isDetailPage ? ' guide-page--detail' : ''}`}
+      aria-label={isDetailPage ? '식재료 가이드 상세' : undefined}
+      aria-labelledby={isDetailPage ? undefined : 'guide-title'}
+    >
+      {!isDetailPage ? (
+        <>
       <div className="guide-hero">
         <div className="guide-hero__copy">
           <h1 id="guide-title">식재료 가이드</h1>
@@ -723,7 +775,7 @@ function Guide() {
       {errorMessage ? <p className="guide-error">{errorMessage}</p> : null}
 
       <section
-        className={`guide-panel guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}`}
+        className={`guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}`}
         aria-labelledby="guide-ingredients-title"
       >
           <div className="guide-ingredients__header">
@@ -732,13 +784,11 @@ function Guide() {
           </div>
           <div className="guide-ingredients__actions">
             {!isLoggedIn ? seasonalMonthControl : null}
-            {canPageFeaturedIngredients ? (
-              <span className="guide-list-summary" aria-current="page">
-              {isLoggedIn
-                ? `${fridgeIngredients.length}개 · ${fridgePage}/${fridgeTotalPages}`
-                : `${guestRecommendationPage}/${guestTotalPages}`}
-              </span>
-            ) : null}
+              {isLoggedIn && canPageFeaturedIngredients ? (
+                <span className="guide-list-summary" aria-current="page">
+                  {fridgeIngredients.length}개 · {fridgePage}/{fridgeTotalPages}
+                </span>
+              ) : null}
           </div>
         </div>
         <div className="guide-fridge-pager">
@@ -793,60 +843,14 @@ function Guide() {
           ) : null}
         </div>
       </section>
-
-      {isLoggedIn ? (
-        <section className="guide-panel guide-ingredients guide-ingredients--seasonal" aria-labelledby="guide-seasonal-title">
-          <div className="guide-ingredients__header">
-            <div className="guide-section-title" id="guide-seasonal-title">
-              {currentMonth}월 제철 식재료
-            </div>
-            <div className="guide-ingredients__actions">
-              {seasonalMonthControl}
-              {seasonalTotalPages > 1 ? (
-                <span className="guide-list-summary" aria-current="page">
-                  {guestRecommendationPage}/{seasonalTotalPages}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="guide-fridge-pager">
-            {seasonalTotalPages > 1 ? (
-              <button
-                className="guide-fridge-page-button is-previous"
-                type="button"
-                aria-label="이전 제철 식재료 페이지"
-                disabled={guestRecommendationPage <= 1}
-                onClick={() => setGuestRecommendationPage((current) => Math.max(1, current - 1))}
-              >
-                ‹
-              </button>
-            ) : null}
-            <div className="guide-ingredient-list" aria-label="제철 식재료 목록">
-              {seasonalFeaturedIngredients.map((ingredient) => renderIngredientButton(ingredient))}
-              {!isListLoading && seasonalFeaturedIngredients.length === 0 ? (
-                <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
-              ) : null}
-            </div>
-            {seasonalTotalPages > 1 ? (
-              <button
-                className="guide-fridge-page-button is-next"
-                type="button"
-                aria-label="다음 제철 식재료 페이지"
-                disabled={guestRecommendationPage >= seasonalTotalPages}
-                onClick={() => setGuestRecommendationPage((current) => Math.min(seasonalTotalPages, current + 1))}
-              >
-                ›
-              </button>
-            ) : null}
-          </div>
-        </section>
+        </>
       ) : null}
 
       {!isDetailPage ? (
-        <section className="guide-panel guide-all" aria-labelledby="guide-all-title">
+        <section className="guide-all" aria-label="전체 재료 목록">
           <div className="guide-category-tabs" aria-label="식재료 분류 선택">
             <div>
-              <div className="guide-category-tab-list" role="group" aria-label="대분류">
+              <div className="guide-category-tab-list guide-category-tab-list--major" role="group" aria-label="대분류">
                 <button
                   className={!selectedMajorCategory ? 'is-active' : ''}
                   type="button"
@@ -871,7 +875,7 @@ function Guide() {
 
             {selectedMajorCategory ? (
               <div>
-                <div className="guide-category-tab-list" role="group" aria-label="중분류">
+                <div className="guide-category-tab-list guide-category-tab-list--middle" role="group" aria-label="중분류">
                   <button
                     className={!selectedMiddleCategory ? 'is-active' : ''}
                     type="button"
@@ -897,10 +901,6 @@ function Guide() {
           </div>
 
           <div className="guide-all__header">
-            <div>
-              <h2 id="guide-all-title">전체 재료 목록</h2>
-              <p>분류별로 재료를 넘겨 보며 보관, 손질, 세척 정보를 확인해요.</p>
-            </div>
             <span className="guide-list-summary">
               {isListLoading ? '불러오는 중' : `${totalCount}개 · ${page}/${totalPages}`}
             </span>
@@ -950,38 +950,35 @@ function Guide() {
             <section className="guide-panel guide-detail guide-loading">가이드를 불러오는 중입니다.</section>
           ) : selectedGuide ? (
             <>
-              <div className="guide-content-grid">
-                <article className="guide-panel guide-detail">
-                  <div className="guide-detail__top">
-                    <button
-                      className="guide-detail-back"
-                      type="button"
-                      aria-label="전체 식재료 목록으로 돌아가기"
-                      title="전체 목록"
-                      onClick={() => navigate('/guide')}
-                    >
-                      ←
-                    </button>
-                    <span className="guide-detail__path">
-                      {formatCategory(selectedGuide) || selectedGuide.name}
-                    </span>
-                  </div>
-                  <div className="guide-detail__header">
+              <nav className="guide-detail-nav" aria-label="가이드 목록으로 돌아가기">
+                <button type="button" onClick={() => navigate('/guide')}>← 가이드 목록</button>
+              </nav>
+
+              <div className="guide-detail-primary">
+                <div className="guide-detail-heading">
+                  <p className="guide-detail-category">
+                    {[selectedGuide.major_category, selectedGuide.middle_category, selectedGuide.minor_category]
+                      .filter((category) => category && category !== selectedGuide.name)
+                      .join(' > ') || '식재료'}
+                  </p>
+                  <h1 id="guide-detail-title">{selectedGuide.name}</h1>
+                </div>
+                <article className="guide-detail-summary">
+                  <div className="guide-detail-visual">
                     <ImageSlot
                       alt=""
-                      className="guide-detail__image"
+                      className="guide-detail-visual__image"
                       label={selectedGuide.name}
                       src={getGuideIcon(selectedGuide)}
                     />
-                    <div>
-                      <h2>{selectedGuide.name}</h2>
-                      <span className="guide-owned-badge">{formatMonths(selectedGuide.seasonal_months)}</span>
-                    </div>
+                    <span className="guide-detail-season">
+                      <i aria-hidden="true" />
+                      {formatMonths(selectedGuide.seasonal_months)}
+                    </span>
                   </div>
-
                 </article>
 
-                <aside className="guide-panel guide-tip-detail" aria-label="식재료 가이드 상세">
+                <aside className={`guide-detail-guide ${selectedTip.isMissing ? 'is-missing' : ''}`} aria-label="식재료 가이드 상세">
                   <div
                     className={`guide-tip-grid ${selectedTip.isMissing ? 'is-missing' : ''}`}
                     role="tablist"
@@ -989,27 +986,21 @@ function Guide() {
                     style={{ gridTemplateColumns: `repeat(${visibleGuideTips.length}, minmax(0, 1fr))` }}
                   >
                     {visibleGuideTips.map((tip) => (
-                      <section
+                      <button
+                        type="button"
                         className={`guide-tip-card ${tip.isMissing ? 'is-missing' : ''} ${
                           selectedTip.title === tip.title ? 'is-active' : ''
                         }`}
                         key={tip.title}
                         role="tab"
                         aria-selected={selectedTip.title === tip.title}
-                        tabIndex={0}
                         onClick={() => setSelectedTipTitle(tip.title)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            setSelectedTipTitle(tip.title)
-                          }
-                        }}
                       >
                         <div className="guide-tip-card__title">
                           <span aria-hidden="true" />
                           <h3>{tip.title}</h3>
                         </div>
-                      </section>
+                      </button>
                     ))}
                   </div>
                   <div className={`guide-tip-body ${selectedTip.isMissing ? 'is-missing' : ''}`}>
@@ -1129,116 +1120,147 @@ function Guide() {
                 </aside>
               </div>
 
-              <section className="guide-panel guide-tip-nutrition" aria-labelledby="guide-nutrition-title">
-                <div className="guide-tip-nutrition__header">
-                  <h2 id="guide-nutrition-title">영양성분</h2>
-                  <div className="guide-tip-nutrition__summary">
-                    <strong className="guide-tip-nutrition__energy">
-                      <small>칼로리</small>
-                      {selectedGuide.energy_kcal ?? '-'} kcal
-                    </strong>
-                    <strong className="guide-tip-nutrition__amount">
-                      <small>기준량</small>
-                      {selectedGuide.nutrition_base_amount || '정보 없음'}
-                    </strong>
-                  </div>
-                  {selectedGuide.nutrition_source_name ? <span className="guide-tip-nutrition__source">출처: {selectedGuide.nutrition_source_name}</span> : null}
-                </div>
-
-                <div className="guide-nutrition-grid">
-                  <strong><span>탄수화물</span><b>{selectedGuide.carbohydrate_g ?? '-'} g</b></strong>
-                  <strong><span>단백질</span><b>{selectedGuide.protein_g ?? '-'} g</b></strong>
-                  <strong><span>지방</span><b>{selectedGuide.fat_g ?? '-'} g</b></strong>
-                  <strong><span>포화지방</span><b>{selectedGuide.saturated_fat_g ?? '-'} g</b></strong>
-                  <strong><span>트랜스지방</span><b>{selectedGuide.trans_fat_g ?? '-'} g</b></strong>
-                  <strong><span>당류</span><b>{selectedGuide.sugar_g ?? '-'} g</b></strong>
-                  <strong><span>식이섬유</span><b>{selectedGuide.fiber_g ?? '-'} g</b></strong>
-                  <strong><span>나트륨</span><b>{selectedGuide.sodium_mg ?? '-'} mg</b></strong>
-                  <strong><span>칼륨</span><b>{selectedGuide.potassium_mg ?? '-'} mg</b></strong>
-                  <strong><span>수분</span><b>{selectedGuide.water_g ?? '-'} g</b></strong>
-                </div>
-              </section>
-
-              <section className="guide-panel guide-recipes" aria-labelledby="guide-recipes-title">
-                <div className="guide-recipes__header">
-                  <div>
+              <div className="guide-detail-secondary">
+                <section className="guide-detail-recipes" aria-labelledby="guide-recipes-title">
+                  <div className="guide-recipes__header">
                     <h2 id="guide-recipes-title">추천 레시피</h2>
-                    <span>{selectedGuide.name} 활용</span>
-                  </div>
-                </div>
-
-                {isRecipeLoading ? (
-                  <p className="guide-recipe-status">추천 레시피를 불러오는 중입니다.</p>
-                ) : recipeErrorMessage ? (
-                  <p className="guide-recipe-status guide-recipe-status--error">{recipeErrorMessage}</p>
-                ) : recommendedRecipes.length ? (
-                  <div className="guide-recipe-carousel">
-                    {canSlideRecipes ? (
-                      <button
-                        className="guide-recipe-arrow"
-                        type="button"
-                        aria-label="이전 추천 레시피"
-                        disabled={!canShowPreviousRecipes}
-                        onClick={() => slideRecipes(-1)}
-                      >
-                        ‹
-                      </button>
+                    {recommendedRecipes.length ? (
+                      <div className="guide-recipe-pager" aria-label="추천 레시피 페이지">
+                        <span>{recipeSlideIndex + 1}/{recommendedRecipes.length}</span>
+                      </div>
                     ) : null}
-                    <div className="guide-recipe-list" aria-label={`${selectedGuide.name} 추천 레시피`}>
-                      {visibleRecommendedRecipes.map((recipe) => (
+                  </div>
+
+                  {isRecipeLoading ? (
+                    <p className="guide-recipe-status">추천 레시피를 불러오는 중입니다.</p>
+                  ) : recipeErrorMessage ? (
+                    <p className="guide-recipe-status guide-recipe-status--error">{recipeErrorMessage}</p>
+                  ) : recommendedRecipes.length ? (
+                    <>
+                      <div
+                        className="guide-recipe-list"
+                        aria-label={`${selectedGuide.name} 추천 레시피`}
+                        aria-live="polite"
+                        onPointerDown={handleRecipeDragStart}
+                        onPointerMove={handleRecipeDragMove}
+                        onPointerUp={handleRecipeDragEnd}
+                        onPointerCancel={(event) => {
+                          recipeDragStartY.current = null
+                          recipeDidDrag.current = false
+                          resetRecipeDragVisual(event.currentTarget)
+                        }}
+                      >
                         <article
-                          className="guide-recipe-card"
-                          key={recipe.recipe_id}
+                          className={`guide-recipe-card is-${recipeSlideDirection}`}
+                          key={currentRecommendedRecipe.recipe_id}
                           role="button"
                           tabIndex={0}
-                          onClick={() => navigate(`/recipes/${recipe.recipe_id}`)}
+                          onClick={() => {
+                            if (!recipeDidDrag.current) navigate(`/recipes/${currentRecommendedRecipe.recipe_id}`)
+                          }}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()
-                              navigate(`/recipes/${recipe.recipe_id}`)
+                              navigate(`/recipes/${currentRecommendedRecipe.recipe_id}`)
                             }
                           }}
                         >
-                          <ImageSlot
-                            alt=""
-                            className="guide-recipe-card__image"
-                            src={recipe.main_image_url}
-                          />
+                          <ImageSlot alt="" className="guide-recipe-card__image" src={currentRecommendedRecipe.main_image_url} />
                           <div>
-                            <span>{recipe.category || '추천 메뉴'}</span>
-                            <h3>{recipe.title}</h3>
+                            <span>{currentRecommendedRecipe.category || '추천 메뉴'}</span>
+                            <h3>{currentRecommendedRecipe.title}</h3>
                             <p>
-                              {formatCookingTime(recipe.cooking_time_min)} · {recipe.difficulty || '난이도 정보 없음'}
+                              {formatCookingTime(currentRecommendedRecipe.cooking_time_min)} · {currentRecommendedRecipe.difficulty || '난이도 정보 없음'}
                             </p>
                           </div>
                         </article>
-                      ))}
+                      </div>
+                    </>
+                  ) : (
+                    <article className="guide-recipe-more">
+                      <ImageSlot alt="" className="guide-recipe-more__icon" src={iconBasket} />
+                      <strong>{selectedGuide.name}로 바로 보여줄 추천 레시피가 아직 없습니다.</strong>
+                    </article>
+                  )}
+                </section>
+
+                <div className="guide-detail-nutrition-column">
+                  <h2 className="guide-detail-section-title" id="guide-nutrition-title">영양성분</h2>
+                  <section className="guide-detail-nutrition" aria-labelledby="guide-nutrition-title">
+                    <div className="guide-detail-nutrition__header">
+                      <div>
+                        <small>기준량 {selectedGuide.nutrition_base_amount || '정보 없음'}</small>
+                        <strong>{selectedGuide.energy_kcal ?? '-'} kcal</strong>
+                      </div>
+                      {selectedGuide.nutrition_source_name ? (
+                        <span className="guide-detail-nutrition__source">출처: {selectedGuide.nutrition_source_name}</span>
+                      ) : null}
                     </div>
-                    {canSlideRecipes ? (
-                      <button
-                        className="guide-recipe-arrow"
-                        type="button"
-                        aria-label="다음 추천 레시피"
-                        disabled={!canShowNextRecipes}
-                        onClick={() => slideRecipes(1)}
-                      >
-                        ›
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <article className="guide-recipe-more">
-                    <ImageSlot alt="" className="guide-recipe-more__icon" src={iconBasket} />
-                    <strong>{selectedGuide.name}로 바로 보여줄 추천 레시피가 아직 없습니다.</strong>
-                  </article>
-                )}
-              </section>
+
+                    <div className="guide-nutrition-grid">
+                      <strong><span>탄수화물</span><b>{selectedGuide.carbohydrate_g ?? '-'} g</b></strong>
+                      <strong><span>단백질</span><b>{selectedGuide.protein_g ?? '-'} g</b></strong>
+                      <strong><span>지방</span><b>{selectedGuide.fat_g ?? '-'} g</b></strong>
+                      <strong><span>포화지방</span><b>{selectedGuide.saturated_fat_g ?? '-'} g</b></strong>
+                      <strong><span>트랜스지방</span><b>{selectedGuide.trans_fat_g ?? '-'} g</b></strong>
+                      <strong><span>당류</span><b>{selectedGuide.sugar_g ?? '-'} g</b></strong>
+                      <strong><span>식이섬유</span><b>{selectedGuide.fiber_g ?? '-'} g</b></strong>
+                      <strong><span>나트륨</span><b>{selectedGuide.sodium_mg ?? '-'} mg</b></strong>
+                      <strong><span>칼륨</span><b>{selectedGuide.potassium_mg ?? '-'} mg</b></strong>
+                      <strong><span>수분</span><b>{selectedGuide.water_g ?? '-'} g</b></strong>
+                    </div>
+                  </section>
+                </div>
+              </div>
             </>
           ) : (
             <section className="guide-panel guide-detail guide-empty">선택한 식재료를 찾을 수 없습니다.</section>
           )}
         </>
       )}
+
+      {isLoggedIn && !isDetailPage ? (
+        <section className="guide-ingredients guide-ingredients--seasonal" aria-labelledby="guide-seasonal-title">
+          <div className="guide-ingredients__header">
+            <div className="guide-section-title" id="guide-seasonal-title">
+              {currentMonth}월 제철 식재료
+            </div>
+            <div className="guide-ingredients__actions">
+              {seasonalMonthControl}
+            </div>
+          </div>
+          <div className="guide-fridge-pager">
+            {seasonalTotalPages > 1 ? (
+              <button
+                className="guide-fridge-page-button is-previous"
+                type="button"
+                aria-label="이전 제철 식재료 페이지"
+                disabled={guestRecommendationPage <= 1}
+                onClick={() => setGuestRecommendationPage((current) => Math.max(1, current - 1))}
+              >
+                ‹
+              </button>
+            ) : null}
+            <div className="guide-ingredient-list" aria-label="제철 식재료 목록">
+              {seasonalFeaturedIngredients.map((ingredient) => renderIngredientButton(ingredient))}
+              {!isListLoading && seasonalFeaturedIngredients.length === 0 ? (
+                <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
+              ) : null}
+            </div>
+            {seasonalTotalPages > 1 ? (
+              <button
+                className="guide-fridge-page-button is-next"
+                type="button"
+                aria-label="다음 제철 식재료 페이지"
+                disabled={guestRecommendationPage >= seasonalTotalPages}
+                onClick={() => setGuestRecommendationPage((current) => Math.min(seasonalTotalPages, current + 1))}
+              >
+                ›
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </section>
   )
 }

@@ -3,8 +3,8 @@ import iconAlarm from '../../../assets/extracted/icons/icon_alarm.png'
 import iconBasket from '../../../assets/extracted/icons/icon_basket.png'
 import iconReceipt from '../../../assets/extracted/icons/icon_receipt.png'
 import iconRefrigerator from '../../../assets/extracted/icons/icon_refrigerator.png'
-import imageHero from '../../../assets/extracted/images/image_hero.png'
-import mascotChef from '../../../assets/mascot_chef.png'
+import imageHero from '../../../assets/extracted/images/image_hero.webp'
+import mascotChef from '../../../assets/mascot_chef.webp'
 const quickActions = ['영수증 등록', '냉장고 확인', 'AI 추천', '장보기', '알림 설정']
 
 const quickActionIconMap = {
@@ -40,7 +40,7 @@ function HeroSection() {
           추천받으세요. 부족한 재료는 최저가 장보기까지 한 번에 연결됩니다.
         </p>
         <div className="home-mobile-hero-art image-slot image-slot--mobile-hero image-slot--filled" aria-hidden="true">
-          <img src={imageHero} alt="" />
+          <img src={imageHero} alt="" decoding="async" fetchPriority="high" />
         </div>
         <div className="home-hero__actions">
           <Link className="home-button home-button--primary" to="/receipt-ocr">
@@ -64,7 +64,7 @@ function HeroSection() {
 
       <div className="home-hero__visual" aria-label="밥벌이 서비스 대표 이미지">
         <div className="home-hero__image image-slot image-slot--hero-main image-slot--filled" aria-hidden="true">
-          <img src={imageHero} alt="" />
+          <img src={imageHero} alt="" decoding="async" fetchPriority="high" />
         </div>
       </div>
     </section>

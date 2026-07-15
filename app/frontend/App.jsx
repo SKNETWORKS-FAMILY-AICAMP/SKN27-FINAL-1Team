@@ -10,6 +10,7 @@ import OnboardingModal from './components/OnboardingModal.jsx'
 import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import Home from './pages/home/Home.jsx'
 import InfoPage from './pages/info/InfoPage.jsx'
+import { privacyDocument, termsDocument } from './pages/info/policyContent.js'
 import Login from './pages/login/Login.jsx'
 import Callback from './pages/login/Callback.jsx'
 import Mypage from './pages/mypage/Mypage.jsx'
@@ -19,7 +20,6 @@ import Guide from './pages/guide/Guide.jsx'
 import FridgeRecipe from './pages/fridge_recipe/FridgeRecipe.jsx'
 import RecipeDetail from './pages/recipe_detail/RecipeDetail.jsx'
 import RecipeList from './pages/recipe_list/RecipeList.jsx'
-import MenuRecommend from './pages/menu_recommend/MenuRecommend.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
 import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
@@ -117,7 +117,6 @@ function AppLayout() {
           <Route path="/guide" element={<Guide />} />
           <Route path="/guide/:ingredientName" element={<Guide />} />
           <Route path="/recipe-fridge" element={<FridgeRecipe />} />
-          <Route path="/menu-recommend" element={<MenuRecommend />} />
           <Route path="/recipe-recommend" element={<RecipeRecommend />} />
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback/:provider" element={<Callback />} />
@@ -165,37 +164,11 @@ function AppLayout() {
           />
           <Route
             path="/terms"
-            element={
-              <InfoPage
-                title="이용약관"
-                description="밥벌이 서비스 이용에 필요한 기본 조건을 안내합니다."
-                items={[
-                  '밥벌이는 냉장고 재료 관리, 영수증 OCR 입고, 레시피 추천, 장보기 목록, 캘린더 알림 기능을 제공합니다.',
-                  '사용자는 본인이 등록한 식재료, 영수증, 레시피 저장 정보가 정확한지 직접 확인하고 관리해야 합니다.',
-                  '레시피 추천, 식재료 가이드, 유통기한 알림은 참고용 정보이며 실제 섭취 가능 여부는 사용자가 최종 판단해야 합니다.',
-                  '타인의 계정 또는 정보를 무단으로 사용하거나 서비스 운영을 방해하는 행위는 제한될 수 있습니다.',
-                  '서비스 내용은 개선을 위해 변경될 수 있으며, 중요한 변경 사항은 서비스 화면 또는 공지로 안내합니다.',
-                  '문의: bobbeori@bobbeori.com',
-                ]}
-              />
-            }
+            element={<InfoPage {...termsDocument} />}
           />
           <Route
             path="/privacy"
-            element={
-              <InfoPage
-                title="개인정보처리방침"
-                description="밥벌이가 서비스 제공을 위해 처리하는 개인정보 기준입니다."
-                items={[
-                  '수집 항목: 소셜 로그인 식별 정보, 이메일, 닉네임, 냉장고 재료, 영수증 OCR 결과, 저장 레시피, 알림 및 캘린더 연동 설정.',
-                  '이용 목적: 회원 식별, 냉장고 재료 관리, 레시피 추천, 장보기 목록 생성, Google Calendar 알림 등록, 고객 문의 대응.',
-                  'Google Calendar 연동 시 사용자가 동의한 범위 안에서 밥벌이 알림 일정을 생성하고 조회합니다.',
-                  '위치정보는 수집하거나 사용하지 않습니다.',
-                  '개인정보는 서비스 이용 기간 동안 보관하며, 회원 탈퇴 또는 삭제 요청 시 관계 법령상 보관이 필요한 경우를 제외하고 삭제합니다.',
-                  '개인정보 처리 관련 문의 및 삭제 요청: bobbeori@bobbeori.com',
-                ]}
-              />
-            }
+            element={<InfoPage {...privacyDocument} />}
           />
           <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
         </Routes>
@@ -209,7 +182,7 @@ function AppLayout() {
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AppLayout />
     </Router>
   )

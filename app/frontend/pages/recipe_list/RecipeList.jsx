@@ -282,9 +282,7 @@ function RecipeList() {
         <ImageSlot className="recipe-list-hero__image" src={imageSearch} />
       </div>
 
-      <section className="recipe-list-filter" aria-labelledby="recipe-filter-title">
-        <h2 id="recipe-filter-title">취향대로 골라보기</h2>
-
+      <section className="recipe-list-filter" aria-label="레시피 조건 필터">
         <div className="recipe-list-filter__controls">
           <div className="recipe-list-choice-group recipe-list-choice-group--select">
             <span>요리타입</span>
