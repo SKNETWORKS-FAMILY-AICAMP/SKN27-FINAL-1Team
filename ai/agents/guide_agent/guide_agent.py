@@ -140,6 +140,19 @@ WEB_FALLBACK_CONTENT_LIMIT = 600
 WEB_SUMMARY_MAX_SENTENCES = 3
 WEB_SUMMARY_TEMPERATURE = 0.2
 
+UNHELPFUL_WEB_PHRASES = (
+    "정보는 포함되어 있지 않습니다",
+    "정보가 포함되어 있지 않습니다",
+    "포함되어 있지 않습니다",
+    "제공할 수 없습니다",
+    "찾을 수 없습니다",
+    "찾지 못했습니다",
+    "확인할 수 없습니다",
+    "구체적인 지침",
+    "다른 신뢰할 수 있는 출처",
+    "다른 출처를 참조",
+)
+
 
 # =========================================================
 # 3. 응답 생성 함수
@@ -693,6 +706,11 @@ def _summarize_web_content(ingredient: str, guide_type: str, content: str) -> st
         return fallback_content
 
 
+def _is_unhelpful_web_content(content: str | None) -> bool:
+    normalized = (content or "").replace(" ", "")
+    return any(phrase.replace(" ", "") in normalized for phrase in UNHELPFUL_WEB_PHRASES)
+
+
 def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tuple[str | None, list[dict[str, str]]]:
     if TavilyClient is None or not app_settings.TAVILY_API_KEY:
         return None, []
@@ -738,11 +756,15 @@ def _fallback_guide_response(
         data_source = "trusted_external"
         source_type = "trusted_external"
         source_label = "외부 공신력 자료"
+        if _is_unhelpful_web_content(content):
+            content = None
         if not content and guide_type not in SAFETY_SENSITIVE_GUIDE_TYPES:
             content, sources = _web_results(ingredient, guide_type, trusted_only=False)
             data_source = "general_web"
             source_type = "general_web"
             source_label = "후순위 웹 자료"
+            if _is_unhelpful_web_content(content):
+                content = None
     except Exception as exc:
         print("[Guide Web Fallback 오류]", exc)
         content, sources = None, []
@@ -1371,3 +1393,4 @@ if __name__ == "__main__":
     assert _candidate_query_value("닭가슴살", "freshness") == "닭가슴살 신선도 확인법 알려줘"
     assert _candidate_query_value("닭가슴살", "nutrition") == "닭가슴살 영양성분 알려줘"
     assert _candidate_display_label("닭가슴살", "freshness") == "닭가슴살 신선도 확인법"
+    assert _is_unhelpful_web_content("검색 결과에는 우동사리의 보관법에 대한 정보는 포함되어 있지 않습니다.")
