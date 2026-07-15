@@ -164,6 +164,22 @@ def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> To
         return ToolResult(ok=False, error=str(e), source="recommendation")
 
 
+def sort_candidates_tool(items: list[dict[str, Any]]) -> ToolResult:
+    """추천 후보를 보유 재료·부족 재료·점수 기준으로 정렬한다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    try:
+        sorted_items = sorted(
+            items,
+            key=lambda x: (
+                -x.get("owned_ingredient_count", 0),
+                x.get("missing_ingredient_count", 0),
+                -x.get("final_score", 0),
+            ),
+        )
+        return ToolResult(ok=True, data={"items": sorted_items, "total": len(sorted_items)}, source="sort_candidates")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="sort_candidates")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -251,6 +267,7 @@ if __name__ == "__main__":
 
         assert callable(search_recipe_tool)
         assert callable(recommend_recipe_tool)
+        assert callable(sort_candidates_tool)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
