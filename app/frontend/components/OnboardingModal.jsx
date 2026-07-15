@@ -1,22 +1,26 @@
 import React, { useState } from 'react';
 import { API_URL } from '../utils/api.js';
+import { splitIngredientSelections } from './onboardingSelections.js';
 import './OnboardingModal.css';
 
 const ALLERGY_OPTIONS = ['땅콩', '우유', '계란', '밀', '갑각류', '대두', '견과류', '생선'];
 const DISLIKE_OPTIONS = ['오이', '가지', '당근', '피망', '브로콜리', '버섯', '연근', '셀러리'];
 const PREFERRED_OPTIONS = ['돼지고기', '소고기', '닭고기', '양파', '마늘', '대파', '버섯', '청양고추', '치즈', '두부'];
 
-export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', onClose }) {
+export default function OnboardingModal({ seenKey = 'hasSeenOnboarding_v4', initialSettings, onClose }) {
+  const initialAllergies = splitIngredientSelections(initialSettings?.allergy, ALLERGY_OPTIONS);
+  const initialDislikes = splitIngredientSelections(initialSettings?.disliked_ingredients, DISLIKE_OPTIONS);
+  const initialPreferred = splitIngredientSelections(initialSettings?.preferred_ingredients, PREFERRED_OPTIONS);
   const [step, setStep] = useState(1);
-  const [allergies, setAllergies] = useState([]);
-  const [dislikes, setDislikes] = useState([]);
-  const [preferred, setPreferred] = useState([]);
+  const [allergies, setAllergies] = useState(initialAllergies.selected);
+  const [dislikes, setDislikes] = useState(initialDislikes.selected);
+  const [preferred, setPreferred] = useState(initialPreferred.selected);
   const [customAllergy, setCustomAllergy] = useState('');
-  const [customAllergyTags, setCustomAllergyTags] = useState([]);
+  const [customAllergyTags, setCustomAllergyTags] = useState(initialAllergies.custom);
   const [customDislike, setCustomDislike] = useState('');
-  const [customDislikeTags, setCustomDislikeTags] = useState([]);
+  const [customDislikeTags, setCustomDislikeTags] = useState(initialDislikes.custom);
   const [customPreferred, setCustomPreferred] = useState('');
-  const [customPreferredTags, setCustomPreferredTags] = useState([]);
+  const [customPreferredTags, setCustomPreferredTags] = useState(initialPreferred.custom);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleSelection = (list, setList, item) => {

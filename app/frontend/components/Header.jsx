@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import appIcon from '../assets/app_icon.png'
 import logoText from '../assets/logo_text_extracted.png'
+import { shouldRevealAppBanner } from './headerBanner.js'
 import './Header.css'
 
 const APP_STORE_URL = 'https://play.google.com/store/apps/details?id=com.bobbeori.bobbeori_app'
@@ -34,9 +35,16 @@ function Header() {
   const isRecipeActive = recipeItems.some((item) => item.to === pathname) || pathname.startsWith('/recipes/')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isRecipeMenuOpen, setIsRecipeMenuOpen] = useState(false)
-  const [isAppBannerVisible, setIsAppBannerVisible] = useState(true)
+  const [isAppBannerDismissed, setIsAppBannerDismissed] = useState(false)
+  const [isHomeBannerReady, setIsHomeBannerReady] = useState(false)
   const [authMode, setAuthMode] = useState(getAuthMode)
   const isLoggedIn = authMode === 'user'
+  const isAppBannerVisible = !isAppBannerDismissed && (pathname !== '/' || isHomeBannerReady)
+  const headerClassName = [
+    'site-header',
+    pathname === '/' ? 'site-header--home-delayed' : '',
+    isAppBannerVisible ? '' : 'site-header--app-banner-hidden',
+  ].filter(Boolean).join(' ')
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false)
@@ -61,9 +69,29 @@ function Header() {
     setIsRecipeMenuOpen(false)
   }, [pathname])
 
+  useEffect(() => {
+    if (pathname !== '/') {
+      setIsHomeBannerReady(false)
+      return undefined
+    }
+
+    const syncBannerVisibility = () => {
+      setIsHomeBannerReady(shouldRevealAppBanner(pathname, window.scrollY, window.innerHeight))
+    }
+
+    syncBannerVisibility()
+    window.addEventListener('scroll', syncBannerVisibility, { passive: true })
+    window.addEventListener('resize', syncBannerVisibility)
+
+    return () => {
+      window.removeEventListener('scroll', syncBannerVisibility)
+      window.removeEventListener('resize', syncBannerVisibility)
+    }
+  }, [pathname])
+
   return (
     <header
-      className={isAppBannerVisible ? 'site-header' : 'site-header site-header--app-banner-hidden'}
+      className={headerClassName}
       aria-label="밥벌이 주요 메뉴"
     >
       {isAppBannerVisible && (
@@ -80,7 +108,7 @@ function Header() {
           <button
             type="button"
             aria-label="앱 다운로드 배너 닫기"
-            onClick={() => setIsAppBannerVisible(false)}
+            onClick={() => setIsAppBannerDismissed(true)}
           >
             ×
           </button>
