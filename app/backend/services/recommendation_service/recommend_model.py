@@ -6,8 +6,6 @@ import logging
 import pickle
 from pathlib import Path
 
-import numpy as np
-
 _DIR = Path(__file__).resolve().parent
 CATALOG_USER_ID = "__catalog__"
 
@@ -60,8 +58,11 @@ def score_recipes(recipe_ids: list[int], user_id: str = CATALOG_USER_ID) -> dict
         return {rid: 0.0 for rid in recipe_ids}
 
     rids, indices = zip(*valid)
+
+    import numpy as np  # ponytail: lazy — pkl 없는 환경(CI 등)에서 모듈 로드 실패 방지
     item_arr = np.array(indices, dtype=np.int32)
     user_arr = np.full(len(item_arr), user_idx, dtype=np.int32)
+    
     scores = model.predict(user_arr, item_arr, item_features=item_features, num_threads=1)
 
     result = dict(zip(rids, scores.astype(float)))
