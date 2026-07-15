@@ -83,6 +83,12 @@ def run_recipe_agent(
 
 
 if __name__ == "__main__":
+    def _check_output_contract(result: dict) -> None:
+        assert set(result) == {"response_text", "actions", "sources"}
+        assert isinstance(result["response_text"], str)
+        assert isinstance(result["actions"], list)
+        assert isinstance(result["sources"], list)
+
     internal = build_recipe_response(
         message="테스트",
         intent="recipe.search",
@@ -98,6 +104,7 @@ if __name__ == "__main__":
     assert supervisor["response_text"] == "테스트"
     assert len(supervisor["actions"]) == 1
     assert supervisor["sources"][0]["title"] == "출처"
+    _check_output_contract(supervisor)
 
     source = inspect.getsource(build_recipe_response) + inspect.getsource(to_supervisor_state)
     assert "GraphState" not in source
@@ -127,12 +134,14 @@ if __name__ == "__main__":
         assert r["response_text"] == "search:김치볶음밥 레시피"
         assert r["actions"][0]["url"] == "/recipes/1"
         assert r["sources"] == []
+        _check_output_contract(r)
 
         r = agent.run_recipe_agent("두부로 뭐 해먹지?", db=None, user_id=1, intent="recipe.recommend")
         assert set(r) == {"response_text", "actions", "sources"}
         assert r["response_text"] == "recommend:두부로 뭐 해먹지?"
         assert len(r["actions"]) == 1
         assert r["sources"] == []
+        _check_output_contract(r)
 
         r = agent.run_recipe_agent("오늘 뭐 해먹지?", db=None, user_id=1)
         assert r["response_text"].startswith("recommend:")
@@ -140,6 +149,7 @@ if __name__ == "__main__":
         r = agent.run_recipe_agent("오늘 뭐 해먹지?", db=None, user_id=None, intent="recipe.recommend")
         assert LOGIN_REQUIRED_REPLY in r["response_text"]
         assert r["actions"] == [] and r["sources"] == []
+        _check_output_contract(r)
 
         assert "placeholder" not in r["response_text"]
 
@@ -148,6 +158,12 @@ if __name__ == "__main__":
         assert "계란국" in r["response_text"]
         assert r["actions"] == []
         assert r["sources"] == []
+        _check_output_contract(r)
+
+        agent.handle_recipe_search = lambda db, text: ("결과 없음", [], [])
+        r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
+        _check_output_contract(r)
+        assert r["actions"] == []
     finally:
         agent.handle_recipe_search = orig_search
         agent.handle_recipe_recommend = orig_recommend
