@@ -202,6 +202,16 @@ def build_actions_tool(items: list[dict[str, Any]]) -> ToolResult:
         return ToolResult(ok=False, error=str(e), source="build_actions")
 
 
+def external_search_tool(keyword: str, query_text: str | None = None) -> ToolResult:
+    """외부 소스(Tavily)로 레시피를 검색하고 요약한다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    try:
+        from .recipe_handlers import reply_external_recipe
+        summary, sources = reply_external_recipe(keyword, query_text)
+        return ToolResult(ok=True, data={"summary": summary, "sources": sources}, source="external_search")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="external_search")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -292,6 +302,7 @@ if __name__ == "__main__":
         assert callable(sort_candidates_tool)
         assert callable(exclude_previous_tool)
         assert callable(build_actions_tool)
+        assert callable(external_search_tool)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
