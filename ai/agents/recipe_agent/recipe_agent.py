@@ -21,6 +21,18 @@ class RecipeAgentRequest:
     intent: str
 
 
+@dataclass
+class RecipeAgentResult:
+    ok: bool
+    agent: str
+    intent: str
+    message: str
+    error: dict[str, Any] | None
+    actions: list[dict[str, Any]]
+    sources: list[dict[str, Any]]
+    meta: dict[str, Any]
+
+
 def build_recipe_response(
     *,
     message: str,
@@ -30,29 +42,26 @@ def build_recipe_response(
     sources: list[dict[str, Any]] | None = None,
     error: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> RecipeAgentResult:
     """Recipe Agent 내부 응답 계약."""
-    return {
-        "ok": ok and error is None,
-        "agent": AGENT_NAME,
-        "intent": intent,
-        "message": message,
-        "error": error,
-        "ui": {
-            "actions": list(actions or []),
-            "sources": list(sources or []),
-        },
-        "meta": meta or {},
-    }
+    return RecipeAgentResult(
+        ok=ok and error is None,
+        agent=AGENT_NAME,
+        intent=intent,
+        message=message,
+        error=error,
+        actions=list(actions or []),
+        sources=list(sources or []),
+        meta=meta or {},
+    )
 
 
-def to_supervisor_state(agent_result: dict[str, Any]) -> dict[str, Any]:
+def to_supervisor_state(result: RecipeAgentResult) -> dict[str, Any]:
     """내부 계약 → LangGraph merge partial update."""
-    ui = agent_result.get("ui") or {}
     return {
-        "response_text": agent_result.get("message", ""),
-        "actions": list(ui.get("actions") or []),
-        "sources": list(ui.get("sources") or []),
+        "response_text": result.message,
+        "actions": result.actions,
+        "sources": result.sources,
     }
 
 
@@ -108,9 +117,9 @@ if __name__ == "__main__":
         actions=[{"label": "김치볶음밥", "url": "/recipes/1"}],
         sources=[{"title": "출처", "url": "https://example.com"}],
     )
-    assert internal["agent"] == "recipe"
-    assert internal["ok"] is True
-    assert internal["ui"]["actions"][0]["label"] == "김치볶음밥"
+    assert internal.agent == "recipe"
+    assert internal.ok is True
+    assert internal.actions[0]["label"] == "김치볶음밥"
 
     supervisor = to_supervisor_state(internal)
     assert set(supervisor) == {"response_text", "actions", "sources"}
@@ -118,6 +127,8 @@ if __name__ == "__main__":
     assert len(supervisor["actions"]) == 1
     assert supervisor["sources"][0]["title"] == "출처"
     _check_output_contract(supervisor)
+    assert "meta" not in supervisor
+    assert "error" not in supervisor
 
     source = inspect.getsource(build_recipe_response) + inspect.getsource(to_supervisor_state)
     assert "GraphState" not in source
