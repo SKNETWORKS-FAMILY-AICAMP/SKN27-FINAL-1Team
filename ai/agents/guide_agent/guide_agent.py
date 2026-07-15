@@ -334,6 +334,13 @@ def _normalize_match_text(value: str | None) -> str:
     return re.sub(r"[^0-9a-z가-힣]", "", value)
 
 
+def _hangul_initial(value: str) -> int | None:
+    code = ord(value)
+    if not 0xAC00 <= code <= 0xD7A3:
+        return None
+    return (code - 0xAC00) // 588
+
+
 def _host_matches_domain(host: str, domain: str) -> bool:
     host = (host or "").split(":")[0].lower().strip(".")
     domain = domain.lower().strip(".")
@@ -349,6 +356,15 @@ def _match_score(query: str, candidate: str) -> float:
         return 1.0
     if query_norm in candidate_norm or candidate_norm in query_norm:
         return 0.94
+    query_second_initial = _hangul_initial(query_norm[1]) if len(query_norm) == 2 else None
+    candidate_second_initial = _hangul_initial(candidate_norm[1]) if len(candidate_norm) == 2 else None
+    if (
+        len(query_norm) == len(candidate_norm) == 2
+        and query_norm[0] == candidate_norm[0]
+        and query_second_initial is not None
+        and query_second_initial == candidate_second_initial
+    ):
+        return 0.9
     return difflib.SequenceMatcher(None, query_norm, candidate_norm).ratio()
 
 
@@ -485,7 +501,10 @@ def _confirm_ingredient_response(
     guide_type: str = "all",
     original_query: str | None = None,
 ) -> dict[str, Any]:
-    candidate_names = [candidate["name"] for candidate in candidates[:CONFIRM_CANDIDATE_DISPLAY_LIMIT]]
+    candidate_names = [
+        _candidate_display_label(candidate["name"], guide_type)
+        for candidate in candidates[:CONFIRM_CANDIDATE_DISPLAY_LIMIT]
+    ]
     return build_guide_response(
         action="confirm_ingredient",
         message=(
@@ -500,6 +519,9 @@ def _confirm_ingredient_response(
                 "type": "select_guide_candidate",
                 "label": _candidate_display_label(candidate["name"], guide_type),
                 "value": _candidate_query_value(candidate["name"], guide_type),
+                "data": {
+                    "message": _candidate_query_value(candidate["name"], guide_type),
+                },
                 "intent": GUIDE_INTENT,
                 "guide_type": guide_type,
                 "original_query": original_query or ingredient,
