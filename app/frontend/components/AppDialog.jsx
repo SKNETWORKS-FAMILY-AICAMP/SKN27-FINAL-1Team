@@ -36,7 +36,7 @@ function AppDialog({ dialog, onCancel, onConfirm }) {
 
   const isPrompt = dialog.type === 'prompt'
   const isConfirm = dialog.type === 'confirm'
-  const dialogTypeLabel = isPrompt ? '입력' : isConfirm ? '확인' : '알림'
+  const dialogTypeLabel = isPrompt ? '입력' : isConfirm ? null : '알림'
 
   const handleConfirm = () => {
     onConfirm(isPrompt ? inputValue : true)
@@ -45,14 +45,14 @@ function AppDialog({ dialog, onCancel, onConfirm }) {
   return (
     <div className="app-dialog-overlay" role="presentation" onMouseDown={onCancel}>
       <section
-        className="app-dialog-card"
+        className={`app-dialog-card${isConfirm ? ' is-confirm' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="app-dialog-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="app-dialog-card__header">
-          <span>{dialogTypeLabel}</span>
+          {dialogTypeLabel ? <span>{dialogTypeLabel}</span> : null}
           <button type="button" aria-label="닫기" onClick={onCancel}>
             x
           </button>
