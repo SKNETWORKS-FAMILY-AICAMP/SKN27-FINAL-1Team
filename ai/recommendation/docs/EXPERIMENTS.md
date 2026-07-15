@@ -2,7 +2,7 @@
 
 **읽는 법:** §1~26 = **레거시** (Track A·Spearman·bar·감성 곱 — 코드에서 제거, 이력만 보존).  
 **현재 축:** §28~31 — y\*=`n_star5≥2`, Go=**R0~R2** (warm-fold CV) · §31 full-catalog 진단. §30 외부축은 **이력만**.  
-헌장: [`METRICS.md`](METRICS.md) · CV: `python evaluation.py` → `outputs/prefer_eval_report.json`.
+헌장: [`METRICS.md`](METRICS.md) · CV: `python ../evaluation.py` → `outputs/prefer_eval_report.json`.
 
 ## 실험 1 — `star_sentiment_sum` + WARP (100 epoch)
 
@@ -3572,3 +3572,102 @@ go = R0 ∧ R1_primary ∧ R3
 ### 다음
 
 개인화 CF: per-user predict + holdout (catalog baseline = `recipe_lightfm.csv`)
+
+---
+
+## Phase 1 완료 요약
+
+**일자:** 2026-07-15  
+**범위:** 실험 §1~31 (Track A 보류 + Track B catalog 추천)
+
+---
+
+### 최종 채택 모델
+
+| 항목 | 값 |
+|------|-----|
+| 프레임워크 | LightFM (hybrid) |
+| Loss | WARP |
+| Positive 정의 | `n_star5 ≥ 2` (prefer) |
+| Item features | view_count(log), scrap_count(log), 조리법, 카테고리, 주재료, 종류, 인분, 난이도, 시간 |
+| Excluded features | ingredients |
+| Epochs | 30 |
+| Seed | 42 (평가: 5-seed CV) |
+
+---
+
+### Go 결과
+
+```
+Go = R0 ∧ R1 (≥4/5 seed)
+결과: 5/5 seed 통과
+```
+
+| 지표 | Model | Pop (5점 Bayesian) |
+|------|-------|-----|
+| **Recall@20** (warm-fold CV mean) | **0.236** | 0.152 |
+| Precision@20 | 0.468 | — |
+
+---
+
+### Full-catalog 진단
+
+| K | Recall | Precision | cold_share |
+|---|--------|-----------|------------|
+| 20 | 0.101 | 1.00 | 0% |
+| 50 | 0.242 | 0.96 | 2~5% |
+| 100 | 0.424 | 0.84 | ~10% |
+
+- Top-20: warm y\*=1만 채움 (cold 미혼입)
+- 전역 정답 198개 중 Top-20에서 20개 회수
+
+---
+
+### Export 산출물
+
+**`outputs/recipe_lightfm.csv`** — 3171행 (warm 563 + cold 2608)
+
+| 컬럼 | 설명 |
+|------|------|
+| `y_hat` / `s_pref` | LightFM catalog predict (전 item) |
+| `prefer_rank` | s_pref 내림차순 전체 순위 |
+| `is_warm` | 1=리뷰 있음, 0=cold |
+| `y_prefer` | warm: 0/1, cold: -1 |
+| `prefer_hat` | t_star 기준 이진 추정 |
+| `n_star5` | 5점 리뷰 수 |
+| `review_rank_score` | warm Bayesian bar (cold: NaN) |
+
+---
+
+### 서비스 역할
+
+**콜드스타트 catalog 기본 추천 엔진**
+
+- 신규/무히스토리 유저 → `prefer_rank` 상위 N 노출
+- 전 catalog 3171개 점수 확보 → 기본 정렬·후보 풀
+- 개인화 CF 전 단계의 baseline
+
+---
+
+### 실험 여정 요약
+
+| 구간 | 회차 | 핵심 결론 |
+|------|------|-----------|
+| Track A CF | §1~12 | p@5 Go 0.05 비현실 → 보류 |
+| Track B v1 | §13~16 | catalog export 확립, Spearman bar 한계 |
+| 콜드스타트 재정의 | §17~20 | full train, Bayesian bar, L0~L2 Go 통과 |
+| 감성·혼합 | §21~22 | 이축 Go 채택, 혼합 미채택 |
+| review_n 가중 | §23~24 | dual Go 5/5 미달 → 기각 |
+| v1 bar 진단 | §25 | catalog feature로 설명 불가 → 모델 경로 닫음 |
+| 별점 WARP ablation | §26~29 | Recall@20 vs star_pop Go 재구성 |
+| 외부 축 | §30 | 콜드스타트 단계 과도 → 별점 헌장 복귀 |
+| Full-catalog 진단 | §31 | 3171행 export, is_warm, Go 5/5 유지 |
+
+---
+
+### 이후 방향
+
+1. **학습 파이프라인 스크립트화** — 노트북 오케스트레이션을 `train.py`로 전환, 모델 아티팩트 저장 (model.pkl, id_maps, item_features)
+2. **추론 서비스 모듈** — `inference.py`: 모델 로드 + predict(user_idx, item_idxs) API
+3. **개인화 CF (Track A)** — 유저별 선호 데이터 축적 후 재학습, per-user predict + holdout HitRate@K 평가
+4. **운영** — 배치 재학습 주기, catalog fallback 정책, 신규 유저/아이템 처리
