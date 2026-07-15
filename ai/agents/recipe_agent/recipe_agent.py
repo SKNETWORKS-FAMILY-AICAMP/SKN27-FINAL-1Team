@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .recipe_handlers import handle_recipe_pairing, handle_recipe_recommend, handle_recipe_search
@@ -31,6 +31,15 @@ class RecipeAgentResult:
     actions: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     meta: dict[str, Any]
+
+
+@dataclass
+class RecipeExecutionState:
+    """Orchestrator 내부 실행 상태. ponytail: 현재 미사용. P3-2 이후 Orchestrator에서 활용."""
+    req: RecipeAgentRequest
+    template: str | None = None
+    steps_done: list[str] = field(default_factory=list)
+    intermediate: dict[str, Any] = field(default_factory=dict)
 
 
 def build_recipe_response(
@@ -158,6 +167,11 @@ if __name__ == "__main__":
 
         selected = _select_engine("recipe.search")
         assert isinstance(selected, LegacyRecipeEngine)
+
+        state = RecipeExecutionState(req=req)
+        assert state.template is None
+        assert state.steps_done == []
+        assert state.intermediate == {}
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
