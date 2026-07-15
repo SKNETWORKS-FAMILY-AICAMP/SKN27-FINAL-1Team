@@ -255,6 +255,7 @@ if __name__ == "__main__":
     original_external = handlers.reply_external_recipe
     original_search = recipe_search_service.search_recipes
     original_empty = handlers.is_inventory_empty
+    original_recommend = recommendation_service.recommend_recipes
 
     called: dict[str, Any] = {"external": False, "query": ""}
 
@@ -296,6 +297,7 @@ if __name__ == "__main__":
         reply, actions = handlers.handle_recipe_recommend(None, 1, "두부로 뭐 해먹지?", history=[])
         assert "김치볶음밥" in reply
         assert len(actions) >= 1
+        assert "초급" in reply or "주재료인" in reply
     finally:
         recipe_search_service.search_recipes = original_search
 
@@ -306,6 +308,60 @@ if __name__ == "__main__":
         assert actions == []
     finally:
         handlers.is_inventory_empty = original_empty
+
+    handlers.is_inventory_empty = lambda **kwargs: False
+    recommendation_service.recommend_recipes = lambda db, user_id, config: {
+        "items": [
+            {"recipe_id": 10, "title": "계란볶음밥", "owned_ingredient_count": 3, "missing_ingredient_count": 0, "final_score": 0.9},
+            {"recipe_id": 11, "title": "참치김밥", "owned_ingredient_count": 2, "missing_ingredient_count": 0, "final_score": 0.8},
+        ]
+    }
+    try:
+        reply, actions = handlers.handle_recipe_recommend(None, 1, "오늘 뭐 해먹지?", history=[])
+        assert "완벽하게 만들 수 있는" in reply
+        assert "계란볶음밥" in reply
+        assert len(actions) >= 1
+        assert actions[0]["url"] == "/recipes/10"
+    finally:
+        recommendation_service.recommend_recipes = original_recommend
+        handlers.is_inventory_empty = original_empty
+
+    handlers.is_inventory_empty = lambda **kwargs: False
+    recommendation_service.recommend_recipes = lambda db, user_id, config: {
+        "items": [
+            {"recipe_id": 20, "title": "된장찌개", "owned_ingredient_count": 2, "missing_ingredient_count": 1, "final_score": 0.7},
+        ]
+    }
+    try:
+        reply, actions = handlers.handle_recipe_recommend(None, 1, "오늘 뭐 해먹지?", history=[])
+        assert "부족한 재료가 약간" in reply
+        assert "된장찌개" in reply
+    finally:
+        recommendation_service.recommend_recipes = original_recommend
+        handlers.is_inventory_empty = original_empty
+
+    class FakeMsg:
+        def __init__(self, role, text):
+            self.role = role
+            self.text = text
+
+    def fake_search_multi(**kwargs):
+        return {
+            "items": [
+                {"recipe_id": 1, "title": "김치볶음밥", "difficulty": "초급", "cooking_time_min": 15},
+                {"recipe_id": 2, "title": "두부김치", "difficulty": "초급", "cooking_time_min": 20},
+                {"recipe_id": 3, "title": "두부조림", "difficulty": "초급", "cooking_time_min": 25},
+            ]
+        }
+
+    recipe_search_service.search_recipes = fake_search_multi
+    try:
+        history_with_prev = [FakeMsg("bot", "두부가 주재료인 30분 이내 초급 레시피는\n1. 김치볶음밥")]
+        reply, actions = handlers.handle_recipe_recommend(None, 1, "두부로 뭐 해먹지?", history=history_with_prev)
+        assert "김치볶음밥" not in reply
+        assert "두부김치" in reply or "두부조림" in reply
+    finally:
+        recipe_search_service.search_recipes = original_search
 
     reply, actions = handlers.handle_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
     assert "김치볶음밥" in reply
