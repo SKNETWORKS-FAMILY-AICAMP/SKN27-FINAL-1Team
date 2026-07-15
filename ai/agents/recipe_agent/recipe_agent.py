@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
-from .recipe_handlers import handle_recipe_recommend, handle_recipe_search
+from .recipe_handlers import handle_recipe_pairing, handle_recipe_recommend, handle_recipe_search
 from .recipe_intents import analyze_recipe_intent
 from .recipe_utils import LOGIN_REQUIRED_REPLY, _requires_login
 
@@ -63,11 +63,13 @@ def run_recipe_agent(
 
     if resolved_intent == "recipe.search":
         reply, actions, sources = handle_recipe_search(db, text)
+    elif resolved_intent == "recipe.pairing":
+        reply, actions = handle_recipe_pairing(text)
+        sources = []
     elif resolved_intent == "recipe.recommend":
         reply, actions = handle_recipe_recommend(db, user_id or 0, text, history, settings_obj)
         sources = []
     else:
-        # ponytail: recipe agent 컨텍스트 fallback — analyze가 search/recommend만 반환
         reply, actions = handle_recipe_recommend(db, user_id or 0, text, history, settings_obj)
         sources = []
 
@@ -140,6 +142,12 @@ if __name__ == "__main__":
         assert r["actions"] == [] and r["sources"] == []
 
         assert "placeholder" not in r["response_text"]
+
+        r = agent.run_recipe_agent("김치볶음밥이랑 먹기 좋은 음식", db=None, intent="recipe.pairing")
+        assert "김치볶음밥" in r["response_text"]
+        assert "계란국" in r["response_text"]
+        assert r["actions"] == []
+        assert r["sources"] == []
     finally:
         agent.handle_recipe_search = orig_search
         agent.handle_recipe_recommend = orig_recommend

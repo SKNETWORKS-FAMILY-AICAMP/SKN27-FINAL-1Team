@@ -9,6 +9,8 @@ _RECOMMEND_WORDS = (
     "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거",
 )
 _SEARCH_WORDS = ("레시피", "요리법", "요리")
+_PAIRING_WORDS = ("같이먹", "함께먹", "곁들임", "어울리는", "이랑먹", "랑먹", "먹기좋은")
+_PAIRING_JOSA = re.compile(r".+(?:이랑|랑|와|과|하고).+(?:먹|어울|곁들|좋은)")
 
 _GOLDEN_CASES = (
     ("김치볶음밥 레시피", "recipe.search"),
@@ -16,6 +18,9 @@ _GOLDEN_CASES = (
     ("두부로 뭐 해먹지?", "recipe.recommend"),
     ("오늘 뭐 해먹지?", "recipe.recommend"),
     ("냉장고 재료로 뭐 해먹지?", "recipe.recommend"),
+    ("김치볶음밥이랑 먹기 좋은 음식", "recipe.pairing"),
+    ("파스타와 어울리는 반찬", "recipe.pairing"),
+    ("라면하고 같이 먹을 만한 거", "recipe.pairing"),
 )
 
 
@@ -24,13 +29,15 @@ def _compact(text: str) -> str:
 
 
 def analyze_recipe_intent(text: str, history: list | None = None) -> str:
-    """recipe.search / recipe.recommend 2-way 분류."""
+    """recipe.search / recipe.recommend / recipe.pairing 3-way 분류."""
     del history  # ponytail: P3 — 시그니처만 고정, follow-up/LLM은 P5
 
     if _is_cooking_time_question(text):
         return "recipe.search"
 
     compact = _compact(text)
+    if any(word in compact for word in _PAIRING_WORDS) or _PAIRING_JOSA.search(compact):
+        return "recipe.pairing"
     if any(word in compact for word in _RECOMMEND_WORDS):
         return "recipe.recommend"
     if any(word in compact for word in _SEARCH_WORDS):

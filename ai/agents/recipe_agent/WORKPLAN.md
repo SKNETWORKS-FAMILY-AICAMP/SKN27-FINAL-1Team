@@ -197,14 +197,24 @@ def recipe_agent_node(state: GraphState) -> dict:
 - [x] **P5-3** end-to-end `__main__` — `done`
 - [x] **P5-4** Handoff parity: 기존 `_reply_recipe_*`와 동일 `{response_text, actions, sources}` — `done`
 
+### P6 — recipe.pairing 이관
+
+- [x] **P6-1** `recipe_handlers.py`에 `handle_recipe_pairing` 추가 (supervisor_service._reply_recipe_pairing 복사 이관) — `done`
+- [x] **P6-2** `recipe_intents.py`에 `recipe.pairing` 분류 + golden cases 추가 (3-way) — `done`
+- [x] **P6-3** `recipe_agent.py` `run_recipe_agent`에 pairing dispatch 분기 추가 — `done`
+- [x] **P6-4** `__init__.py` export 업데이트 — `done`
+- [x] **P6-5** WORKPLAN.md 갱신 (P6 phase + supervisor handoff 지침) — `done`
+- [x] **P6-6** `python -m ai.agents.recipe_agent.recipe_agent` + `recipe_intents` + `recipe_handlers` 테스트 — `done`
+
 ---
 
-## 6. Intent 매핑 (1차)
+## 6. Intent 매핑
 
 | Intent | Handler | 예시 utterance |
 |--------|---------|----------------|
 | `recipe.search` | `handle_recipe_search` | "김치볶음밥 레시피", "에어프라이어 몇 분?" |
 | `recipe.recommend` | `handle_recipe_recommend` | "두부로 뭐해먹지", "오늘 뭐해먹지", "그거 말고 다른 거" |
+| `recipe.pairing` | `handle_recipe_pairing` | "김치볶음밥이랑 먹기 좋은 음식", "파스타와 어울리는 반찬" |
 
 ### recommend 내부 분기 (handler 내부, intent 변경 없음)
 
@@ -236,19 +246,34 @@ def recipe_agent_node(state: GraphState) -> dict:
 | "두부로 뭐 해먹지?" | `recipe.recommend` |
 | "오늘 뭐 해먹지?" | `recipe.recommend` |
 | "냉장고 재료로 뭐 해먹지?" | `recipe.recommend` |
+| "김치볶음밥이랑 먹기 좋은 음식" | `recipe.pairing` |
+| "파스타와 어울리는 반찬" | `recipe.pairing` |
+| "라면하고 같이 먹을 만한 거" | `recipe.pairing` |
 
 ---
 
 ## 8. Handoff 메모 (Supervisor 담당자용)
 
-1. `recipe_recommend_node` / `recipe_search_node` → 단일 `recipe_agent_node`
+1. `recipe_recommend_node` / `recipe_search_node` → 단일 `recipe_agent_node` (완료됨)
 2. adapter: GraphState subset 추출 → `run_recipe_agent(...)` → 반환 dict를 LangGraph merge (**추가 변환 없이**)
 3. `ChatService._reply_recipe_*` deprecated
 4. recipe_agent는 `GraphState` / `ChatService` import하지 않음
 
+### recipe.pairing Handoff (P6 추가분)
+
+`recipe.pairing` 인텐트가 recipe agent에 이관 완료됨. Supervisor 쪽에서 다음 변경 필요:
+
+1. [`supervisor_agent.py:344`](../supervisor_agent/supervisor_agent.py) — `"recipe.pairing": "recipe_pairing_node"` → `"recipe.pairing": "recipe_agent_node"` 로 변경
+2. [`supervisor_agent.py:213-216`](../supervisor_agent/supervisor_agent.py) — `recipe_pairing_node` 함수 삭제
+3. [`supervisor_agent.py:356`](../supervisor_agent/supervisor_agent.py) — `workflow.add_node("recipe_pairing_node", ...)` 삭제
+4. [`supervisor_agent.py:368`](../supervisor_agent/supervisor_agent.py) — `"recipe_pairing_node"` END 엣지 삭제
+5. [`supervisor_service.py:413-423`](../supervisor_agent/supervisor_service.py) — `_reply_recipe_pairing` 메서드 삭제
+6. [`test/fixtures/chatbot/test_chatbot.py:608`](../../../test/fixtures/chatbot/test_chatbot.py) — `route_intent` 기대값 `"recipe_pairing_node"` → `"recipe_agent_node"`
+7. [`test/fixtures/chatbot/test_chatbot.py:858-860`](../../../test/fixtures/chatbot/test_chatbot.py) — `supervisor_service._reply_recipe_pairing` 테스트 → recipe agent 경유 테스트로 변경
+
 ### 완성 기준 (Handoff)
 
-> 동일 GraphState subset 입력에 대해 기존 `ChatService._reply_recipe_search` / `_reply_recipe_recommend`와 `{response_text, actions, sources}` parity.
+> 동일 GraphState subset 입력에 대해 기존 `ChatService._reply_recipe_search` / `_reply_recipe_recommend` / `_reply_recipe_pairing`과 `{response_text, actions, sources}` parity.
 
 ---
 
@@ -256,9 +281,9 @@ def recipe_agent_node(state: GraphState) -> dict:
 
 | 항목 | 값 |
 |------|-----|
-| **현재 Phase** | 완료 (Handoff 대기) |
-| **마지막 완료 Todo** | P5-4 |
-| **다음 Todo** | Supervisor `recipe_agent_node` Handoff |
+| **현재 Phase** | P6 완료 (Supervisor Handoff 대기) |
+| **마지막 완료 Todo** | P6-6 |
+| **다음 Todo** | Supervisor `recipe_pairing_node` → `recipe_agent_node` Handoff (섹션 8 참고) |
 | **블로커** | 없음 |
 
 ### 변경 이력
@@ -271,6 +296,7 @@ def recipe_agent_node(state: GraphState) -> dict:
 | 2026-07-13 | P3 intent router 완료 (`recipe_intents.py`, golden cases) |
 | 2026-07-13 | P4 handlers 완료 (`recipe_utils.py`, `recipe_handlers.py`) |
 | 2026-07-13 | P5 통합 완료 (`run_recipe_agent` dispatch, login guard, e2e `__main__`) |
+| 2026-07-15 | P6 recipe.pairing 이관 완료 (`handle_recipe_pairing`, 3-way intent, supervisor handoff 지침) |
 
 ---
 

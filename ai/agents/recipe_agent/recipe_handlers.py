@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -233,6 +234,21 @@ def handle_recipe_recommend(
     return prefix + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles)), _recipe_actions(items)
 
 
+def handle_recipe_pairing(text: str) -> tuple[str, list[dict[str, Any]]]:
+    """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
+    keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
+    keyword = re.sub(r"^(남은|먹다남은)\s*", "", keyword) or "그 메뉴"
+    # ponytail: 정적 dict — LLM 기반 pairing은 에이전트 재정의 시 교체 예정
+    pairings = {
+        "김치볶음밥": ["계란국", "어묵국", "단무지", "오이무침", "군만두"],
+        "파스타": ["마늘빵", "샐러드", "피클", "구운 채소"],
+        "라면": ["김치", "단무지", "계란말이", "주먹밥"],
+    }
+    items = pairings.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
+    reply = f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
+    return reply, []
+
+
 if __name__ == "__main__":
     import ai.agents.recipe_agent.recipe_handlers as handlers
 
@@ -290,5 +306,14 @@ if __name__ == "__main__":
         assert actions == []
     finally:
         handlers.is_inventory_empty = original_empty
+
+    reply, actions = handlers.handle_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
+    assert "김치볶음밥" in reply
+    assert "계란국" in reply
+    assert actions == []
+
+    reply, actions = handlers.handle_recipe_pairing("알수없는메뉴와 어울리는 반찬")
+    assert "알수없는메뉴" in reply
+    assert "맑은 국" in reply
 
     print("recipe_handlers ok")
