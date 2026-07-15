@@ -315,6 +315,8 @@ def _clean_query_keyword(text_value: str) -> str:
 
 def _is_related_list_query(query: str) -> bool:
     normalized = query.replace(" ", "").lower()
+    if any(word in normalized for word in ("분류정보", "카테고리", "대분류", "중분류")):
+        return False
     explicit_words = ("종류", "목록", "리스트", "분류")
     patterns = (
         "어떤재료",
@@ -327,6 +329,37 @@ def _is_related_list_query(query: str) -> bool:
         any(word in normalized for word in explicit_words)
         or any(pattern in normalized for pattern in patterns)
     )
+
+
+def _is_category_info_query(query: str) -> bool:
+    normalized = query.replace(" ", "").lower()
+    return any(word in normalized for word in ("분류정보", "카테고리", "대분류", "중분류"))
+
+
+def _clean_category_info_keyword(query: str) -> str:
+    keyword = _clean_query_keyword(query)
+    for word in ("분류정보", "분류", "카테고리", "대분류", "중분류"):
+        keyword = keyword.replace(word, " ")
+    return re.sub(r"\s+", " ", keyword).strip()
+
+
+def _category_info_response(ingredient: str) -> dict[str, Any]:
+    result = lookup_ingredient_guide(ingredient)
+    if result.get("status") != "success":
+        return result
+    item = (result.get("data") or {}).get("ingredient") or {}
+    category = item.get("category") or {}
+    path = " > ".join(
+        value for value in (
+            category.get("major"),
+            category.get("middle"),
+            category.get("minor") or item.get("name"),
+        ) if value
+    )
+    result["action"] = "lookup_category_info"
+    result["data"] = {"ingredient": item}
+    result["message"] = f"{item.get('name') or ingredient} 분류정보는 {path}예요." if path else f"{ingredient} 분류정보를 찾지 못했어요."
+    return result
 
 
 def _clean_related_keyword(query: str) -> str:
@@ -489,6 +522,14 @@ def _needs_confirmation(candidates: list[dict[str, Any]]) -> bool:
     return len(candidates) > 1 and candidates[0]["score"] - candidates[1]["score"] < FUZZY_SCORE_GAP
 
 
+def _exact_candidate(candidates: list[dict[str, Any]], keyword: str) -> dict[str, Any] | None:
+    normalized_keyword = _normalize_match_text(keyword)
+    for candidate in candidates:
+        if _normalize_match_text(candidate.get("name")) == normalized_keyword:
+            return candidate
+    return None
+
+
 def _candidate_query_value(candidate_name: str, guide_type: str) -> str:
     if guide_type == "nutrition":
         return f"{candidate_name} 영양성분 알려줘"
@@ -499,12 +540,7 @@ def _candidate_query_value(candidate_name: str, guide_type: str) -> str:
 
 
 def _candidate_display_label(candidate_name: str, guide_type: str) -> str:
-    if guide_type == "nutrition":
-        return f"{candidate_name} 영양성분"
-    if guide_type == "all":
-        return candidate_name
-    label = GUIDE_TYPE_LABELS.get(guide_type, "가이드")
-    return f"{candidate_name} {label}"
+    return candidate_name
 
 
 def _confirm_ingredient_response(
@@ -586,6 +622,70 @@ def _is_safe_nutrition_partial_match(keyword: str, row: dict[str, Any]) -> bool:
     )
 
 
+def _wants_representative_nutrition(value: str) -> bool:
+    return any(word in value for word in ("대표", "기본", "일반", "아무거나"))
+
+
+def _nutrition_lookup_name(value: str) -> str:
+    return re.sub(r"(대표|기본|일반|아무거나)", " ", value or "").strip()
+
+
+def _nutrition_display_name(food_name: str) -> str:
+    return " · ".join(part.strip() for part in str(food_name or "").split("_") if part.strip())
+
+
+def _nutrition_candidate_response(ingredient: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    candidates = []
+    seen_labels = set()
+    for row in rows:
+        label = _nutrition_display_name(row["food_name"])
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        candidates.append(
+            {
+                "name": row["food_name"],
+                "label": label,
+                "food_code": row.get("food_code"),
+                "representative_name": row.get("representative_name"),
+                "base_amount": row.get("base_amount"),
+                "energy_kcal": row.get("energy_kcal"),
+                "score": row.get("representative_nutrition_score"),
+            }
+        )
+        if len(candidates) >= CONFIRM_CANDIDATE_DISPLAY_LIMIT:
+            break
+    return build_guide_response(
+        action="confirm_nutrition",
+        message=f"{ingredient} 영양정보는 여러 기준이 있어요. 어떤 기준으로 볼까요?",
+        status="needs_input",
+        data={"input": ingredient, "candidates": candidates},
+        requires_confirmation=True,
+        actions=[
+            {
+                "type": "select_nutrition_candidate",
+                "label": candidate["label"],
+                "value": f"{candidate['food_code']} 영양성분 알려줘",
+                "data": {"message": f"{candidate['food_code']} 영양성분 알려줘"},
+                "intent": GUIDE_INTENT,
+                "guide_type": "nutrition",
+                "food_code": candidate["food_code"],
+                "food_name": candidate["name"],
+            }
+            for candidate in candidates
+        ],
+        cards=[
+            {
+                "title": candidate["label"],
+                "subtitle": f"{candidate.get('base_amount') or ''} {candidate.get('energy_kcal') or '-'}kcal".strip(),
+                "value": f"{candidate['food_code']} 영양성분 알려줘",
+            }
+            for candidate in candidates
+        ],
+        meta={"result_code": "NUTRITION_CONFIRMATION_REQUIRED", "candidate_count": len(rows)},
+    )
+
+
 def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
     candidates = [name for name in dict.fromkeys(names) if name]
     if not candidates:
@@ -601,10 +701,16 @@ def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
                            major_category, middle_category, minor_category,
                            base_amount, energy_kcal, carbohydrate_g, protein_g,
                            fat_g, sugar_g, sodium_mg,
-                           source_name, source_ref, reference_year, source_priority
+                           source_name, source_ref, reference_year, source_priority,
+                           is_representative_nutrition, representative_nutrition_score
                     FROM food_nutrition_facts
-                    WHERE food_name = :name OR representative_name = :name
-                    ORDER BY source_priority, CASE WHEN representative_name = :name THEN 0 ELSE 1 END, food_name
+                    WHERE food_code = :name OR food_name = :name OR representative_name = :name
+                    ORDER BY is_representative_nutrition DESC,
+                             representative_nutrition_score DESC,
+                             source_priority,
+                             CASE WHEN food_code = :name THEN 0 ELSE 1 END,
+                             CASE WHEN representative_name = :name THEN 0 ELSE 1 END,
+                             food_name
                     LIMIT 1
                     """
                 ),
@@ -622,10 +728,13 @@ def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
                        major_category, middle_category, minor_category,
                        base_amount, energy_kcal, carbohydrate_g, protein_g,
                        fat_g, sugar_g, sodium_mg,
-                       source_name, source_ref, reference_year, source_priority
+                       source_name, source_ref, reference_year, source_priority,
+                       is_representative_nutrition, representative_nutrition_score
                 FROM food_nutrition_facts
                 WHERE food_name ILIKE :name OR representative_name ILIKE :name
                 ORDER BY
+                    is_representative_nutrition DESC,
+                    representative_nutrition_score DESC,
                     CASE
                         WHEN representative_name = :exact_name THEN 0
                         WHEN food_name = :exact_name THEN 1
@@ -657,12 +766,68 @@ def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
         db.close()
 
 
+def _nutrition_options(name: str) -> list[dict[str, Any]]:
+    tokens = [token for token in re.split(r"[\s_]+", name.strip()) if token]
+    db = SessionLocal()
+    try:
+        rows = [
+            dict(row)
+            for row in db.execute(
+                text(
+                    """
+                    SELECT food_code, food_name, representative_name, base_amount, energy_kcal,
+                           is_representative_nutrition, representative_nutrition_score
+                    FROM food_nutrition_facts
+                    WHERE food_code = :name OR representative_name = :name OR food_name = :name
+                    ORDER BY is_representative_nutrition DESC,
+                             representative_nutrition_score DESC,
+                             source_priority,
+                             food_name
+                    LIMIT :limit
+                    """
+                ),
+                {"name": name, "limit": CONFIRM_CANDIDATE_DISPLAY_LIMIT},
+            ).mappings().all()
+        ]
+        if rows:
+            return rows
+        if not tokens:
+            return []
+        conditions = " AND ".join(f"food_name ILIKE :token_{index}" for index, _ in enumerate(tokens[:4]))
+        params = {f"token_{index}": f"%{token}%" for index, token in enumerate(tokens[:4])}
+        params["limit"] = CONFIRM_CANDIDATE_DISPLAY_LIMIT
+        return [
+            dict(row)
+            for row in db.execute(
+                text(
+                    f"""
+                    SELECT food_code, food_name, representative_name, base_amount, energy_kcal,
+                           is_representative_nutrition, representative_nutrition_score
+                    FROM food_nutrition_facts
+                    WHERE {conditions}
+                    ORDER BY is_representative_nutrition DESC,
+                             representative_nutrition_score DESC,
+                             source_priority,
+                             food_name
+                    LIMIT :limit
+                    """
+                ),
+                params,
+            ).mappings().all()
+        ]
+    finally:
+        db.close()
+
+
 def _ingredient_from_nutrition(nutrition: dict[str, Any] | None, fallback_name: str) -> dict[str, Any]:
     if not nutrition:
         return {"name": fallback_name}
+    display_name = fallback_name
+    if fallback_name and fallback_name == nutrition.get("food_code"):
+        display_name = _nutrition_display_name(nutrition.get("food_name"))
     return {
         "code": nutrition.get("food_code"),
-        "name": nutrition.get("representative_name") or nutrition.get("food_name") or fallback_name,
+        "name": display_name or nutrition.get("representative_name") or nutrition.get("food_name"),
         "representative_name": nutrition.get("representative_name"),
         "raw_name": nutrition.get("food_name"),
         "display_name": None,
@@ -711,6 +876,12 @@ def _is_unhelpful_web_content(content: str | None) -> bool:
     return any(phrase.replace(" ", "") in normalized for phrase in UNHELPFUL_WEB_PHRASES)
 
 
+def _web_item_matches_ingredient(ingredient: str, item: dict[str, Any]) -> bool:
+    ingredient_norm = _normalize_match_text(ingredient)
+    text_norm = _normalize_match_text(f"{item.get('title') or ''} {item.get('content') or ''}")
+    return bool(ingredient_norm and ingredient_norm in text_norm)
+
+
 def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tuple[str | None, list[dict[str, str]]]:
     if TavilyClient is None or not app_settings.TAVILY_API_KEY:
         return None, []
@@ -727,6 +898,8 @@ def _web_results(ingredient: str, guide_type: str, *, trusted_only: bool) -> tup
             continue
         is_trusted = any(_host_matches_domain(host, domain) for domain in TRUSTED_WEB_DOMAINS)
         if trusted_only and not is_trusted:
+            continue
+        if not _web_item_matches_ingredient(ingredient, item):
             continue
         picked.append(item)
     if not picked:
@@ -799,6 +972,7 @@ def _fallback_guide_response(
     fallback_data = {
         "ingredient": ingredient_info or _ingredient_from_nutrition(nutrition, ingredient),
         "nutrition": nutrition,
+        "guide_type": guide_type,
     }
     if guide_type == "seasonality":
         fallback_data["seasonality"] = {
@@ -818,6 +992,7 @@ def _fallback_guide_response(
         }
 
     return build_guide_response(
+        action="lookup_seasonality" if guide_type == "seasonality" else f"lookup_{guide_type}",
         message=f"내부 공공데이터에는 {ingredient} {label}{label_josa} 없어, {source_label}를 기준으로 안내드릴게요.",
         data=fallback_data,
         sources=sources,
@@ -1130,15 +1305,50 @@ def list_seasonal_ingredients(month: int) -> dict[str, Any]:
 def lookup_ingredient_nutrition(ingredient: str) -> dict[str, Any]:
     """PostgreSQL 영양DB에서 식재료 영양성분을 조회합니다."""
     try:
-        guide_data, _ = _lookup_guide_detail(ingredient)
+        lookup_name = _nutrition_lookup_name(ingredient) or ingredient
+        guide_data, _ = _lookup_guide_detail(lookup_name)
         ingredient_info = (guide_data or {}).get("ingredient", {})
         names = [
             ingredient_info.get("name"),
             ingredient_info.get("representative_name"),
             ingredient_info.get("raw_name"),
             *ingredient_info.get("aliases", []),
-            ingredient,
+            lookup_name,
         ]
+        if not _wants_representative_nutrition(ingredient):
+            options = _nutrition_options(lookup_name)
+            if len(options) == 1:
+                nutrition = _query_nutrition([options[0]["food_code"]])
+                if nutrition:
+                    source = _source(nutrition.get("source_name"), nutrition.get("source_ref"))
+                    return build_guide_response(
+                        action="lookup_nutrition",
+                        message=f"{nutrition['food_name']} 영양성분을 조회했어요.",
+                        data={
+                            "ingredient": _ingredient_from_nutrition(nutrition, lookup_name),
+                            "nutrition": nutrition,
+                        },
+                        sources=[source] if source else [],
+                        meta={"data_source": "postgresql", "match_type": "food_code"},
+                    )
+            if len(options) > 1:
+                candidate_response = _nutrition_candidate_response(lookup_name, options)
+                candidates = candidate_response.get("data", {}).get("candidates") or []
+                if len(candidates) == 1:
+                    nutrition = _query_nutrition([candidates[0]["food_code"]])
+                    if nutrition:
+                        source = _source(nutrition.get("source_name"), nutrition.get("source_ref"))
+                        return build_guide_response(
+                            action="lookup_nutrition",
+                            message=f"{nutrition['food_name']} 영양성분을 조회했어요.",
+                            data={
+                                "ingredient": _ingredient_from_nutrition(nutrition, lookup_name),
+                                "nutrition": nutrition,
+                            },
+                            sources=[source] if source else [],
+                            meta={"data_source": "postgresql", "match_type": "food_code"},
+                        )
+                return candidate_response
         nutrition = _query_nutrition(names)
         if not nutrition:
             return build_guide_response(
@@ -1154,11 +1364,14 @@ def lookup_ingredient_nutrition(ingredient: str) -> dict[str, Any]:
             )
 
         source = _source(nutrition.get("source_name"), nutrition.get("source_ref"))
+        display_ingredient = dict(ingredient_info or {"name": ingredient})
+        if _normalize_match_text(ingredient) == _normalize_match_text(nutrition.get("representative_name")):
+            display_ingredient["name"] = nutrition.get("representative_name")
         return build_guide_response(
             action="lookup_nutrition",
             message=f"{nutrition['representative_name'] or nutrition['food_name']} 영양성분을 조회했어요.",
             data={
-                "ingredient": ingredient_info or {"name": ingredient},
+                "ingredient": display_ingredient,
                 "nutrition": nutrition,
             },
             sources=[source] if source else [],
@@ -1197,6 +1410,15 @@ def answer_guide_query(query: str) -> dict[str, Any]:
     if "제철" in query and not month and not keyword:
         return _request_season_month_response()
 
+    if _is_category_info_query(query):
+        category_keyword = _clean_category_info_keyword(query)
+        if not category_keyword:
+            return _invalid_query_response(
+                "분류정보를 조회할 식재료명을 입력해주세요.",
+                "INGREDIENT_REQUIRED",
+            )
+        return _category_info_response(category_keyword)
+
     if _is_related_list_query(query):
         related_keyword = _clean_related_keyword(query)
         return list_related_ingredients(related_keyword)
@@ -1211,13 +1433,16 @@ def answer_guide_query(query: str) -> dict[str, Any]:
         result = lookup_ingredient_nutrition(keyword)
         if result.get("status") == "error":
             return result
-        if result.get("status") == "success":
+        if result.get("status") in {"success", "needs_input"}:
             return result
 
         candidates, fuzzy_error = _safe_guide_fuzzy_candidates(keyword)
         if fuzzy_error:
             return fuzzy_error
         if candidates:
+            exact = _exact_candidate(candidates, keyword)
+            if exact:
+                return lookup_ingredient_nutrition(exact["name"])
             if _needs_confirmation(candidates):
                 return _confirm_ingredient_response(
                     keyword,
@@ -1392,5 +1617,5 @@ if __name__ == "__main__":
     assert _guide_type_from_query("고추가 물러졌는데 괜찮아?") == "freshness"
     assert _candidate_query_value("닭가슴살", "freshness") == "닭가슴살 신선도 확인법 알려줘"
     assert _candidate_query_value("닭가슴살", "nutrition") == "닭가슴살 영양성분 알려줘"
-    assert _candidate_display_label("닭가슴살", "freshness") == "닭가슴살 신선도 확인법"
+    assert _candidate_display_label("닭가슴살", "freshness") == "닭가슴살"
     assert _is_unhelpful_web_content("검색 결과에는 우동사리의 보관법에 대한 정보는 포함되어 있지 않습니다.")
