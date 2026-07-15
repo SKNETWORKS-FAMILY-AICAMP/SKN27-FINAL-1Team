@@ -245,7 +245,7 @@ def test_guide_context_switch_uses_latest_ingredient():
     class GuideService:
         def _reply_guide(self, text):
             received.append(text)
-            return "양파 보관법이에요.", []
+            return {"response_text": "양파 보관법이에요.", "actions": [], "sources": []}
 
     result = supervisor_agent.guide_agent_node({"text": "감자 말고 양파 보관법", "service": GuideService()})
 
