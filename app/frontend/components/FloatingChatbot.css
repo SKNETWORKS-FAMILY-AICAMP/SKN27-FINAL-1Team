@@ -308,12 +308,18 @@
 
 @media (max-width: 767px) {
   .floating-chatbot {
-    right: 14px;
-    bottom: 78px;
+    right: 10px;
+    bottom: 70px;
+  }
+
+  .floating-chatbot__toggle {
+    width: 44px;
+    height: 44px;
+    box-shadow: 0 8px 20px rgba(255, 101, 114, 0.28);
   }
 
   .floating-chatbot__panel {
-    bottom: 72px;
+    bottom: 54px;
     width: calc(100vw - 32px);
     height: min(560px, calc(100vh - 180px));
   }

@@ -36,7 +36,7 @@ def is_basic_ingredient(raw_name: str) -> bool:
 
 @dataclass(frozen=True)
 class RecipeRecommendConfig:
-    FRIDGE_CONSUME_LIMIT = 9
+    FRIDGE_CONSUME_LIMIT = 3
     LIMIT_MIN = 1
     LIMIT_MAX = 50
     DEFAULT_POOL_MULTIPLIER = 10

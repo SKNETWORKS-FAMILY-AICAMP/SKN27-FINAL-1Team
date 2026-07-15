@@ -382,15 +382,6 @@ function RecipeDetail() {
       <div className="recipe-detail-hero">
         <div className="recipe-detail-main-image">
           <ImageSlot src={recipe.main_image_url || imageEatRefrigerator} alt={recipe.title} />
-          <button
-            type="button"
-            aria-label={isSaved ? '저장한 레시피' : '레시피 저장'}
-            aria-pressed={isSaved}
-            disabled={isSaved || isSaving}
-            onClick={handleSaveRecipe}
-          >
-            {isSaved ? '♥' : '♡'}
-          </button>
         </div>
 
         <div className="recipe-detail-summary">

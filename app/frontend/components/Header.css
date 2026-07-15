@@ -17,11 +17,16 @@
 
 .site-header__app-banner {
   height: 40px;
+  position: relative;
+  background: #ffb8bd;
+}
+
+.site-header__app-banner a {
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #ffb8bd;
   color: #4f292c;
   font-size: 14px;
   font-weight: 700;
@@ -30,6 +35,31 @@
 
 .site-header__app-banner:hover {
   background: #ffa7ae;
+}
+
+.site-header__app-banner button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  border: 0;
+  background: transparent;
+  color: #704347;
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.site-header.site-header--app-banner-hidden {
+  min-height: 72px;
+}
+
+.app-shell:has(.site-header--app-banner-hidden) .app-main {
+  padding-top: 72px;
 }
 
 .site-header__app-banner img {
@@ -114,6 +144,8 @@
 
 .site-header__dropdown {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .site-header__dropdown::after {
@@ -164,8 +196,7 @@
     transform 120ms ease;
 }
 
-.site-header__dropdown:hover .site-header__dropdown-menu,
-.site-header__dropdown:focus-within .site-header__dropdown-menu {
+.site-header__dropdown.is-open .site-header__dropdown-menu {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, 0);
@@ -273,7 +304,15 @@
   .site-header__app-banner {
     height: 36px;
     padding: 0 12px;
+  }
+
+  .site-header__app-banner a {
+    padding: 0 34px 0 0;
     font-size: 12px;
+  }
+
+  .site-header__app-banner button {
+    right: 6px;
   }
 
   .site-header__app-banner img {
@@ -357,6 +396,18 @@
     transform: translateX(-50%);
   }
 
+  .site-header.site-header--app-banner-hidden {
+    min-height: 64px;
+  }
+
+  .site-header--app-banner-hidden .site-header__nav {
+    top: 64px;
+  }
+
+  .app-shell:has(.site-header--app-banner-hidden) .app-main {
+    padding-top: 64px;
+  }
+
   .site-header__nav.is-mobile-open {
     display: flex;
   }
@@ -391,8 +442,7 @@
     box-shadow: none;
   }
 
-  .site-header__dropdown:hover .site-header__dropdown-menu,
-  .site-header__dropdown:focus-within .site-header__dropdown-menu {
+  .site-header__dropdown.is-open .site-header__dropdown-menu {
     transform: none;
   }
 }

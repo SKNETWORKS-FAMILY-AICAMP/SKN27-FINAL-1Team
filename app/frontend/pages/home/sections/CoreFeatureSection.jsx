@@ -1,7 +1,7 @@
 import iconCart from '../../../assets/extracted/icons/icon_cart.png'
 import iconReceipt from '../../../assets/extracted/icons/icon_receipt.png'
 import iconRefrigerator from '../../../assets/extracted/icons/icon_refrigerator.png'
-import mascotChef from '../../../assets/mascot_chef.png'
+import mascotChef from '../../../assets/mascot_chef.webp'
 
 const coreFeatures = [
   {
@@ -13,7 +13,7 @@ const coreFeatures = [
   {
     tag: 'Inventory',
     title: '보관 위치와 소비 임박을 한눈에 관리',
-    description: '냉장·냉동·상온 분류와 유통기한 우선순위로 재료를 놓치지 않습니다.',
+    description: '냉장·냉동·상온 분류와 소비기한 우선순위로 재료를 놓치지 않습니다.',
     icon: iconRefrigerator,
   },
   {
