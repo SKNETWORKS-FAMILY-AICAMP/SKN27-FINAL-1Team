@@ -28,6 +28,26 @@
   object-fit: contain;
 }
 
+.fridge-image-placeholder {
+  width: min(68%, 96px);
+  height: min(68%, 96px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff1f2;
+  color: #d96a72;
+}
+
+.fridge-image-placeholder svg {
+  width: 72%;
+  height: 72%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .fridge-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -273,31 +293,15 @@
   padding: 0 10px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 6px;
+  border: 1px solid #efb9bd;
+  border-radius: 8px;
   background: transparent;
 }
 
-.fridge-edit-toggle::before {
-  width: 13px;
-  height: 13px;
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-  content: '';
-  font-size: 10px;
-  line-height: 1;
-}
-
 .fridge-toolbar-controls .fridge-edit-toggle.is-active {
+  border-color: var(--figma-coral);
   background: var(--figma-coral);
   color: #fff;
-}
-
-.fridge-edit-toggle.is-active::before {
-  content: '✓';
 }
 
 .fridge-card-grid {
@@ -305,7 +309,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: start;
+  align-items: stretch;
   gap: 14px;
   border: 0;
   border-radius: 0;
@@ -317,7 +321,7 @@
   padding: 16px 16px 0;
   display: grid;
   position: relative;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   grid-template-rows: 1fr 42px;
   gap: 8px 14px;
   overflow: hidden;
@@ -343,8 +347,8 @@
 }
 
 .fridge-item__image {
-  width: 82px;
-  height: 82px;
+  width: 72px;
+  height: 72px;
 }
 
 .fridge-item__body {
@@ -360,16 +364,32 @@
 }
 
 .fridge-item h2 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   color: var(--figma-text);
   font-size: 20px;
   font-weight: 900;
+  line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.fridge-item h2.is-name-medium {
+  font-size: 17px;
+}
+
+.fridge-item h2.is-name-long {
+  font-size: 15px;
+}
+
+.fridge-item h2.is-name-very-long {
+  font-size: 13px;
+}
+
 .fridge-storage-badge {
+  flex: 0 0 auto;
   min-height: 26px;
   padding: 0 10px;
   display: inline-flex;
@@ -450,18 +470,18 @@
 
 .fridge-add-card {
   min-height: 164px;
-  padding: 18px;
+  padding: 12px;
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 12px;
+  gap: 6px;
   border-style: dashed;
   text-align: center;
 }
 
 .fridge-add-card__image {
-  width: 84px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
 }
 
 .fridge-add-card strong {
@@ -471,7 +491,7 @@
 }
 
 .fridge-add-card button {
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 22px;
   border: 1.4px solid var(--figma-coral-stroke);
   border-radius: 999px;
@@ -880,6 +900,118 @@
   border: none;
   color: #fff;
 }
+
+.fridge-modal-footer .btn-submit:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.fridge-consumption-modal {
+  max-width: 560px;
+}
+
+.fridge-consumption-intro {
+  margin: 0 0 18px;
+  color: #765c52;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.fridge-consumption-intro strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--figma-text);
+  font-size: 18px;
+}
+
+.fridge-consumption-list {
+  max-height: 360px;
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.fridge-consumption-item {
+  min-height: 64px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #f1ded9;
+  border-radius: 12px;
+  background: #fffafa;
+}
+
+.fridge-consumption-item > div {
+  min-width: 0;
+}
+
+.fridge-consumption-item strong,
+.fridge-consumption-item > div span {
+  display: block;
+}
+
+.fridge-consumption-item strong {
+  color: var(--figma-text);
+  font-size: 14px;
+}
+
+.fridge-consumption-item > div span {
+  margin-top: 3px;
+  color: #8b736a;
+  font-size: 11px;
+}
+
+.fridge-consumption-item label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #765c52;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.fridge-consumption-item input {
+  width: 72px;
+  min-height: 36px;
+  box-sizing: border-box;
+  border: 1px solid #dfc6c0;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.fridge-consumption-item input:focus {
+  outline: none;
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.1);
+}
+
+.fridge-consumption-item b {
+  min-width: 14px;
+  color: #765c52;
+}
+
+.fridge-consumption-state {
+  min-height: 120px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: #8b736a;
+  font-size: 13px;
+  text-align: center;
+}
+
+.fridge-consumption-state.is-error {
+  color: #c43d49;
+}
 /* ==========================================================================
    Form Styles (Modal)
    ========================================================================== */
@@ -1160,6 +1292,17 @@
     min-height: 44px;
     font-size: 14px;
     width: 100%;
+  }
+
+  .fridge-consumption-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .fridge-consumption-item label {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .fridge-summary-cards {

@@ -181,41 +181,42 @@
 }
 
 .guide-ingredients {
-  padding: 20px 24px;
+  padding: 18px 0 22px;
 }
 
-.guide-ingredients + .guide-ingredients {
-  margin-top: 16px;
+.guide-ingredients:has(+ .guide-all) {
+  padding-bottom: 14px;
 }
 
 .guide-ingredients--seasonal {
-  padding: 12px 20px;
+  padding: 0 0 22px;
+}
+
+.guide-all + .guide-ingredients--seasonal,
+.guide-recipes + .guide-ingredients--seasonal {
+  margin-top: 32px;
 }
 
 .guide-ingredients--seasonal .guide-ingredients__header {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .guide-ingredients--seasonal .guide-ingredient-list {
   grid-template-columns: repeat(8, minmax(72px, 1fr));
-  gap: 8px;
-}
-
-.guide-ingredients--seasonal .guide-fridge-pager {
-  padding: 0 56px;
+  gap: 10px;
 }
 
 .guide-ingredients--seasonal .guide-ingredient {
-  height: 50px;
-  padding: 5px 7px;
-  gap: 6px;
+  height: 56px;
+  padding: 6px 10px;
+  gap: 8px;
   border-radius: 12px;
   font-size: 12px;
 }
 
 .guide-ingredients--seasonal .guide-ingredient__image {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
 }
 
 .guide-ingredients--seasonal .guide-ingredient__name {
@@ -223,7 +224,7 @@
 }
 
 .guide-ingredients__header {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -240,6 +241,13 @@
   gap: 8px;
 }
 
+.guide-ingredients__actions .guide-list-summary {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: #9a7662;
+}
+
 .guide-seasonal-month-control {
   display: inline-flex;
   align-items: center;
@@ -247,11 +255,11 @@
 }
 
 .guide-seasonal-month-button {
-  height: 28px;
+  height: 30px;
   padding: 0 10px 0 12px;
   border: 1px solid #efd8b8;
-  border-radius: 999px;
-  background: #fff8ed;
+  border-radius: 9px;
+  background: #fff;
   color: #8a5635;
   cursor: pointer;
   font: inherit;
@@ -262,8 +270,16 @@
   gap: 5px;
 }
 
-.guide-seasonal-month-button span {
-  transform: translateY(-1px);
+.guide-seasonal-month-button svg {
+  display: block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .guide-seasonal-month-button:hover {
@@ -317,30 +333,33 @@
 
 .guide-ingredient-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(116px, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 
 .guide-fridge-pager {
   position: relative;
-  padding: 0 50px;
+}
+
+.guide-fridge-pager:has(.guide-fridge-page-button) {
+  padding: 0 46px;
 }
 
 .guide-fridge-page-button {
   position: absolute;
   top: 50%;
   z-index: 1;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border: 1.4px solid #c79a74;
+  border: 1px solid #e9c9b2;
   border-radius: 50%;
   background: #fff;
-  color: #6d4128;
+  color: #80543e;
   cursor: pointer;
   font: inherit;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 900;
   transform: translateY(-50%);
 }
@@ -359,21 +378,23 @@
 }
 
 .guide-fridge-page-button:hover:not(:disabled) {
-  background: #fff4e3;
+  border-color: #ff9da3;
+  background: #fff1ef;
+  color: var(--figma-coral);
 }
 
 .guide-ingredient,
 .guide-more-button {
   box-sizing: border-box;
   min-width: 0;
-  height: 76px;
-  border: 1.4px solid #efd8b8;
+  height: 66px;
+  border: 1px solid #edd5c2;
   border-radius: 14px;
   background: #fff;
   color: var(--figma-text);
   cursor: pointer;
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 900;
   transition:
     border-color 140ms ease,
@@ -381,18 +402,17 @@
 }
 
 .guide-ingredient {
-  padding: 8px 14px;
+  padding: 7px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .guide-ingredient:hover,
 .guide-more-button:hover {
   border-color: #ff8b93;
-  box-shadow: 0 10px 20px rgba(255, 107, 116, 0.12);
-  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(255, 107, 116, 0.1);
 }
 
 .guide-ingredient.is-active {
@@ -444,15 +464,29 @@
   object-fit: contain;
 }
 
-.guide-image-slot__text {
-  color: #8b673e;
-  font-size: 22px;
-  font-weight: 900;
+.guide-image-placeholder {
+  width: min(68%, 96px);
+  height: min(68%, 96px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff1f2;
+  color: #d96a72;
+}
+
+.guide-image-placeholder svg {
+  width: 72%;
+  height: 72%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .guide-ingredient__image {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
 }
 
@@ -460,7 +494,7 @@
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: var(--guide-ingredient-name-size, 16px);
+  font-size: var(--guide-ingredient-name-size, 14px);
   line-height: 1.2;
   text-align: center;
 }
@@ -567,81 +601,112 @@
 
 .guide-all {
   margin-top: 16px;
-  padding: 22px;
+  padding: 24px 0 0;
+}
+
+.guide-ingredients + .guide-all {
+  margin-top: 0;
+  padding-top: 8px;
 }
 
 .guide-category-tabs {
-  margin: -22px -22px 20px;
-  padding: 18px 22px 0;
+  margin: 0 0 12px;
   display: grid;
-  gap: 14px;
-  border-bottom: 1px solid #f1d9b3;
-  background: #fff9f1;
+  gap: 8px;
 }
 
 .guide-category-tab-list {
-  padding-top: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px;
   display: flex;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
   overflow-x: auto;
   overflow-y: hidden;
-  border-bottom: 2px solid var(--figma-coral);
-  scrollbar-width: thin;
+  border-radius: 18px;
+  background: #fff1f4;
+  scrollbar-width: none;
+}
+
+.guide-category-tab-list::-webkit-scrollbar {
+  display: none;
 }
 
 .guide-category-tab-list button {
-  min-height: 40px;
-  margin-bottom: -2px;
-  padding: 0 17px;
+  min-height: 36px;
+  padding: 0 16px;
   flex: 0 0 auto;
-  border: 1.4px solid #efd8b8;
-  border-bottom: 2px solid var(--figma-coral);
-  border-radius: 10px 10px 0 0;
-  background: #fff;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
   color: #6d4128;
   cursor: pointer;
   font: inherit;
   font-size: 13px;
   font-weight: 900;
-  transition: background 140ms ease, border-color 140ms ease;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
-.guide-category-tab-list button:hover,
+.guide-category-tab-list button:hover {
+  background: #ffe4e8;
+}
+
 .guide-category-tab-list button:focus-visible {
-  border-color: var(--figma-coral);
-  background: #fff0ec;
-  outline: 2px solid var(--figma-coral);
+  outline: 2px solid rgba(255, 107, 116, 0.42);
   outline-offset: 2px;
 }
 
+.guide-category-tab-list--major {
+  align-items: center;
+  padding: 0;
+  gap: 24px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-category-tab-list--major button {
+  min-height: 42px;
+  padding: 0 2px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+
+.guide-category-tab-list--major button:hover {
+  background: transparent;
+  color: var(--figma-coral);
+}
+
 .guide-category-tab-list button.is-active {
-  min-height: 44px;
-  border-color: var(--figma-coral);
   background: var(--figma-coral);
   color: #fff;
-  box-shadow: 0 -5px 12px rgba(255, 107, 116, 0.14);
+  box-shadow: 0 2px 8px rgba(123, 79, 55, 0.1);
 }
 
-.guide-category-tabs > div + div .guide-category-tab-list {
-  border-bottom-color: #71a957;
+.guide-category-tab-list--major button.is-active {
+  border-bottom-color: var(--figma-coral);
+  background: transparent;
+  color: var(--figma-coral);
+  box-shadow: none;
 }
 
-.guide-category-tabs > div + div .guide-category-tab-list button {
-  border-bottom-color: #71a957;
+.guide-category-tab-list--middle {
+  background: #fff1f4;
 }
 
-.guide-category-tabs > div + div .guide-category-tab-list button:hover,
-.guide-category-tabs > div + div .guide-category-tab-list button:focus-visible {
-  border-color: #71a957;
-  background: #eef8e8;
-  outline-color: #71a957;
+.guide-category-tab-list--middle button {
+  border-radius: 14px;
 }
 
-.guide-category-tabs > div + div .guide-category-tab-list button.is-active {
-  border-color: #71a957;
-  background: #5f9848;
-  box-shadow: 0 -5px 12px rgba(95, 152, 72, 0.14);
+.guide-category-tab-list--middle button:hover,
+.guide-category-tab-list--middle button:focus-visible {
+  background: #ffe4e8;
+}
+
+.guide-category-tab-list--middle button.is-active {
+  background: var(--figma-coral);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(123, 79, 55, 0.1);
 }
 
 .guide-pagination button:hover:not(:disabled) {
@@ -668,27 +733,17 @@
 }
 
 .guide-all__header {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
 }
 
-.guide-all__header h2 {
-  margin: 0;
-  color: var(--figma-text);
-  font-size: 23px;
-  font-weight: 900;
-  letter-spacing: 0;
-}
-
-.guide-all__header p {
-  margin: 7px 0 0;
-  color: #6f4b36;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.5;
+.guide-all__header .guide-list-summary {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: #9a7662;
 }
 
 .guide-list-summary {
@@ -1200,8 +1255,8 @@
 }
 
 .guide-suggestion__form textarea {
-  height: 74px;
-  min-height: 74px;
+  height: 120px;
+  min-height: 120px;
   resize: none;
 }
 
@@ -1495,37 +1550,6 @@
   font-weight: 900;
 }
 
-.guide-recipe-carousel {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-}
-
-.guide-recipe-carousel .guide-recipe-list:first-child,
-.guide-recipe-carousel .guide-recipe-list:last-child {
-  grid-column: 1 / -1;
-}
-
-.guide-recipe-arrow {
-  width: 48px;
-  height: 48px;
-  border: 1.4px solid #c79a74;
-  border-radius: 50%;
-  background: #fff;
-  color: #6d4128;
-  cursor: pointer;
-  font: inherit;
-  font-size: 28px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.guide-recipe-arrow:disabled {
-  cursor: default;
-  opacity: 0.35;
-}
-
 .guide-recipe-card p {
   margin: 8px 0 0;
   color: #6f4b36;
@@ -1580,9 +1604,660 @@
   padding: 0 22px;
 }
 
+/* Guide detail */
+.guide-page--detail {
+  padding-top: 30px;
+}
+
+.guide-detail-nav {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #6f5548;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guide-detail-nav button {
+  width: auto;
+  height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #fff0ea;
+  color: #38241b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.guide-detail-nav button:hover,
+.guide-detail-nav button:focus-visible {
+  background: #ffdcd3;
+  outline: 0;
+  transform: translateX(-2px);
+}
+
+.guide-detail-primary {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.85fr);
+  grid-template-areas:
+    "heading ."
+    "summary guide";
+  align-items: stretch;
+  column-gap: 32px;
+  row-gap: 0;
+}
+
+.guide-detail-heading {
+  min-width: 0;
+  grid-area: heading;
+}
+
+.guide-detail-summary {
+  min-width: 0;
+  grid-area: summary;
+}
+
+.guide-detail-visual {
+  aspect-ratio: 1;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #f2d3c7;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at 72% 20%, rgba(255, 255, 255, 0.94), transparent 32%),
+    linear-gradient(145deg, #fff8f5 0%, #fff0eb 100%);
+  box-shadow: 0 16px 38px rgba(85, 50, 35, 0.07);
+}
+
+.guide-detail-visual::before {
+  width: 68%;
+  aspect-ratio: 1;
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  content: "";
+  filter: blur(1px);
+}
+
+.guide-detail-visual__image {
+  width: min(58%, 250px);
+  height: min(58%, 250px);
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 18px 22px rgba(73, 42, 27, 0.12));
+}
+
+.guide-detail-season {
+  min-height: 40px;
+  padding: 0 16px;
+  position: absolute;
+  z-index: 2;
+  bottom: 24px;
+  left: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #27713a;
+  box-shadow: 0 8px 20px rgba(70, 48, 35, 0.1);
+  font-size: 13px;
+  font-weight: 900;
+  backdrop-filter: blur(8px);
+}
+
+.guide-detail-season i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #169447;
+}
+
+.guide-detail-category {
+  margin: 0 0 8px;
+  color: #796357;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.guide-detail-heading h1 {
+  margin: 0 0 20px;
+  color: #271712;
+  font-size: clamp(34px, 3vw, 46px);
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.guide-detail-guide {
+  --guide-missing-film: #fff9f7;
+  --guide-missing-seam: #f3d7ce;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  grid-area: guide;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #f2c7b7;
+  border-radius: 32px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(85, 50, 35, 0.06);
+}
+
+.guide-page--detail .guide-tip-grid {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0 12px;
+  align-items: center;
+  gap: 24px;
+  overflow-x: auto;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-grid.is-missing {
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-card {
+  height: 50px;
+  margin: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #463129;
+  box-shadow: none;
+  font: inherit;
+}
+
+.guide-page--detail .guide-tip-card:hover,
+.guide-page--detail .guide-tip-card:focus-visible {
+  border-bottom-color: transparent;
+  background: transparent;
+  color: var(--figma-coral);
+  box-shadow: none;
+}
+
+.guide-page--detail .guide-tip-card:focus-visible {
+  outline: 2px solid rgba(255, 107, 116, 0.35);
+  outline-offset: -2px;
+}
+
+.guide-page--detail .guide-tip-card.is-active,
+.guide-page--detail .guide-tip-card.is-missing.is-active {
+  border: 0;
+  border-bottom: 2px solid var(--figma-coral);
+  background: transparent;
+  box-shadow: none;
+}
+
+.guide-page--detail .guide-tip-card.is-active::after {
+  display: none;
+}
+
+.guide-page--detail .guide-tip-card__title {
+  justify-content: center;
+}
+
+.guide-page--detail .guide-tip-card__title > span {
+  display: none;
+}
+
+.guide-page--detail .guide-tip-card h3,
+.guide-page--detail .guide-tip-card.is-active h3,
+.guide-page--detail .guide-tip-card.is-missing h3 {
+  color: #463129;
+  font-size: 16px;
+}
+
+.guide-page--detail .guide-tip-card.is-active h3 {
+  color: var(--figma-coral);
+}
+
+.guide-page--detail .guide-tip-card:hover h3,
+.guide-page--detail .guide-tip-card:focus-visible h3 {
+  color: var(--figma-coral);
+}
+
+.guide-page--detail .guide-tip-body,
+.guide-page--detail .guide-tip-body.is-missing {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 28px 28px 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-copy-stack {
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-color: #e5b9aa transparent;
+  scrollbar-width: thin;
+}
+
+.guide-page--detail .guide-tip-copy {
+  min-width: 0;
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.guide-page--detail .guide-tip-copy:has(.guide-suggestion) {
+  justify-content: center;
+}
+
+.guide-page--detail .guide-tip-copy:has(.guide-suggestion.is-form-open) {
+  justify-content: flex-start;
+}
+
+.guide-page--detail .guide-suggestion {
+  width: 100%;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-suggestion__panel {
+  padding: 0;
+  justify-items: center;
+  gap: 18px;
+  border: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.guide-page--detail .guide-suggestion__intro {
+  max-width: 560px;
+}
+
+.guide-page--detail .guide-suggestion__open {
+  width: min(100%, 320px);
+  margin-top: 0;
+}
+
+.guide-page--detail .guide-suggestion.is-form-open .guide-suggestion__panel {
+  justify-items: stretch;
+  text-align: left;
+}
+
+.guide-page--detail .guide-suggestion.is-form-open .guide-suggestion__form {
+  gap: 16px;
+}
+
+.guide-page--detail .guide-suggestion.is-complete {
+  padding: 0;
+}
+
+.guide-page--detail .guide-suggestion__complete {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-copy ul {
+  max-width: 72ch;
+  margin: 0;
+  padding: 8px 0 28px;
+  display: grid;
+  gap: 20px;
+  list-style: none;
+}
+
+.guide-page--detail .guide-tip-copy li {
+  padding-left: 22px;
+  position: relative;
+  color: #44322a;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.75;
+}
+
+.guide-page--detail .guide-tip-copy li::before {
+  width: 6px;
+  height: 6px;
+  position: absolute;
+  top: 11px;
+  left: 0;
+  border-radius: 50%;
+  background: #ad3740;
+  content: "";
+}
+
+.guide-page--detail .guide-tip-source {
+  margin: auto 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid #eadfd8;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-source a,
+.guide-page--detail .guide-tip-source span {
+  max-width: 100%;
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: #77665e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.guide-page--detail .guide-tip-source a::before,
+.guide-page--detail .guide-tip-source span::before {
+  margin-right: 8px;
+  color: #a33139;
+  font-weight: 900;
+  content: "출처";
+}
+
+.guide-page--detail .guide-tip-source a:hover,
+.guide-page--detail .guide-tip-source a:focus-visible {
+  color: #a33139;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  box-shadow: none;
+}
+
+.guide-detail-secondary {
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.85fr);
+  align-items: start;
+  gap: 32px;
+}
+
+.guide-detail-nutrition-column {
+  min-width: 0;
+}
+
+.guide-detail-section-title,
+.guide-detail-recipes h2 {
+  margin: 2px 0 18px;
+  color: #271712;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.guide-detail-nutrition {
+  padding: 28px 32px 22px;
+  border: 1px solid #f2c7b7;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(85, 50, 35, 0.05);
+}
+
+.guide-detail-nutrition__header {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #f3d7ce;
+}
+
+.guide-detail-nutrition__header > div {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+.guide-detail-nutrition__header small {
+  color: #716057;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guide-detail-nutrition__header strong {
+  color: #a33139;
+  font-size: 27px;
+  line-height: 1;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px 18px;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid strong {
+  min-height: auto;
+  padding: 0;
+  display: grid;
+  justify-content: stretch;
+  gap: 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid span {
+  color: #716057;
+  font-size: 12px;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid b {
+  color: #271712;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.guide-detail-nutrition__source {
+  color: #8b7670;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.guide-detail-recipes {
+  min-width: 0;
+}
+
+.guide-detail-recipes .guide-recipes__header {
+  margin: 0 0 18px;
+  justify-content: space-between;
+}
+
+.guide-detail-recipes .guide-recipes__header h2,
+.guide-detail-recipes .guide-recipes__header .guide-recipe-pager {
+  margin: 0;
+}
+
+.guide-detail-recipes .guide-recipe-list {
+  grid-template-columns: 1fr;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.guide-detail-recipes .guide-recipe-list::after {
+  padding: 8px 12px;
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(39, 23, 18, 0.72);
+  color: #fff;
+  content: "↕ 위아래로 드래그";
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.guide-detail-recipes .guide-recipe-list:hover::after,
+.guide-detail-recipes .guide-recipe-list:focus-within::after,
+.guide-detail-recipes .guide-recipe-list.is-dragging::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.guide-detail-recipes .guide-recipe-list.is-dragging::after {
+  background: rgba(255, 107, 116, 0.9);
+  content: "↕ 놓아서 넘기기";
+}
+
+.guide-detail-recipes .guide-recipe-list.is-dragging {
+  cursor: grabbing;
+}
+
+.guide-detail-recipes .guide-recipe-card,
+.guide-detail-recipes .guide-recipe-more {
+  min-height: 250px;
+  border-color: #f0ddd5;
+  border-radius: 20px;
+  box-shadow: 0 8px 22px rgba(85, 50, 35, 0.035);
+}
+
+.guide-detail-recipes .guide-recipe-card {
+  height: 250px;
+  padding: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  animation: guide-recipe-slide-up 180ms ease-out;
+  transition: transform 120ms ease-out;
+}
+
+.guide-detail-recipes .guide-recipe-card.is-previous {
+  animation-name: guide-recipe-slide-down;
+}
+
+.guide-detail-recipes .guide-recipe-list.is-dragging .guide-recipe-card {
+  animation: none;
+  transition: none;
+}
+
+.guide-detail-recipes .guide-recipe-card:hover,
+.guide-detail-recipes .guide-recipe-card:focus-visible {
+  border-color: #e7b7a7;
+  outline: 0;
+}
+
+.guide-detail-recipes .guide-recipe-card__image {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: block;
+  border-radius: 19px;
+}
+
+.guide-detail-recipes .guide-recipe-card__image img {
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.guide-detail-recipes .guide-recipe-card > div {
+  padding: 64px 18px 18px;
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(transparent, rgba(39, 23, 18, 0.86));
+}
+
+.guide-detail-recipes .guide-recipe-card h3 {
+  color: #fff;
+  font-size: 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
+}
+
+.guide-detail-recipes .guide-recipe-card p {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.guide-detail-recipes .guide-recipe-card > div span {
+  background: rgba(255, 255, 255, 0.9);
+  color: #7d503b;
+}
+
+.guide-recipe-pager {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-recipe-pager span {
+  min-width: 58px;
+  min-height: 28px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff3ef;
+  color: #785c51;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+@keyframes guide-recipe-slide-up {
+  from {
+    opacity: 0.35;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes guide-recipe-slide-down {
+  from {
+    opacity: 0.35;
+    transform: translateY(-18px);
+  }
+}
+
+.guide-page--detail > .guide-loading,
+.guide-page--detail > .guide-empty {
+  min-height: 360px;
+  padding: 32px;
+  display: grid;
+  place-items: center;
+}
+
 @media (max-width: 1080px) {
   .guide-ingredient-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .guide-more-button {
@@ -1660,7 +2335,7 @@
 
   .guide-ingredients {
     margin-top: 14px;
-    padding: 16px;
+    padding: 16px 0;
   }
 
   .guide-section-title {
@@ -1688,6 +2363,10 @@
   }
 
   .guide-fridge-pager {
+    padding: 0;
+  }
+
+  .guide-fridge-pager:has(.guide-fridge-page-button) {
     padding: 0 40px;
   }
 
@@ -1737,18 +2416,17 @@
 
   .guide-detail,
   .guide-tip-detail,
-  .guide-all,
   .guide-recipes {
     padding: 16px;
   }
 
   .guide-all {
     margin-top: 12px;
+    padding: 20px 0 0;
   }
 
   .guide-category-tabs {
-    margin: -16px -16px 16px;
-    padding: 14px 16px 0;
+    margin: 0 0 10px;
   }
 
   .guide-category-tab-list button {
@@ -1756,16 +2434,7 @@
   }
 
   .guide-all__header {
-    margin-bottom: 12px;
-    align-items: flex-start;
-  }
-
-  .guide-all__header h2 {
-    font-size: 19px;
-  }
-
-  .guide-all__header p {
-    font-size: 12px;
+    margin-bottom: 6px;
   }
 
   .guide-all-list {
@@ -1902,16 +2571,6 @@
     flex-wrap: wrap;
   }
 
-  .guide-recipe-carousel {
-    grid-template-columns: repeat(2, auto);
-    justify-content: center;
-  }
-
-  .guide-recipe-carousel .guide-recipe-list {
-    grid-column: 1 / -1;
-    order: -1;
-  }
-
   .guide-recipe-list {
     display: grid;
     grid-template-columns: 1fr;
@@ -1941,5 +2600,169 @@
 
   .guide-hero__copy p {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .guide-detail-primary,
+  .guide-detail-secondary {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-detail-primary {
+    grid-template-areas:
+      "heading"
+      "summary"
+      "guide";
+    align-items: start;
+    row-gap: 0;
+  }
+
+  .guide-detail-guide {
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .guide-detail-heading,
+  .guide-detail-summary {
+    width: min(100%, 520px);
+    margin: 0 auto;
+  }
+
+  .guide-detail-secondary {
+    gap: 28px;
+  }
+
+  .guide-detail-recipes .guide-recipe-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .guide-page--detail {
+    padding-top: 14px;
+  }
+
+  .guide-detail-nav {
+    margin-bottom: 18px;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .guide-detail-nav button {
+    width: auto;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .guide-detail-primary {
+    gap: 0;
+  }
+
+  .guide-detail-visual {
+    aspect-ratio: 4 / 3;
+    border-radius: 24px;
+  }
+
+  .guide-detail-visual__image {
+    width: min(52%, 190px);
+    height: min(52%, 190px);
+  }
+
+  .guide-detail-season {
+    min-height: 34px;
+    bottom: 16px;
+    left: 16px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+
+  .guide-detail-category {
+    margin-top: 0;
+  }
+
+  .guide-detail-heading h1 {
+    font-size: 32px;
+  }
+
+  .guide-detail-guide {
+    min-height: 0;
+    padding: 8px;
+    border-radius: 24px;
+  }
+
+  .guide-page--detail .guide-tip-grid {
+    grid-template-columns: repeat(4, minmax(108px, 1fr)) !important;
+    padding: 0 8px;
+    gap: 18px;
+    border-radius: 0;
+  }
+
+  .guide-page--detail .guide-tip-card {
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 0;
+  }
+
+  .guide-page--detail .guide-tip-card h3,
+  .guide-page--detail .guide-tip-card.is-active h3,
+  .guide-page--detail .guide-tip-card.is-missing h3 {
+    font-size: 14px;
+  }
+
+  .guide-page--detail .guide-tip-body,
+  .guide-page--detail .guide-tip-body.is-missing {
+    padding: 22px 18px 0;
+  }
+
+  .guide-page--detail .guide-tip-copy {
+    min-height: 320px;
+  }
+
+  .guide-page--detail .guide-tip-copy li {
+    font-size: 13px;
+  }
+
+  .guide-page--detail .guide-tip-source {
+    margin-right: 0;
+    margin-left: 0;
+    padding: 12px 0 0;
+  }
+
+  .guide-detail-secondary {
+    margin-top: 28px;
+  }
+
+  .guide-detail-nutrition {
+    padding: 22px 18px 18px;
+    border-radius: 22px;
+  }
+
+  .guide-detail-nutrition__header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+  }
+
+  .guide-detail-section-title,
+  .guide-detail-recipes h2 {
+    font-size: 20px;
+  }
+
+  .guide-detail-nutrition__header strong {
+    font-size: 21px;
+  }
+
+  .guide-detail-nutrition .guide-nutrition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 12px;
+  }
+
+  .guide-detail-recipes .guide-recipe-list {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-detail-recipes .guide-recipe-card {
+    padding: 0;
   }
 }

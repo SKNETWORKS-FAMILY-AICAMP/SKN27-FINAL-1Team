@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import appIcon from '../assets/app_icon.png'
 import logoText from '../assets/logo_text_extracted.png'
+import { shouldRevealAppBanner } from './headerBanner.js'
 import './Header.css'
 
 const APP_STORE_URL = 'https://play.google.com/store/apps/details?id=com.bobbeori.bobbeori_app'
@@ -14,7 +15,6 @@ const navItems = [
 const recipeItems = [
   { to: '/recipes', label: '레시피 목록' },
   { to: '/recipe-fridge', label: '냉장고 파먹기' },
-  { to: '/menu-recommend', label: '메뉴 추천' },
 ]
 
 function getAuthMode() {
@@ -34,8 +34,17 @@ function Header() {
   const navigate = useNavigate()
   const isRecipeActive = recipeItems.some((item) => item.to === pathname) || pathname.startsWith('/recipes/')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isRecipeMenuOpen, setIsRecipeMenuOpen] = useState(false)
+  const [isAppBannerDismissed, setIsAppBannerDismissed] = useState(false)
+  const [isHomeBannerReady, setIsHomeBannerReady] = useState(false)
   const [authMode, setAuthMode] = useState(getAuthMode)
   const isLoggedIn = authMode === 'user'
+  const isAppBannerVisible = !isAppBannerDismissed && (pathname !== '/' || isHomeBannerReady)
+  const headerClassName = [
+    'site-header',
+    pathname === '/' ? 'site-header--home-delayed' : '',
+    isAppBannerVisible ? '' : 'site-header--app-banner-hidden',
+  ].filter(Boolean).join(' ')
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false)
@@ -57,20 +66,54 @@ function Header() {
 
   useEffect(() => {
     closeMobileMenu()
+    setIsRecipeMenuOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    if (pathname !== '/') {
+      setIsHomeBannerReady(false)
+      return undefined
+    }
+
+    const syncBannerVisibility = () => {
+      setIsHomeBannerReady(shouldRevealAppBanner(pathname, window.scrollY, window.innerHeight))
+    }
+
+    syncBannerVisibility()
+    window.addEventListener('scroll', syncBannerVisibility, { passive: true })
+    window.addEventListener('resize', syncBannerVisibility)
+
+    return () => {
+      window.removeEventListener('scroll', syncBannerVisibility)
+      window.removeEventListener('resize', syncBannerVisibility)
+    }
   }, [pathname])
 
   return (
-    <header className="site-header" aria-label="밥벌이 주요 메뉴">
-      <a
-        className="site-header__app-banner"
-        href={APP_STORE_URL}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Google Play에서 밥벌이 앱 다운로드하기"
-      >
-        <img src={appIcon} alt="" />
-        <span>밥벌이 앱 다운로드하고 냉장고 관리를 더 편하게 시작해보세요!</span>
-      </a>
+    <header
+      className={headerClassName}
+      aria-label="밥벌이 주요 메뉴"
+    >
+      {isAppBannerVisible && (
+        <div className="site-header__app-banner">
+          <a
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Google Play에서 밥벌이 앱 다운로드하기"
+          >
+            <img src={appIcon} alt="" />
+            <span>앱 다운로드하고 냉장고 관리를 더 편하게 시작해보세요!</span>
+          </a>
+          <button
+            type="button"
+            aria-label="앱 다운로드 배너 닫기"
+            onClick={() => setIsAppBannerDismissed(true)}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="site-header__inner">
         <button
           className="site-header__mobile-icon"
@@ -102,7 +145,15 @@ function Header() {
             </NavLink>
           ))}
 
-          <div className="site-header__dropdown">
+          <div
+            className={isRecipeMenuOpen ? 'site-header__dropdown is-open' : 'site-header__dropdown'}
+            onMouseEnter={() => setIsRecipeMenuOpen(true)}
+            onMouseLeave={() => setIsRecipeMenuOpen(false)}
+            onFocus={() => setIsRecipeMenuOpen(true)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setIsRecipeMenuOpen(false)
+            }}
+          >
             <button
               className={
                 isRecipeActive
@@ -111,7 +162,11 @@ function Header() {
               }
               type="button"
               aria-haspopup="menu"
-              onClick={() => navigate('/recipes')}
+              aria-expanded={isRecipeMenuOpen}
+              onClick={() => {
+                setIsRecipeMenuOpen(false)
+                navigate('/recipes')
+              }}
             >
               레시피
             </button>
@@ -124,7 +179,10 @@ function Header() {
                     isActive ? 'site-header__dropdown-link active' : 'site-header__dropdown-link'
                   }
                   role="menuitem"
-                  onClick={closeMobileMenu}
+                  onClick={() => {
+                    setIsRecipeMenuOpen(false)
+                    closeMobileMenu()
+                  }}
                 >
                   {item.label}
                 </NavLink>

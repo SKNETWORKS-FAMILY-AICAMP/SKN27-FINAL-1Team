@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './Fridge.css'
 
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
-import imageDefaultIngredient from '../../assets/extracted/images/image_default_ingredient.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 import { API_URL } from '../../utils/api.js'
+import { removeStoredRecipe } from '../../utils/savedRecipes.js'
+import { getFridgeNameClass } from './fridgeName.js'
 
 const FILTER_TYPES = ['전체', '냉장', '냉동', '실온', '소비 임박', '기한 지남']
 
@@ -31,7 +33,15 @@ function getStorageTone(storageMethod = '') {
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
     <span className={`fridge-image-slot ${src ? 'is-filled' : ''} ${className}`}>
-      {src ? <img src={src} alt={alt} /> : null}
+      {src ? (
+        <img src={src} alt={alt} />
+      ) : (
+        <span className="fridge-image-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <path d="M10 34h28M14 31a10 10 0 0 1 20 0M21 18h6M24 18v3" />
+          </svg>
+        </span>
+      )}
     </span>
   )
 }
@@ -73,7 +83,7 @@ const ingredientImages = Object.entries(
 function getIngredientIcon(name = '') {
   const key = normalizeIngredientImageKey(name)
   const image = ingredientImages.find((item) => item.key === key)
-  return image?.src || imageDefaultIngredient
+  return image?.src || ''
 }
 
 // 날짜 문자열을 로컬 Date 객체로 변환합니다.
@@ -145,6 +155,8 @@ function getDdayLabel(item) {
 // 냉장고 재료 목록과 등록/수정/소비 흐름을 관리하는 페이지 컴포넌트입니다.
 function Fridge() {
   const { dialogNode, showAlert } = useAppDialog()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [ingredients, setIngredients] = useState([])
   const [summary, setSummary] = useState(buildSummary([]))
   const [activeFilter, setActiveFilter] = useState('전체')
@@ -160,6 +172,12 @@ function Fridge() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [recentStockTick, setRecentStockTick] = useState(0)
+  const [completionRecipe, setCompletionRecipe] = useState(() => location.state?.completionRecipe || null)
+  const [completionIngredientRefs, setCompletionIngredientRefs] = useState(null)
+  const [completionQuantities, setCompletionQuantities] = useState({})
+  const [completionError, setCompletionError] = useState('')
+  const [isCompletionLoading, setIsCompletionLoading] = useState(Boolean(location.state?.completionRecipe))
+  const [isCompletionSubmitting, setIsCompletionSubmitting] = useState(false)
   const recentStockedItemIdSet = useMemo(() => {
     const receiptItems = ingredients
       .filter((item) => item.receipt_item_id && item.created_at)
@@ -174,6 +192,19 @@ function Fridge() {
 
     return new Set(receiptItems.filter((item) => latestCreatedAt - item.createdAt <= 60 * 1000).map((item) => item.id))
   }, [ingredients, recentStockTick])
+
+  const completionItems = useMemo(() => {
+    if (!completionIngredientRefs) return []
+
+    const ingredientIds = new Set(completionIngredientRefs.ingredientIds)
+    const names = completionIngredientRefs.names.map(normalizeIngredientImageName)
+    return ingredients.filter((item) => {
+      if (ingredientIds.has(Number(item.ingredient_id))) return true
+
+      const itemName = normalizeIngredientImageName(item.name)
+      return names.some((name) => name && (itemName.includes(name) || name.includes(itemName)))
+    })
+  }, [completionIngredientRefs, ingredients])
 
   // OCR 입고 강조가 1분 뒤 자동으로 사라지도록 화면을 한 번 갱신합니다.
   useEffect(() => {
@@ -193,6 +224,56 @@ function Fridge() {
 
   // 현재 브라우저에 저장된 로그인 토큰을 반환합니다.
   const getToken = () => window.localStorage.getItem('bobbeori-token')
+
+  useEffect(() => {
+    if (!completionRecipe) return undefined
+
+    const controller = new AbortController()
+    const loadCompletionIngredients = async () => {
+      const token = getToken()
+      if (!token) {
+        setCompletionError('로그인 후 재료 소모를 확인할 수 있어요.')
+        setIsCompletionLoading(false)
+        return
+      }
+
+      try {
+        const recipeId = completionRecipe.recipeId || completionRecipe.recipe_id || completionRecipe.id
+        const response = await fetch(`${API_URL}/api/v1/recipes/${recipeId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('레시피 재료를 불러오지 못했어요.')
+
+        const recipe = await response.json()
+        const ownedIngredients = recipe.owned_ingredients || []
+        const maybeOwnedIngredients = recipe.maybe_owned_ingredients || []
+        setCompletionIngredientRefs({
+          ingredientIds: ownedIngredients
+            .map((ingredient) => Number(ingredient.ingredient_id))
+            .filter(Number.isInteger),
+          names: [
+            ...ownedIngredients.map((ingredient) => ingredient.name),
+            ...maybeOwnedIngredients.map((ingredient) => ingredient.fridge_ingredient_name),
+          ].filter(Boolean),
+        })
+      } catch (error) {
+        if (error.name !== 'AbortError') setCompletionError(error.message)
+      } finally {
+        if (!controller.signal.aborted) setIsCompletionLoading(false)
+      }
+    }
+
+    loadCompletionIngredients()
+    return () => controller.abort()
+  }, [completionRecipe])
+
+  useEffect(() => {
+    if (!completionIngredientRefs) return
+    setCompletionQuantities(
+      Object.fromEntries(completionItems.map((item) => [item.id, String(item.quantity)])),
+    )
+  }, [completionIngredientRefs, completionItems])
 
   // 인증 실패 시 토큰을 제거하고 demo 데이터 화면으로 복귀합니다.
   const handleAuthFailure = async () => {
@@ -585,6 +666,102 @@ function Fridge() {
     }
   }
 
+  const closeCompletionFlow = () => {
+    setCompletionRecipe(null)
+    navigate('/mypage?tab=saved', { replace: true })
+  }
+
+  const completeRecipeConsumption = async () => {
+    const token = getToken()
+    if (!token || !completionRecipe) return
+
+    const updates = []
+    for (const item of completionItems) {
+      const value = completionQuantities[item.id]
+      const remainingQuantity = Number(value)
+      const currentQuantity = Number(item.quantity)
+      if (String(value ?? '').trim() === '' || !Number.isFinite(remainingQuantity) || remainingQuantity < 0) {
+        await showAlert(`${item.name}의 남은 수량을 확인해주세요.`, { title: '수량 확인' })
+        return
+      }
+      if (remainingQuantity > currentQuantity) {
+        await showAlert(`${item.name}의 남은 수량은 현재 수량보다 많을 수 없어요.`, { title: '수량 확인' })
+        return
+      }
+      if (remainingQuantity !== currentQuantity) updates.push({ item, remainingQuantity })
+    }
+
+    setIsCompletionSubmitting(true)
+    try {
+      const responses = await Promise.all(updates.map(({ item, remainingQuantity }) => {
+        if (remainingQuantity === 0) {
+          return fetch(`${API_URL}/api/v1/inventory/${item.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        }
+
+        return fetch(`${API_URL}/api/v1/inventory/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            name: item.name,
+            category: item.category,
+            storage_method: item.storage_method,
+            quantity: remainingQuantity,
+            unit: item.unit,
+            purchase_date: item.purchase_date,
+            expiration_date: item.expiration_date,
+          }),
+        })
+      }))
+
+      if (responses.some((response) => response.status === 401 || response.status === 403)) {
+        await handleAuthFailure()
+        return
+      }
+      if (responses.some((response) => !response.ok)) {
+        throw new Error('재료 수량을 수정하지 못했어요.')
+      }
+
+      const recommendationId = Number(
+        completionRecipe.recommendationId || completionRecipe.recommendation_id,
+      )
+      if (Number.isInteger(recommendationId)) {
+        const deleteResponse = await fetch(`${API_URL}/api/v1/recommendations/${recommendationId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!deleteResponse.ok && deleteResponse.status !== 404) {
+          throw new Error('재료 수량은 반영했지만 저장 레시피를 삭제하지 못했어요.')
+        }
+      }
+
+      removeStoredRecipe(completionRecipe.storageId)
+      const legacyRecipe = window.localStorage.getItem('bobbeori-fridge-recipe')
+      if (legacyRecipe) {
+        try {
+          const parsed = JSON.parse(legacyRecipe)
+          if (String(parsed.id) === String(completionRecipe.recipeId || completionRecipe.id)) {
+            window.localStorage.removeItem('bobbeori-fridge-recipe')
+          }
+        } catch {
+          window.localStorage.removeItem('bobbeori-fridge-recipe')
+        }
+      }
+      window.localStorage.setItem('bobbeori-last-cooked-recipe', completionRecipe.title)
+
+      setCompletionRecipe(null)
+      navigate('/fridge', { replace: true })
+      await fetchFridgeData()
+      await showAlert('재료 수량을 반영하고 저장된 레시피에서 삭제했어요.', { title: '요리 완료' })
+    } catch (error) {
+      await showAlert(error.message || '요리 완료 처리 중 오류가 발생했어요.', { title: '처리 실패' })
+    } finally {
+      setIsCompletionSubmitting(false)
+    }
+  }
+
   // 소비 모달은 공통 ConfirmModal이 아니라서 Enter 확인을 여기서 처리합니다.
   useEffect(() => {
     if (!consumeTarget) return
@@ -607,20 +784,23 @@ function Fridge() {
           <h1 id="fridge-title">냉장고 재료 관리</h1>
           <p>우리 집 재료를 한눈에 관리하고, 소비기한이 가까운 재료를 먼저 확인해요.</p>
         </div>
-        <label className="fridge-search" aria-label="재료명 검색">
-          <span aria-hidden="true" />
-          <input
-            type="search"
-            placeholder="재료명이나 카테고리로 검색해보세요"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-          />
-        </label>
+        {ingredients.length > 0 ? (
+          <label className="fridge-search" aria-label="재료명 검색">
+            <span aria-hidden="true" />
+            <input
+              type="search"
+              placeholder="재료명이나 카테고리로 검색해보세요"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </label>
+        ) : null}
       </div>
 
       <div className="fridge-layout">
         <main className="fridge-main">
-          <div className="fridge-toolbar">
+          {ingredients.length > 0 ? (
+            <div className="fridge-toolbar">
             <div className="fridge-filters" aria-label="재료 상태 필터">
               {visibleFilters.map((filter) => (
                 <button
@@ -634,24 +814,22 @@ function Fridge() {
                       <span className="fridge-filter__warning" aria-hidden="true">!</span>
                       {filter} {filterCounts[filter]}
                     </>
-                  ) : `${filter} (${filterCounts[filter]})`}
+                  ) : filter}
                 </button>
               ))}
             </div>
 
             <div className="fridge-toolbar-controls">
-              {ingredients.length > 0 ? (
-                <button
-                  type="button"
-                  className={`fridge-edit-toggle ${isEditMode ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setIsEditMode(!isEditMode)
-                    setSelectedIds(new Set())
-                  }}
-                >
-                  {isEditMode ? '선택 취소' : '일괄 선택'}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className={`fridge-edit-toggle ${isEditMode ? 'is-active' : ''}`}
+                onClick={() => {
+                  setIsEditMode(!isEditMode)
+                  setSelectedIds(new Set())
+                }}
+              >
+                {isEditMode ? '선택 취소' : '일괄 선택'}
+              </button>
               <div
                 className="fridge-sort"
                 onBlur={(event) => {
@@ -693,7 +871,8 @@ function Fridge() {
                 ) : null}
               </div>
             </div>
-          </div>
+            </div>
+          ) : null}
 
           <div className="fridge-card-grid">
             {ingredients.length === 0 ? (
@@ -742,7 +921,9 @@ function Fridge() {
                     </div>
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
-                        <h2>{item.name}</h2>
+                      <h2 className={getFridgeNameClass(item.name)} title={item.name}>
+                        {item.name}
+                      </h2>
                         <span className={['fridge-storage-badge', getStorageTone(item.storage_method)].filter(Boolean).join(' ')}>{item.storage_method}</span>
                       </div>
                       <dl>
@@ -804,6 +985,67 @@ function Fridge() {
         onConfirm={confirmModal.onConfirm}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
+
+      {completionRecipe && (
+        <div className="fridge-modal-overlay">
+          <div className="fridge-modal-content fridge-consumption-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="fridge-modal-header">
+              <h2>재료 소모 확인</h2>
+              <button type="button" onClick={closeCompletionFlow} aria-label="닫기">×</button>
+            </div>
+            <div className="fridge-modal-body">
+              <p className="fridge-consumption-intro">
+                <strong>{completionRecipe.title}</strong> 요리 후 냉장고에 남은 수량을 입력해주세요.
+              </p>
+              {isCompletionLoading ? (
+                <p className="fridge-consumption-state">보유 재료를 확인하고 있어요.</p>
+              ) : completionError ? (
+                <p className="fridge-consumption-state is-error" role="alert">{completionError}</p>
+              ) : completionItems.length === 0 ? (
+                <p className="fridge-consumption-state">수정할 보유 재료가 없어요. 완료하면 저장된 레시피만 정리됩니다.</p>
+              ) : (
+                <div className="fridge-consumption-list">
+                  {completionItems.map((item) => (
+                    <div className="fridge-consumption-item" key={item.id}>
+                      <div>
+                        <strong>{item.name}</strong>
+                        <span>현재 {Number(item.quantity)}{item.unit}</span>
+                      </div>
+                      <label>
+                        <span>남은 수량</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={item.quantity}
+                          step="0.5"
+                          value={completionQuantities[item.id] ?? ''}
+                          aria-label={`${item.name} 남은 수량`}
+                          onChange={(event) => setCompletionQuantities((quantities) => ({
+                            ...quantities,
+                            [item.id]: event.target.value,
+                          }))}
+                        />
+                        <b>{item.unit}</b>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="fridge-modal-footer">
+              <button type="button" className="btn-cancel" onClick={closeCompletionFlow}>취소</button>
+              <button
+                type="button"
+                className="btn-submit"
+                disabled={isCompletionLoading || Boolean(completionError) || isCompletionSubmitting}
+                onClick={completeRecipeConsumption}
+              >
+                {isCompletionSubmitting ? '반영 중...' : '수정 완료'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {consumeTarget && (
         <div className="fridge-modal-overlay">

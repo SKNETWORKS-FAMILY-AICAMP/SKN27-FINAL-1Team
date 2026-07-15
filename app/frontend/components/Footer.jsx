@@ -3,10 +3,8 @@ import { Link } from 'react-router-dom'
 import './Footer.css'
 
 const customerServiceLinks = [
-  { to: '/guide', label: '사용 가이드' },
   { to: '/faq', label: '자주 묻는 질문(FAQ)' },
   { to: '/support', label: '고객 지원/고객 센터' },
-  { to: '/refund-policy', label: '반품 및 환불 정책' },
 ]
 
 const utilityLinks = [
@@ -32,17 +30,12 @@ function Footer() {
             밥벌이
           </Link>
           <p>
-            냉장고 속 남은 재료와 유통기한을 기준으로 오늘 먹기 좋은 메뉴를 추천하고,
+            냉장고 속 남은 재료와 소비기한을 기준으로 오늘 먹기 좋은 메뉴를 추천하고,
             부족한 재료는 장보기까지 이어주는 식재료 절약 서비스입니다.
           </p>
           <a className="site-footer__mail" href="mailto:bobbeori@bobbeori.com">
             bobbeori@bobbeori.com
           </a>
-          <div className="site-footer__badges" aria-label="서비스 핵심 가치">
-            <span>냉장고 기반 추천</span>
-            <span>식재료 낭비 절감</span>
-            <span>장보기 비용 비교</span>
-          </div>
         </section>
 
         <div className="site-footer__menus">
@@ -68,7 +61,6 @@ function Footer() {
 
       <div className="site-footer__bottom">
         <span>© 2026 Babbeori. All rights reserved.</span>
-        <span>문의: bobbeori@bobbeori.com</span>
       </div>
     </footer>
   )

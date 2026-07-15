@@ -478,12 +478,14 @@
 }
 
 .login-card__terms {
-  max-width: 360px;
-  margin: 34px 0 0;
+  max-width: none;
+  margin: 28px auto 0;
   color: #7c6a5f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.75;
+  line-height: 1.6;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .login-card__terms a {
@@ -582,11 +584,6 @@
     font-size: 16px;
   }
 
-  
-
-  .login-card__terms {
-    font-size: 12px;
-  }
 }
 
 @media (max-width: 900px) {
@@ -755,11 +752,10 @@
     font-size: 14px;
   }
 
-  
-
   .login-card__terms {
-    font-size: 12px;
+    white-space: normal;
   }
+
 }
 
 @media (max-width: 380px), (max-width: 900px) and (max-height: 740px) {
@@ -864,7 +860,7 @@
 
   .login-card__terms {
     margin-top: 12px;
-    font-size: 11px;
     line-height: 1.45;
+    white-space: normal;
   }
 }

@@ -7,8 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecipeIngredient
-from app.backend.services.recommendation_service.fridge_ingredient_match import classify_fridge_match
-from app.backend.services.recommendation_service.fridge_loader import fetch_fridge_snapshots
+from app.backend.services.recommendation_service.fridge import classify_fridge_match, fetch_fridge_snapshots
 
 
 class RecipeDetailService:

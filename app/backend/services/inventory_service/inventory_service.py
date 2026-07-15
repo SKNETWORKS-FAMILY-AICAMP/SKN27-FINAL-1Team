@@ -261,6 +261,7 @@ class InventoryService:
         return {
             "id": item.id,
             "fridge_id": item.id,
+            "ingredient_id": getattr(ingredient, "id", 0),
             "receipt_item_id": getattr(item, "receipt_item_id", None),
             "name": item.display_name or ingredient.name,
             "category": ingredient.category or DEFAULT_CATEGORY,

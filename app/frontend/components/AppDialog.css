@@ -39,6 +39,7 @@
 }
 
 .app-dialog-card__header button {
+  margin-left: auto;
   width: 34px;
   height: 34px;
   padding: 0 0 3px;
@@ -62,6 +63,24 @@
   font-size: 22px;
   font-weight: 900;
   letter-spacing: 0;
+}
+
+.app-dialog-card.is-confirm {
+  position: relative;
+}
+
+.app-dialog-card.is-confirm .app-dialog-card__header {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.app-dialog-card.is-confirm h2 {
+  min-height: 34px;
+  margin-top: 0;
+  padding-right: 46px;
+  display: flex;
+  align-items: center;
 }
 
 .app-dialog-card p {

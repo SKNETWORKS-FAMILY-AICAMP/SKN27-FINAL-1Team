@@ -8,6 +8,7 @@ import iconRefrigerator from '../../assets/extracted/icons/icon_refrigerator.png
 import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageReceipt from '../../assets/extracted/images/image_receipt registration.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import { adjustCropPixelsForOffset, resizeCropBoxFromPointer } from './cropGeometry.js'
 import { API_URL } from '../../utils/api.js'
 import {
   receiptHistory,
@@ -29,36 +30,35 @@ const storageOptions = ['냉동', '냉장', '실온']
 const maxUploadSizeMb = 10
 const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 // Main stepper indices (must match the order of receiptSteps).
-const STEP = { UPLOAD: 0, CROP: 1, ANALYZE: 2, CONFIRM: 3, STOCK: 4 }
+const STEP = { UPLOAD: 0, ANALYZE: 1, CONFIRM: 2, STOCK: 3 }
 
-const defaultCropBox = { w: 0.78, h: 0.86 }
+let receiptHistoryRequest = { token: '', promise: null }
+
+function fetchReceiptHistory(token) {
+  if (receiptHistoryRequest.token === token) return receiptHistoryRequest.promise
+
+  const promise = fetch(`${API_URL}/api/v1/receipts/history`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(async (response) => {
+    if (!response.ok) throw new Error('영수증 내역을 불러오지 못했어요.')
+    const data = await response.json().catch(() => ({}))
+    return Array.isArray(data.receipts) ? data.receipts : []
+  })
+  receiptHistoryRequest = { token, promise }
+
+  const clearRequest = () => {
+    if (receiptHistoryRequest.promise === promise) receiptHistoryRequest = { token: '', promise: null }
+  }
+  promise.then(clearRequest, clearRequest)
+
+  return promise
+}
+
+const defaultCropBox = { w: 0.78, h: 0.86, x: 0, y: 0 }
 const minCropBoxScale = 0.32
-const maxCropBoxScale = 1
 const defaultCropZoom = 1
 const minCropZoom = 1
 const maxCropZoom = 3
-const aiAnalysisSteps = [
-  '이미지 업로드 중',
-  '영수증 내용 분석 중',
-  '표준 재료명 매칭 중',
-  '확인 화면 준비 중',
-]
-
-const analysisStageStepMap = {
-  image_uploaded: 0,
-  ocr_extracted: 1,
-  ocr_retry_requested: 1,
-  result_normalized: 2,
-  receipt_document_validated: 2,
-  quality_validated: 2,
-  receipt_persisted: 3,
-  response_ready: 3,
-  reupload_required: 3,
-}
-
-function getAnalysisStepForStage(stage) {
-  return analysisStageStepMap[stage] ?? 0
-}
 
 function parseSseBlock(block) {
   const dataLines = block
@@ -353,18 +353,12 @@ function formatManwon(amount) {
   return `${(amount / 10000).toFixed(1)}만`
 }
 
-function PurchaseFlowChart({ isLoggedIn }) {
-  const chartId = isLoggedIn ? 'receipt-chart-title' : 'receipt-guest-chart-title'
+function PurchaseFlowChart() {
+  const chartId = 'receipt-chart-title'
   const [purchaseFlowData, setPurchaseFlowData] = useState(fallbackPurchaseFlowData)
   const [purchaseFlowStatus, setPurchaseFlowStatus] = useState('idle')
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      setPurchaseFlowData(fallbackPurchaseFlowData)
-      setPurchaseFlowStatus('idle')
-      return undefined
-    }
-
     const token = window.localStorage.getItem('bobbeori-token')
 
     if (!token) {
@@ -376,17 +370,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
     let active = true
     setPurchaseFlowStatus('loading')
 
-    fetch(`${API_URL}/api/v1/receipts/history?limit=100`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('식재료 구매 흐름을 불러오지 못했어요.')
-        }
-
-        const data = await response.json().catch(() => ({}))
-        return Array.isArray(data.receipts) ? data.receipts : []
-      })
+    fetchReceiptHistory(token)
       .then((receipts) => {
         if (!active) {
           return
@@ -407,25 +391,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
     return () => {
       active = false
     }
-  }, [isLoggedIn])
-
-  if (!isLoggedIn) {
-    return (
-      <section className="receipt-panel receipt-chart" aria-labelledby={chartId}>
-        <div>
-          <h2 id={chartId}>식재료 구매 흐름</h2>
-          <p> 최근 식재료 구매 패턴을 한눈에 확인해보세요.</p>
-        </div>
-        <div className="receipt-chart__bars" aria-hidden="true">
-          <span style={{ height: '42%' }} />
-          <span style={{ height: '66%' }} />
-          <span style={{ height: '54%' }} />
-          <span style={{ height: '82%' }} />
-          <span style={{ height: '58%' }} />
-        </div>
-      </section>
-    )
-  }
+  }, [])
 
   const weeklyPurchaseData = purchaseFlowData.weeklyData
   const frequentIngredientData = purchaseFlowData.frequentIngredients
@@ -455,7 +421,6 @@ function PurchaseFlowChart({ isLoggedIn }) {
     >
       <div className="receipt-chart__head">
         <h2 id={chartId}>식재료 구매 흐름</h2>
-        <p>이번 주를 기준으로 최근 {weekCount}주간 주차별 구매 금액과 품목 수를 보여줘요.</p>
       </div>
 
       <div className="receipt-dashboard">
@@ -636,10 +601,6 @@ function fromDateTimeLocalValue(value) {
   return value ? String(value).replace('T', ' ') : ''
 }
 
-function formatGuideSuggestionCategory(item) {
-  return [item?.major_category, item?.middle_category, item?.minor_category].filter(Boolean).join(' > ')
-}
-
 function toNumber(value, fallback = null) {
   const numericValue = Number(String(value ?? '').replace(/[^\d.-]/g, ''))
 
@@ -689,7 +650,6 @@ function ReceiptOcr() {
   const [editingRows, setEditingRows] = useState(() => getInitialEditingRows(createInitialReceiptRows()))
   const [receiptMeta, setReceiptMeta] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [analysisStep, setAnalysisStep] = useState(0)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
   const [cropFile, setCropFile] = useState(null)
   const [cropImageUrl, setCropImageUrl] = useState(null)
@@ -713,33 +673,14 @@ function ReceiptOcr() {
 
   const mappedCount = detectedRows.filter((row) => !row.review && !editingRows[row.id]).length
   const reviewCount = detectedRows.length - mappedCount
+  const areAllRowsConfirmed = detectedRows.length > 0 && reviewCount === 0
   const totalAmount = detectedRows.reduce((sum, row) => {
     const numericPrice = Number(row.price.replace(/[^\d]/g, ''))
     return sum + (Number.isFinite(numericPrice) ? numericPrice : 0)
   }, 0)
-  const progressPercent = hasUploaded ? Math.round(((activeStep + 1) / steps.length) * 100) : 0
-  const currentStepLabel = steps[activeStep]
-  const isReadyToStock = hasUploaded && activeStep >= steps.length - 1
-  const isAllConfirmed = detectedRows.length > 0 && reviewCount === 0
+  const visibleStep = hasUploaded && detectedRows.length > 0 && reviewCount === 0 ? STEP.STOCK : activeStep
   const isStockDisabled = reviewCount > 0 || detectedRows.length === 0 || isStocking
-  const isShowingAnalysisProgress = isProcessing && activeStep === STEP.ANALYZE
-  const analysisProgressPercent = Math.round(((analysisStep + 1) / aiAnalysisSteps.length) * 100)
   const isCropPending = Boolean(cropFile && cropImageUrl)
-
-  // Indices align with STEP (UPLOAD, CROP, ANALYZE, CONFIRM, STOCK).
-  const progressDescriptions = [
-    '영수증을 올리거나 촬영하면 분석을 시작해요.',
-    '영수증 영역을 맞춘 뒤 분석을 시작하세요.',
-    isProcessing
-      ? '영수증 이미지를 분석하고 있어요.'
-      : '영수증 이미지 분석을 완료했어요.',
-    detectedRows.length === 0
-      ? '품목 리스트를 찾지 못했어요. 필요한 품목은 직접 추가해서 등록할 수 있어요.'
-      : reviewCount
-      ? `${detectedRows.length}개 품목을 찾았어요. 확인한 품목은 확정을 눌러 잠가주세요.`
-      : `${detectedRows.length}개 품목이 모두 확정됐어요.`,
-    `총 ${detectedRows.length}개 재료를 냉장고에 입고할 준비가 끝났어요.`,
-  ]
 
   const clearFlowTimers = () => {
     flowTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
@@ -783,7 +724,7 @@ function ReceiptOcr() {
     }
 
     if (!acceptedImageTypes.includes(file.type)) {
-      await showAlert('JPG, PNG, WEBP 형식의 영수증 이미지만 업로드할 수 있어요.', {
+      await showAlert('PNG, JPG, WEBP 파일만 업로드할 수 있어요.', {
         title: '지원하지 않는 파일이에요',
       })
       return false
@@ -797,17 +738,6 @@ function ReceiptOcr() {
     }
 
     return true
-  }
-
-  const moveToStep = (nextStep) => {
-    if (!hasUploaded && nextStep > 0) {
-      return
-    }
-
-    clearFlowTimers()
-    setIsProcessing(false)
-    setAnalysisStep(0)
-    setActiveStep(Math.max(0, Math.min(nextStep, steps.length - 1)))
   }
 
   const requestLogin = async () => {
@@ -838,9 +768,7 @@ function ReceiptOcr() {
       return
     }
 
-    const uploadRunId = uploadRunIdRef.current + 1
-    uploadRunIdRef.current = uploadRunId
-
+    uploadRunIdRef.current += 1
     clearFlowTimers()
     setUploadedPreview(null)
     setCropPreview(file)
@@ -851,8 +779,7 @@ function ReceiptOcr() {
     setEditingRows({})
     setHasUploaded(false)
     setIsProcessing(false)
-    setAnalysisStep(0)
-    setActiveStep(STEP.CROP)
+    setActiveStep(STEP.UPLOAD)
     setIsAddRowOpen(false)
     setRowSelectionMode(false)
     setSelectedRowIds([])
@@ -885,7 +812,6 @@ function ReceiptOcr() {
     setEditingRows({})
     setHasUploaded(true)
     setIsProcessing(true)
-    setAnalysisStep(0)
     setActiveStep(STEP.ANALYZE)
 
     const formData = new FormData()
@@ -923,11 +849,6 @@ function ReceiptOcr() {
 
       await readReceiptUploadStream(response, (event) => {
         if (uploadRunIdRef.current !== uploadRunId) {
-          return
-        }
-
-        if (event.type === 'stage') {
-          setAnalysisStep(getAnalysisStepForStage(event.stage))
           return
         }
 
@@ -977,7 +898,6 @@ function ReceiptOcr() {
         totalAmount: data.total_amount,
         confidenceNote: data.confidence_note,
       })
-      setAnalysisStep(aiAnalysisSteps.length - 1)
       setActiveStep(STEP.CONFIRM)
     } catch (error) {
       if (uploadRunIdRef.current !== uploadRunId) {
@@ -1021,33 +941,6 @@ function ReceiptOcr() {
     uploadRunIdRef.current += 1
     clearCropSelection()
     setActiveStep(STEP.UPLOAD)
-  }
-
-  const proceedNextStep = async () => {
-    clearFlowTimers()
-    setIsProcessing(false)
-    setAnalysisStep(0)
-
-    if (!hasUploaded) {
-      await showAlert('먼저 영수증을 업로드하거나 촬영해주세요.', {
-        title: '영수증이 필요해요',
-      })
-      return
-    }
-
-    if (isReadyToStock) {
-      stockIngredients()
-      return
-    }
-
-    if (activeStep === STEP.CONFIRM && reviewCount > 0) {
-      await showAlert('아직 확정되지 않은 항목이 있어요. 수량과 금액을 확인한 뒤 확정 체크를 눌러주세요.', {
-        title: '확인이 필요해요',
-      })
-      return
-    }
-
-    moveToStep(activeStep + 1)
   }
 
   const addRow = () => {
@@ -1099,7 +992,15 @@ function ReceiptOcr() {
   }
 
   const selectAllRows = () => {
+    setRowSelectionMode(true)
     setSelectedRowIds(detectedRows.map((row) => row.id))
+  }
+
+  const toggleAllRowsConfirmation = () => {
+    const shouldConfirm = !areAllRowsConfirmed
+    setDetectedRows((prev) => prev.map((row) => ({ ...row, review: !shouldConfirm })))
+    setEditingRows(Object.fromEntries(detectedRows.map((row) => [row.id, !shouldConfirm])))
+    setActiveStep(STEP.CONFIRM)
   }
 
   const deleteSelectedRows = async () => {
@@ -1358,19 +1259,6 @@ function ReceiptOcr() {
     setActiveStep(STEP.CONFIRM)
   }
 
-  const toggleAllRowsConfirmation = () => {
-    const nextReviewState = isAllConfirmed
-
-    setDetectedRows((prev) => prev.map((row) => ({ ...row, review: nextReviewState })))
-    setEditingRows(
-      detectedRows.reduce((nextEditingRows, row) => {
-        nextEditingRows[row.id] = nextReviewState
-        return nextEditingRows
-      }, {}),
-    )
-    setActiveStep(STEP.CONFIRM)
-  }
-
   const resetAnalysis = () => {
     uploadRunIdRef.current += 1
     clearFlowTimers()
@@ -1383,7 +1271,6 @@ function ReceiptOcr() {
     setReceiptMeta(null)
     setHasUploaded(false)
     setIsProcessing(false)
-    setAnalysisStep(0)
     setActiveStep(STEP.UPLOAD)
     setIsAddRowOpen(false)
     setRowSelectionMode(false)
@@ -1538,30 +1425,26 @@ function ReceiptOcr() {
         <ImageSlot className="receipt-hero__image" src={imageReceipt} />
       </div>
 
-      <div className="receipt-stepper" aria-label="OCR 진행 단계">
+      <ol className="receipt-stepper" aria-label="영수증 등록 진행 단계">
         {steps.map((step, index) => (
-          <React.Fragment key={step}>
-            <button
-              className={[
-                index === activeStep ? 'is-active' : '',
-                (hasUploaded || isCropPending) && index < activeStep ? 'is-done' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              type="button"
-              tabIndex={-1}
-              aria-current={index === activeStep ? 'step' : undefined}
-            >
-              <span>{step}</span>
-            </button>
-            {index < steps.length - 1 ? <i aria-hidden="true" /> : null}
-          </React.Fragment>
+          <li
+            className={[
+              index === visibleStep ? 'is-active' : '',
+              hasUploaded && index < visibleStep ? 'is-done' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            key={step}
+            aria-current={index === visibleStep ? 'step' : undefined}
+          >
+            <b aria-hidden="true">{hasUploaded && index < visibleStep ? '✓' : index + 1}</b>
+            <span>{step}</span>
+          </li>
         ))}
-      </div>
+      </ol>
 
       {!isLoggedIn ? (
-        <div className="receipt-branch receipt-guest-grid">
-          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
+        <div className="receipt-branch receipt-guest">
           <section className="receipt-panel receipt-login-notice" aria-labelledby="receipt-login-title">
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
@@ -1570,10 +1453,9 @@ function ReceiptOcr() {
             로그인 후 바로 시작할 수 있어요.
             </p>
             <button className="receipt-primary-button" type="button" onClick={() => navigate('/login')}>
-              로그인하러 가기
+              로그인하고 영수증 등록하기
             </button>
           </section>
-          <PurchaseFlowChart isLoggedIn={false} />
         </div>
       ) : isCropPending ? (
         <div className="receipt-branch receipt-crop-focus">
@@ -1597,53 +1479,10 @@ function ReceiptOcr() {
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
           </aside>
-          <PurchaseFlowChart isLoggedIn />
+          <PurchaseFlowChart />
         </div>
       ) : (
         <>
-          <section className="receipt-progress-panel" aria-labelledby="receipt-progress-title">
-            <div>
-              <span>{progressPercent}% 진행</span>
-              <h2 id="receipt-progress-title">{currentStepLabel}</h2>
-              <p>{progressDescriptions[activeStep]}</p>
-            </div>
-            {!isShowingAnalysisProgress ? (
-              <div className="receipt-progress-panel__bar" aria-label={`진행률 ${progressPercent}%`}>
-                <span style={{ width: `${progressPercent}%` }} />
-              </div>
-            ) : null}
-            {isShowingAnalysisProgress ? (
-              <div className="receipt-analysis-progress" aria-label="AI 분석 세부 진행 단계">
-                <div className="receipt-analysis-progress__bar">
-                  <span style={{ width: `${analysisProgressPercent}%` }} />
-                </div>
-                <ol>
-                  {aiAnalysisSteps.map((step, index) => (
-                    <li
-                      className={[
-                        index < analysisStep ? 'is-done' : '',
-                        index === analysisStep ? 'is-active' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      key={step}
-                    >
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
-            <button
-              className="receipt-primary-button"
-              type="button"
-              disabled={isProcessing}
-              onClick={proceedNextStep}
-            >
-              {isProcessing ? '분석 진행 중...' : isReadyToStock ? '냉장고 입고 완료하기' : '다음 단계 진행'}
-            </button>
-          </section>
-
           <div className="receipt-branch receipt-after-grid">
             <section className="receipt-panel receipt-preview-panel" aria-labelledby="preview-title">
               <div className="receipt-preview__title">
@@ -1663,51 +1502,48 @@ function ReceiptOcr() {
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
-              <div className="receipt-panel__title">
-                <h2 id="mapping-title">표준 재료명 매칭</h2>
-                <div className="receipt-panel__actions">
-                  <button type="button" disabled={detectedRows.length === 0} onClick={toggleAllRowsConfirmation}>
-                    {isAllConfirmed ? '전체 확인 취소' : '전체 확인'}
-                  </button>
-                  <span>전체 금액 {totalAmount.toLocaleString()}원</span>
-                </div>
+              <div className="receipt-mapping__title">
+                <h2 id="mapping-title">
+                  분석된 식재료 <span>({detectedRows.length})</span>
+                </h2>
               </div>
-              <p className="receipt-mapping__helper">
-              맞게 인식됐는지 확인해주세요! 수정 후 확인 완료를 누르면 해당 항목이 저장돼요.
-              </p>
-              {receiptMeta ? (
-                <div className="receipt-ocr-meta" aria-label="OCR 분석 참고 정보">
-                  <label className="receipt-ocr-meta__field">
-                    <small>매장명</small>
-                    <input
-                      className="receipt-inline-input"
-                      type="text"
-                      value={receiptMeta.storeName || ''}
-                      placeholder="상호명 미확인"
-                      onChange={(event) => updateReceiptMetaField('storeName', event.target.value)}
-                    />
-                  </label>
-                  <label className="receipt-ocr-meta__field">
-                    <small>날짜</small>
-                    <input
-                      className="receipt-inline-input receipt-inline-input--datetime"
-                      type="datetime-local"
-                      value={toDateTimeLocalValue(receiptMeta.purchaseDatetime)}
-                      onChange={(event) =>
-                        updateReceiptMetaField('purchaseDatetime', fromDateTimeLocalValue(event.target.value))
-                      }
-                    />
-                  </label>
-                </div>
-              ) : null}
+              <div className="receipt-mapping__meta-row">
+                {receiptMeta ? (
+                  <div className="receipt-ocr-meta" aria-label="OCR 분석 참고 정보">
+                    <label className="receipt-ocr-meta__field">
+                      <small>매장명:</small>
+                      <input
+                        className="receipt-inline-input"
+                        type="text"
+                        value={receiptMeta.storeName || ''}
+                        placeholder="상호명 미확인"
+                        onChange={(event) => updateReceiptMetaField('storeName', event.target.value)}
+                      />
+                    </label>
+                    <label className="receipt-ocr-meta__field">
+                      <small>날짜:</small>
+                      <input
+                        className="receipt-inline-input receipt-inline-input--datetime"
+                        type="datetime-local"
+                        value={toDateTimeLocalValue(receiptMeta.purchaseDatetime)}
+                        onChange={(event) =>
+                          updateReceiptMetaField('purchaseDatetime', fromDateTimeLocalValue(event.target.value))
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                <button
+                  className={`receipt-mapping__select-all ${areAllRowsConfirmed ? 'is-active' : ''}`}
+                  type="button"
+                  disabled={detectedRows.length === 0}
+                  onClick={toggleAllRowsConfirmation}
+                >
+                  {areAllRowsConfirmed ? '전체 확인 취소' : '전체 확인'}
+                </button>
+              </div>
 
-              <div className="receipt-mapping-table" role="table" aria-label="표준 재료명 매칭 결과">
-                <div className="receipt-mapping-row receipt-mapping-row--head" role="row">
-                  <span role="columnheader">재료</span>
-                  <span role="columnheader">입고 정보</span>
-                  <span role="columnheader">보관</span>
-                  <span role="columnheader">확인</span>
-                </div>
+              <div className="receipt-mapping-table" role="table" aria-label="분석된 식재료">
                 {detectedRows.map((row) => {
                   const isEditing = Boolean(editingRows[row.id])
                   const isShowingIngredientSuggestions =
@@ -1750,10 +1586,7 @@ function ReceiptOcr() {
                             />
                             {isShowingIngredientSuggestions ? (
                               <div className="receipt-ingredient-suggestions" role="listbox">
-                                {ingredientSuggestions.items.map((suggestion, index) => {
-                                  const category = formatGuideSuggestionCategory(suggestion)
-
-                                  return (
+                                {ingredientSuggestions.items.map((suggestion, index) => (
                                     <button
                                       type="button"
                                       role="option"
@@ -1766,10 +1599,8 @@ function ReceiptOcr() {
                                       }}
                                     >
                                       <strong>{suggestion.name}</strong>
-                                      {category ? <span>{category}</span> : null}
                                     </button>
-                                  )
-                                })}
+                                ))}
                               </div>
                             ) : null}
                           </div>
@@ -1779,78 +1610,81 @@ function ReceiptOcr() {
                       </b>
                     </span>
                     <span className="receipt-mapping-details" role="cell">
-                      <label className="receipt-quantity-field">
+                      <div className="receipt-mapping-field receipt-quantity-field">
                         <small>수량</small>
-                        <span className="receipt-quantity-control">
-                          <button
-                            aria-label={`${row.name} 수량 감소`}
-                            disabled={!isEditing}
-                            type="button"
-                            onClick={() => stepQuantityAmount(row.id, -1)}
-                          >
-                            -
-                          </button>
-                          <input
-                            aria-label={`${row.name} 수량`}
-                            className="receipt-inline-input"
-                            min="0"
-                            step={row.quantityUnit === 'kg' ? '0.1' : '1'}
-                            type="number"
-                            value={row.quantityAmount ?? 1}
-                            disabled={!isEditing}
-                            onChange={(event) => updateQuantityAmount(row.id, event.target.value)}
-                          />
-                          <button
-                            aria-label={`${row.name} 수량 증가`}
-                            disabled={!isEditing}
-                            type="button"
-                            onClick={() => stepQuantityAmount(row.id, 1)}
-                          >
-                            +
-                          </button>
-                        </span>
-                        <select
-                          aria-label={`${row.name} 단위`}
-                          className="receipt-inline-select"
-                          disabled={!isEditing}
-                          value={row.quantityUnit || '개'}
-                          onChange={(event) => updateQuantityUnit(row.id, event.target.value)}
-                        >
-                          {quantityUnitOptions.map((unit) => (
-                            <option key={unit} value={unit}>
-                              {unit}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
+                        {isEditing ? (
+                          <>
+                            <span className="receipt-quantity-control">
+                              <button
+                                aria-label={`${row.name} 수량 감소`}
+                                type="button"
+                                onClick={() => stepQuantityAmount(row.id, -1)}
+                              >
+                                -
+                              </button>
+                              <input
+                                aria-label={`${row.name} 수량`}
+                                className="receipt-inline-input"
+                                min="0"
+                                step={row.quantityUnit === 'kg' ? '0.1' : '1'}
+                                type="number"
+                                value={row.quantityAmount ?? 1}
+                                onChange={(event) => updateQuantityAmount(row.id, event.target.value)}
+                              />
+                              <button
+                                aria-label={`${row.name} 수량 증가`}
+                                type="button"
+                                onClick={() => stepQuantityAmount(row.id, 1)}
+                              >
+                                +
+                              </button>
+                            </span>
+                            <ReceiptDropdown
+                              ariaLabel={`${row.name} 단위`}
+                              className="receipt-inline-select"
+                              value={row.quantityUnit || '개'}
+                              options={quantityUnitOptions}
+                              onChange={(value) => updateQuantityUnit(row.id, value)}
+                            />
+                          </>
+                        ) : (
+                          <strong className="receipt-mapping-static-value">
+                            {row.quantityAmount ?? 1}{row.quantityUnit || '개'}
+                          </strong>
+                        )}
+                      </div>
+                      <div className="receipt-mapping-field receipt-price-field">
                         <small>금액(원)</small>
-                        <input
-                          aria-label={`${row.name} 금액`}
-                          className="receipt-inline-input receipt-inline-input--price"
-                          inputMode="numeric"
-                          pattern="[0-9,]*"
-                          type="text"
-                          value={row.price}
-                          disabled={!isEditing}
-                          onChange={(event) => updateRowField(row.id, 'price', event.target.value)}
-                        />
-                      </label>
+                        {isEditing ? (
+                          <input
+                            aria-label={`${row.name} 금액`}
+                            className="receipt-inline-input receipt-inline-input--price"
+                            inputMode="numeric"
+                            pattern="[0-9,]*"
+                            type="text"
+                            value={row.price}
+                            onChange={(event) => updateRowField(row.id, 'price', event.target.value)}
+                          />
+                        ) : (
+                          <strong className="receipt-mapping-static-value">
+                            {row.price || '0'}원
+                          </strong>
+                        )}
+                      </div>
                     </span>
                     <span role="cell" className="receipt-storage-cell">
-                      <select
-                        aria-label={`${row.name} 보관 방법`}
-                        className="receipt-storage-select"
-                        disabled={!isEditing}
-                        value={row.storage || '냉장'}
-                        onChange={(event) => updateRowField(row.id, 'storage', event.target.value)}
-                      >
-                        {storageOptions.map((storage) => (
-                          <option key={storage} value={storage}>
-                            {storage}
-                          </option>
-                        ))}
-                      </select>
+                      <small>보관 위치</small>
+                      {isEditing ? (
+                        <ReceiptDropdown
+                          ariaLabel={`${row.name} 보관 방법`}
+                          className="receipt-storage-select"
+                          value={row.storage || '냉장'}
+                          options={storageOptions}
+                          onChange={(value) => updateRowField(row.id, 'storage', value)}
+                        />
+                      ) : (
+                        <strong className="receipt-mapping-static-value">{row.storage || '냉장'}</strong>
+                      )}
                     </span>
                     <span className="receipt-row-status" role="cell">
                       <label className={`receipt-confirm-toggle ${!row.review && !isEditing ? 'is-confirmed' : ''}`}>
@@ -1927,15 +1761,15 @@ function ReceiptOcr() {
                     ) : (
                       <>
                         <button className="receipt-add-row" type="button" onClick={addRow}>
-                          + 행 추가
+                          항목 추가
                         </button>
                         <button
-                          className="receipt-add-row"
+                          className="receipt-add-row receipt-row-tools__delete"
                           type="button"
                           disabled={detectedRows.length === 0}
                           onClick={enterRowSelection}
                         >
-                          행 삭제
+                          항목 삭제
                         </button>
                       </>
                     )}
@@ -1987,6 +1821,58 @@ function ReceiptOcr() {
         </div>
       ) : null}
     </section>
+  )
+}
+
+function ReceiptDropdown({ ariaLabel, className, value, options, onChange }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div
+      className={`receipt-row-dropdown ${className}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setIsOpen(false)
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          setIsOpen(false)
+        }
+      }}
+    >
+      <button
+        className="receipt-row-dropdown__trigger"
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span>{value}</span>
+        <span className="receipt-row-dropdown__arrow" aria-hidden="true" />
+      </button>
+      {isOpen ? (
+        <div className="receipt-row-dropdown__menu" role="menu">
+          {options.map((option) => (
+            <button
+              className={value === option ? 'is-active' : ''}
+              key={option}
+              type="button"
+              role="menuitemradio"
+              aria-checked={value === option}
+              onClick={() => {
+                onChange(option)
+                setIsOpen(false)
+              }}
+            >
+              <span>{option}</span>
+              {value === option ? <span aria-hidden="true">✓</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -2121,10 +2007,13 @@ function ReceiptCropPanel({
   const cropperRef = useRef(null)
   const [cropperSize, setCropperSize] = useState({ width: 0, height: 0 })
   const [cropAreaRect, setCropAreaRect] = useState(null)
-  const [mediaAspect, setMediaAspect] = useState(null)
+  const [mediaSize, setMediaSize] = useState(null)
+  const mediaAspect = mediaSize?.naturalWidth && mediaSize?.naturalHeight
+    ? mediaSize.naturalWidth / mediaSize.naturalHeight
+    : null
 
   useEffect(() => {
-    setMediaAspect(null)
+    setMediaSize(null)
   }, [imageUrl])
 
   useEffect(() => {
@@ -2190,7 +2079,21 @@ function ReceiptCropPanel({
           height: Math.round(maxCropHeight * cropBox.h),
         }
       : undefined
-  const clampCropBoxScale = (value) => Math.min(maxCropBoxScale, Math.max(minCropBoxScale, value))
+  const cropAreaOffsetX = (cropBox.x || 0) * maxCropWidth
+  const cropAreaOffsetY = (cropBox.y || 0) * maxCropHeight
+
+  const reportCrop = (area, pixels) => {
+    onCropComplete(
+      area,
+      adjustCropPixelsForOffset({
+        pixels,
+        cropBox,
+        cropSize,
+        displayedMediaSize: { width: maxCropWidth, height: maxCropHeight },
+        naturalMediaSize: mediaSize,
+      }),
+    )
+  }
 
   // react-easy-crop clamps the crop area to the visible media (letterboxing),
   // so read the actual rendered crop rectangle and sync the resize-handle overlay to it.
@@ -2239,10 +2142,10 @@ function ReceiptCropPanel({
         window.cancelAnimationFrame(frameId)
       }
     }
-  }, [cropSize?.width, cropSize?.height, cropperSize.width, cropperSize.height, imageUrl, zoom, crop])
+  }, [cropSize?.width, cropSize?.height, cropBox.x, cropBox.y, cropperSize.width, cropperSize.height, imageUrl, zoom, crop])
 
   const startCropBoxResize = (handle) => (event) => {
-    if (isSubmitting || !cropperRef.current || event.button > 0) {
+    if (isSubmitting || !cropperRef.current || !cropAreaRect || event.button > 0) {
       return
     }
 
@@ -2251,28 +2154,39 @@ function ReceiptCropPanel({
 
     const cropperElement = cropperRef.current
     const cropperRect = cropperElement.getBoundingClientRect()
-    const centerX = cropperRect.left + cropperRect.width / 2
-    const centerY = cropperRect.top + cropperRect.height / 2
-    // Corner handles resize both axes; edge handles resize a single axis.
-    const affectsWidth = handle.includes('e') || handle.includes('w')
-    const affectsHeight = handle.includes('n') || handle.includes('s')
-
-    const updateScaleFromPointer = (clientX, clientY) => {
-      onCropBoxChange((current) => ({
-        w: affectsWidth
-          ? clampCropBoxScale((Math.abs(clientX - centerX) * 2) / maxCropWidth)
-          : current.w,
-        h: affectsHeight
-          ? clampCropBoxScale((Math.abs(clientY - centerY) * 2) / maxCropHeight)
-          : current.h,
-      }))
+    const bounds = {
+      left: cropperRect.left + (cropperRect.width - maxCropWidth) / 2,
+      top: cropperRect.top + (cropperRect.height - maxCropHeight) / 2,
+      right: cropperRect.left + (cropperRect.width + maxCropWidth) / 2,
+      bottom: cropperRect.top + (cropperRect.height + maxCropHeight) / 2,
+      width: maxCropWidth,
+      height: maxCropHeight,
+    }
+    const initialRect = {
+      left: cropperRect.left + cropAreaRect.left,
+      top: cropperRect.top + cropAreaRect.top,
+      right: cropperRect.left + cropAreaRect.left + cropAreaRect.width,
+      bottom: cropperRect.top + cropAreaRect.top + cropAreaRect.height,
     }
 
-    updateScaleFromPointer(event.clientX, event.clientY)
+    const updateCropBoxFromPointer = (clientX, clientY) => {
+      onCropBoxChange(
+        resizeCropBoxFromPointer({
+          handle,
+          pointerX: clientX,
+          pointerY: clientY,
+          initialRect,
+          bounds,
+          minScale: minCropBoxScale,
+        }),
+      )
+    }
+
+    updateCropBoxFromPointer(event.clientX, event.clientY)
 
     const handlePointerMove = (moveEvent) => {
       moveEvent.preventDefault()
-      updateScaleFromPointer(moveEvent.clientX, moveEvent.clientY)
+      updateCropBoxFromPointer(moveEvent.clientX, moveEvent.clientY)
     }
 
     const stopResize = () => {
@@ -2312,14 +2226,21 @@ function ReceiptCropPanel({
             cropSize={cropSize}
             objectFit="contain"
             showGrid={false}
+            style={{
+              cropAreaStyle: {
+                marginLeft: `${cropAreaOffsetX}px`,
+                marginTop: `${cropAreaOffsetY}px`,
+              },
+            }}
             zoomWithScroll
+            onWheelRequest={(event) => event.ctrlKey}
             onCropChange={onCropChange}
-            onCropAreaChange={onCropComplete}
-            onCropComplete={onCropComplete}
+            onCropAreaChange={reportCrop}
+            onCropComplete={reportCrop}
             onZoomChange={onZoomChange}
-            onMediaLoaded={(mediaSize) => {
-              if (mediaSize?.naturalWidth && mediaSize?.naturalHeight) {
-                setMediaAspect(mediaSize.naturalWidth / mediaSize.naturalHeight)
+            onMediaLoaded={(nextMediaSize) => {
+              if (nextMediaSize?.naturalWidth && nextMediaSize?.naturalHeight) {
+                setMediaSize(nextMediaSize)
               }
             }}
           />
@@ -2624,11 +2545,7 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        <p>
-          {canUseCamera
-            ? '영수증 사진(PNG, JPG, JPEG, WEBP)을 드래그하거나 업로드/촬영 버튼을 눌러주세요.'
-            : '영수증 사진(PNG, JPG, JPEG, WEBP)을 드래그하거나 업로드 버튼을 눌러주세요.'}
-        </p>
+        <p>영수증 사진(PNG, JPG, JPEG, WEBP)을 드래그하거나 업로드 버튼을 눌러주세요.</p>
         <input
           ref={uploadInputRef}
           className="receipt-file-input"
@@ -2713,17 +2630,8 @@ function RecentHistory() {
     let active = true
     setStatus('loading')
 
-    fetch(`${API_URL}/api/v1/receipts/history`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('최근 영수증 내역을 불러오지 못했어요.')
-        }
-
-        const data = await response.json().catch(() => ({}))
-        return Array.isArray(data.receipts) ? data.receipts.map(mapHistoryEntry) : []
-      })
+    fetchReceiptHistory(token)
+      .then((receipts) => receipts.map(mapHistoryEntry))
       .then((entries) => {
         if (!active) {
           return
@@ -2749,7 +2657,7 @@ function RecentHistory() {
 
   const handleDelete = async (item) => {
     const confirmed = await showConfirm(
-      `'${item.title}' 영수증 내역을 삭제할까요? 이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
+      `'${item.title}' 영수증 내역을 삭제할까요?\n이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
       { title: '영수증 내역 삭제', confirmText: '삭제', cancelText: '취소' },
     )
 
