@@ -1823,7 +1823,7 @@
 .guide-page--detail .guide-tip-card.is-active h3,
 .guide-page--detail .guide-tip-card.is-missing h3 {
   color: #463129;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .guide-page--detail .guide-tip-card.is-active h3 {
@@ -2708,7 +2708,7 @@
   .guide-page--detail .guide-tip-card h3,
   .guide-page--detail .guide-tip-card.is-active h3,
   .guide-page--detail .guide-tip-card.is-missing h3 {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .guide-page--detail .guide-tip-body,
