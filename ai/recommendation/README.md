@@ -50,7 +50,8 @@ ai/recommendation/
 ├── outputs/               # 산출물 (recipe_lightfm.csv, JSON 리포트)
 └── docs/                  # 문서
     ├── EXPERIMENTS.md     # 실험 §1~31 상세 기록
-    └── METRICS.md         # 평가 지표 헌장 + 달성 수치
+    ├── METRICS.md         # 평가 지표 헌장 + 달성 수치
+    └── DATA.md            # 학습 데이터 운용 가이드
 ```
 
 ---
@@ -60,6 +61,7 @@ ai/recommendation/
 | 문서 | 역할 |
 |------|------|
 | **본 README** | 실행 방법, 구조, 운영 안내 |
+| [`docs/DATA.md`](docs/DATA.md) | 학습 데이터 CSV 컬럼 설명, 사용법, 추가 학습 가이드 |
 | [`docs/METRICS.md`](docs/METRICS.md) | 평가 지표 정의, Go 조건, 현재 달성 수치 |
 | [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) | 실험 §1~31 전체 상세 이력 + Phase 1 완료 요약 |
 
