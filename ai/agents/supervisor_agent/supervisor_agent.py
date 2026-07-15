@@ -251,7 +251,7 @@ def general_node(state: GraphState) -> dict:
     return {"response_text": GENERAL_REPLY}
 
 def multi_agent_node(state: GraphState) -> dict:
-    """작업 목록을 기존 Agent 노드로 순차 실행하고 응답을 합칩니다."""
+    """작업 목록을 순차 실행하고 일부 Agent 실패가 전체 응답을 막지 않게 합니다."""
     handlers = {
         "inventory_agent_node": inventory_agent_node,
         "guide_agent_node": guide_agent_node,
@@ -261,6 +261,8 @@ def multi_agent_node(state: GraphState) -> dict:
         "shopping_agent_node": shopping_agent_node,
     }
     results = []
+    completed_intents = []
+    failed_intents = []
 
     for task in state.get("tasks") or []:
         intent = task.get("intent", "")
@@ -271,10 +273,28 @@ def multi_agent_node(state: GraphState) -> dict:
             "tasks": [],
         }
         handler = handlers.get(route_intent(task_state))
-        if handler:
+        if not handler:
+            failed_intents.append(intent)
+            continue
+        try:
             results.append(handler(task_state))
+            completed_intents.append(intent)
+        except Exception as exc:
+            print(f"[Supervisor] {intent} task failed: {type(exc).__name__}: {exc}")
+            failed_intents.append(intent)
 
-    return _merge_agent_results(*results) if results else general_node(state)
+    if failed_intents:
+        results.append({"response_text": "일부 요청은 처리하지 못했어요. 잠시 후 다시 시도해주세요."})
+    if not results:
+        return general_node(state)
+
+    result = _merge_agent_results(*results)
+    result["slots"] = {
+        **(result.get("slots") or {}),
+        "completed_intents": completed_intents,
+        "failed_intents": failed_intents,
+    }
+    return result
 
 
 def route_intent(state: GraphState) -> str:
