@@ -11,7 +11,15 @@ CONFIRM_PREFIX = "확인:"
 CANCEL_WORDS = ("취소", "아니", "아니요", "아니다", "아니야", "취소할게", "안넣어", "넣지마", "추가하지마")
 
 # 규칙 기반 라우터는 의도가 명확한 표현만 처리하고, 애매한 표현은 LLM에 맡깁니다.
-_CONTEXT_INTENTS = {"ingredient.guide", "inventory.list", "inventory.expiring"}
+_CONTEXT_SLOT_KEYS = {
+    "ingredient.guide": {"ingredient", "keyword", "guide_type"},
+    "recipe.recommend": {"ingredient", "keyword", "use_inventory"},
+    "recipe.search": {"ingredient", "keyword"},
+    "recipe.pairing": {"ingredient", "keyword"},
+    "shopping.compare": {"shopping_product"},
+    "alarm.notification": {"date", "keyword"},
+    "alarm.calendar": {"date", "keyword"},
+}
 _RECIPE_RECOMMEND_PHRASES = (
     "뭐해먹", "뭐먹", "만들어먹", "요리추천", "메뉴추천", "추천메뉴", "냉장고파먹",
 )
@@ -38,16 +46,17 @@ _GUIDE_ACTION_TYPES = {
 }
 _GUIDE_TYPE_LABELS = dict(_GUIDE_ACTION_TYPES.values())
 
-# LLM fallback이 반환할 수 있는 읽기 전용 intent입니다.
+# LLM 읽기 분류기가 반환할 수 있는 intent입니다.
 _LLM_ROUTE_INTENTS = (
     "receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search",
     "ingredient.guide", "inventory.expiring", "inventory.list",
-    "shopping.current", "shopping.history", "shopping.compare", "alarm.notification", "alarm.calendar",
-    "multi_agent", "general",
+    "shopping.current", "shopping.history", "shopping.compare", "shopping.price_help",
+    "alarm.notification", "alarm.calendar",
+    "food.general", "multi_agent", "general",
 )
 # LLM 라우팅 결과를 채택할 최소 신뢰도와 허용 슬롯입니다.
 _LLM_ROUTE_CONFIDENCE = 0.5
-_LLM_SLOT_KEYS = {"ingredient", "keyword", "date", "quantity", "storage", "use_inventory", "guide_type"}
+_LLM_SLOT_KEYS = {"ingredient", "keyword", "shopping_product", "date", "quantity", "storage", "use_inventory", "guide_type"}
 # 복합 요청에서 순차 실행을 허용하는 읽기 전용 intent입니다.
 _MULTI_AGENT_TASK_INTENTS = {
     "receipt.guide",
@@ -62,7 +71,7 @@ _MULTI_AGENT_TASK_INTENTS = {
     "shopping.compare",
 }
 
-# LLM fallback은 아래 허용 intent만 JSON으로 반환하도록 제한합니다.
+# LLM 읽기 분류기는 아래 허용 intent만 JSON으로 반환하도록 제한합니다.
 _LLM_ROUTE_SYSTEM_PROMPT = """
 You are the Supervisor intent router for the Bobbeori food chatbot.
 Return exactly one JSON object. Do not include markdown, code fences, or explanations.
@@ -74,9 +83,11 @@ Response schema:
 {{
   "intent": "one allowed intent",
   "confidence": 0.0,
+  "is_follow_up": false,
   "slots": {{
     "ingredient": null,
     "keyword": null,
+    "shopping_product": null,
     "date": null,
     "quantity": null,
     "storage": null
@@ -86,17 +97,22 @@ Response schema:
 
 Rules:
 - recipe.recommend: menu recommendation, fridge ingredient cooking ideas, leftover ingredient use.
-- recipe.search: specific recipe, cooking method, cooking time, air fryer time.
+- recipe.search: making a named dish, recipe steps, or the original cooking time for a dish. Do not use it for reheating already-cooked or leftover food.
 - recipe.pairing: side dish, pairing food, food that goes well with another dish.
-- ingredient.guide: ingredient overview, storage, washing, prep, freshness, nutrition, calories, seasonal food, or ingredient category lists.
+- ingredient.guide: a single ingredient's overview, storage, washing, prep, freshness, nutrition, calories, seasonal food, or ingredient category lists. Do not use it to compare two ingredient or product variants.
 - inventory.expiring: expiry, use-by date, expiring ingredients.
 - inventory.list: list current fridge ingredients.
 - receipt.guide: receipt OCR or purchase upload guide.
-- shopping.current/history/compare: shopping list lookup, history, or price comparison.
+- shopping.current/history: current shopping list or purchase history lookup.
+- shopping.compare: asks for a product price, lowest price, cheaper seller, or why a product is expensive. Put an explicitly named product in slots.shopping_product; leave it null for a context-only follow-up.
+- shopping.price_help: only asks why a previous shopping result has no price; never use it for a direct product price question.
 - alarm.notification: notification lookup or management.
 - alarm.calendar: calendar schedule lookup or management.
+- food.general: food-related unit conversion, ingredient substitution, comparison between ingredient or product variants, reheating already-cooked or leftover food, or general cooking knowledge not handled by another intent.
+- Examples: "동물성 휘핑크림과 식물성은 뭐가 달라?" and "남은 치킨 데우는 방법은?" must be food.general.
 - multi_agent: a request that needs two or more read-only intents. Put each task in tasks as {{"intent": "...", "text": "..."}}.
-- general: anything else.
+- general: non-food requests or unsupported requests outside the service scope.
+- Set is_follow_up=true only when the current message depends on the latest assistant response and omits a subject or entity.
 - Use previous_intent metadata from the latest assistant message when the current message is a short follow-up.
 
 Safety:
@@ -113,6 +129,14 @@ _INVENTORY_CONFIRM_ACTIONS = {
     "delete_ingredient",
 }
 
+# 데이터 변경 가능성이 있는 장보기 intent만 규칙 기반으로 고정합니다.
+_SHOPPING_WRITE_INTENTS = {
+    "shopping.create",
+    "shopping.purchase",
+    "shopping.delete_item",
+    "shopping.check_item",
+}
+
 # Supervisor가 직접 제공하는 최소 곁들임 추천 목록입니다.
 _RECIPE_PAIRINGS = {
     "김치볶음밥": ["계란국", "어묵국", "단무지", "오이무침", "군만두"],
@@ -124,6 +148,18 @@ def _normalize_text(text: str) -> str:
     """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
     return text.replace(" ", "").lower()
 
+
+def _is_food_general_query(text: str) -> bool:
+    """식품 비교나 남은 음식 재가열처럼 전담 Agent가 없는 일반 요리 질문인지 확인합니다."""
+    normalized = _normalize_text(text)
+    if any(word in normalized for word in ("가격", "최저가", "얼마")):
+        return False
+    is_reheating = any(word in normalized for word in ("데우", "재가열", "다시가열", "다시익히"))
+    is_comparison = (
+        any(word in normalized for word in ("차이", "뭐가달라", "어떻게달라", "비교"))
+        and bool(re.search(r"(?:와|과|랑|이랑|vs|대비)", normalized, re.IGNORECASE))
+    )
+    return is_reheating or is_comparison
 
 def _is_receipt_query(text: str) -> bool:
     """영수증 또는 OCR 사용 방법을 묻는 요청인지 확인합니다."""
@@ -143,11 +179,19 @@ def _is_alarm_calendar_query(text: str) -> bool:
     normalized = _normalize_text(text)
     return any(word in normalized for word in ("일정", "캘린더"))
 
+def _is_alarm_write_query(text: str) -> bool:
+    """알림 또는 일정 데이터를 변경하는 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    write_words = ("등록", "추가", "생성", "삭제", "지워", "취소", "수정", "변경", "읽음", "동기화", "연결", "해제")
+    return (
+        _is_alarm_notification_query(text) or _is_alarm_calendar_query(text)
+    ) and any(word in normalized for word in write_words)
+
 
 def _is_shopping_price_query(text: str) -> bool:
     """상품 가격 또는 최저가를 묻는 요청인지 확인합니다."""
     normalized = _normalize_text(text)
-    return any(word in normalized for word in ("가격", "얼마", "최저가", "싼곳", "싼데", "저렴", "비싸"))
+    return any(word in normalized for word in ("가격", "최저가", "싼곳", "싼데", "저렴", "비싸"))
 
 
 def _is_shopping_price_explanation(text: str) -> bool:
@@ -403,11 +447,12 @@ def _latest_bot_slots(history) -> dict:
 
 
 def _latest_bot_pending_action(history) -> dict | None:
-    """이전 봇 응답에 저장된 실행 대기 작업을 반환합니다."""
+    """가장 최근 봇 응답에서 아직 실행을 기다리는 작업만 반환합니다."""
     for message in reversed(history or []):
+        if _message_value(message, "role", "") != "bot":
+            continue
         pending = _message_value(message, "pending_action")
-        if _message_value(message, "role", "") == "bot" and isinstance(pending, dict):
-            return pending
+        return pending if isinstance(pending, dict) else None
     return None
 
 
@@ -504,9 +549,11 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
     intent = str(payload.get("intent", "")).strip()
     if intent not in _LLM_ROUTE_INTENTS:
         intent = "general"
+        confidence = 0.0
     return {
         "intent": intent,
         "confidence": max(0.0, min(confidence, 1.0)),
+        "is_follow_up": payload.get("is_follow_up") is True,
         "slots": slots,
         "tasks": tasks,
     }
@@ -517,9 +564,27 @@ def _route_payload(
     confidence: float = 1.0,
     slots: dict[str, Any] | None = None,
     tasks: list[dict[str, str]] | None = None,
+    is_follow_up: bool = False,
 ) -> dict[str, Any]:
     """LLM 라우팅 결과를 Supervisor 공통 dict 형식으로 반환합니다."""
-    return {"intent": intent, "confidence": confidence, "slots": slots or {}, "tasks": tasks or []}
+    return {
+        "intent": intent,
+        "confidence": confidence,
+        "is_follow_up": is_follow_up,
+        "slots": slots or {},
+        "tasks": tasks or [],
+    }
+
+
+def _inherit_route_context(payload: dict[str, Any], previous_intent: str | None, previous_slots: dict) -> dict[str, Any]:
+    """같은 의도의 후속 질문에서 허용된 직전 슬롯만 안전하게 이어받습니다."""
+    intent = payload.get("intent")
+    if not payload.get("is_follow_up") or intent != previous_intent:
+        return payload
+    allowed_keys = _CONTEXT_SLOT_KEYS.get(intent, set())
+    inherited = {key: value for key, value in previous_slots.items() if key in allowed_keys and value is not None}
+    current = {key: value for key, value in (payload.get("slots") or {}).items() if value is not None}
+    return {**payload, "slots": {**inherited, **current}}
 
 
 def _rewrite_guide_query(text: str) -> str:
@@ -531,7 +596,7 @@ def _is_shopping_show_all_request(text: str) -> bool:
     """생략된 장보기 항목을 모두 보여 달라는 후속 요청인지 확인합니다."""
     normalized = _normalize_text(text)
     return bool(re.search(r"^외\d+개", normalized)) or any(
-        word in normalized for word in ("나머지", "전부", "다말해", "다보여", "전체")
+        word in normalized for word in ("나머지", "전부", "다말해", "다알려", "다보여", "전체")
     )
 
 
@@ -689,6 +754,46 @@ def _alarm_result_to_state(agent_result: dict[str, Any]) -> dict[str, Any]:
     result = {"response_text": response_text}
     if actions:
         result["actions"] = actions
+    return result
+
+def _normalize_agent_result(
+    agent_result: Any,
+    *,
+    inherited_slots: dict | None = None,
+    error_reply: str = "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
+) -> dict[str, Any]:
+    """서로 다른 Agent 응답을 Supervisor GraphState 공통 형식으로 정규화합니다."""
+    if not isinstance(agent_result, dict):
+        return {"response_text": error_reply, "actions": [], "sources": [], "slots": inherited_slots or {}}
+
+    ui = agent_result.get("ui") if isinstance(agent_result.get("ui"), dict) else {}
+    status = agent_result.get("status")
+    failed = agent_result.get("ok") is False or status == "error" or bool(agent_result.get("error"))
+    response_text = agent_result.get("response_text") or agent_result.get("message") or ""
+    if failed and not response_text:
+        response_text = error_reply
+
+    actions = agent_result.get("actions")
+    if not isinstance(actions, list):
+        actions = ui.get("actions") if isinstance(ui.get("actions"), list) else []
+    sources = agent_result.get("sources")
+    if not isinstance(sources, list):
+        sources = ui.get("sources") if isinstance(ui.get("sources"), list) else []
+
+    slots = {**(inherited_slots or {}), **(agent_result.get("slots") or {})}
+    if status:
+        slots["agent_status"] = status
+    if agent_result.get("action"):
+        slots["agent_action"] = agent_result["action"]
+
+    result = {
+        "response_text": response_text or error_reply,
+        "actions": [action for action in actions if isinstance(action, dict)],
+        "sources": [source for source in sources if isinstance(source, dict)],
+        "slots": slots,
+    }
+    if isinstance(agent_result.get("pending_action"), dict):
+        result["pending_action"] = agent_result["pending_action"]
     return result
 
 def _merge_agent_results(*results: dict[str, Any]) -> dict[str, Any]:

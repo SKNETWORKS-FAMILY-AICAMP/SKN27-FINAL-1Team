@@ -2,6 +2,7 @@ import sys
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -62,6 +63,25 @@ def test_chat_inventory_name_match_uses_display_name() -> None:
     assert inventory_service._find_item_by_name(items, "토마토 소스") is fridge_item
     assert inventory_service._find_item_by_name(items, "토마토소스") is fridge_item
 
+
+def test_chat_consume_uses_multiple_matching_inventory_rows() -> None:
+    """같은 재료가 여러 건이면 소비기한이 가까운 항목부터 요청 수량만큼 차감합니다."""
+    first = SimpleNamespace(display_name="두부", quantity=Decimal("2"), status="normal", expiry_date=date(2026, 7, 16))
+    second = SimpleNamespace(display_name="두부", quantity=Decimal("2"), status="normal", expiry_date=date(2026, 7, 20))
+    ingredient = SimpleNamespace(name="두부", normalized_name="두부")
+    db = MagicMock()
+    db.query.return_value.join.return_value.filter.return_value.all.return_value = [
+        (first, ingredient),
+        (second, ingredient),
+    ]
+
+    reply = inventory_service.consume_ingredient_by_name(db, 1, "두부", 3)
+
+    assert first.status == "used"
+    assert second.quantity == Decimal("1")
+    assert "3개 소비 처리했어요" in reply
+    assert "남은 총수량: 1" in reply
+    db.commit.assert_called_once()
 
 if __name__ == "__main__":
     test_chat_inventory_name_match_uses_display_name()

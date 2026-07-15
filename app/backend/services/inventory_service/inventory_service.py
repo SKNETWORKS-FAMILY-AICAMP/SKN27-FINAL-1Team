@@ -502,20 +502,29 @@ class InventoryService:
         display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
         return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}에 추가했어요."
 
-    def _find_item_by_name(self, items, ingredient_name: str):
-        """챗봇에서 받은 이름으로 표시명과 마스터명을 함께 비교합니다."""
+    def _find_items_by_name(self, items, ingredient_name: str):
+        """챗봇에서 받은 이름과 일치하는 활성 냉장고 항목을 모두 반환합니다."""
         target = self._normalize_ingredient_name(ingredient_name)
 
-        # 먼저 공백만 다른 정확 일치를 찾고, 없으면 부분 일치를 허용합니다.
+        # 정확히 일치하는 항목을 우선하고, 없을 때만 부분 일치를 허용합니다.
         for allow_partial in (False, True):
+            matches = []
             for fridge_item, ingredient in items:
                 names = [fridge_item.display_name, ingredient.name, ingredient.normalized_name]
                 normalized_names = [self._normalize_ingredient_name(name) for name in names if name]
-                if not allow_partial and target in normalized_names:
-                    return fridge_item
-                if allow_partial and any(target in name or name in target for name in normalized_names):
-                    return fridge_item
-        return None
+                is_match = target in normalized_names if not allow_partial else any(
+                    target in name or name in target for name in normalized_names
+                )
+                if is_match:
+                    matches.append(fridge_item)
+            if matches:
+                return matches if not allow_partial else matches[:1]
+        return []
+
+    def _find_item_by_name(self, items, ingredient_name: str):
+        """챗봇에서 받은 이름과 가장 먼저 일치하는 냉장고 항목을 반환합니다."""
+        matches = self._find_items_by_name(items, ingredient_name)
+        return matches[0] if matches else None
 
     def delete_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str) -> str:
         """챗봇에서 식재료 이름을 받아 냉장고 항목을 폐기 처리합니다."""
@@ -534,37 +543,49 @@ class InventoryService:
 
 
     def consume_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
-        """챗봇 Tool에서 식재료 이름과 소비 수량을 받아 재고를 차감하거나 삭제합니다."""
-        # 사용자의 활성 식재료 목록 조회
+        """동일 재료의 여러 입고 건에서 요청 수량만큼 소비 처리합니다."""
         items = (
             db.query(FridgeItem, Ingredient)
             .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
             .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
             .all()
         )
-        target_item = self._find_item_by_name(items, ingredient_name)
-        if not target_item:
+        target_items = self._find_items_by_name(items, ingredient_name)
+        if not target_items:
             return f"냉장고에서 {ingredient_name}{_object_particle(ingredient_name)} 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
-            
-        current_qty = target_item.quantity or Decimal("1")
+
         consume_qty = Decimal(str(quantity or 1))
-        new_qty = current_qty - consume_qty
-        
-        if new_qty <= 0:
-            target_item.status = "used"
-            db.commit()
-            if current_qty < consume_qty:
-                display_current = int(current_qty) if current_qty == current_qty.to_integral() else current_qty
-                return f"냉장고에 {ingredient_name}{_object_particle(ingredient_name)} {display_current}개 남아있었지만, 요청하신 대로 전부 소비 완료(삭제) 처리했습니다."
-            return f"{ingredient_name}{_object_particle(ingredient_name)} 전부 소비하여 냉장고에서 삭제(소비 완료) 처리했습니다."
-        else:
-            target_item.quantity = new_qty
-            db.commit()
-            display_quantity = int(consume_qty) if consume_qty == consume_qty.to_integral() else consume_qty
-            display_remaining = int(new_qty) if new_qty == new_qty.to_integral() else new_qty
-            return f"{ingredient_name}{_object_particle(ingredient_name)} {display_quantity}개 소비했습니다. (남은 수량: {display_remaining})"
+        if consume_qty <= 0:
+            return "소비 수량은 0보다 크게 입력해주세요."
 
+        # 소비기한이 가까운 입고 건부터 차감합니다.
+        target_items.sort(key=lambda item: (getattr(item, "expiry_date", None) is None, getattr(item, "expiry_date", None) or date.max))
+        total_quantity = sum((Decimal(str(item.quantity or 1)) for item in target_items), Decimal("0"))
+        remaining_to_consume = min(consume_qty, total_quantity)
+        actual_consumed = remaining_to_consume
 
+        for target_item in target_items:
+            if remaining_to_consume <= 0:
+                break
+            current_qty = Decimal(str(target_item.quantity or 1))
+            if remaining_to_consume >= current_qty:
+                target_item.status = "used"
+                remaining_to_consume -= current_qty
+            else:
+                target_item.quantity = current_qty - remaining_to_consume
+                remaining_to_consume = Decimal("0")
+
+        db.commit()
+        remaining_total = total_quantity - actual_consumed
+        display_consumed = int(actual_consumed) if actual_consumed == actual_consumed.to_integral() else actual_consumed
+        display_remaining = int(remaining_total) if remaining_total == remaining_total.to_integral() else remaining_total
+
+        if consume_qty > total_quantity:
+            display_total = int(total_quantity) if total_quantity == total_quantity.to_integral() else total_quantity
+            return f"냉장고에 남은 {ingredient_name} 수량이 {display_total}개라 모두 소비 처리했어요."
+        if remaining_total == 0:
+            return f"{ingredient_name}{_object_particle(ingredient_name)} {display_consumed}개 소비 처리했어요. 남은 수량은 없어요."
+        return f"{ingredient_name}{_object_particle(ingredient_name)} {display_consumed}개 소비 처리했어요. (남은 총수량: {display_remaining})"
 
 
 inventory_service = InventoryService()

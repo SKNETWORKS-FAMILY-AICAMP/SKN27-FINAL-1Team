@@ -122,7 +122,7 @@ class ChatService:
         return response
 
     def _route_intent_payload_with_llm(self, text: str, history: list[Any] | None = None) -> dict[str, Any]:
-        """규칙으로 분류되지 않은 문장을 LLM으로 분류해 JSON dict로 반환합니다."""
+        """읽기 요청을 LLM으로 분류해 검증된 JSON dict로 반환합니다."""
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
             return _route_payload("general", confidence=0.0)
 
@@ -162,7 +162,7 @@ class ChatService:
             if intent == "multi_agent":
                 if payload.get("confidence", 0) >= _LLM_ROUTE_CONFIDENCE and len(payload.get("tasks") or []) >= 2:
                     return payload
-                return _route_payload("general", confidence=payload.get("confidence", 0))
+                return _route_payload("general", confidence=0.0)
             if intent in _LLM_ROUTE_INTENTS and payload.get("confidence", 0) >= _LLM_ROUTE_CONFIDENCE:
                 return payload
             return _route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
