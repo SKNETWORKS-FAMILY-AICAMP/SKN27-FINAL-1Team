@@ -25,6 +25,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     LOGIN_REQUIRED_REPLY,
     _CONTEXT_INTENTS,
     _alarm_result_to_state,
+    _build_read_tasks,
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
     _is_guide_query,
@@ -32,6 +33,8 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _is_recipe_pairing_query,
     _is_recipe_recommend_query,
     _is_recipe_search_query,
+    _is_shopping_price_explanation,
+    _is_shopping_show_all_request,
     _is_shopping_price_query,
     _is_context_follow_up,
     _is_cooking_time_question,
@@ -39,6 +42,8 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _latest_bot_intent,
     _latest_bot_pending_action,
     _latest_bot_slots,
+    _merge_agent_results,
+    _normalize_shopping_create_query,
     _normalize_text,
     _parse_alarm_request,
     _reply_recipe_pairing,
@@ -98,6 +103,18 @@ def router_node(state: GraphState) -> dict:
     if _is_alarm_calendar_query(text):
         return _route_result("alarm.calendar")
 
+    if _is_shopping_price_explanation(text):
+        return _route_result("shopping.price_help")
+
+    # 읽기 전용 복합 요청은 기존 Agent 작업 목록으로 분해해 순차 실행합니다.
+    read_tasks = _build_read_tasks(text)
+    if len(read_tasks) >= 2:
+        return _route_result("multi_agent", tasks=read_tasks)
+
+    # 가격 질문은 Guide와 일반 LLM보다 Shopping Agent를 우선합니다.
+    if _is_shopping_price_query(text):
+        return _route_result("shopping.compare")
+
     # 가이드 질문을 Shopping의 부분 문자열 매칭과 냉장고 목록보다 먼저 처리합니다.
     if _is_guide_query(text):
         return _route_result("ingredient.guide")
@@ -108,13 +125,10 @@ def router_node(state: GraphState) -> dict:
     shopping_intent = analyze_shopping_intent(text)
     if shopping_intent:
         return _route_result(shopping_intent)
-
-    # 가격 질문은 장보기 문맥이 없어도 Shopping Agent의 가격 비교로 보냅니다.
-    if _is_shopping_price_query(text):
-        return _route_result("shopping.compare")
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if _is_recipe_pairing_query(text):
         return _route_result("recipe.pairing")
+
 
     if _is_expiring_question(text):
         return _route_result("inventory.expiring")
@@ -141,11 +155,10 @@ def router_node(state: GraphState) -> dict:
         return _route_result("inventory.action")
     if any(word in normalized for word in ADD_WORDS):
         return _route_result("inventory.action")
-    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
-        return _route_result("inventory.list")
-
     if _is_recipe_recommend_query(text):
         return _route_result("recipe.recommend")
+    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
+        return _route_result("inventory.list")
     if _is_recipe_search_query(text):
         return _route_result("recipe.search")
 
@@ -154,6 +167,7 @@ def router_node(state: GraphState) -> dict:
         route_payload.get("intent", "general"),
         route_payload.get("confidence", 0.0),
         route_payload.get("slots", {}),
+        route_payload.get("tasks", []),
     )
 
 
@@ -206,11 +220,29 @@ def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
 
+    if state.get("intent") == "shopping.price_help":
+        return {
+            "response_text": "가격 정보 없음은 상품 검색 결과에서 판매가를 확인하지 못했다는 뜻이에요. 상품명이나 용량을 더 구체적으로 입력하면 검색 정확도가 좋아질 수 있어요."
+        }
     if not state.get("user_id"):
         return {"response_text": LOGIN_REQUIRED_REPLY}
 
+    # 나머지/전체 조회 후속 요청은 기존 Shopping 조회 결과를 모두 펼쳐 보여줍니다.
+    if state.get("intent") == "shopping.current" and _is_shopping_show_all_request(state["text"]):
+        from app.backend.services.shopping_service import shopping_service
+        from ai.agents.shopping_agent.shopping_utils import shopping_list_action, summarize_shopping_list
+
+        shopping_list = shopping_service.get_current(db=state["db"], user_id=state["user_id"])
+        max_items = len((shopping_list or {}).get("items", [])) or 5
+        return {
+            "response_text": summarize_shopping_list(shopping_list, max_items=max_items),
+            "actions": [shopping_list_action(shopping_list.get("id") if shopping_list else None)],
+        }
+
     # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
     text = state["text"]
+    if state.get("intent") == "shopping.create":
+        text = _normalize_shopping_create_query(text)
     compare_text = _strip_shopping_compare_suffix(text)
 
     return run_shopping_agent(
@@ -242,9 +274,61 @@ def general_node(state: GraphState) -> dict:
     """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
     return {"response_text": GENERAL_REPLY}
 
+def multi_agent_node(state: GraphState) -> dict:
+    """작업 목록을 순차 실행하고 일부 Agent 실패가 전체 응답을 막지 않게 합니다."""
+    handlers = {
+        "inventory_agent_node": inventory_agent_node,
+        "guide_agent_node": guide_agent_node,
+        "recipe_agent_node": recipe_agent_node,
+        "recipe_pairing_node": recipe_pairing_node,
+        "receipt_guide_node": receipt_guide_node,
+        "shopping_agent_node": shopping_agent_node,
+    }
+    results = []
+    completed_intents = []
+    failed_intents = []
+
+    for task in state.get("tasks") or []:
+        intent = task.get("intent", "")
+        task_state = {
+            **state,
+            "intent": intent,
+            "text": task.get("text") or state["text"],
+            "tasks": [],
+        }
+        # 임박 재료 조회 뒤 레시피 추천은 같은 냉장고 기준으로 이어서 처리합니다.
+        if intent == "recipe.recommend" and "inventory.expiring" in completed_intents:
+            task_state["text"] = "냉장고 재료로 요리 추천해줘"
+        handler = handlers.get(route_intent(task_state))
+        if not handler:
+            failed_intents.append(intent)
+            continue
+        try:
+            results.append(handler(task_state))
+            completed_intents.append(intent)
+        except Exception as exc:
+            print(f"[Supervisor] {intent} task failed: {type(exc).__name__}: {exc}")
+            failed_intents.append(intent)
+
+    if failed_intents:
+        results.append({"response_text": "일부 요청은 처리하지 못했어요. 잠시 후 다시 시도해주세요."})
+    if not results:
+        return general_node(state)
+
+    result = _merge_agent_results(*results)
+    result["slots"] = {
+        **(result.get("slots") or {}),
+        "completed_intents": completed_intents,
+        "failed_intents": failed_intents,
+    }
+    return result
+
+
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
+    if intent == "multi_agent":
+        return "multi_agent_node"
     if intent.startswith("alarm."):
         return "alarm_agent_node"
     if intent.startswith("shopping."):
@@ -269,6 +353,7 @@ def route_intent(state: GraphState) -> str:
 workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)
 workflow.add_node("inventory_agent_node", inventory_agent_node)
+workflow.add_node("multi_agent_node", multi_agent_node)
 workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
@@ -281,6 +366,7 @@ workflow.set_entry_point("router")
 workflow.add_conditional_edges("router", route_intent)
 for node_name in (
     "inventory_agent_node",
+    "multi_agent_node",
     "alarm_agent_node",
     "shopping_agent_node",
     "guide_agent_node",

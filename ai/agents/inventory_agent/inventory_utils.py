@@ -74,8 +74,9 @@ def _extract_storage(text: str) -> str | None:
     for alias, storage in aliases.items():
         if alias in normalized:
             return storage
+    # 보관 위치 뒤에 붙은 조사까지 허용해 "냉장에" 같은 표현을 인식합니다.
     for storage in STORAGE_KEYS:
-        if re.search(rf"(?<![가-힣A-Za-z0-9]){storage}(?![가-힣A-Za-z0-9])", text):
+        if re.search(rf"(?<![가-힣A-Za-z0-9]){storage}(?:에|으로)?(?![가-힣A-Za-z0-9])", text):
             return storage
     return None
 
@@ -84,6 +85,8 @@ def _strip_add_name(name: str) -> str:
     cleaned = re.sub(r"^(그러면|그럼|그리고|아니면|아|음|자)\s+", "", cleaned)
     for token in ('냉장실에', '냉동실에', '냉장고에서', '냉장고에', '냉장고', '재료', '식재료', '어제', '오늘', '방금'):
         cleaned = cleaned.replace(token, " ")
+    # 재료명 뒤에 붙은 보관 위치와 조사를 함께 제거합니다.
+    cleaned = re.sub(r"(?<![가-힣A-Za-z0-9])(?:냉장|냉동|실온|상온)(?:에|으로)?(?![가-힣A-Za-z0-9])", " ", cleaned)
     for storage in STORAGE_KEYS:
         cleaned = re.sub(rf"(?<![가-힣A-Za-z0-9]){storage}(?![가-힣A-Za-z0-9])", " ", cleaned)
     cleaned = cleaned.strip(" ,/\t\n").rstrip("을를은는이가")
@@ -173,7 +176,7 @@ def _extract_expiry_keyword(text: str) -> str:
     if not match:
         return ""
     keyword = match.group(1).strip()
-    if keyword in ("재료", "식재료", "냉장고", "오늘", "소비", "소비기한", "유통기한", "기한", "임박", "임박재료", "소비임박재료"):
+    if keyword in ("재료", "식재료", "냉장고", "중", "오늘", "소비", "소비기한", "유통기한", "기한", "임박", "임박재료", "소비임박재료"):
         return ""
     return keyword
 
