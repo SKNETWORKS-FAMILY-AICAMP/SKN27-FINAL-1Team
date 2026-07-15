@@ -65,6 +65,30 @@ def to_supervisor_state(result: RecipeAgentResult) -> dict[str, Any]:
     }
 
 
+class LegacyRecipeEngine:
+    """기존 Handler를 그대로 호출하는 레거시 실행기."""
+
+    def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
+        if req.intent == "recipe.recommend" and _requires_login(req.intent, req.text) and not req.user_id:
+            return build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=req.intent)
+
+        if req.intent == "recipe.search":
+            reply, actions, sources = handle_recipe_search(req.db, req.text)
+        elif req.intent == "recipe.pairing":
+            reply, actions = handle_recipe_pairing(req.text)
+            sources = []
+        elif req.intent == "recipe.recommend":
+            reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
+            sources = []
+        else:
+            reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
+            sources = []
+
+        return build_recipe_response(
+            message=reply, intent=req.intent, actions=actions, sources=sources,
+        )
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -141,6 +165,9 @@ if __name__ == "__main__":
         )
         assert req.text == "테스트"
         assert req.intent == "recipe.search"
+
+        engine = LegacyRecipeEngine()
+        assert hasattr(engine, "run")
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
