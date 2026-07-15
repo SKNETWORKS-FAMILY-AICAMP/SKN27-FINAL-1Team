@@ -20,7 +20,6 @@ pytest>=8.0.0
 Pillow>=10.0.0
 
 # AI
-lightfm>=1.17
 openai>=1.0.0
 tavily-python
 langchain
