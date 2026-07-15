@@ -180,6 +180,18 @@ def sort_candidates_tool(items: list[dict[str, Any]]) -> ToolResult:
         return ToolResult(ok=False, error=str(e), source="sort_candidates")
 
 
+def exclude_previous_tool(items: list[dict[str, Any]], history: list) -> ToolResult:
+    """이전 봇 응답에 포함된 레시피를 후보에서 제외한다. ponytail: 문자열 비교 방식. 구조화 이력 전환은 Backlog."""
+    try:
+        past_bot_texts = " ".join(getattr(msg, "text", "") for msg in history if getattr(msg, "role", "") == "bot")
+        filtered = [item for item in items if item.get("title", "") not in past_bot_texts]
+        if not filtered:
+            filtered = list(items)
+        return ToolResult(ok=True, data={"items": filtered, "total": len(filtered)}, source="exclude_previous")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="exclude_previous")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -268,6 +280,7 @@ if __name__ == "__main__":
         assert callable(search_recipe_tool)
         assert callable(recommend_recipe_tool)
         assert callable(sort_candidates_tool)
+        assert callable(exclude_previous_tool)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
