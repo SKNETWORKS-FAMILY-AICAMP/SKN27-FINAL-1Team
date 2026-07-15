@@ -17,25 +17,24 @@ const PAGE_SIZE = 20;
 
 const recipeTypeOptions = RecipeFilterConfig.toSelectOptions(
   RecipeFilterConfig.recipeTypes,
-  `${RecipeFilterConfig.labels.recipeType}`,
+  RecipeFilterConfig.FILTER_ALL,
 );
 
-const cookingTimeOptions = RecipeFilterConfig.toSelectOptions(
-  RecipeFilterConfig.cookingTimes,
-  `${RecipeFilterConfig.labels.cookingTime}`,
-);
+const cookingTimeOptions = [
+  { value: RecipeFilterConfig.FILTER_ALL, label: "전체" },
+  { value: "15분이내", label: "15분" },
+  { value: "30분이내", label: "30분" },
+  { value: "60분이내", label: "60분" },
+  { value: "60분이상", label: "60분 이상" },
+];
 
-const difficultyOptions = RecipeFilterConfig.toSelectOptions(
-  RecipeFilterConfig.difficulties,
-  `${RecipeFilterConfig.labels.difficulty}`,
-);
+const difficultyOptions = [RecipeFilterConfig.FILTER_ALL, ...RecipeFilterConfig.difficulties];
 
 /** 개별 기능 연결 시 true로 전환 */
 const FEATURE_FLAGS = {
   categoryFilter: true,
   timeFilter: true,
   levelFilter: true,
-  sortFilter: false,
   savedRecipes: true,
 };
 
@@ -46,30 +45,6 @@ function ImageSlot({ src, alt = "", className = "" }) {
     >
       {src ? <img src={src} alt={alt} /> : null}
     </span>
-  );
-}
-
-function GridIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false">
-      <rect x="3" y="3" width="5" height="5" rx="1.2" />
-      <rect x="12" y="3" width="5" height="5" rx="1.2" />
-      <rect x="3" y="12" width="5" height="5" rx="1.2" />
-      <rect x="12" y="12" width="5" height="5" rx="1.2" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false">
-      <rect x="3" y="4" width="3" height="3" rx="0.8" />
-      <rect x="8" y="4.5" width="9" height="2" rx="1" />
-      <rect x="3" y="8.5" width="3" height="3" rx="0.8" />
-      <rect x="8" y="9" width="9" height="2" rx="1" />
-      <rect x="3" y="13" width="3" height="3" rx="0.8" />
-      <rect x="8" y="13.5" width="9" height="2" rx="1" />
-    </svg>
   );
 }
 
@@ -116,9 +91,7 @@ function RecipeList() {
 
   const [error, setError] = useState(null);
 
-  const [viewMode, setViewMode] = useState("grid");
-
-  const [sortBy, setSortBy] = useState(RecipeFilterConfig.sortOptions[0].value);
+  const [isRecipeTypeMenuOpen, setIsRecipeTypeMenuOpen] = useState(false);
 
   const [savedIds, setSavedIds] = useState([]);
 
@@ -260,8 +233,6 @@ function RecipeList() {
   };
 
   const resetFilters = () => {
-    setSortBy(RecipeFilterConfig.sortOptions[0].value);
-
     navigate("/recipes");
   };
 
@@ -276,12 +247,6 @@ function RecipeList() {
         : "전체 레시피";
 
   const resultsCount = total;
-
-  const isFilterSectionPending =
-    !FEATURE_FLAGS.categoryFilter &&
-    !FEATURE_FLAGS.timeFilter &&
-    !FEATURE_FLAGS.levelFilter &&
-    !FEATURE_FLAGS.sortFilter;
 
   return (
     <section className="recipe-list-page" aria-labelledby="recipe-list-title">
@@ -317,111 +282,92 @@ function RecipeList() {
         <ImageSlot className="recipe-list-hero__image" src={imageSearch} />
       </div>
 
-      <section
-        className={`recipe-list-filter${isFilterSectionPending ? " is-pending" : ""}`}
-        aria-labelledby="recipe-filter-title"
-      >
-        <h2 id="recipe-filter-title">
-          레시피 필터
-          {!FEATURE_FLAGS.sortFilter ? (
-            <span className="recipe-list-pending-label">정렬 준비 중</span>
-          ) : null}
-        </h2>
-
+      <section className="recipe-list-filter" aria-label="레시피 조건 필터">
         <div className="recipe-list-filter__controls">
-          <select
-            aria-label={RecipeFilterConfig.labels.recipeType}
-            value={criteria.category}
-            disabled={!FEATURE_FLAGS.categoryFilter}
-            title={
-              FEATURE_FLAGS.categoryFilter ? undefined : "준비 중인 기능입니다"
-            }
-            onChange={(event) =>
-              handleFilterChange({ category: event.target.value })
-            }
-          >
-            {recipeTypeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            aria-label={RecipeFilterConfig.labels.cookingTime}
-            value={criteria.timeFilter}
-            disabled={!FEATURE_FLAGS.timeFilter}
-            title={
-              FEATURE_FLAGS.timeFilter ? undefined : "준비 중인 기능입니다"
-            }
-            onChange={(event) =>
-              handleFilterChange({ timeFilter: event.target.value })
-            }
-          >
-            {cookingTimeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            aria-label={RecipeFilterConfig.labels.difficulty}
-            value={criteria.levelFilter}
-            disabled={!FEATURE_FLAGS.levelFilter}
-            title={
-              FEATURE_FLAGS.levelFilter ? undefined : "준비 중인 기능입니다"
-            }
-            onChange={(event) =>
-              handleFilterChange({ levelFilter: event.target.value })
-            }
-          >
-            {difficultyOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <div className="recipe-list-filter__right">
-            <select
-              aria-label={RecipeFilterConfig.labels.sort}
-              value={sortBy}
-              disabled={!FEATURE_FLAGS.sortFilter}
-              title={
-                FEATURE_FLAGS.sortFilter ? undefined : "준비 중인 기능입니다"
-              }
-              onChange={(event) => setSortBy(event.target.value)}
+          <div className="recipe-list-choice-group recipe-list-choice-group--select">
+            <span>요리타입</span>
+            <div
+              className="recipe-list-type-dropdown"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setIsRecipeTypeMenuOpen(false);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setIsRecipeTypeMenuOpen(false);
+              }}
             >
-              {RecipeFilterConfig.sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <div className="recipe-list-view" aria-label="보기 방식">
               <button
-                className={viewMode === "grid" ? "is-active" : ""}
+                className="recipe-list-type-trigger"
                 type="button"
-                aria-label="그리드 보기"
-                title="그리드 보기"
-                onClick={() => setViewMode("grid")}
+                aria-haspopup="menu"
+                aria-expanded={isRecipeTypeMenuOpen}
+                disabled={!FEATURE_FLAGS.categoryFilter}
+                onClick={() => setIsRecipeTypeMenuOpen((isOpen) => !isOpen)}
               >
-                <GridIcon />
+                <span>{recipeTypeOptions.find((option) => option.value === criteria.category)?.label}</span>
+                <span className="recipe-list-type-trigger__arrow" aria-hidden="true" />
               </button>
 
-              <button
-                className={viewMode === "list" ? "is-active" : ""}
-                type="button"
-                aria-label="리스트 보기"
-                title="리스트 보기"
-                onClick={() => setViewMode("list")}
-              >
-                <ListIcon />
-              </button>
+              {isRecipeTypeMenuOpen ? (
+                <div className="recipe-list-type-menu" role="menu">
+                  {recipeTypeOptions.map((option) => (
+                    <button
+                      className={criteria.category === option.value ? "is-active" : ""}
+                      key={option.value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={criteria.category === option.value}
+                      onClick={() => {
+                        handleFilterChange({ category: option.value });
+                        setIsRecipeTypeMenuOpen(false);
+                      }}
+                    >
+                      <span>{option.label}</span>
+                      {criteria.category === option.value ? <span aria-hidden="true">✓</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
+
+          <div className="recipe-list-choice-group" role="group" aria-label="조리시간">
+            <span>조리시간</span>
+            <div className="recipe-list-choice-group__options">
+              {cookingTimeOptions.map((option) => (
+                <button
+                  className={criteria.timeFilter === option.value ? "is-active" : ""}
+                  key={option.value}
+                  type="button"
+                  aria-pressed={criteria.timeFilter === option.value}
+                  disabled={!FEATURE_FLAGS.timeFilter}
+                  onClick={() => handleFilterChange({ timeFilter: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="recipe-list-choice-group" role="group" aria-label="난이도">
+            <span>난이도</span>
+            <div className="recipe-list-choice-group__options">
+              {difficultyOptions.map((option) => (
+                <button
+                  className={criteria.levelFilter === option ? "is-active" : ""}
+                  key={option}
+                  type="button"
+                  aria-pressed={criteria.levelFilter === option}
+                  disabled={!FEATURE_FLAGS.levelFilter}
+                  onClick={() => handleFilterChange({ levelFilter: option })}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -457,13 +403,7 @@ function RecipeList() {
           </p>
         ) : null}
 
-        <div
-          className={
-            viewMode === "list"
-              ? "recipe-list-grid is-list"
-              : "recipe-list-grid"
-          }
-        >
+        <div className="recipe-list-grid">
           {!error
             ? recipes.map((recipe) => (
                 <article

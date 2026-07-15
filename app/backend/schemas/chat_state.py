@@ -15,6 +15,7 @@ class GraphState(TypedDict):
     intent: Optional[str]           # 라우터가 판단한 의도 (예: recipe.recommend, inventory.consume 등)
     intent_payload: Optional[dict] # LLM/룰 라우팅 결과 원본 dict
     slots: Optional[dict]          # LLM이 추출한 식재료, 날짜 등 슬롯
+    pending_action: Optional[dict] # 사용자 확인을 기다리는 쓰기 작업
     keyword: Optional[str]          # 추출된 핵심 키워드 (예: "감자", "양파")
     
     # 도구(Tool) 및 에이전트 통신용

@@ -7,7 +7,6 @@ const breadcrumbMap = {
   '/receipt-ocr': [{ label: '홈', to: '/' }, { label: '영수증 등록' }],
   '/recipes': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '레시피 목록' }],
   '/recipe-fridge': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '냉장고 파먹기' }],
-  '/menu-recommend': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '메뉴 추천' }],
   '/recipe-recommend': [{ label: '홈', to: '/' }, { label: '레시피' }, { label: '레시피 추천' }],
   '/login': [{ label: '홈', to: '/' }, { label: '로그인' }],
   '/mypage': [{ label: '홈', to: '/' }, { label: '마이페이지' }],
@@ -23,7 +22,7 @@ const breadcrumbMap = {
 function Breadcrumbs() {
   const { pathname, search } = useLocation()
 
-  if (pathname === '/') {
+  if (pathname === '/' || (pathname.startsWith('/guide/') && pathname !== '/guide')) {
     return null
   }
 
@@ -38,12 +37,6 @@ function Breadcrumbs() {
         { label: '홈', to: '/' },
         { label: '마이페이지', to: mypageTabLabels[mypageTab] ? '/mypage' : undefined },
         { label: mypageTabLabels[mypageTab] || '내 정보' },
-      ]
-    : pathname.startsWith('/guide/') && pathname !== '/guide'
-    ? [
-        { label: '홈', to: '/' },
-        { label: '식재료 가이드', to: '/guide' },
-        { label: '식재료 가이드' },
       ]
     : pathname.startsWith('/recipes/') && pathname !== '/recipes'
       ? [

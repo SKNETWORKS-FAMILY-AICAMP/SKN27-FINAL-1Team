@@ -255,7 +255,6 @@ function MenuRecommend() {
           aria-labelledby="builder-title"
         >
           <div className="menu-recommend-panel__heading">
-            <span className="menu-recommend-panel__step">1</span>
             <div>
               <h2 id="builder-title">추천 템플릿 선택</h2>
               <p>상황에 맞는 템플릿을 고르면 조건이 자동으로 설정됩니다.</p>
@@ -276,9 +275,6 @@ function MenuRecommend() {
                 aria-pressed={templateId === template.id}
                 onClick={() => handleTemplateSelect(template)}
               >
-                <span className="menu-recommend-template-card__icon" aria-hidden="true">
-                  {template.icon}
-                </span>
                 <strong>{template.label}</strong>
                 <span>{template.desc}</span>
               </button>
@@ -292,7 +288,6 @@ function MenuRecommend() {
         <section className="menu-recommend-panel menu-recommend-panel--settings">
           <div className="menu-recommend-panel__heading menu-recommend-panel__heading--split">
             <div className="menu-recommend-panel__heading-copy">
-              <span className="menu-recommend-panel__step">2</span>
               <div>
                 <h2>추천 설정</h2>
                 <p>원하는 조건을 직접 설정해 맞춤 추천을 받아보세요.</p>
@@ -318,7 +313,6 @@ function MenuRecommend() {
               {filterGroups.map((group) => (
                 <div className="menu-recommend-settings__column" key={group.key}>
                   <div className="menu-recommend-settings__column-head">
-                    <span aria-hidden="true">{group.icon}</span>
                     <div>
                       <strong>{group.label}</strong>
                       {group.subtitle ? <small>{group.subtitle}</small> : null}
@@ -495,10 +489,6 @@ function MenuRecommend() {
                       <p>
                         {formatCookingTime(recipe.cooking_time_min)} · {recipe.difficulty || '-'}
                       </p>
-                      <div>
-                        <b>추천 이유</b>
-                        <span>{recipe.reason || '조건에 맞는 메뉴예요.'}</span>
-                      </div>
                       <div className="menu-recommend-card__actions">
                         <Link to={`/recipes/${recipeId}`}>레시피 보기</Link>
                         <button
@@ -519,19 +509,6 @@ function MenuRecommend() {
             </div>
           )}
         </main>
-
-        <aside className="menu-recommend-guide" aria-labelledby="guide-title">
-          <h2 id="guide-title">추천 기준</h2>
-          <ol>
-            {process.map((item, index) => (
-              <li className={index === activeStep && isGenerating ? 'is-active' : ''} key={item.title}>
-                <strong>{item.title}</strong>
-                <p>{item.description}</p>
-              </li>
-            ))}
-          </ol>
-          <ImageSlot className="menu-recommend-guide__image" src={imageHello} alt="인사하는 밥벌이" />
-        </aside>
       </div>
     </section>
   )

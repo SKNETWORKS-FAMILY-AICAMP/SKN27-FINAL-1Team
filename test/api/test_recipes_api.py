@@ -1,3 +1,4 @@
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -65,9 +66,6 @@ def test_recipe_recommend_api_requires_login_and_returns_result(monkeypatch):
             ],
             "returned_count": 1,
             "has_more": False,
-            "applied_tier": "strict",
-            "fallback_used": False,
-            "empty_reason": "none",
         }
 
     monkeypatch.setattr(recipes_api.recommendation_service, "recommend_recipes", fake_recommend_recipes)

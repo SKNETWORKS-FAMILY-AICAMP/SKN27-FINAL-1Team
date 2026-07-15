@@ -142,22 +142,14 @@
   margin-top: 18px;
 }
 
-.receipt-guest-grid {
+.receipt-guest {
   display: grid;
-  grid-template-columns: minmax(330px, 0.84fr) minmax(330px, 0.8fr);
-  grid-template-areas:
-    "upload login"
-    "chart chart";
-  gap: 18px;
-  align-items: stretch;
-}
-
-.receipt-guest-grid .receipt-upload {
-  grid-area: upload;
+  grid-template-columns: minmax(0, 620px);
+  justify-content: center;
 }
 
 .receipt-login-notice {
-  grid-area: login;
+  min-height: 360px;
 }
 
 .receipt-before-grid {
@@ -2504,7 +2496,6 @@ body.is-receipt-crop-resizing * {
     grid-column: 1 / -1;
   }
 
-  .receipt-guest-grid,
   .receipt-before-grid,
   .receipt-after-grid {
     grid-template-columns: 1fr;
@@ -2515,7 +2506,6 @@ body.is-receipt-crop-resizing * {
     max-width: none;
   }
 
-  .receipt-guest-grid .receipt-upload,
   .receipt-before-grid .receipt-upload,
   .receipt-login-notice,
   .receipt-before-side,

@@ -31,6 +31,28 @@ const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 // Main stepper indices (must match the order of receiptSteps).
 const STEP = { UPLOAD: 0, CROP: 1, ANALYZE: 2, CONFIRM: 3, STOCK: 4 }
 
+let receiptHistoryRequest = { token: '', promise: null }
+
+function fetchReceiptHistory(token) {
+  if (receiptHistoryRequest.token === token) return receiptHistoryRequest.promise
+
+  const promise = fetch(`${API_URL}/api/v1/receipts/history`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(async (response) => {
+    if (!response.ok) throw new Error('영수증 내역을 불러오지 못했어요.')
+    const data = await response.json().catch(() => ({}))
+    return Array.isArray(data.receipts) ? data.receipts : []
+  })
+  receiptHistoryRequest = { token, promise }
+
+  const clearRequest = () => {
+    if (receiptHistoryRequest.promise === promise) receiptHistoryRequest = { token: '', promise: null }
+  }
+  promise.then(clearRequest, clearRequest)
+
+  return promise
+}
+
 const defaultCropBox = { w: 0.78, h: 0.86 }
 const minCropBoxScale = 0.32
 const maxCropBoxScale = 1
@@ -353,18 +375,12 @@ function formatManwon(amount) {
   return `${(amount / 10000).toFixed(1)}만`
 }
 
-function PurchaseFlowChart({ isLoggedIn }) {
-  const chartId = isLoggedIn ? 'receipt-chart-title' : 'receipt-guest-chart-title'
+function PurchaseFlowChart() {
+  const chartId = 'receipt-chart-title'
   const [purchaseFlowData, setPurchaseFlowData] = useState(fallbackPurchaseFlowData)
   const [purchaseFlowStatus, setPurchaseFlowStatus] = useState('idle')
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      setPurchaseFlowData(fallbackPurchaseFlowData)
-      setPurchaseFlowStatus('idle')
-      return undefined
-    }
-
     const token = window.localStorage.getItem('bobbeori-token')
 
     if (!token) {
@@ -376,17 +392,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
     let active = true
     setPurchaseFlowStatus('loading')
 
-    fetch(`${API_URL}/api/v1/receipts/history?limit=100`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('식재료 구매 흐름을 불러오지 못했어요.')
-        }
-
-        const data = await response.json().catch(() => ({}))
-        return Array.isArray(data.receipts) ? data.receipts : []
-      })
+    fetchReceiptHistory(token)
       .then((receipts) => {
         if (!active) {
           return
@@ -407,25 +413,7 @@ function PurchaseFlowChart({ isLoggedIn }) {
     return () => {
       active = false
     }
-  }, [isLoggedIn])
-
-  if (!isLoggedIn) {
-    return (
-      <section className="receipt-panel receipt-chart" aria-labelledby={chartId}>
-        <div>
-          <h2 id={chartId}>식재료 구매 흐름</h2>
-          <p> 최근 식재료 구매 패턴을 한눈에 확인해보세요.</p>
-        </div>
-        <div className="receipt-chart__bars" aria-hidden="true">
-          <span style={{ height: '42%' }} />
-          <span style={{ height: '66%' }} />
-          <span style={{ height: '54%' }} />
-          <span style={{ height: '82%' }} />
-          <span style={{ height: '58%' }} />
-        </div>
-      </section>
-    )
-  }
+  }, [])
 
   const weeklyPurchaseData = purchaseFlowData.weeklyData
   const frequentIngredientData = purchaseFlowData.frequentIngredients
@@ -1645,8 +1633,7 @@ function ReceiptOcr() {
       </div>
 
       {!isLoggedIn ? (
-        <div className="receipt-branch receipt-guest-grid">
-          <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
+        <div className="receipt-branch receipt-guest">
           <section className="receipt-panel receipt-login-notice" aria-labelledby="receipt-login-title">
             <ImageSlot className="receipt-login-notice__image" src={imageHello} />
             <h2 id="receipt-login-title">로그인이 필요해요</h2>
@@ -1655,10 +1642,9 @@ function ReceiptOcr() {
             로그인 후 바로 시작할 수 있어요.
             </p>
             <button className="receipt-primary-button" type="button" onClick={() => navigate('/login')}>
-              로그인하러 가기
+              로그인하고 영수증 등록하기
             </button>
           </section>
-          <PurchaseFlowChart isLoggedIn={false} />
         </div>
       ) : isCropPending ? (
         <div className="receipt-branch receipt-crop-focus">
@@ -1682,7 +1668,7 @@ function ReceiptOcr() {
           <aside className="receipt-before-side" aria-label="영수증 입고 정보">
             <RecentHistory />
           </aside>
-          <PurchaseFlowChart isLoggedIn />
+          <PurchaseFlowChart />
         </div>
       ) : (
         <>
@@ -2803,17 +2789,8 @@ function RecentHistory() {
     let active = true
     setStatus('loading')
 
-    fetch(`${API_URL}/api/v1/receipts/history`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('최근 영수증 내역을 불러오지 못했어요.')
-        }
-
-        const data = await response.json().catch(() => ({}))
-        return Array.isArray(data.receipts) ? data.receipts.map(mapHistoryEntry) : []
-      })
+    fetchReceiptHistory(token)
+      .then((receipts) => receipts.map(mapHistoryEntry))
       .then((entries) => {
         if (!active) {
           return

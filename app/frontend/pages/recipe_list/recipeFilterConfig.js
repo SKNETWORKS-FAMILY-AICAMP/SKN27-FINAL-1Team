@@ -29,33 +29,13 @@ export class RecipeFilterConfig {
     '퓨전',
   ]
 
-  /** CKG_TIME_NM — 조리 시간 순 */
-  static cookingTimes = [
-    '5분이내',
-    '10분이내',
-    '15분이내',
-    '30분이내',
-    '60분이내',
-    '90분이내',
-    '2시간이내',
-    '2시간이상',
-  ]
-
   /** CKG_DODF_NM */
   static difficulties = ['초급', '중급', '고급']
-
-  /** 정렬 — UI 유지, FEATURE_FLAGS.sortFilter 연동 전까지 비활성 */
-  static sortOptions = [
-    { value: '인기순', label: '인기순' },
-    { value: '조리시간순', label: '조리시간순' },
-    { value: '난이도순', label: '난이도순' },
-  ]
 
   static labels = {
     recipeType: '요리타입',
     cookingTime: '조리시간',
     difficulty: '난이도',
-    sort: '정렬',
   }
 
   /**
