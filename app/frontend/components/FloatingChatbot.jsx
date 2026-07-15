@@ -16,6 +16,10 @@ const initialMessages = [
   { role: 'bot', text: '무엇을 도와드릴까요? 요리에 관한 모든 것을 물어보세요.' },
 ]
 
+// Langfuse에서 새 채팅을 별도 세션으로 추적할 식별자를 생성합니다.
+const createChatSessionId = () =>
+  globalThis.crypto?.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(16).slice(2)
+
 // 응답 안의 '재료명' 표기를 작은 강조 배지로 바꿔 보여줍니다.
 function MessageText({ text }) {
   return (
@@ -73,6 +77,7 @@ function FloatingChatbot() {
   const [messages, setMessages] = useState(initialMessages)
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef(null)
+  const sessionIdRef = useRef(createChatSessionId())
 
   // 새 메시지나 로딩 말풍선이 추가되면 마지막 응답으로 이동합니다.
   useEffect(() => {
@@ -102,6 +107,7 @@ function FloatingChatbot() {
         headers,
         body: JSON.stringify({
           message: trimmed,
+          session_id: sessionIdRef.current,
           history: messages.map((item) => ({
             role: item.role,
             text: item.text,
@@ -156,6 +162,13 @@ function FloatingChatbot() {
     requestChat(message)
   }
 
+  // Enter는 전송하고 Shift+Enter는 줄바꿈으로 유지합니다.
+  const handleMessageKeyDown = (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    requestChat(message)
+  }
+
   return (
     <aside className="floating-chatbot" aria-label="밥벌이 챗봇">
       {isOpen && (
@@ -176,7 +189,10 @@ function FloatingChatbot() {
                 type="button"
                 aria-label="새 채팅"
                 title="새 채팅 시작"
-                onClick={() => setMessages(initialMessages)}
+                onClick={() => {
+                  setMessages(initialMessages)
+                  sessionIdRef.current = createChatSessionId()
+                }}
                 style={{ 
                   width: 'auto',
                   height: 'auto',
@@ -293,11 +309,12 @@ function FloatingChatbot() {
           </div>
 
           <form className="floating-chatbot__form" onSubmit={sendMessage}>
-            <input
-              type="text"
+            <textarea
+              rows="1"
               value={message}
               placeholder="메시지를 입력하세요..."
               onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={handleMessageKeyDown}
             />
             <button type="submit" aria-label="메시지 전송">
               <svg viewBox="0 0 24 24" aria-hidden="true">
