@@ -1,44 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { API_URL } from '../../utils/api.js'
+import {
+  searchIngredientImages,
+  useIngredientImageCatalog,
+} from '../../utils/ingredientImages.js'
 
 const CATEGORY_OPTIONS = ['기타', '채소', '과일', '육류', '수산물', '유제품', '가공식품']
 const STORAGE_OPTIONS = ['냉장', '냉동', '실온']
 const UNIT_OPTIONS = ['개', 'kg']
-
-// 식재료 이미지 파일명을 검색용 키로 정규화합니다.
-function normalizeIngredientImageName(name = '') {
-  return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
-}
-
-const INGREDIENT_SEARCH_ALIASES = {
-  계란: ['달걀'],
-  달걀: ['계란'],
-  쇠고기: ['소고기'],
-  돈육: ['돼지고기'],
-  고추가루: ['고춧가루'],
-  케찹: ['케첩'],
-  대파: ['파'],
-}
-
-// 사용자가 동의어로 검색해도 대표 식재료가 자동완성되도록 검색 키를 확장합니다.
-function getIngredientSearchKeys(keyword = '') {
-  const key = normalizeIngredientImageName(keyword)
-  return [key, ...(INGREDIENT_SEARCH_ALIASES[key] || []).map(normalizeIngredientImageName)]
-}
-
-const ingredientImages = Object.entries(
-  import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
-    eager: true,
-    import: 'default',
-  }),
-)
-  .map(([path, src]) => {
-    const fileName = path.split('/').pop() || ''
-    const name = fileName.replace(/\.[^.]+$/, '')
-    return { name, key: normalizeIngredientImageName(name), src }
-  })
-  .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-
 
 // 식재료 추가/수정 폼을 표시하는 모달 컴포넌트입니다.
 export default function IngredientModal({
@@ -50,6 +19,7 @@ export default function IngredientModal({
   onSubmit,
   isSubmitting,
 }) {
+  const ingredientImageCatalog = useIngredientImageCatalog()
   const [predictError, setPredictError] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false)
@@ -106,30 +76,18 @@ export default function IngredientModal({
       console.error('AI 예측 실패:', error)
     }
   }
-  // 재료명 입력값으로 assets에 있는 표준 식재료만 자동완성합니다.
+  // 재료명 입력값으로 매니페스트의 대표 식재료를 자동완성합니다.
   useEffect(() => {
     const keyword = formData.name.trim()
-    const key = normalizeIngredientImageName(keyword)
-    const searchKeys = getIngredientSearchKeys(keyword)
-    if (!isOpen || (editingId && !hasEditedName) || !key) {
+    if (!isOpen || (editingId && !hasEditedName) || !keyword) {
       setSuggestions([])
       setFocusedSuggestionIndex(-1)
       return
     }
 
     setFocusedSuggestionIndex(-1)
-    setSuggestions(
-      ingredientImages
-        .filter((item) => searchKeys.some((searchKey) => item.key.includes(searchKey)))
-        // 정확히 일치하는 식재료를 먼저 보여줍니다.
-        .sort((a, b) =>
-          Number(searchKeys.includes(b.key)) - Number(searchKeys.includes(a.key)) ||
-          Number(searchKeys.some((searchKey) => b.key.startsWith(searchKey))) - Number(searchKeys.some((searchKey) => a.key.startsWith(searchKey))) ||
-          a.name.localeCompare(b.name, 'ko'),
-        )
-        .slice(0, 6),
-    )
-  }, [editingId, formData.name, hasEditedName, isOpen])
+    setSuggestions(searchIngredientImages(ingredientImageCatalog, keyword))
+  }, [editingId, formData.name, hasEditedName, ingredientImageCatalog, isOpen])
 
   // 자동완성 항목을 선택하면 재료명 입력값에 바로 반영합니다.
   const handleSelectSuggestion = (suggestion) => {
@@ -220,14 +178,14 @@ export default function IngredientModal({
                 {suggestions.map((suggestion, index) => (
                   <button
                     type="button"
-                    key={suggestion.key}
+                    key={suggestion.id}
                     className={index === focusedSuggestionIndex ? 'is-focused' : ''}
                     onMouseDown={(event) => {
                       event.preventDefault()
                       handleSelectSuggestion(suggestion)
                     }}
                   >
-                    <img src={suggestion.src} alt="" />
+                    <img src={suggestion.imageUrl} alt="" />
                     <span>{suggestion.name}</span>
                   </button>
                 ))}
