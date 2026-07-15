@@ -28,6 +28,26 @@
   object-fit: contain;
 }
 
+.fridge-image-placeholder {
+  width: min(68%, 96px);
+  height: min(68%, 96px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff1f2;
+  color: #d96a72;
+}
+
+.fridge-image-placeholder svg {
+  width: 72%;
+  height: 72%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .fridge-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -344,16 +364,32 @@
 }
 
 .fridge-item h2 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   color: var(--figma-text);
   font-size: 20px;
   font-weight: 900;
+  line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.fridge-item h2.is-name-medium {
+  font-size: 17px;
+}
+
+.fridge-item h2.is-name-long {
+  font-size: 15px;
+}
+
+.fridge-item h2.is-name-very-long {
+  font-size: 13px;
+}
+
 .fridge-storage-badge {
+  flex: 0 0 auto;
   min-height: 26px;
   padding: 0 10px;
   display: inline-flex;
