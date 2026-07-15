@@ -22,6 +22,7 @@ Pillow                      # 이미지 처리 및 핸들링
 
 # LLM & Agent Framework (공용)
 langchain>=0.1.0            # LLM 체인 및 에이전트 프레임워크
+langgraph>=1.1.0,<2.0.0    # 슈퍼바이저 LangGraph 워크플로 실행
 openai>=1.0.0               # OpenAI API 연동
 
 # Data Analysis & Machine Learning (김경수 담당)
