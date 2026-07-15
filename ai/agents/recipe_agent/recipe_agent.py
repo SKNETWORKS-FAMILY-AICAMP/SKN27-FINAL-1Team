@@ -164,6 +164,40 @@ if __name__ == "__main__":
         r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
         _check_output_contract(r)
         assert r["actions"] == []
+
+        # -- P0-4: Supervisor 통합 기준선 --
+        agent.handle_recipe_search = fake_search
+        r = agent.run_recipe_agent(
+            "김치볶음밥 레시피",
+            db=None, user_id=None, history=[], settings_obj=None, intent=None,
+        )
+        _check_output_contract(r)
+
+        agent.handle_recipe_recommend = fake_recommend
+        r = agent.run_recipe_agent(
+            "두부로 뭐 해먹지?",
+            db=None, user_id=1, history=[], settings_obj=None, intent="recipe.recommend",
+        )
+        _check_output_contract(r)
+        assert len(r["response_text"]) > 0
+
+        r = agent.run_recipe_agent(
+            "김치볶음밥이랑 어울리는 반찬",
+            db=None, user_id=None, history=[], settings_obj=None, intent=None,
+        )
+        _check_output_contract(r)
+
+        class FakeMsg:
+            def __init__(self, role, text):
+                self.role = role
+                self.text = text
+        r = agent.run_recipe_agent(
+            "다른 거 추천해줘",
+            db=None, user_id=1,
+            history=[FakeMsg("bot", "이전에 김치볶음밥을 추천했습니다.")],
+            settings_obj=None, intent="recipe.search",
+        )
+        _check_output_contract(r)
     finally:
         agent.handle_recipe_search = orig_search
         agent.handle_recipe_recommend = orig_recommend
