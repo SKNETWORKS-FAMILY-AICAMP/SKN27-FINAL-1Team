@@ -102,7 +102,7 @@ function FloatingChatbot() {
         headers,
         body: JSON.stringify({
           message: trimmed,
-          history: messages.filter((item) => !item.isTyping).map((item) => ({ role: item.role, text: item.text })),
+          history: messages.map((item) => ({ role: item.role, text: item.text, intent: item.intent || null })),
           settings: initialSettings,
         }),
       })
@@ -117,7 +117,7 @@ function FloatingChatbot() {
       }
       setMessages((prev) => [
         ...prev,
-        { role: 'bot', text: data.reply, actions: data.actions || [], sources: data.sources || [], isTyping: true },
+        { role: 'bot', text: data.reply, intent: data.intent, actions: data.actions || [], sources: data.sources || [], isTyping: true },
       ])
     } catch (error) {
       setMessages((prev) => [
