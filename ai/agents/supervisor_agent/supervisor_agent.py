@@ -1,3 +1,5 @@
+import json
+
 from langgraph.graph import END, StateGraph
 
 from ai.agents.inventory_agent.inventory_utils import (
@@ -24,6 +26,12 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     CONFIRM_PREFIX, CANCEL_WORDS,
     _normalize_text
 )
+from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
+
+def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = None) -> dict:
+    """라우터 결과를 공통 dict 형식으로 반환합니다."""
+    payload = {"intent": intent, "confidence": confidence, "slots": slots or {}}
+    return {"intent": intent, "intent_payload": payload, "slots": payload["slots"]}
 
 def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
@@ -32,48 +40,63 @@ def router_node(state: GraphState) -> dict:
     history = state.get("history", [])
 
     if normalized.startswith(CONFIRM_PREFIX):
-        return {"intent": "action.confirm"}
+        return _route_result("action.confirm")
     if normalized in CANCEL_WORDS:
-        return {"intent": "action.cancel"}
+        return _route_result("action.cancel")
 
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
-            return {"intent": "inventory.pending_add_many"}
+            return _route_result("inventory.pending_add_many")
         if _is_quantity_only_list(text):
-            return {"intent": "inventory.pending_add_many_retry"}
+            return _route_result("inventory.pending_add_many_retry")
     if _pending_add_storage_from_history(history) and _extract_storage(text):
-        return {"intent": "inventory.pending_add_storage"}
+        return _route_result("inventory.pending_add_storage")
     if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
-        return {"intent": "inventory.pending_add"}
+        return _route_result("inventory.pending_add")
     if _pending_consume_from_history(history) and _extract_quantity(text):
-        return {"intent": "inventory.pending_consume"}
+        return _route_result("inventory.pending_consume")
 
     # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
     if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
-        return {"intent": "receipt.guide"}
+        return _route_result("receipt.guide")
 
     # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if any(word in normalized for word in ("알림", "알람", "리마인더", "디바이스", "기기", "푸시토큰", "읽음", "읽었")) and not any(word in normalized for word in ("일정", "캘린더")):
-        return {"intent": "alarm.notification"}
+    if any(word in normalized for word in ("알림", "알람", "리마인더", "디바이스", "푸시토큰", "읽음", "읽었")) and not any(word in normalized for word in ("일정", "캘린더")):
+        return _route_result("alarm.notification")
     if any(word in normalized for word in ("일정", "캘린더")):
-        return {"intent": "alarm.calendar"}
+        return _route_result("alarm.calendar")
+    shopping_intent = analyze_shopping_intent(text)
+    if shopping_intent:
+        return _route_result(shopping_intent)
+
+    # 가격 질문은 장보기 문맥이 없어도 Shopping Agent의 가격 비교로 보냅니다.
+    if any(word in normalized for word in ("가격", "얼마", "최저가")):
+        return _route_result("shopping.compare")
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
-        return {"intent": "recipe.pairing"}
+        return _route_result("recipe.pairing")
 
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
-        return {"intent": "inventory.delete"}
+        return _route_result("inventory.delete")
     if any(word in normalized for word in EXPIRING_WORDS):
-        return {"intent": "inventory.expiring"}
+        return _route_result("inventory.expiring")
     if any(word in normalized for word in CONSUME_WORDS):
-        return {"intent": "inventory.action"}
+        return _route_result("inventory.action")
     if any(word in normalized for word in ADD_WORDS):
-        return {"intent": "inventory.action"}
+        return _route_result("inventory.action")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
-        return {"intent": "inventory.list"}
+        return _route_result("inventory.list")
 
-    return {"intent": state["service"]._route_intent_with_llm(text, history)}
+    if hasattr(state["service"], "_route_intent_payload_with_llm"):
+        route_payload = state["service"]._route_intent_payload_with_llm(text, history)
+    else:
+        route_payload = {"intent": state["service"]._route_intent_with_llm(text, history), "slots": {}}
+    return _route_result(
+        route_payload.get("intent", "general"),
+        route_payload.get("confidence", 0.0),
+        route_payload.get("slots", {}),
+    )
 
 
 def _format_calendar_events(data: dict) -> str | None:
@@ -138,6 +161,21 @@ def receipt_guide_node(state: GraphState) -> dict:
         "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
 
+def shopping_agent_node(state: GraphState) -> dict:
+    """장보기 관리를 Shopping Agent로 위임합니다."""
+    from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
+
+    if not state.get("user_id"):
+        return {"response_text": LOGIN_REQUIRED_REPLY}
+
+    return run_shopping_agent(
+        text=state["text"],
+        intent=state.get("intent", ""),
+        history=state.get("history", []),
+        db=state["db"],
+        user_id=state.get("user_id"),
+    )
+
 def alarm_agent_node(state: GraphState) -> dict:
     """캘린더 및 알림 관리를 Alarm Agent로 위임합니다."""
     from ai.agents.alarm_agent.alarm_agent import run as run_alarm_agent
@@ -153,17 +191,24 @@ def alarm_agent_node(state: GraphState) -> dict:
     alarm_intent = None
     
     if confirmed:
-        parts = text.split(":")
+        parts = text.split(":", 2)
         if len(parts) >= 2:
             action = parts[1]
             # 재고 관련 확인 액션은 Inventory Agent가 처리하므로 여기서 넘기지 않습니다.
             if action in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
-                pass 
-            elif len(parts) >= 4 and action == "add_calendar_event":
+                pass
+            elif action == "alarm" and len(parts) == 3:
+                # Alarm Agent의 최신 action payload를 손실 없이 다시 전달합니다.
+                alarm_action = json.loads(parts[2])
+                alarm_intent = alarm_action.get("intent")
+                action = alarm_action.get("action")
+                payload = alarm_action.get("payload") or {}
+            elif len(parts) >= 3 and action == "add_calendar_event":
                 # 기존 레거시 포맷: 확인:add_calendar_event:제목:날짜
+                legacy_parts = text.split(":")
                 action = "create_event"
                 alarm_intent = "calendar.create"
-                payload = {"title": parts[2], "date_text": ":".join(parts[3:])}
+                payload = {"title": legacy_parts[2], "date_text": ":".join(legacy_parts[3:])}
             elif len(parts) >= 3 and action == "delete_event":
                 alarm_intent = "calendar.delete"
                 payload = {"event_key": parts[2]}
@@ -171,15 +216,8 @@ def alarm_agent_node(state: GraphState) -> dict:
                 alarm_intent = "calendar.sync_daily"
                 payload = {}
     elif intent == "alarm.notification":
-        # 미확인 알림 필터는 알람 에이전트에 아직 전용 도구가 없어 성공 응답처럼 보이지 않게 막습니다.
-        if any(word in text for word in ('읽지 않은', '안 읽은', '안읽은', '미확인', '미열람')):
-            return {"response_text": "읽지 않은 알림만 따로 조회하는 기능은 아직 준비 중이에요. 현재는 전체 알림 목록 조회만 가능해요."}
-        if any(word in text for word in ('읽음', '읽었')):
-            alarm_intent = "alarm.read"
-        elif any(word in text for word in ('디바이스', '기기', '푸시토큰')) and any(word in text for word in ('등록', '추가', '설정')):
-            alarm_intent = "alarm.register_device"
-        elif any(word in text for word in ('조회', '있어', '확인', '알려')) and not any(word in text for word in ('등록', '추가', '생성', '예약', '설정', '삭제', '지워', '취소', '없애')):
-            alarm_intent = "alarm.list"
+        # 알림 세부 의도는 Alarm Agent의 최신 분석 로직에 맡깁니다.
+        pass
     elif intent == "alarm.calendar" and any(word in text for word in ("조회", "있어", "확인", "알려")):
         # 등록된 일정 조회 문장이 등록 요청으로 오분류되지 않게 조회 의도를 고정합니다.
         alarm_intent = "calendar.list"
@@ -199,36 +237,21 @@ def alarm_agent_node(state: GraphState) -> dict:
     response_text = response_text or res.get("message", "요청을 처리했습니다.")
     actions = []
     
-    # Alarm agent의 ui 형식을 챗봇 규격으로 변환
+    # Alarm Agent의 ui action을 프론트가 보낼 수 있는 message 문자열로 보존합니다.
     ui = res.get("ui", {})
     if ui and "actions" in ui:
         for a in ui["actions"]:
             label = a.get("label", "")
             val = a.get("value", {})
             if isinstance(val, dict):
-                # 프론트엔드가 요구하는 텍스트 문자열 형태로 직렬화
-                # 취소 버튼
                 if val.get("action") == "cancel":
                     actions.append({"label": label, "data": {"message": "취소"}})
-                # 확인 버튼 (create_event)
-                elif val.get("action") == "create_event":
-                    p = val.get("payload", {})
-                    t = p.get("title", "")
-                    d = p.get("date_text", "")
-                    actions.append({"label": label, "data": {"message": f"확인:add_calendar_event:{t}:{d}"}})
-                elif val.get("action") == "delete_event":
-                    p = val.get("payload", {})
-                    event_key = p.get("event_key", "")
-                    actions.append({"label": label, "data": {"message": f"확인:delete_event:{event_key}"}})
-                elif val.get("action") == "sync_daily_events":
-                    actions.append({"label": label, "data": {"message": "확인:sync_daily_events"}})
                 else:
-                    # 기타 알람 액션
-                    a_name = val.get("action", "")
-                    actions.append({"label": label, "data": {"message": f"확인:{a_name}"}})
+                    message = json.dumps(val, ensure_ascii=False, separators=(",", ":"))
+                    actions.append({"label": label, "data": {"message": f"확인:alarm:{message}"}})
             else:
                 actions.append({"label": label, "data": {"message": str(val)}})
-                
+
     result = {"response_text": response_text}
     if actions:
         result["actions"] = actions
@@ -243,9 +266,13 @@ def route_intent(state: GraphState) -> str:
     intent = state.get("intent") or "general"
     if intent.startswith("alarm."):
         return "alarm_agent_node"
+    if intent.startswith("shopping."):
+        return "shopping_agent_node"
     if intent.startswith("inventory.") or intent.startswith("action."):
         if intent == "action.confirm":
             parts = state["text"].split(":")
+            if len(parts) >= 2 and parts[1] in SHOPPING_CONFIRM_ACTIONS:
+                return "shopping_agent_node"
             if len(parts) >= 2 and parts[1] not in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
                 return "alarm_agent_node"
         return "inventory_agent_node"
@@ -262,6 +289,7 @@ workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)
 workflow.add_node("inventory_agent_node", inventory_agent_node)
 workflow.add_node("alarm_agent_node", alarm_agent_node)
+workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
 workflow.add_node("recipe_pairing_node", recipe_pairing_node)
@@ -273,6 +301,7 @@ workflow.add_conditional_edges("router", route_intent)
 for node_name in (
     "inventory_agent_node",
     "alarm_agent_node",
+    "shopping_agent_node",
     "guide_agent_node",
     "recipe_agent_node",
     "recipe_pairing_node",
