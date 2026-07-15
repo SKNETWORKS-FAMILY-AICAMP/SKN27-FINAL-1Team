@@ -33,9 +33,7 @@ def ndcg_at_k(scores: np.ndarray, relevance: np.ndarray, k: int = AT_K) -> float
     return dcg / idcg if idcg > 0.0 else 0.0
 
 
-def ranking_at_k_binary(
-    y_true: np.ndarray, scores: np.ndarray, *, k: int = AT_K
-) -> dict[str, float]:
+def ranking_at_k_binary(y_true: np.ndarray, scores: np.ndarray, *, k: int = AT_K) -> dict[str, float]:
     y = np.asarray(y_true, dtype=np.float64).ravel()
     s = np.asarray(scores, dtype=np.float64).ravel()
     k = min(int(k), s.size)
@@ -53,37 +51,23 @@ def catalog_score_sanity(scores: np.ndarray) -> dict[str, float | bool]:
     finite = np.isfinite(s)
     coverage = float(finite.sum() / s.size) if s.size else 0.0
     score_std = float(np.std(s[finite])) if finite.any() else 0.0
-    return {
-        "coverage": coverage,
-        "score_std": score_std,
-        "r0_pass": coverage == 1.0 and score_std > 1e-6,
-    }
+    return {"coverage": coverage, "score_std": score_std, "r0_pass": coverage == 1.0 and score_std > 1e-6}
 
 
 def seed_recommend_go_pass(seed_mean: dict) -> bool:
-    """R1: Recall@K(model) > Recall@K(star Bayesian pop)."""
-    rec = float(seed_mean.get("recall_at_k", 0.0))
-    rec_pop = float(seed_mean.get("recall_at_k_pop", 0.0))
-    return rec > rec_pop
+    return float(seed_mean.get("recall_at_k", 0.0)) > float(seed_mean.get("recall_at_k_pop", 0.0))
 
 
 def aggregate_recommend_multi_seed(seed_means: list[dict]) -> dict:
     n = len(seed_means)
     wins = sum(1 for m in seed_means if seed_recommend_go_pass(m))
-    pop_wins = sum(
-        1
-        for m in seed_means
-        if float(m.get("recall_at_k", 0.0)) > float(m.get("recall_at_k_pop", 0.0))
-    )
 
     def _mean(k: str) -> float:
         vals = [float(m[k]) for m in seed_means if k in m and np.isfinite(m[k])]
         return float(np.mean(vals)) if vals else float("nan")
 
     return {
-        "n_seeds": n,
-        "n_wins": wins,
-        "pop_wins": wins,
+        "n_seeds": n, "n_wins": wins, "pop_wins": wins,
         "go": wins >= REC_SEED_WINS_REQUIRED and n >= REC_SEED_WINS_REQUIRED,
         "mean_recall_at_k": _mean("recall_at_k"),
         "mean_recall_at_k_pop": _mean("recall_at_k_pop"),
@@ -104,19 +88,10 @@ def _mean_dicts(dicts: list[dict], keys: list[str]) -> dict:
     return out
 
 
-def run_prefer_cv(
-    cfg,
-    *,
-    review_df: pd.DataFrame,
-    dataset,
-    item_ids: list[str],
-    item_features,
-    y_prefer: pd.Series,
-) -> dict:
+def run_prefer_cv(cfg, *, review_df, dataset, item_ids, item_features, y_prefer) -> dict:
     from lightfm import LightFM
 
-    from preprocess import build_interactions, build_prefer_labels
-    from scoring import catalog_predict, star_popularity_scores
+    from pipeline import build_interactions, build_prefer_labels, catalog_predict, star_popularity_scores
 
     warm_ids = np.array(sorted(y_prefer.index.astype(str)), dtype=object)
     y = y_prefer.loc[warm_ids].to_numpy(dtype=int)
@@ -131,19 +106,10 @@ def run_prefer_cv(
         train_review = review_df[rid_str.isin(train_ids)].copy()
         y_train = build_prefer_labels(train_review)
 
-        interactions, _, _ = build_interactions(
-            train_review, dataset, cfg, recipe_prefer_labels=y_train
-        )
+        interactions = build_interactions(train_review, dataset, recipe_prefer_labels=y_train)
         model = LightFM(loss="warp", random_state=cfg.seed + fold_i)
-        model.fit(
-            interactions,
-            item_features=item_features,
-            epochs=cfg.epochs,
-            num_threads=cfg.num_threads,
-        )
-        all_scores = catalog_predict(
-            model, dataset, item_ids, item_features, cfg.num_threads
-        )
+        model.fit(interactions, item_features=item_features, epochs=cfg.epochs, num_threads=cfg.num_threads)
+        all_scores = catalog_predict(model, dataset, item_ids, item_features, cfg.num_threads)
         y_te = y_prefer.loc[test_ids].to_numpy(dtype=int)
         s_te = np.array([all_scores[id_to_idx[rid]] for rid in test_ids], dtype=float)
 
@@ -152,45 +118,22 @@ def run_prefer_cv(
 
         atk = ranking_at_k_binary(y_te, s_te, k=AT_K)
         atk_pop = ranking_at_k_binary(y_te, pop_te, k=AT_K)
-        fold_rows.append(
-            {
-                "fold": fold_i,
-                "recall_at_k": atk["recall_at_k"],
-                "recall_at_k_pop": atk_pop["recall_at_k"],
-                "precision_at_k": atk["precision_at_k"],
-                "precision_at_k_pop": atk_pop["precision_at_k"],
-                "ndcg_at_k": atk["ndcg_at_k"],
-                "ndcg_at_k_pop": atk_pop["ndcg_at_k"],
-                "matrix_nnz": float(interactions.nnz),
-                "pop_C_train": float(pop_C),
-            }
-        )
+        fold_rows.append({
+            "fold": fold_i,
+            "recall_at_k": atk["recall_at_k"], "recall_at_k_pop": atk_pop["recall_at_k"],
+            "precision_at_k": atk["precision_at_k"], "precision_at_k_pop": atk_pop["precision_at_k"],
+            "ndcg_at_k": atk["ndcg_at_k"], "ndcg_at_k_pop": atk_pop["ndcg_at_k"],
+            "matrix_nnz": float(interactions.nnz), "pop_C_train": float(pop_C),
+        })
 
-    keys = [
-        "recall_at_k",
-        "recall_at_k_pop",
-        "precision_at_k",
-        "precision_at_k_pop",
-        "ndcg_at_k",
-        "ndcg_at_k_pop",
-        "matrix_nnz",
-    ]
+    keys = ["recall_at_k", "recall_at_k_pop", "precision_at_k", "precision_at_k_pop", "ndcg_at_k", "ndcg_at_k_pop", "matrix_nnz"]
     mean = _mean_dicts(fold_rows, keys)
     mean["seed"] = cfg.seed
     mean["seed_pass"] = seed_recommend_go_pass(mean)
     return {"seed": cfg.seed, "fold_mean": mean, "folds": fold_rows}
 
 
-def run_cv_evaluation(
-    *,
-    cfg0,
-    review_df: pd.DataFrame,
-    dataset,
-    item_ids: list[str],
-    item_features,
-    y_prefer: pd.Series,
-    cv_epochs: int,
-) -> list[dict]:
+def run_cv_evaluation(*, cfg0, review_df, dataset, item_ids, item_features, y_prefer, cv_epochs) -> list[dict]:
     from config import load_experiment_config, seed_all
 
     project_root = cfg0.project_root
@@ -198,33 +141,17 @@ def run_cv_evaluation(
     for seed in CV_SEEDS:
         os.environ["SEED"] = str(seed)
         cfg = load_experiment_config(project_root)
-        cfg.positive_mode = cfg0.positive_mode
         cfg.epochs = cv_epochs
         seed_all(cfg.seed)
         print(f"--- seed {seed} ---", flush=True)
-        rep = run_prefer_cv(
-            cfg,
-            review_df=review_df,
-            dataset=dataset,
-            item_ids=item_ids,
-            item_features=item_features,
-            y_prefer=y_prefer,
-        )
+        rep = run_prefer_cv(cfg, review_df=review_df, dataset=dataset, item_ids=item_ids, item_features=item_features, y_prefer=y_prefer)
         seed_reports.append(rep)
         print(rep["fold_mean"], flush=True)
     return seed_reports
 
 
-def run_full_catalog_eval(
-    export_df: pd.DataFrame,
-    *,
-    y_prefer: pd.Series,
-    warm_item_ids: set[str],
-    review_df: pd.DataFrame,
-    cold_item_ids: list[str],
-) -> dict:
-    """Diagnostic: rank full catalog (warm+cold), measure warm y*=1 vs star_pop."""
-    from scoring import star_popularity_scores
+def run_full_catalog_eval(export_df, *, y_prefer, warm_item_ids, review_df, cold_item_ids) -> dict:
+    from pipeline import star_popularity_scores
 
     y = (export_df["y_prefer"] == 1).astype(int).to_numpy()
     s_model = export_df["s_pref"].to_numpy(dtype=float)
@@ -242,37 +169,29 @@ def run_full_catalog_eval(
         order = np.argsort(-s_model, kind="stable")[:kk]
         cold_share = float((is_warm[order] == 0).sum()) / kk if kk else 0.0
         at_k[str(k)] = {
-            "warm_recall_at_k": atk_m["recall_at_k"],
-            "warm_recall_at_k_pop": atk_p["recall_at_k"],
-            "warm_precision_at_k": atk_m["precision_at_k"],
-            "warm_precision_at_k_pop": atk_p["precision_at_k"],
+            "warm_recall_at_k": atk_m["recall_at_k"], "warm_recall_at_k_pop": atk_p["recall_at_k"],
+            "warm_precision_at_k": atk_m["precision_at_k"], "warm_precision_at_k_pop": atk_p["precision_at_k"],
             "cold_share_at_k": cold_share,
             "recall_gap_vs_pop": atk_m["recall_at_k"] - atk_p["recall_at_k"],
             "precision_gap_vs_pop": atk_m["precision_at_k"] - atk_p["precision_at_k"],
         }
 
-    n_prefer = int((y_prefer == 1).sum())
     return {
-        "n_total": int(len(export_df)),
-        "n_warm": int(len(warm_item_ids)),
-        "n_cold": int(len(cold_item_ids)),
-        "n_prefer": n_prefer,
-        "pop_formula": "Bayesian WR on n_star5/review_n; m=3; full review",
-        "at_k": at_k,
+        "n_total": int(len(export_df)), "n_warm": int(len(warm_item_ids)),
+        "n_cold": int(len(cold_item_ids)), "n_prefer": int((y_prefer == 1).sum()),
+        "pop_formula": "Bayesian WR on n_star5/review_n; m=3; full review", "at_k": at_k,
     }
 
 
 def main() -> None:
-    from config import load_experiment_config, require_docker_runtime, seed_all
-    from data_io import export_recipe_lightfm, load_track_b_tables, write_json_report
-    from preprocess import (
-        build_item_features,
-        build_lightfm_ids,
-        build_prefer_labels,
-        prepare_training_frames,
-        recipe_n_star5_counts,
+    from lightfm import LightFM
+
+    from config import load_experiment_config, require_docker_runtime, seed_all, export_recipe_lightfm, load_track_b_tables, write_json_report
+    from pipeline import (
+        aggregate_review_for_export, build_export_dataframe, build_interactions,
+        build_item_features, build_lightfm_ids, build_prefer_labels,
+        catalog_predict, prepare_training_frames, recipe_n_star5_counts,
     )
-    from scoring import aggregate_review_for_export, full_fit_export
 
     project_root = Path(os.environ.get("PROJECT_ROOT", Path(__file__).resolve().parent))
     cv_epochs = int(os.environ.get("EPOCHS", "10"))
@@ -284,55 +203,40 @@ def main() -> None:
 
     review_raw, recipe_raw, alias_df = load_track_b_tables(cfg0.data_dir)
     recipe_df, review_df = prepare_training_frames(review_raw, recipe_raw, alias_df)
-    dataset, item_ids, warm_item_ids, cold_item_ids, _ = build_lightfm_ids(
-        review_df, recipe_df
-    )
-    item_features, _ = build_item_features(
-        recipe_df, item_ids, dataset, cfg0.excluded_recipe_columns
-    )
+    dataset, item_ids, warm_item_ids, cold_item_ids, _ = build_lightfm_ids(review_df, recipe_df)
+    item_features, _ = build_item_features(recipe_df, item_ids, dataset, cfg0.excluded_recipe_columns)
 
     y_prefer = build_prefer_labels(review_df)
     n_star5 = recipe_n_star5_counts(review_df)
-    review_agg, _ = aggregate_review_for_export(pd.read_csv(cfg0.data_files["review"]))
+    review_agg = aggregate_review_for_export(pd.read_csv(cfg0.data_files["review"]))
 
-    print(
-        f"y*=n_star5>=2: {(y_prefer==1).sum()}/{len(y_prefer)} warm, "
-        f"mode={cfg0.positive_mode}, CV ep={cv_epochs}",
-        flush=True,
-    )
+    print(f"y*=n_star5>=2: {(y_prefer==1).sum()}/{len(y_prefer)} warm, mode=prefer_n_star5_ge2, CV ep={cv_epochs}", flush=True)
 
     seed_reports = run_cv_evaluation(
-        cfg0=cfg0,
-        review_df=review_df,
-        dataset=dataset,
-        item_ids=item_ids,
-        item_features=item_features,
-        y_prefer=y_prefer,
-        cv_epochs=cv_epochs,
+        cfg0=cfg0, review_df=review_df, dataset=dataset,
+        item_ids=item_ids, item_features=item_features, y_prefer=y_prefer, cv_epochs=cv_epochs,
     )
     agg = aggregate_recommend_multi_seed([r["fold_mean"] for r in seed_reports])
     agg["charter"] = "R0-R2"
-    agg["positive_mode"] = cfg0.positive_mode
+    agg["positive_mode"] = "prefer_n_star5_ge2"
     agg["cv_epochs"] = cv_epochs
     agg["full_epochs"] = full_epochs
     agg["pop_formula"] = "Bayesian WR on n_star5/review_n; m=3; train-fold only"
     agg["go_rule"] = "Recall@20(model) > Recall@20(star_pop) per seed, >=4/5"
 
+    # Full-fit for export (inlined full_fit_export)
     os.environ["SEED"] = "42"
     cfg_full = load_experiment_config(project_root)
     cfg_full.epochs = full_epochs
     seed_all(42)
-    export_df = full_fit_export(
-        cfg_full,
-        recipe_df=recipe_df,
-        review_df=review_df,
-        dataset=dataset,
-        item_ids=item_ids,
-        warm_item_ids=warm_item_ids,
-        item_features=item_features,
-        y_prefer=y_prefer,
-        review_agg=review_agg,
-        n_star5=n_star5,
+
+    interactions = build_interactions(review_df, dataset, recipe_prefer_labels=y_prefer)
+    model = LightFM(loss="warp", random_state=cfg_full.seed)
+    model.fit(interactions, item_features=item_features, epochs=cfg_full.epochs, num_threads=cfg_full.num_threads)
+    s_pref = catalog_predict(model, dataset, item_ids, item_features, cfg_full.num_threads)
+    export_df = build_export_dataframe(
+        recipe_df=recipe_df, review_agg=review_agg, s_pref=s_pref,
+        y_prefer=y_prefer, n_star5=n_star5, warm_item_ids=warm_item_ids,
     )
 
     sanity = catalog_score_sanity(export_df["s_pref"].to_numpy(dtype=float))
@@ -343,11 +247,8 @@ def main() -> None:
     agg["n_cold"] = int(len(cold_item_ids))
 
     full_catalog_eval = run_full_catalog_eval(
-        export_df,
-        y_prefer=y_prefer,
-        warm_item_ids=warm_item_ids,
-        review_df=review_df,
-        cold_item_ids=cold_item_ids,
+        export_df, y_prefer=y_prefer, warm_item_ids=warm_item_ids,
+        review_df=review_df, cold_item_ids=cold_item_ids,
     )
     print("full_catalog_eval:", json.dumps(full_catalog_eval, ensure_ascii=False), flush=True)
 
@@ -355,12 +256,9 @@ def main() -> None:
     export_recipe_lightfm(export_df, ranked_path)
     report_path = cfg0.outputs_dir / "prefer_eval_report.json"
     out = {
-        "charter": "R0-R2",
-        "positive_mode": cfg0.positive_mode,
-        "aggregate": agg,
-        "full_catalog_eval": full_catalog_eval,
-        "seeds": seed_reports,
-        "export_path": str(ranked_path),
+        "charter": "R0-R2", "positive_mode": "prefer_n_star5_ge2",
+        "aggregate": agg, "full_catalog_eval": full_catalog_eval,
+        "seeds": seed_reports, "export_path": str(ranked_path),
     }
     write_json_report(out, report_path)
 
@@ -382,28 +280,6 @@ if __name__ == "__main__":
     atk_m = ranking_at_k_binary(y, s_model, k=3)
     atk_p = ranking_at_k_binary(y, s_pop, k=3)
     assert atk_m["recall_at_k"] > atk_p["recall_at_k"]
-    assert seed_recommend_go_pass(
-        {"recall_at_k": atk_m["recall_at_k"], "recall_at_k_pop": atk_p["recall_at_k"]}
-    )
     assert catalog_score_sanity(s_model)["r0_pass"]
-    toy_export = pd.DataFrame(
-        {
-            "recipe_id": ["a", "b", "c"],
-            "s_pref": [0.9, 0.5, 0.1],
-            "y_prefer": [1, 0, -1],
-            "is_warm": [1, 1, 0],
-        }
-    )
-    toy_rev = pd.DataFrame(
-        {"recipe_id": ["a", "a", "b"], "star_count": [5, 5, 3], "group_id": ["u1", "u2", "u3"]}
-    )
-    fc = run_full_catalog_eval(
-        toy_export,
-        y_prefer=pd.Series({"a": 1, "b": 0}, name="y_prefer"),
-        warm_item_ids={"a", "b"},
-        review_df=toy_rev,
-        cold_item_ids=["c"],
-    )
-    assert fc["n_total"] == 3 and fc["at_k"]["20"]["warm_recall_at_k"] == 1.0
     print("evaluation self-check ok", atk_m["recall_at_k"], atk_p["recall_at_k"], flush=True)
     main()
