@@ -159,9 +159,10 @@ function getGuideIcon(ingredient) {
 
 function getFridgeNameFontSize(name = '') {
   const length = String(name).replace(/\s/g, '').length
-  if (length > 18) return '10px'
-  if (length > 12) return '12px'
-  if (length > 8) return '14px'
+  if (length > 16) return '9px'
+  if (length > 12) return '10px'
+  if (length > 8) return '11px'
+  if (length > 5) return '13px'
   return '16px'
 }
 
