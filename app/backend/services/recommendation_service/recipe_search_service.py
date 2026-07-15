@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe
-from app.backend.services.recommendation_service.recipe_candidate_query import (
+from app.backend.services.recommendation_service.recipe_query import (
     build_recipe_query,
     recipe_to_list_item,
 )
