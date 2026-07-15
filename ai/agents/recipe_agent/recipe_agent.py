@@ -146,6 +146,24 @@ def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
         return ToolResult(ok=False, error=str(e), source="recipe_search")
 
 
+def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> ToolResult:
+    """recommendation_service를 ToolResult로 감싼다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    try:
+        from .recipe_handlers import recommendation_service
+        from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+        config = RecipeRecommendConfig.fridge_consume_preset()
+        if settings_obj:
+            if not getattr(settings_obj, "expiringFirst", True):
+                config.mode = "fridge_all"
+            if not getattr(settings_obj, "excludeDislikes", True):
+                config.exclude_dislikes = False
+        result = recommendation_service.recommend_recipes(db, user_id, config)
+        items = result.get("items", [])
+        return ToolResult(ok=True, data={"items": items, "total": len(items)}, source="recommendation")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="recommendation")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -232,6 +250,7 @@ if __name__ == "__main__":
         assert empty_result.ok and empty_result.data is None
 
         assert callable(search_recipe_tool)
+        assert callable(recommend_recipe_tool)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
