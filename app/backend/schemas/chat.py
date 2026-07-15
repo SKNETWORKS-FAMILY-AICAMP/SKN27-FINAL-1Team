@@ -4,8 +4,11 @@ from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
+    """이전 대화의 화면 문구와 분류된 의도를 함께 보관합니다."""
+
     role: str
     text: str
+    intent: str | None = None
 
 class ChatSettings(BaseModel):
     shortAnswer: bool = True

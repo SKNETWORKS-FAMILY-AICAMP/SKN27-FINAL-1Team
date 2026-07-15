@@ -1,4 +1,5 @@
 import json
+import re
 
 from langgraph.graph import END, StateGraph
 
@@ -28,6 +29,39 @@ from ai.agents.supervisor_agent.supervisor_utils import (
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 
+_CONTEXT_INTENT_PREFIXES = ("shopping.", "recipe.", "alarm.")
+_CONTEXT_INTENTS = {"ingredient.guide", "inventory.list", "inventory.expiring"}
+
+
+def _latest_bot_intent(history) -> str | None:
+    """이전 봇 응답에 저장된 마지막 intent를 반환합니다."""
+    for message in reversed(history or []):
+        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
+        intent = message.get("intent") if isinstance(message, dict) else getattr(message, "intent", None)
+        if role == "bot" and intent:
+            return intent
+    return None
+
+
+def _rewrite_context_switch(text: str, has_pending: bool = False) -> str:
+    """기존 작업을 번복한 문장에서 새로 실행할 명령만 남깁니다."""
+    stripped = text.strip()
+    if has_pending:
+        switch_match = re.search(r"(?:말고|대신)\s*(.+)$", stripped)
+        if switch_match:
+            return switch_match.group(1).strip()
+    replacement = re.sub(r"^(?:아니다|아니야|아니|잠깐|취소하고)(?:\s+|,\s*)", "", stripped).strip()
+    return replacement or stripped
+
+
+def _is_context_follow_up(text: str) -> bool:
+    """직전 응답 없이는 의미가 부족한 짧은 후속 질문인지 확인합니다."""
+    normalized = _normalize_text(text)
+    return (
+        bool(re.match(r"^외\d+개", normalized))
+        or any(word in normalized for word in ("나머지", "그중", "그거", "그건", "더알려", "더보여", "전부", "다말해", "다보여"))
+    )
+
 def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = None) -> dict:
     """라우터 결과를 공통 dict 형식으로 반환합니다."""
     payload = {"intent": intent, "confidence": confidence, "slots": slots or {}}
@@ -35,9 +69,23 @@ def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = Non
 
 def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
-    text = state["text"]
-    normalized = _normalize_text(text)
+    original_text = state["text"]
     history = state.get("history", [])
+    has_pending = bool(
+        _pending_add_many_from_history(history)
+        or _pending_add_storage_from_history(history)
+        or _pending_add_from_history(history)
+        or _pending_consume_from_history(history)
+    )
+    text = _rewrite_context_switch(original_text, has_pending)
+
+    # 번복 뒤 새 명령은 오래된 pending 문맥을 버리고 처음부터 다시 분류합니다.
+    if text != original_text:
+        result = router_node({**state, "text": text, "history": []})
+        result.update({"text": text, "history": []})
+        return result
+
+    normalized = _normalize_text(text)
 
     if normalized.startswith(CONFIRM_PREFIX):
         return _route_result("action.confirm")
@@ -91,6 +139,15 @@ def router_node(state: GraphState) -> dict:
         return _route_result("inventory.action")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return _route_result("inventory.list")
+
+    # 생략된 후속 질문은 직전 에이전트 intent를 이어받습니다.
+    previous_intent = _latest_bot_intent(history)
+    if (
+        previous_intent
+        and _is_context_follow_up(text)
+        and (previous_intent.startswith(_CONTEXT_INTENT_PREFIXES) or previous_intent in _CONTEXT_INTENTS)
+    ):
+        return _route_result(previous_intent)
 
     if hasattr(state["service"], "_route_intent_payload_with_llm"):
         route_payload = state["service"]._route_intent_payload_with_llm(text, history)

@@ -162,3 +162,34 @@ def test_alarm_confirm_payload_returns_to_alarm_agent(monkeypatch):
     assert calls[0]["action"] == "create_event"
     assert calls[0]["payload"]["reminder_type"] == "shopping_reminder"
     assert calls[0]["confirmed"] is True
+
+
+def test_context_switch_replaces_pending_inventory_request():
+    """번복 뒤 새 재료 요청은 이전 pending 식재료를 이어받지 않습니다."""
+    history = [SimpleNamespace(role="bot", text="두부를 몇 개 추가하시겠어요?", intent="inventory.action")]
+    assert supervisor_agent._rewrite_context_switch("소금 대신 뭐 넣어?") == "소금 대신 뭐 넣어?"
+
+    for message in ("아니다 치즈 넣어줘", "두부말고 치즈 넣어줘", "두부 대신 치즈 넣어줘"):
+        result = supervisor_agent.router_node({"text": message, "history": history})
+
+        assert result["intent"] == "inventory.action"
+        assert result["text"] == "치즈 넣어줘"
+        assert result["history"] == []
+
+
+def test_short_follow_up_inherits_previous_agent_intent():
+    """주어가 생략된 짧은 질문은 직전 봇 응답의 intent를 이어받습니다."""
+    history = [SimpleNamespace(role="bot", text="외 2개가 더 있어요.", intent="shopping.current")]
+
+    result = supervisor_agent.router_node({"text": "외 2개는 뭐야?", "history": history})
+
+    assert result["intent"] == "shopping.current"
+
+
+def test_context_switch_cancel_word_stops_pending_request():
+    """새 명령이 없는 번복 표현은 진행 중 작업을 취소합니다."""
+    history = [SimpleNamespace(role="bot", text="두부를 몇 개 추가하시겠어요?", intent="inventory.action")]
+
+    result = supervisor_agent.router_node({"text": "아니다", "history": history})
+
+    assert result["intent"] == "action.cancel"
