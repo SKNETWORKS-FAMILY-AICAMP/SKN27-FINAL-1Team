@@ -1,190 +1,181 @@
-﻿source_id,name,url
-source_0001,식품의약품안전처,
-source_0002,농진청('16),
-source_0003,농진청('15),
-source_0004,국립수산과학원(표준수산물성분표),
-source_0005,농진청(’22),
-source_0006,농촌진흥청(국가표준식품성분표),
-source_0007,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=141&menuId=PS03599
-source_0008,농진청('19),
-source_0009,JAPAN(’20),
-source_0010,농진청('14),
-source_0011,기존 가이드 유형 확장 (참조: 애플민트) | 원출처: 기존 식재료 가이드 유형 확장,
-source_0012,USDA(’18),
-source_0013,기존 식재료 가이드 유형 확장,
-source_0014,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=19&menuId=PS03599
-source_0015,식품의약품안전처/식생활안전관리원 잔류농약 세척법,https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621
-source_0016,농진청(’21),
-source_0017,농진청(’23),
-source_0018,농진청('18),
-source_0019,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=9&menuId=PS03599
-source_0020,농진청('02),
-source_0021,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=66&menuId=PS03599
-source_0022,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=143&menuId=PS03599/view?fd_se=286&fd_snn=91&menuId=PS03599
-source_0023,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=50&menuId=PS03599
-source_0024,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=104&menuId=PS03599
-source_0025,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=137&menuId=PS03599
-source_0026,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=80&menuId=PS03599/view?fd_se=286&fd_snn=33&menuId=PS03599
-source_0027,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=57&menuId=PS03599
-source_0028,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=125&menuId=PS03599
-source_0029,대푯값,
-source_0030,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=8&menuId=PS03599
-source_0031,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=85&menuId=PS03599
-source_0032,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=112&menuId=PS03599
-source_0033,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=25&menuId=PS03599
-source_0034,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=11&menuId=PS03599
-source_0035,농진청('24),
-source_0036,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=130&menuId=PS03599
-source_0037,기존 가이드 유형 확장 (참조: 흑미) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=49&menuId=PS03599
-source_0038,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=49&menuId=PS03599
-source_0039,농진청(’20),
-source_0040,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=16&menuId=PS03599
-source_0041,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=15&menuId=PS03599
-source_0042,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=144&menuId=PS03599/view?fd_se=286&fd_snn=13&menuId=PS03599
-source_0043,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=132&menuId=PS03599/view?fd_se=286&fd_snn=1&menuId=PS03599
-source_0044,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=135&menuId=PS03599
-source_0045,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=20&menuId=PS03599
-source_0046,농진청('08),
-source_0047,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=97&menuId=PS03599
-source_0048,농진청('10),
-source_0049,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=148&menuId=PS03599
-source_0050,식약처('96),
-source_0051,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=106&menuId=PS03599
-source_0052,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=107&menuId=PS03599
-source_0053,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=81&menuId=PS03599
-source_0054,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=99&menuId=PS03599
-source_0055,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=123&menuId=PS03599
-source_0056,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=73&menuId=PS03599
-source_0057,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=152&menuId=PS03599
-source_0058,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=82&menuId=PS03599
-source_0059,농진청('13),
-source_0060,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=75&menuId=PS03599
-source_0061,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=113&menuId=PS03599
-source_0062,농진청('03),
-source_0063,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=63&menuId=PS03599
-source_0064,"농촌진흥청 국립원예특작과학원 보도자료(더 오래 신선하게 똑똑한 과일, 채소 보관법, 2023-09-26)",https://share.google/WISOVwbIIyFa0wOWY
-source_0065,기존 가이드 유형 확장 (참조: 포도) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=102&menuId=PS03599
-source_0066,유사 식재료 참고 (참조: 블루베리) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=99&menuId=PS03599
-source_0067,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=127&menuId=PS03599
-source_0068,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=102&menuId=PS03599
-source_0069,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=17&menuId=PS03599
-source_0070,기존 가이드 유형 확장 (참조: 시래기) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=22&menuId=PS03599
-source_0071,기존 가이드 유형 확장 (참조: 시래기) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법,https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621
-source_0072,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=31&menuId=PS03599
-source_0073,농진청('86),
-source_0074,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=22&menuId=PS03599
-source_0075,기존 가이드 유형 확장 (참조: 새싹) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=34&menuId=PS03599
-source_0076,기존 가이드 유형 확장 (참조: 새싹) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법,https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621
-source_0077,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=34&menuId=PS03599
-source_0078,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=39&menuId=PS03599
-source_0079,농진청('85),
-source_0080,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=149&menuId=PS03599
-source_0081,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=118&menuId=PS03599/view?fd_se=286&fd_snn=67&menuId=PS03599/view?fd_se=286&fd_snn=103&menuId=PS03599/view?fd_se=286&fd_snn=146&menuId=PS03599
-source_0082,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=156&menuId=PS03599
-source_0083,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=117&menuId=PS03599/view?fd_se=286&fd_snn=115&menuId=PS03599/view?fd_se=286&fd_snn=124&menuId=PS03599/view?fd_se=286&fd_snn=30&menuId=PS03599
-source_0084,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=65&menuId=PS03599
-source_0085,유사 식재료 참고 (참조: 고추) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=92&menuId=PS03599/view.do?fd_se=286&fd_snn=119&menuId=PS03599
-source_0086,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=92&menuId=PS03599/view.do?fd_se=286&fd_snn=119&menuId=PS03599
-source_0087,농진청('84),
-source_0088,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=18&menuId=PS03599
-source_0089,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=27&menuId=PS03599
-source_0090,기존 가이드 유형 확장 (참조: 호박) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=131&menuId=PS03599/view?fd_se=286&fd_snn=133&menuId=PS03599
-source_0091,기존 가이드 유형 확장 (참조: 호박) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법,https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621
-source_0092,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=40&menuId=PS03599
-source_0093,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=3&menuId=PS03599
-source_0094,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=121&menuId=PS03599
-source_0095,유사 식재료 참고 (참조: 참나물) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=101&menuId=PS03599
-source_0096,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=53&menuId=PS03599
-source_0097,기존 가이드 유형 확장 (참조: 상추) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=56&menuId=PS03599
-source_0098,기존 가이드 유형 확장 (참조: 상추) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법,https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621
-source_0099,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=55&menuId=PS03599/view?fd_se=286&fd_snn=37&menuId=PS03599
-source_0100,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=43&menuId=PS03599
-source_0101,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=138&menuId=PS03599
-source_0102,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=44&menuId=PS03599
-source_0103,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=21&menuId=PS03599/view?fd_se=286&fd_snn=139&menuId=PS03599
-source_0104,기존 가이드 유형 확장 (참조: 파) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=36&menuId=PS03599
-source_0105,농진청('09),
-source_0106,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=150&menuId=PS03599
-source_0107,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=56&menuId=PS03599
-source_0108,농진청('05),
-source_0109,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=151&menuId=PS03599
-source_0110,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=59&menuId=PS03599
-source_0111,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=47&menuId=PS03599
-source_0112,유사 식재료 참고 (참조: 파) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=36&menuId=PS03599
-source_0113,유사 식재료 참고 (참조: 파) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법,https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621
-source_0114,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=83&menuId=PS03599
-source_0115,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=35&menuId=PS03599
-source_0116,기존 가이드 유형 확장 (참조: 배추) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=21&menuId=PS03599/view?fd_se=286&fd_snn=139&menuId=PS03599
-source_0117,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=74&menuId=PS03599
-source_0118,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=100&menuId=PS03599
-source_0119,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=84&menuId=PS03599
-source_0120,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=61&menuId=PS03599
-source_0121,유사 식재료 참고 (참조: 냉이) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=27&menuId=PS03599
-source_0122,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=24&menuId=PS03599
-source_0123,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=88&menuId=PS03599
-source_0124,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=62&menuId=PS03599
-source_0125,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=101&menuId=PS03599
-source_0126,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=90&menuId=PS03599
-source_0127,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=114&menuId=PS03599
-source_0128,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=12&menuId=PS03599
-source_0129,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=32&menuId=PS03599/view?fd_se=286&fd_snn=64&menuId=PS03599
-source_0130,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=36&menuId=PS03599
-source_0131,농진청('07),
-source_0132,기존 가이드 유형 확장 (참조: 고추) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=92&menuId=PS03599/view.do?fd_se=286&fd_snn=119&menuId=PS03599
-source_0133,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=131&menuId=PS03599/view?fd_se=286&fd_snn=133&menuId=PS03599
-source_0134,농진청('98),
-source_0135,FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0136,수('16),
-source_0137,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224074895155
-source_0138,기존 가이드 유형 확장 (참조: 홍게) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0139,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223967949272
-source_0140,기존 가이드 유형 확장 (참조: 대하) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0141,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223941454992
-source_0142,기존 가이드 유형 확장 (참조: 고등어) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0143,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224074902629
-source_0144,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223937313264
-source_0145,국립수산과학원,
-source_0146,수('09),
-source_0147,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224004011936
-source_0148,기존 가이드 유형 확장 (참조: 민물장어) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0149,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223879767578
-source_0150,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223905864591
-source_0151,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224041747297
-source_0152,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224300030279
-source_0153,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224279211080
-source_0154,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224004038353
-source_0155,어식백세 블로그(korfish01) 수산물 가이드,
-source_0156,해물류 기존 가이드 참고,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0157,기존 가이드 유형 확장 (참조: 황태채) | 원출처: 기존 식재료 가이드 유형 확장,
-source_0158,건어물류 기존 가이드 참고,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0159,FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,
-source_0160,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223859971929
-source_0161,기존 가이드 유형 확장 (참조: 오징어) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0162,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223905845392
-source_0163,기존 가이드 유형 확장 (참조: 낙지) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0164,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223968015658
-source_0165,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224300024480
-source_0166,기존 가이드 유형 확장 (참조: 조개) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0167,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224041764267
-source_0168,어식백세 블로그(korfish01) 수산물 가이드,https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224279184534
-source_0169,기존 가이드 유형 확장 (참조: 건다시마) | 원출처: 기존 식재료 가이드 유형 확장,
-source_0170,기존 가이드 유형 확장 (참조: 김) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법,https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7
-source_0171,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=69&menuId=PS03599
-source_0172,기존 가이드 유형 확장 (참조: 달걀) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=69&menuId=PS03599
-source_0173,기존 가이드 유형 확장 (참조: 닭고기) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599/view?fd_se=286&fd_snn=93&menuId=PS03599
-source_0174,닭고기 분류 기존 가이드 참고,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599
-source_0175,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599/view?fd_se=286&fd_snn=93&menuId=PS03599
-source_0176,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=76&menuId=PS03599
-source_0177,기존 가이드 유형 확장 (참조: 돼지고기) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599/view.do?fd_se=286&fd_snn=136&menuId=PS03599
-source_0178,돼지고기 분류 기존 가이드 참고,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599
-source_0179,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599/view.do?fd_se=286&fd_snn=136&menuId=PS03599
-source_0180,소고기 분류 기존 가이드 참고,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599
-source_0181,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599
-source_0182,기존 가이드 유형 확장 (참조: 소고기) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599
-source_0183,식품안전나라/식약처(seed),https://www.foodsafetykorea.go.kr
-source_0184,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=58&menuId=PS03599
-source_0185,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=23&menuId=PS03599
-source_0186,국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=87&menuId=PS03599
-source_0187,기존 가이드 유형 확장 (참조: 요구르트) | 원출처: 국립식량과학원 이달의 식재료,https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=23&menuId=PS03599
-source_0188,식품의약품안전처 식품영양성분DB,
-source_0189,전국통합식품영양성분정보,
+﻿"source_id","name","url"
+"source_0001","식품의약품안전처",""
+"source_0002","농진청('16)",""
+"source_0003","농진청('15)",""
+"source_0004","국립수산과학원(표준수산물성분표)",""
+"source_0005","농진청(’22)",""
+"source_0006","농촌진흥청(국가표준식품성분표)",""
+"source_0008","농진청('19)",""
+"source_0009","JAPAN(’20)",""
+"source_0010","농진청('14)",""
+"source_0011","기존 가이드 유형 확장 (참조: 애플민트) | 원출처: 기존 식재료 가이드 유형 확장",""
+"source_0012","USDA(’18)",""
+"source_0013","기존 식재료 가이드 유형 확장",""
+"source_0015","식품의약품안전처/식생활안전관리원 잔류농약 세척법","https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621"
+"source_0016","농진청(’21)",""
+"source_0017","농진청(’23)",""
+"source_0018","농진청('18)",""
+"source_0019","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=9&menuId=PS03599"
+"source_0021","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=66&menuId=PS03599"
+"source_0022","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=143&menuId=PS03599/view?fd_se=286&fd_snn=91&menuId=PS03599"
+"source_0023","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=50&menuId=PS03599"
+"source_0024","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=104&menuId=PS03599"
+"source_0025","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=137&menuId=PS03599"
+"source_0026","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=80&menuId=PS03599/view?fd_se=286&fd_snn=33&menuId=PS03599"
+"source_0027","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=57&menuId=PS03599"
+"source_0028","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=125&menuId=PS03599"
+"source_0029","대푯값",""
+"source_0030","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=8&menuId=PS03599"
+"source_0031","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=85&menuId=PS03599"
+"source_0032","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=112&menuId=PS03599"
+"source_0033","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=25&menuId=PS03599"
+"source_0034","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=11&menuId=PS03599"
+"source_0035","농진청('24)",""
+"source_0036","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=130&menuId=PS03599"
+"source_0037","기존 가이드 유형 확장 (참조: 흑미) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=49&menuId=PS03599"
+"source_0038","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=49&menuId=PS03599"
+"source_0039","농진청(’20)",""
+"source_0040","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=16&menuId=PS03599"
+"source_0041","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=15&menuId=PS03599"
+"source_0042","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=144&menuId=PS03599/view?fd_se=286&fd_snn=13&menuId=PS03599"
+"source_0043","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=132&menuId=PS03599/view?fd_se=286&fd_snn=1&menuId=PS03599"
+"source_0044","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=135&menuId=PS03599"
+"source_0045","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=20&menuId=PS03599"
+"source_0046","농진청('08)",""
+"source_0047","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=97&menuId=PS03599"
+"source_0048","농진청('10)",""
+"source_0049","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=148&menuId=PS03599"
+"source_0050","식약처('96)",""
+"source_0051","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=106&menuId=PS03599"
+"source_0052","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=107&menuId=PS03599"
+"source_0053","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=81&menuId=PS03599"
+"source_0054","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=99&menuId=PS03599"
+"source_0055","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=123&menuId=PS03599"
+"source_0056","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=73&menuId=PS03599"
+"source_0057","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=152&menuId=PS03599"
+"source_0058","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=82&menuId=PS03599"
+"source_0059","농진청('13)",""
+"source_0060","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=75&menuId=PS03599"
+"source_0061","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=113&menuId=PS03599"
+"source_0062","농진청('03)",""
+"source_0063","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=63&menuId=PS03599"
+"source_0064","농촌진흥청 국립원예특작과학원 보도자료(더 오래 신선하게 똑똑한 과일, 채소 보관법, 2023-09-26)","https://share.google/WISOVwbIIyFa0wOWY"
+"source_0065","기존 가이드 유형 확장 (참조: 포도) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=102&menuId=PS03599"
+"source_0066","유사 식재료 참고 (참조: 블루베리) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=99&menuId=PS03599"
+"source_0067","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=127&menuId=PS03599"
+"source_0068","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=102&menuId=PS03599"
+"source_0069","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=17&menuId=PS03599"
+"source_0070","기존 가이드 유형 확장 (참조: 시래기) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=22&menuId=PS03599"
+"source_0071","기존 가이드 유형 확장 (참조: 시래기) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법","https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621"
+"source_0072","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=31&menuId=PS03599"
+"source_0073","농진청('86)",""
+"source_0074","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=22&menuId=PS03599"
+"source_0075","기존 가이드 유형 확장 (참조: 새싹) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=34&menuId=PS03599"
+"source_0076","기존 가이드 유형 확장 (참조: 새싹) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법","https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621"
+"source_0077","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=34&menuId=PS03599"
+"source_0078","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=39&menuId=PS03599"
+"source_0079","농진청('85)",""
+"source_0080","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=149&menuId=PS03599"
+"source_0081","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=118&menuId=PS03599/view?fd_se=286&fd_snn=67&menuId=PS03599/view?fd_se=286&fd_snn=103&menuId=PS03599/view?fd_se=286&fd_snn=146&menuId=PS03599"
+"source_0082","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=156&menuId=PS03599"
+"source_0083","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=117&menuId=PS03599/view?fd_se=286&fd_snn=115&menuId=PS03599/view?fd_se=286&fd_snn=124&menuId=PS03599/view?fd_se=286&fd_snn=30&menuId=PS03599"
+"source_0084","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=65&menuId=PS03599"
+"source_0086","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=92&menuId=PS03599/view.do?fd_se=286&fd_snn=119&menuId=PS03599"
+"source_0087","농진청('84)",""
+"source_0088","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=18&menuId=PS03599"
+"source_0089","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=27&menuId=PS03599"
+"source_0090","기존 가이드 유형 확장 (참조: 호박) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=131&menuId=PS03599/view?fd_se=286&fd_snn=133&menuId=PS03599"
+"source_0091","기존 가이드 유형 확장 (참조: 호박) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법","https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621"
+"source_0092","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=40&menuId=PS03599"
+"source_0093","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=3&menuId=PS03599"
+"source_0094","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=121&menuId=PS03599"
+"source_0096","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=53&menuId=PS03599"
+"source_0097","기존 가이드 유형 확장 (참조: 상추) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=56&menuId=PS03599"
+"source_0098","기존 가이드 유형 확장 (참조: 상추) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법","https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621"
+"source_0099","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=55&menuId=PS03599/view?fd_se=286&fd_snn=37&menuId=PS03599"
+"source_0100","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=43&menuId=PS03599"
+"source_0101","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=138&menuId=PS03599"
+"source_0102","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=44&menuId=PS03599"
+"source_0103","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=21&menuId=PS03599/view?fd_se=286&fd_snn=139&menuId=PS03599"
+"source_0104","기존 가이드 유형 확장 (참조: 파) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=36&menuId=PS03599"
+"source_0105","농진청('09)",""
+"source_0106","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=150&menuId=PS03599"
+"source_0107","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=56&menuId=PS03599"
+"source_0108","농진청('05)",""
+"source_0109","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=151&menuId=PS03599"
+"source_0110","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=59&menuId=PS03599"
+"source_0111","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=47&menuId=PS03599"
+"source_0112","유사 식재료 참고 (참조: 파) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=36&menuId=PS03599"
+"source_0113","유사 식재료 참고 (참조: 파) | 원출처: 식품의약품안전처/식생활안전관리원 잔류농약 세척법","https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?bbs_no=bbs001&menu_grp=MENU_NEW01&menu_no=3120&ntctxt_no=1100621"
+"source_0114","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=83&menuId=PS03599"
+"source_0115","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=35&menuId=PS03599"
+"source_0116","기존 가이드 유형 확장 (참조: 배추) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=21&menuId=PS03599/view?fd_se=286&fd_snn=139&menuId=PS03599"
+"source_0117","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=74&menuId=PS03599"
+"source_0118","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=100&menuId=PS03599"
+"source_0119","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=84&menuId=PS03599"
+"source_0120","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=61&menuId=PS03599"
+"source_0121","유사 식재료 참고 (참조: 냉이) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=27&menuId=PS03599"
+"source_0122","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=24&menuId=PS03599"
+"source_0123","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=88&menuId=PS03599"
+"source_0124","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=62&menuId=PS03599"
+"source_0125","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=101&menuId=PS03599"
+"source_0126","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=90&menuId=PS03599"
+"source_0127","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=114&menuId=PS03599"
+"source_0128","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=12&menuId=PS03599"
+"source_0129","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=32&menuId=PS03599/view?fd_se=286&fd_snn=64&menuId=PS03599"
+"source_0130","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=36&menuId=PS03599"
+"source_0131","농진청('07)",""
+"source_0133","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=131&menuId=PS03599/view?fd_se=286&fd_snn=133&menuId=PS03599"
+"source_0134","농진청('98)",""
+"source_0135","FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0136","수('16)",""
+"source_0137","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224074895155"
+"source_0138","기존 가이드 유형 확장 (참조: 홍게) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0139","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223967949272"
+"source_0140","기존 가이드 유형 확장 (참조: 대하) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0141","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223941454992"
+"source_0142","기존 가이드 유형 확장 (참조: 고등어) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0143","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224074902629"
+"source_0144","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223937313264"
+"source_0145","국립수산과학원",""
+"source_0146","수('09)",""
+"source_0147","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224004011936"
+"source_0148","기존 가이드 유형 확장 (참조: 민물장어) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0149","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223879767578"
+"source_0150","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223905864591"
+"source_0151","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224041747297"
+"source_0152","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224300030279"
+"source_0153","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224279211080"
+"source_0154","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224004038353"
+"source_0155","어식백세 블로그(korfish01) 수산물 가이드",""
+"source_0157","기존 가이드 유형 확장 (참조: 황태채) | 원출처: 기존 식재료 가이드 유형 확장",""
+"source_0158","건어물류 기존 가이드 참고","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0160","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223859971929"
+"source_0161","기존 가이드 유형 확장 (참조: 오징어) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0162","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223905845392"
+"source_0163","기존 가이드 유형 확장 (참조: 낙지) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0164","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=223968015658"
+"source_0165","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224300024480"
+"source_0166","기존 가이드 유형 확장 (참조: 조개) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0167","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224041764267"
+"source_0168","어식백세 블로그(korfish01) 수산물 가이드","https://blog.naver.com/PostView.naver?blogId=korfish01&logNo=224279184534"
+"source_0169","기존 가이드 유형 확장 (참조: 건다시마) | 원출처: 기존 식재료 가이드 유형 확장",""
+"source_0170","기존 가이드 유형 확장 (참조: 김) | 원출처: FSIS 수산물안전정보서비스 - 신선/냉동 수산물의 적정 보관방법","https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&cnts_id=16951&select_list_no=7"
+"source_0171","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=69&menuId=PS03599"
+"source_0172","기존 가이드 유형 확장 (참조: 달걀) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=69&menuId=PS03599"
+"source_0173","기존 가이드 유형 확장 (참조: 닭고기) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599/view?fd_se=286&fd_snn=93&menuId=PS03599"
+"source_0174","닭고기 분류 기존 가이드 참고","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599"
+"source_0175","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=70&menuId=PS03599/view?fd_se=286&fd_snn=93&menuId=PS03599"
+"source_0176","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=76&menuId=PS03599"
+"source_0177","기존 가이드 유형 확장 (참조: 돼지고기) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599/view.do?fd_se=286&fd_snn=136&menuId=PS03599"
+"source_0178","돼지고기 분류 기존 가이드 참고","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=42&menuId=PS03599"
+"source_0180","소고기 분류 기존 가이드 참고","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599"
+"source_0181","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599"
+"source_0182","기존 가이드 유형 확장 (참조: 소고기) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=109&menuId=PS03599"
+"source_0183","식품안전나라/식약처(seed)","https://www.foodsafetykorea.go.kr"
+"source_0184","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=58&menuId=PS03599"
+"source_0185","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=23&menuId=PS03599"
+"source_0186","국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view.do?fd_se=286&fd_snn=87&menuId=PS03599"
+"source_0187","기존 가이드 유형 확장 (참조: 요구르트) | 원출처: 국립식량과학원 이달의 식재료","https://www.nics.go.kr/food/kfi/foodMonth/view?fd_se=286&fd_snn=23&menuId=PS03599"
+"source_0188","식품의약품안전처 식품영양성분DB",""
+"source_0189","전국통합식품영양성분정보",""
