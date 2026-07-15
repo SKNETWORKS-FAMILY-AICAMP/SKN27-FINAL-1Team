@@ -1,4 +1,6 @@
-from app.backend.services.recommendation_service.fridge_ingredient_match import (
+import pytest
+
+from app.backend.services.recommendation_service.fridge import (
     FridgeItemSnapshot,
     classify_fridge_match,
     compute_match_rates,
@@ -47,9 +49,8 @@ def test_recipe_matching_feature_detects_banned_ingredients_by_id_or_partial_nam
 
 
 def test_recipe_recommend_config_feature_clamps_limits_and_pool_size():
-    config = RecipeRecommendConfig.menu_custom_preset(999, pool_multiplier=999, query="tofu")
+    config = RecipeRecommendConfig.menu_custom_preset(999, query="tofu")
 
     assert config.limit == 50
-    assert config.pool_multiplier == 10
-    assert config.pool_size == 500
+    assert config.pool_size == 100
     assert RecipeRecommendConfig.for_mode("unknown", request_limit=9) is None

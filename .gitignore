@@ -140,6 +140,9 @@ ai/recommendation/models/**
 !ai/recommendation/models/
 !ai/recommendation/models/.gitkeep
 
+# recommendation_service 모델 파일은 추적
+!app/backend/services/recommendation_service/*.pkl
+
 
 # ────────────────────────────────────────
 # 10. PostgreSQL (관계형 데이터베이스)

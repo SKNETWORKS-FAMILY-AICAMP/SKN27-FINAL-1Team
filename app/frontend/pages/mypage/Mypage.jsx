@@ -43,6 +43,20 @@ const tabs = [
   { id: 'alerts', label: '알림 및 캘린더' },
 ]
 
+function TabIcon({ id }) {
+  const paths = {
+    profile: <><circle cx="12" cy="8" r="3.2" /><path d="M5.5 19c.6-3.5 2.8-5.2 6.5-5.2s5.9 1.7 6.5 5.2" /></>,
+    saved: <path d="M6.5 4.5h11v15l-5.5-3.2-5.5 3.2z" />,
+    alerts: <><rect x="4.5" y="6.5" width="15" height="13" rx="2" /><path d="M8 3.5v5m8-5v5M4.5 11h15M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" /></>,
+  }
+
+  return (
+    <svg aria-hidden="true" className="mypage-tab-icon" viewBox="0 0 24 24">
+      {paths[id]}
+    </svg>
+  )
+}
+
 const getDaysLeft = (expiresAt) =>
   Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
 
@@ -408,6 +422,10 @@ function Mypage() {
     }
   }
 
+  const completeSavedRecipe = (recipe) => {
+    navigate('/fridge?mode=recipe-consume', { state: { completionRecipe: recipe } })
+  }
+
   const profileDisplayName = profileName
   const profileDisplayEmail = profileEmail
   const profileCreatedAt = userData?.created_at
@@ -419,25 +437,9 @@ function Mypage() {
     naver: '네이버',
     google: '구글',
   }[provider] || '소셜 로그인'
-  const providerClass =
-    provider === 'kakao'
-      ? 'mypage-social__pill--kakao'
-      : provider === 'naver'
-        ? 'mypage-social__pill--naver'
-        : 'mypage-social__pill--google'
 
   return (
-    <section className="mypage" aria-labelledby="mypage-title">
-      <div className="mypage-hero">
-        <div>
-          <h1 id="mypage-title">마이페이지</h1>
-          <p>
-            내 프로필, 저장한 레시피, 알림 설정과 이용 기록을 한곳에서 확인해요.
-          </p>
-        </div>
-        <ImageSlot className="mypage-hero__image" src={imageMypage} />
-      </div>
-
+    <section className="mypage" aria-label="마이페이지">
       <div className="mypage-layout">
         <nav className="mypage-tabs" aria-label="마이페이지 메뉴">
           {tabs.map((tab) => (
@@ -447,7 +449,8 @@ function Mypage() {
               type="button"
               onClick={() => navigate(tab.id === 'profile' ? '/mypage' : `/mypage?tab=${tab.id}`)}
             >
-              {tab.label}
+              <TabIcon id={tab.id} />
+              <span>{tab.label}</span>
             </button>
           ))}
         </nav>
@@ -456,7 +459,9 @@ function Mypage() {
           {activeTab === 'profile' && (
             <>
               <section className="mypage-panel mypage-profile" aria-label="회원 정보">
-                <ImageSlot className="mypage-profile__avatar" src={imageMypage} />
+                <div className="mypage-profile__avatar-wrap">
+                  <ImageSlot className="mypage-profile__avatar" src={imageMypage} alt="프로필 이미지" />
+                </div>
                 <div className="mypage-profile__info">
                   <div className="mypage-profile__name">
                     {isEditingProfile ? (
@@ -493,14 +498,6 @@ function Mypage() {
                     </button>
                   </div>
                 </div>
-                <div className="mypage-social">
-                  <strong>로그인 방식</strong>
-                  <div>
-                    <span className={`mypage-social__pill ${providerClass} is-active`}>
-                      {providerLabel}
-                    </span>
-                  </div>
-                </div>
               </section>
 
               <div className="mypage-info-grid">
@@ -513,8 +510,8 @@ function Mypage() {
                     <div><dt>로그인 방식</dt><dd>{providerLabel}</dd></div>
                     <div><dt>회원 유형</dt><dd>일반 회원</dd></div>
                     <div><dt>가입일</dt><dd>{profileCreatedAt.replace('가입일 ', '')}</dd></div>
-                    <div><dt>캘린더 연동</dt><dd>{calendarEnabled ? '연결됨' : '미연결'}</dd></div>
-                    <div><dt>보유 재료</dt><dd>{inventorySummary.total}개</dd></div>
+                    <div><dt>캘린더 연동</dt><dd className={calendarEnabled ? 'is-connected' : ''}>{calendarEnabled ? '연결됨' : '미연결'}</dd></div>
+                    <div><dt>보유 재료</dt><dd className="is-count">{inventorySummary.total}개</dd></div>
                   </dl>
                 </section>
 
@@ -543,7 +540,7 @@ function Mypage() {
                     type="button"
                     onClick={() => setShowOnboarding(true)}
                   >
-                    다시 설정하기
+                    <span aria-hidden="true">⚙</span> 다시 설정하기
                   </button>
                 </section>
               </div>
@@ -584,17 +581,36 @@ function Mypage() {
                               src={recipe.image || imageRecommendation}
                               alt={recipe.title}
                             />
+                            <button
+                              className="mypage-saved-card__delete"
+                              type="button"
+                              aria-label={`${recipe.title} 삭제`}
+                              title="삭제"
+                              onClick={() => setDeleteTarget(recipe)}
+                            >
+                              <svg aria-hidden="true" viewBox="0 0 24 24">
+                                <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                              </svg>
+                            </button>
                             <div className="mypage-saved-card__body">
-                              <div className="mypage-recipe-title-row">
-                                <h3>{recipe.title}</h3>
+                              <h3>{recipe.title}</h3>
+                              {recipe.description ? (
+                                <p className="mypage-saved-card__description">{recipe.description}</p>
+                              ) : null}
+                              <div className="mypage-recipe-meta">
+                                {recipe.category ? <span>{recipe.category}</span> : null}
                                 <small>{getDaysLeft(recipe.expiresAt)}일 남음</small>
                               </div>
                               <div className="mypage-recipe-actions">
                                 <button className="mypage-primary-button" type="button" onClick={() => navigate(`/recipes/${recipe.recipeId || recipe.id}`)}>
                                   레시피 보기
                                 </button>
-                                <button className="mypage-soft-button" type="button" onClick={() => setDeleteTarget(recipe)}>
-                                  삭제
+                                <button
+                                  className="mypage-soft-button"
+                                  type="button"
+                                  onClick={() => completeSavedRecipe(recipe)}
+                                >
+                                  요리완료
                                 </button>
                               </div>
                             </div>

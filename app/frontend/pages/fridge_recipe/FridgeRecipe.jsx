@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './FridgeRecipe.css'
 
 import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageMenuRecommendation from '../../assets/extracted/images/image_menu_recommendation.png'
-import { userProfile } from '../../mock/userService.js'
-import { saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
+import { readStoredRecipes, saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import { API_URL } from '../../utils/api.js'
 
 
@@ -24,19 +23,16 @@ function formatPeople(servingCount) {
 
 function FridgeRecipe() {
   const navigate = useNavigate()
-  const [isLoading, setIsLoading] = useState(false)
+  const didAutoRequest = useRef(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
   const [hasMore, setHasMore] = useState(false)
   const [excludedRecipeIds, setExcludedRecipeIds] = useState([])
   const [hasRequested, setHasRequested] = useState(false)
-  const [selectedRecipeId, setSelectedRecipeId] = useState(null)
-  const [savedRecipe, setSavedRecipe] = useState(() => {
-    if (typeof window === 'undefined') return null
-
-    const saved = window.localStorage.getItem('bobbeori-fridge-recipe')
-    return saved ? JSON.parse(saved) : null
-  })
+  const [savedRecipeIds, setSavedRecipeIds] = useState(
+    () => new Set(readStoredRecipes().map((recipe) => String(recipe.recipeId))),
+  )
 
   const fetchRecommendations = async ({ refreshPool, excludeIds }) => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -70,7 +66,6 @@ function FridgeRecipe() {
       setItems(data.items || [])
       setHasMore(Boolean(data.has_more))
       setHasRequested(true)
-      setSelectedRecipeId(null)
 
       if (refreshPool) {
         setExcludedRecipeIds([])
@@ -85,6 +80,12 @@ function FridgeRecipe() {
   const startRecommendation = () => {
     fetchRecommendations({ refreshPool: true, excludeIds: [] })
   }
+
+  useEffect(() => {
+    if (didAutoRequest.current) return
+    didAutoRequest.current = true
+    startRecommendation()
+  }, [])
 
   const loadMoreRecommendations = () => {
     const currentIds = items.map((recipe) => recipe.recipe_id)
@@ -109,12 +110,10 @@ function FridgeRecipe() {
       missing: recipe.missing_ingredient_count,
     }
 
-    const saved = saveStoredRecipe({ ...nextRecipe, source: '냉장고파먹기', image: recipe.main_image_url })
+    saveStoredRecipe({ ...nextRecipe, source: '냉장고파먹기', image: recipe.main_image_url })
     saveRecommendationResult(recipe, 'fridge_based').catch(() => {})
 
-    setSelectedRecipeId(recipeId)
-    setSavedRecipe(saved)
-    window.localStorage.setItem('bobbeori-fridge-recipe', JSON.stringify(saved))
+    setSavedRecipeIds((ids) => new Set(ids).add(String(recipeId)))
     window.localStorage.setItem('bobbeori-selected-recipe', recipe.title)
   }
 
@@ -131,19 +130,13 @@ function FridgeRecipe() {
             추천 결과는 저장해서 마이페이지에서 다시 확인할 수 있어요.
           </p>
           <div className="fridge-recipe-hero__actions">
-            <button type="button" onClick={startRecommendation} disabled={isLoading}>
-              {isLoading ? '추천 중' : hasRequested ? '새로 추천받기' : '추천받기'}
+            <button
+              type="button"
+              onClick={hasRequested && hasMore ? loadMoreRecommendations : startRecommendation}
+              disabled={isLoading}
+            >
+              {isLoading ? '추천 중' : hasRequested ? '다른 레시피 추천' : '추천받기'}
             </button>
-            {hasRequested && hasMore ? (
-              <button
-                type="button"
-                className="is-secondary"
-                onClick={loadMoreRecommendations}
-                disabled={isLoading}
-              >
-                다른 레시피 추천
-              </button>
-            ) : null}
           </div>
         </div>
         <ImageSlot className="fridge-recipe-hero__image" src={imageMenuRecommendation} />
@@ -179,67 +172,56 @@ function FridgeRecipe() {
           </div>
 
           <div className="fridge-recipe-grid">
-            {items.map((recipe) => (
-              <article
-                className={selectedRecipeId === recipe.recipe_id ? 'fridge-recipe-card is-selected' : 'fridge-recipe-card'}
-                key={recipe.recipe_id}
-              >
-                <div className="fridge-recipe-card__media">
-                  <ImageSlot className="fridge-recipe-card__image" src={recipe.main_image_url} alt={recipe.title} />
-                  <span>{recipe.category || '추천 메뉴'}</span>
-                </div>
+            {items.map((recipe) => {
+              const isSaved = savedRecipeIds.has(String(recipe.recipe_id))
 
-                <div className="fridge-recipe-card__body">
-                  <h2>{recipe.title}</h2>
-                  <p className="fridge-recipe-card__meta">
-                    {recipe.difficulty || '난이도 미정'} · {formatPeople(recipe.serving_count)}
-                  </p>
-                  <div className="fridge-recipe-card__score">
-                    <div>
-                      <dt>보유 재료</dt>
-                      <dd>
-                        {recipe.owned_ingredient_count}/
-                        {recipe.owned_ingredient_count + recipe.missing_ingredient_count}개
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>부족 재료</dt>
-                      <dd>{recipe.missing_ingredient_count}개</dd>
-                    </div>
+              return (
+                <article
+                  className={isSaved ? 'fridge-recipe-card is-selected' : 'fridge-recipe-card'}
+                  key={recipe.recipe_id}
+                >
+                  <div className="fridge-recipe-card__media">
+                    <ImageSlot className="fridge-recipe-card__image" src={recipe.main_image_url} alt={recipe.title} />
+                    <span>{recipe.category || '추천 메뉴'}</span>
                   </div>
 
-                  {recipe.reason ? (
-                    <div className="fridge-recipe-card__reason">
-                      <b>추천 이유</b>
-                      <p>{recipe.reason}</p>
-                    </div>
-                  ) : null}
+                  <div className="fridge-recipe-card__body">
+                    <h2>{recipe.title}</h2>
+                    <p className="fridge-recipe-card__meta">
+                      {recipe.difficulty || '난이도 미정'} · {formatPeople(recipe.serving_count)}
+                    </p>
+                    <dl className="fridge-recipe-card__score">
+                      <div>
+                        <dt>보유 재료</dt>
+                        <dd>
+                          <b>{recipe.owned_ingredient_count}</b>
+                          <span>/ {recipe.owned_ingredient_count + recipe.missing_ingredient_count}개</span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>부족 재료</dt>
+                        <dd><b>{recipe.missing_ingredient_count}</b><span>개</span></dd>
+                      </div>
+                    </dl>
 
-                  <div className="fridge-recipe-card__actions">
-                    <button type="button" onClick={() => saveRecipe(recipe)}>
-                      {selectedRecipeId === recipe.recipe_id ? '저장됨' : '이 레시피 저장'}
-                    </button>
-                    <button type="button" onClick={() => navigate(`/recipes/${recipe.recipe_id}`)}>
-                      상세 보기
-                    </button>
+                    <div className="fridge-recipe-card__actions">
+                      <button
+                        type="button"
+                        onClick={() => isSaved ? navigate('/mypage?tab=saved') : saveRecipe(recipe)}
+                      >
+                        {isSaved ? '레시피 확인' : '레시피저장'}
+                      </button>
+                      <button type="button" onClick={() => navigate(`/recipes/${recipe.recipe_id}`)}>
+                        상세 보기
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
         </section>
       )}
-
-      {savedRecipe ? (
-        <section className="fridge-recipe-saved" aria-label="저장된 추천">
-          <div>
-            <span>저장된 메뉴</span>
-            <strong>{savedRecipe.title}</strong>
-            <p>{userProfile.name} 마이페이지에서 다시 확인할 수 있어요.</p>
-          </div>
-          <button type="button" onClick={() => navigate('/mypage?tab=saved')}>마이페이지에서 확인</button>
-        </section>
-      ) : null}
     </section>
   )
 }

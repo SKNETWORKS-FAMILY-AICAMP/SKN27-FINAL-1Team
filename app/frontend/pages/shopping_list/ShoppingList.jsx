@@ -264,8 +264,19 @@ function ShoppingStart({ isLoggedIn, recentList, historyCount, notice, onContinu
         </p>
       ) : null}
 
-      <div className="shopping-start-grid">
-        {recentList ? (
+      <div className={`shopping-start-grid${isLoggedIn ? '' : ' is-single'}`}>
+        {!isLoggedIn ? (
+          <article className="shopping-start-card is-featured">
+            <span>로그인 필요</span>
+            <h2>로그인하고 장보기를 시작해보세요</h2>
+            <p>장보기 내역과 냉장고 재료를 연결해 필요한 재료만 확인할 수 있어요.</p>
+            <button className="shopping-primary-action" type="button" onClick={onLogin}>
+              로그인하기
+            </button>
+          </article>
+        ) : (
+          <>
+          {recentList ? (
           <article className="shopping-start-card is-featured">
             <span>최근 장바구니</span>
             <h2>이어서 장보기</h2>
@@ -287,19 +298,21 @@ function ShoppingStart({ isLoggedIn, recentList, historyCount, notice, onContinu
             완료했거나 예전에 만든 장보기 목록을 확인해요.
             {historyCount > 0 ? ` 최근 내역 ${historyCount}개가 있어요.` : ''}
           </p>
-          <button className="shopping-soft-action" type="button" onClick={isLoggedIn ? onHistoryBrowse : onLogin}>
-            {isLoggedIn ? '내역 보기' : '로그인하고 보기'}
+          <button className="shopping-soft-action" type="button" onClick={onHistoryBrowse}>
+            내역 보기
           </button>
         </article>
 
         <article className="shopping-start-card">
-          <span>{isLoggedIn ? '준비 중' : '로그인 필요'}</span>
+          <span>준비 중</span>
           <h2>냉장고 보충 장보기</h2>
-          <p>자주 쓰는 재료, 곧 떨어지는 재료, 유통기한 임박 재료를 기준으로 추천하는 흐름입니다.</p>
-          <button className="shopping-soft-action" type="button" onClick={isLoggedIn ? onRecipeBrowse : onLogin}>
-            {isLoggedIn ? '지금은 레시피에서 시작하기' : '로그인하고 시작하기'}
+          <p>자주 쓰는 재료, 곧 떨어지는 재료, 소비기한 임박 재료를 기준으로 추천하는 흐름입니다.</p>
+          <button className="shopping-soft-action" type="button" onClick={onRecipeBrowse}>
+            지금은 레시피에서 시작하기
           </button>
-        </article>
+          </article>
+          </>
+        )}
       </div>
     </section>
   )

@@ -40,4 +40,6 @@ def test_chat_api_returns_legacy_chat_contract(monkeypatch):
         "reply": "냉장고 재료를 조회했어요.",
         "actions": [{"label": "냉장고 보기", "url": "/fridge", "data": {"tab": "list"}}],
         "sources": [],
+        "slots": {},
+        "pending_action": None,
     }

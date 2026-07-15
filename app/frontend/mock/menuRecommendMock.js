@@ -52,61 +52,54 @@ export const filterOptions = {
 }
 
 export const filterGroups = [
-  { key: 'cookTime', label: '조리 시간', icon: '🕐', type: 'pills' },
-  { key: 'difficulty', label: '난이도', icon: '👨‍🍳', type: 'pills' },
-  { key: 'ingredientUsage', label: '활용 재료', icon: '🥬', subtitle: '보유 재료 기준', type: 'pills' },
-  { key: 'allowMissing', label: '부족 재료 허용', icon: '🛒', type: 'pills' },
-  { key: 'category', label: '카테고리', icon: '📁', type: 'select' },
-  { key: 'expiryPriority', label: '유통기한 임박 재료 우선', icon: '📅', type: 'pills' },
+  { key: 'cookTime', label: '조리 시간', type: 'pills' },
+  { key: 'difficulty', label: '난이도', type: 'pills' },
+  { key: 'ingredientUsage', label: '활용 재료', subtitle: '보유 재료 기준', type: 'pills' },
+  { key: 'allowMissing', label: '부족 재료 허용', type: 'pills' },
+  { key: 'category', label: '카테고리', type: 'select' },
+  { key: 'expiryPriority', label: '소비기한 임박 재료 우선', type: 'pills' },
 ]
 
 export const recommendTemplates = [
   {
     id: 'quick',
     label: '빠르게 만들기',
-    icon: '⚡',
     desc: '조리 시간이 짧은 레시피',
     preset: { cookTime: '15분이내', difficulty: '초급', ingredientUsage: 'NORMAL' },
   },
   {
     id: 'low_fail',
     label: '실패 확률 낮게',
-    icon: '🛡️',
     desc: '초보자도 성공하기 쉬운 레시피',
     preset: { difficulty: '초급', ingredientUsage: 'NORMAL' },
   },
   {
     id: 'hearty',
     label: '든든한 한 끼',
-    icon: '🍲',
     desc: '포만감 있는 레시피',
     preset: { difficulty: '중급', cookTime: 'ANY' },
   },
   {
     id: 'side_dish',
     label: '반찬 위주',
-    icon: '🥗',
     desc: '밑반찬·곁들임 레시피',
     preset: { category: '밑반찬', ingredientUsage: 'NORMAL' },
   },
   {
     id: 'budget',
     label: '절약 메뉴',
-    icon: '💰',
     desc: '재료비 부담이 적은 레시피',
     preset: { ingredientUsage: 'NORMAL', allowMissing: 'ALLOW' },
   },
   {
     id: 'consume',
     label: '재료 소진 우선',
-    icon: '♻️',
     desc: '냉장고 재료를 활용하는 레시피',
     preset: { ingredientUsage: 'HIGH', expiryPriority: 'PRIORITIZE' },
   },
   {
     id: 'custom',
     label: '추천 설정',
-    icon: '⚙️',
     desc: '조건을 직접 설정',
     preset: null,
   },

@@ -6,7 +6,7 @@ from ai.agents.alarm_agent.alarm_agent import analyze_intent
 from app.backend.api.calendar.calendar_api import _event_key_belongs_to_user
 from app.backend.services.calendar_mcp_client import _serverless_output
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
-from app.backend.services.recommendation_service.fridge_ingredient_match import (
+from app.backend.services.recommendation_service.fridge import (
     FridgeItemSnapshot,
     classify_fridge_match,
 )
@@ -101,12 +101,10 @@ def test_recipe_matching_feature_ab_owned_partial_missing_paths(fridge_items, ex
     assert len(result.missing) == expected_missing
 
 
-@pytest.mark.parametrize(
-    ("small", "large"),
-    [
-        (RecipeRecommendConfig.menu_custom_preset(1, pool_multiplier=1), RecipeRecommendConfig.menu_custom_preset(50, pool_multiplier=10)),
-        (RecipeRecommendConfig.for_mode("menu_custom", request_limit=5), RecipeRecommendConfig.for_mode("fridge_consume", request_limit=5)),
-    ],
-)
-def test_recipe_recommend_feature_ab_small_custom_pool_vs_larger_pool(small, large):
-    assert small.pool_size < large.pool_size
+def test_recipe_recommend_feature_ab_pool_size_is_fixed():
+    small = RecipeRecommendConfig.menu_custom_preset(1)
+    large = RecipeRecommendConfig.menu_custom_preset(50)
+
+    assert small.pool_size == 100
+    assert large.pool_size == 100
+    assert small.limit < large.limit

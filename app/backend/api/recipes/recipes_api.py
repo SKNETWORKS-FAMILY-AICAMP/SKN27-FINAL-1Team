@@ -57,7 +57,7 @@ def recommend_recipes(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """레시피 추천. fridge_consume은 limit 9 고정, menu_custom은 request limit 사용."""
+    """레시피 추천. fridge_consume은 limit 3 고정, menu_custom은 request limit 사용."""
     if request_data.mode == "menu_custom":
         config = RecipeRecommendConfig.menu_custom_preset(
             request_data.limit,
@@ -65,7 +65,6 @@ def recommend_recipes(
             category=_normalize_filter(request_data.category),
             difficulty=_normalize_filter(request_data.difficulty),
             cooking_time_label=_normalize_filter(request_data.cooking_time_label),
-            pool_multiplier=request_data.pool_multiplier,
             min_display_match_rate=request_data.min_display_match_rate,
             require_any_owned=request_data.require_any_owned,
             use_expiry_priority=request_data.use_expiry_priority,
@@ -82,7 +81,6 @@ def recommend_recipes(
             items=[],
             returned_count=0,
             has_more=False,
-            empty_reason="no_sql_match",
         )
 
     result = recommendation_service.recommend_recipes(
@@ -98,9 +96,6 @@ def recommend_recipes(
         items=result["items"],
         returned_count=result["returned_count"],
         has_more=result["has_more"],
-        applied_tier=result["applied_tier"],
-        fallback_used=result["fallback_used"],
-        empty_reason=result["empty_reason"],
     )
 
 @router.get("/{id}", response_model=RecipeDetailResponse)
