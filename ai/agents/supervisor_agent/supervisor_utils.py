@@ -147,7 +147,14 @@ def _is_alarm_calendar_query(text: str) -> bool:
 def _is_shopping_price_query(text: str) -> bool:
     """상품 가격 또는 최저가를 묻는 요청인지 확인합니다."""
     normalized = _normalize_text(text)
-    return any(word in normalized for word in ("가격", "얼마", "최저가", "싼곳", "싼데", "저렴한곳", "저렴한데"))
+    return any(word in normalized for word in ("가격", "얼마", "최저가", "싼곳", "싼데", "저렴", "비싸"))
+
+
+def _is_shopping_price_explanation(text: str) -> bool:
+    """가격 정보가 표시되지 않는 이유를 묻는 후속 질문인지 확인합니다."""
+    normalized = _normalize_text(text)
+    return "가격정보" in normalized and any(word in normalized for word in ("안나", "없", "이유", "왜"))
+
 
 
 def _is_recipe_pairing_query(text: str) -> bool:
@@ -520,13 +527,30 @@ def _rewrite_guide_query(text: str) -> str:
     return re.sub(r"^.+?(?:말고|대신)\s+", "", text).strip()
 
 
+def _is_shopping_show_all_request(text: str) -> bool:
+    """생략된 장보기 항목을 모두 보여 달라는 후속 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    return bool(re.search(r"^외\d+개", normalized)) or any(
+        word in normalized for word in ("나머지", "전부", "다말해", "다보여", "전체")
+    )
+
+
+def _normalize_shopping_create_query(text: str) -> str:
+    """장보기 위치 조사만 제거해 실제 상품명이 오염되지 않도록 정리합니다."""
+    return re.sub(
+        r"((?:장보기|쇼핑)(?:\s*목록)?|구매\s*(?:목록|리스트))\s*에",
+        r"\1 ",
+        text,
+    ).strip()
+
 def _strip_shopping_compare_suffix(text: str) -> str:
     """가격 비교 후속 표현을 제거하고 실제 상품명만 반환합니다."""
-    return re.sub(
+    cleaned = re.sub(
         r"\s*더\s*(?:싼|저렴한)\s*(?:곳|데)(?:은|는)?(?:\s*없어(?:요)?)?\s*\??$",
         "",
         text,
-    ).strip()
+    )
+    return re.sub(r"\s*왜\s*(?:이렇게\s*)?비싸(?:요)?\s*\??$", "", cleaned).strip()
 
 def _auth_status_response(user_id: int | None) -> dict[str, Any]:
     """현재 로그인 상태를 챗봇 공통 응답으로 반환합니다."""

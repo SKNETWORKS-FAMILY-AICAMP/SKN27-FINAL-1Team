@@ -138,9 +138,10 @@ from pathlib import Path
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node
-from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY
+from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node, shopping_agent_node
+from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY, _normalize_shopping_create_query, _strip_shopping_compare_suffix
 from ai.agents.inventory_agent.inventory_utils import _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _extract_expiry_keyword, _pending_add_from_history
+from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
 
 
 class FakeService:
@@ -301,7 +302,7 @@ def test_multi_agent_node_runs_tasks_in_order(monkeypatch) -> None:
 
     def fake_recipe(*args, **kwargs):
         """테스트용 레시피 응답을 반환합니다."""
-        calls.append(kwargs["intent"])
+        calls.append((kwargs["intent"], args[0]))
         return {
             "response_text": "두부로 만들 수 있는 레시피예요.",
             "actions": [{"label": "두부조림", "url": "/recipes/1"}],
@@ -324,7 +325,7 @@ def test_multi_agent_node_runs_tasks_in_order(monkeypatch) -> None:
 
     assert routed["intent"] == "multi_agent"
     assert [task["intent"] for task in routed["tasks"]] == ["inventory.expiring", "recipe.recommend"]
-    assert calls == ["inventory.expiring", "recipe.recommend"]
+    assert calls == ["inventory.expiring", ("recipe.recommend", "냉장고 재료로 요리 추천해줘")]
     assert "두부 D-1" in result["response_text"]
     assert "두부로 만들 수 있는 레시피" in result["response_text"]
     assert result["actions"][0]["label"] == "두부조림"
@@ -388,6 +389,76 @@ def test_guide_and_price_request_builds_multi_agent_tasks() -> None:
         "shopping.compare",
     ]
     assert result["tasks"][1]["text"] == "감자 가격 알려줘"
+
+
+def test_shopping_follow_up_shows_all_items(monkeypatch) -> None:
+    """장보기 목록의 나머지 요청은 생략 없이 전체 항목을 반환합니다."""
+    from app.backend.services.shopping_service import shopping_service
+
+    shopping_list = {
+        "id": 1,
+        "items": [
+            {"name": f"재료{index}", "quantity": 1, "unit": "개", "price": None, "is_purchased": False}
+            for index in range(1, 8)
+        ],
+    }
+    monkeypatch.setattr(shopping_service, "get_current", lambda **kwargs: shopping_list)
+
+    result = shopping_agent_node({
+        "text": "외2개도 보여줘",
+        "intent": "shopping.current",
+        "db": MagicMock(),
+        "user_id": 1,
+        "history": [],
+    })
+
+    assert "7. 재료7 - 가격 정보 없음" in result["response_text"]
+    assert "외 2개" not in result["response_text"]
+
+
+def test_shopping_create_removes_location_particle() -> None:
+    """장보기 위치 조사를 제거해 상품명에 에/로가 남지 않게 합니다."""
+    first = _normalize_shopping_create_query("냉동 피자 장보기에 넣어줘")
+    second = _normalize_shopping_create_query("장보기에 냉동 치킨 넣어줘")
+
+    assert extract_ingredient_names(first) == ["냉동 피자"]
+    assert extract_ingredient_names(second) == ["냉동 치킨"]
+
+def test_price_explanation_uses_shopping_help() -> None:
+    """가격 정보 없음의 이유를 묻는 후속 질문은 상품명으로 검색하지 않습니다."""
+    routed = router_node({
+        "text": "가격 정보 안나오는 이유?",
+        "history": [],
+        "service": FakeService("general"),
+    })
+
+    assert routed["intent"] == "shopping.price_help"
+    result = shopping_agent_node({"text": "가격 정보 안나오는 이유?", **routed})
+    assert "판매가를 확인하지 못했다" in result["response_text"]
+
+
+def test_expensive_price_question_routes_to_shopping() -> None:
+    """비싸다고 묻는 가격 질문은 식재료 가이드가 아니라 장보기 가격 비교로 보냅니다."""
+    routed = router_node({
+        "text": "바닐라오일 왜 이렇게 비싸?",
+        "history": [],
+        "service": FakeService("general"),
+    })
+
+    assert routed["intent"] == "shopping.compare"
+
+
+def test_expensive_price_question_strips_question_suffix() -> None:
+    """비싸다고 묻는 표현은 상품명에서 제거한 뒤 가격 비교에 전달합니다."""
+    assert _strip_shopping_compare_suffix("바닐라오일 왜 이렇게 비싸?") == "바닐라오일"
+
+
+def test_inventory_add_parses_quantity_and_storage_particle() -> None:
+    """수량과 보관 위치 조사가 포함되어도 재료명만 정확히 추출합니다."""
+    assert _extract_add_items("양파 2개 냉장에 추가해줘") == [
+        {"name": "양파", "quantity": 2.0, "storage": "냉장"}
+    ]
+
 
 
 def test_delete_inventory_item_routes_to_inventory_delete() -> None:
