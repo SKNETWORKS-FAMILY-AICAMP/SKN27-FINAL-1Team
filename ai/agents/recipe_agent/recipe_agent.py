@@ -42,6 +42,15 @@ class RecipeExecutionState:
     intermediate: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ToolResult:
+    """Tool 실행 공통 결과. ponytail: 현재 미사용. P4-2 이후 Tool 래퍼에서 활용."""
+    ok: bool
+    data: Any = None
+    error: str | None = None
+    source: str | None = None
+
+
 TEMPLATE_RECIPE_SEARCH = "RECIPE_SEARCH"
 TEMPLATE_INGREDIENT_RECOMMEND = "INGREDIENT_RECOMMEND"
 TEMPLATE_FRIDGE_RECOMMEND = "FRIDGE_RECOMMEND"
@@ -198,6 +207,13 @@ if __name__ == "__main__":
         assert _select_template("recipe.pairing", "파스타와 어울리는 반찬") == TEMPLATE_RECIPE_PAIRING
         assert _select_template("recipe.recommend", "냉장고 재료로 뭐 해먹지?") == TEMPLATE_FRIDGE_RECOMMEND
         assert _select_template("recipe.recommend", "두부로 뭐 해먹지?") == TEMPLATE_INGREDIENT_RECOMMEND
+
+        ok_result = ToolResult(ok=True, data={"recipes": []}, source="search")
+        assert ok_result.ok and ok_result.data is not None and ok_result.error is None
+        fail_result = ToolResult(ok=False, error="timeout", source="search")
+        assert not fail_result.ok and fail_result.data is None
+        empty_result = ToolResult(ok=True, data=None, source="search")
+        assert empty_result.ok and empty_result.data is None
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
