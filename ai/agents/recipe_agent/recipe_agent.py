@@ -105,27 +105,8 @@ def run_recipe_agent(
         settings_obj=settings_obj,
         intent=intent or analyze_recipe_intent(text, history),
     )
-
-    if req.intent == "recipe.recommend" and _requires_login(req.intent, req.text) and not req.user_id:
-        internal = build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=req.intent)
-        return to_supervisor_state(internal)
-
-    if req.intent == "recipe.search":
-        reply, actions, sources = handle_recipe_search(req.db, req.text)
-    elif req.intent == "recipe.pairing":
-        reply, actions = handle_recipe_pairing(req.text)
-        sources = []
-    elif req.intent == "recipe.recommend":
-        reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
-        sources = []
-    else:
-        reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
-        sources = []
-
-    internal = build_recipe_response(
-        message=reply, intent=req.intent, actions=actions, sources=sources,
-    )
-    return to_supervisor_state(internal)
+    result = LegacyRecipeEngine().run(req)
+    return to_supervisor_state(result)
 
 
 if __name__ == "__main__":
