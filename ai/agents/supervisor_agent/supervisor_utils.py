@@ -38,11 +38,12 @@ _GUIDE_ACTION_TYPES = {
 }
 _GUIDE_TYPE_LABELS = dict(_GUIDE_ACTION_TYPES.values())
 
-# LLM fallback이 반환할 수 있는 읽기 전용 intent입니다.
+# LLM 읽기 분류기가 반환할 수 있는 intent입니다.
 _LLM_ROUTE_INTENTS = (
     "receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search",
     "ingredient.guide", "inventory.expiring", "inventory.list",
-    "shopping.current", "shopping.history", "shopping.compare", "alarm.notification", "alarm.calendar",
+    "shopping.current", "shopping.history", "shopping.compare", "shopping.price_help",
+    "alarm.notification", "alarm.calendar",
     "multi_agent", "general",
 )
 # LLM 라우팅 결과를 채택할 최소 신뢰도와 허용 슬롯입니다.
@@ -62,7 +63,7 @@ _MULTI_AGENT_TASK_INTENTS = {
     "shopping.compare",
 }
 
-# LLM fallback은 아래 허용 intent만 JSON으로 반환하도록 제한합니다.
+# LLM 읽기 분류기는 아래 허용 intent만 JSON으로 반환하도록 제한합니다.
 _LLM_ROUTE_SYSTEM_PROMPT = """
 You are the Supervisor intent router for the Bobbeori food chatbot.
 Return exactly one JSON object. Do not include markdown, code fences, or explanations.
@@ -93,6 +94,7 @@ Rules:
 - inventory.list: list current fridge ingredients.
 - receipt.guide: receipt OCR or purchase upload guide.
 - shopping.current/history/compare: shopping list lookup, history, or price comparison.
+- shopping.price_help: asks why shopping price information is missing.
 - alarm.notification: notification lookup or management.
 - alarm.calendar: calendar schedule lookup or management.
 - multi_agent: a request that needs two or more read-only intents. Put each task in tasks as {{"intent": "...", "text": "..."}}.
@@ -111,6 +113,14 @@ _INVENTORY_CONFIRM_ACTIONS = {
     "add_ingredient_unchecked",
     "add_ingredients",
     "delete_ingredient",
+}
+
+# 데이터 변경 가능성이 있는 장보기 intent만 규칙 기반으로 고정합니다.
+_SHOPPING_WRITE_INTENTS = {
+    "shopping.create",
+    "shopping.purchase",
+    "shopping.delete_item",
+    "shopping.check_item",
 }
 
 # Supervisor가 직접 제공하는 최소 곁들임 추천 목록입니다.
@@ -142,6 +152,14 @@ def _is_alarm_calendar_query(text: str) -> bool:
     """캘린더 일정 관리 요청인지 확인합니다."""
     normalized = _normalize_text(text)
     return any(word in normalized for word in ("일정", "캘린더"))
+
+def _is_alarm_write_query(text: str) -> bool:
+    """알림 또는 일정 데이터를 변경하는 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    write_words = ("등록", "추가", "생성", "삭제", "지워", "취소", "수정", "변경", "읽음", "동기화", "연결", "해제")
+    return (
+        _is_alarm_notification_query(text) or _is_alarm_calendar_query(text)
+    ) and any(word in normalized for word in write_words)
 
 
 def _is_shopping_price_query(text: str) -> bool:
@@ -504,6 +522,7 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
     intent = str(payload.get("intent", "")).strip()
     if intent not in _LLM_ROUTE_INTENTS:
         intent = "general"
+        confidence = 0.0
     return {
         "intent": intent,
         "confidence": max(0.0, min(confidence, 1.0)),

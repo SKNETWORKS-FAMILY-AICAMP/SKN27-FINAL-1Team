@@ -23,11 +23,14 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     CONFIRM_PREFIX,
     GENERAL_REPLY,
     LOGIN_REQUIRED_REPLY,
+    _LLM_ROUTE_CONFIDENCE,
+    _SHOPPING_WRITE_INTENTS,
     _CONTEXT_INTENTS,
     _alarm_result_to_state,
     _build_read_tasks,
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
+    _is_alarm_write_query,
     _is_guide_query,
     _is_receipt_query,
     _is_recipe_pairing_query,
@@ -97,79 +100,78 @@ def router_node(state: GraphState) -> dict:
     if _is_receipt_query(text):
         return _route_result("receipt.guide")
 
-    # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if _is_alarm_notification_query(text):
-        return _route_result("alarm.notification")
-    if _is_alarm_calendar_query(text):
-        return _route_result("alarm.calendar")
-
-    if _is_shopping_price_explanation(text):
-        return _route_result("shopping.price_help")
-
-    # 읽기 전용 복합 요청은 기존 Agent 작업 목록으로 분해해 순차 실행합니다.
-    read_tasks = _build_read_tasks(text)
-    if len(read_tasks) >= 2:
-        return _route_result("multi_agent", tasks=read_tasks)
-
-    # 가격 질문은 Guide와 일반 LLM보다 Shopping Agent를 우선합니다.
-    if _is_shopping_price_query(text):
-        return _route_result("shopping.compare")
-
-    # 가이드 질문을 Shopping의 부분 문자열 매칭과 냉장고 목록보다 먼저 처리합니다.
-    if _is_guide_query(text):
-        return _route_result("ingredient.guide")
-    # "장본거" 표현은 냉장고 보유 재료가 아니라 장보기 목록 조회로 처리합니다.
-    if "장본" in normalized:
-        return _route_result("shopping.current")
-
-    shopping_intent = analyze_shopping_intent(text)
-    if shopping_intent:
-        return _route_result(shopping_intent)
-    # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
-    if _is_recipe_pairing_query(text):
-        return _route_result("recipe.pairing")
-
-
-    if _is_expiring_question(text):
-        return _route_result("inventory.expiring")
-    if _is_cooking_time_question(text):
-        return _route_result("recipe.search")
-
-    # 생략된 후속 명령은 일반 냉장고 쓰기 규칙보다 직전 에이전트 문맥을 우선합니다.
+    # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     previous_intent = _latest_bot_intent(history)
-    if previous_intent and _is_context_follow_up(text):
+    has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
+    if previous_intent and has_write_word and _is_context_follow_up(text):
         previous_slots = _latest_bot_slots(history)
         if previous_intent.startswith("shopping."):
             return _route_result(analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
         if previous_intent.startswith("alarm."):
             return _route_result(previous_intent, slots=previous_slots)
-        if not any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS)) and (
-            previous_intent.startswith("recipe.") or previous_intent in _CONTEXT_INTENTS
-        ):
-            return _route_result(previous_intent, slots=previous_slots)
 
-    # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
+    # 알림·일정과 장보기의 데이터 변경 요청은 LLM보다 먼저 고정합니다.
+    if _is_alarm_write_query(text):
+        intent = "alarm.notification" if _is_alarm_notification_query(text) else "alarm.calendar"
+        return _route_result(intent)
+
+    shopping_intent = analyze_shopping_intent(text)
+    if shopping_intent in _SHOPPING_WRITE_INTENTS:
+        return _route_result(shopping_intent)
+
+    # 냉장고 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
         return _route_result("inventory.delete")
-    if any(word in normalized for word in CONSUME_WORDS):
+    if not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
         return _route_result("inventory.action")
-    if any(word in normalized for word in ADD_WORDS):
+    if not _is_guide_query(text) and any(word in normalized for word in ADD_WORDS):
         return _route_result("inventory.action")
+
+    # 읽기 요청은 LLM JSON 분류를 먼저 채택합니다.
+    service = state.get("service")
+    if service:
+        route_payload = service._route_intent_payload_with_llm(text, history)
+        if route_payload.get("confidence", 0.0) >= _LLM_ROUTE_CONFIDENCE:
+            return _route_result(
+                route_payload.get("intent", "general"),
+                route_payload.get("confidence", 0.0),
+                route_payload.get("slots", {}),
+                route_payload.get("tasks", []),
+            )
+
+    # LLM을 사용할 수 없거나 신뢰도가 낮을 때만 기존 읽기 규칙으로 보완합니다.
+    if _is_alarm_notification_query(text):
+        return _route_result("alarm.notification")
+    if _is_alarm_calendar_query(text):
+        return _route_result("alarm.calendar")
+    if _is_shopping_price_explanation(text):
+        return _route_result("shopping.price_help")
+    read_tasks = _build_read_tasks(text)
+    if len(read_tasks) >= 2:
+        return _route_result("multi_agent", tasks=read_tasks)
+    if _is_shopping_price_query(text):
+        return _route_result("shopping.compare")
+    if _is_guide_query(text):
+        return _route_result("ingredient.guide")
+    if "장본" in normalized:
+        return _route_result("shopping.current")
+    if shopping_intent:
+        return _route_result(shopping_intent)
+    if _is_recipe_pairing_query(text):
+        return _route_result("recipe.pairing")
+    if _is_expiring_question(text):
+        return _route_result("inventory.expiring")
+    if _is_cooking_time_question(text):
+        return _route_result("recipe.search")
+    if previous_intent and _is_context_follow_up(text):
+        return _route_result(previous_intent, slots=_latest_bot_slots(history))
     if _is_recipe_recommend_query(text):
         return _route_result("recipe.recommend")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return _route_result("inventory.list")
     if _is_recipe_search_query(text):
         return _route_result("recipe.search")
-
-    route_payload = state["service"]._route_intent_payload_with_llm(text, history)
-    return _route_result(
-        route_payload.get("intent", "general"),
-        route_payload.get("confidence", 0.0),
-        route_payload.get("slots", {}),
-        route_payload.get("tasks", []),
-    )
-
+    return _route_result("general")
 
 def inventory_agent_node(state: GraphState) -> dict:
     """재고 관리를 Inventory Agent로 위임합니다."""

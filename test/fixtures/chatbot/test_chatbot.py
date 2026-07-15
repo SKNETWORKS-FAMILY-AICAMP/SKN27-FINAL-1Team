@@ -59,7 +59,7 @@ def test_route_intent_examples() -> None:
     }
 
     for message, expected in cases.items():
-        assert _route_intent(message) == expected
+        assert router_node({"text": message, "service": FakeService(expected), "history": []})["intent"] == expected
 
 
 def test_extract_recipe_ingredient() -> None:
@@ -219,6 +219,57 @@ def test_llm_route_history_keeps_explicit_context() -> None:
     }
 
 
+def test_read_request_uses_llm_before_rule_fallback() -> None:
+    """읽기 요청은 기존 키워드 규칙보다 LLM JSON 분류를 먼저 사용합니다."""
+
+    class TrackingService(FakeService):
+        """LLM 분류 호출 여부를 기록하는 테스트 대역입니다."""
+
+        def __init__(self) -> None:
+            super().__init__("ingredient.guide")
+            self.called = False
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """호출 상태를 기록하고 가이드 intent를 반환합니다."""
+            self.called = True
+            return super()._route_intent_payload_with_llm(text, history)
+
+    service = TrackingService()
+    result = router_node({"text": "감자 보관법", "service": service, "history": []})
+
+    assert service.called
+    assert result["intent"] == "ingredient.guide"
+
+
+def test_low_confidence_llm_result_uses_read_rule_fallback() -> None:
+    """LLM 신뢰도가 낮으면 기존 읽기 규칙으로 안전하게 보완합니다."""
+
+    class LowConfidenceService:
+        """낮은 신뢰도의 일반 intent를 반환하는 테스트 대역입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """규칙 fallback을 확인하기 위한 낮은 신뢰도 결과를 반환합니다."""
+            return {"intent": "general", "confidence": 0.2, "slots": {}}
+
+    result = router_node({"text": "감자 보관법", "service": LowConfidenceService(), "history": []})
+
+    assert result["intent"] == "ingredient.guide"
+
+
+def test_write_request_does_not_call_llm_router() -> None:
+    """냉장고 쓰기 요청은 LLM을 호출하지 않고 규칙으로 고정합니다."""
+
+    class UnexpectedService:
+        """호출되면 테스트를 실패시키는 LLM 대역입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """쓰기 요청에서 LLM 호출이 발생하면 실패합니다."""
+            raise AssertionError("쓰기 요청에서 LLM 분류기를 호출했습니다.")
+
+    result = router_node({"text": "감자 1개 추가해줘", "service": UnexpectedService(), "history": []})
+
+    assert result["intent"] == "inventory.action"
+
 def test_llm_fallback_excludes_write_intents() -> None:
     """DB 변경 intent는 LLM fallback 허용 목록에 포함하지 않습니다."""
     write_intents = {
@@ -281,7 +332,7 @@ def test_inventory_consume_plain_word_routes_to_inventory_action() -> None:
 
 def test_expiring_question_does_not_use_consume_as_ingredient_name() -> None:
     """소비기한 임박 질문에서 소비를 식재료명으로 보지 않습니다."""
-    assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("general"), "history": []})["intent"] == "inventory.expiring"
+    assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("inventory.expiring"), "history": []})["intent"] == "inventory.expiring"
     assert _extract_expiry_keyword("소비기한 임박 재료 있어?") == ""
     assert _extract_expiry_keyword("소비 임박재료 뭐 있어?") == ""
     assert _extract_expiry_keyword("냉장고 재료 중 유통기한 임박 재료") == ""
@@ -429,7 +480,7 @@ def test_price_explanation_uses_shopping_help() -> None:
     routed = router_node({
         "text": "가격 정보 안나오는 이유?",
         "history": [],
-        "service": FakeService("general"),
+        "service": FakeService("shopping.price_help"),
     })
 
     assert routed["intent"] == "shopping.price_help"
@@ -442,7 +493,7 @@ def test_expensive_price_question_routes_to_shopping() -> None:
     routed = router_node({
         "text": "바닐라오일 왜 이렇게 비싸?",
         "history": [],
-        "service": FakeService("general"),
+        "service": FakeService("shopping.compare"),
     })
 
     assert routed["intent"] == "shopping.compare"
@@ -477,24 +528,23 @@ def test_receipt_register_words_route_to_receipt_guide() -> None:
         assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "receipt.guide"
 
 def test_alarm_agent_feature_words_route_to_alarm() -> None:
-    """알림과 캘린더 요청을 슈퍼바이저에서 분리해 보냅니다."""
-    notification_messages = (
-        "내일 알람 삭제해줘",
-        "리마인더 조회해줘",
-        "푸시토큰 등록해줘",
-        "알림 읽음 처리해줘",
+    """알림과 캘린더 쓰기는 규칙으로, 조회는 LLM 결과로 분리합니다."""
+    write_cases = (
+        ("내일 알람 삭제해줘", "alarm.notification"),
+        ("푸시토큰 등록해줘", "alarm.notification"),
+        ("알림 읽음 처리해줘", "alarm.notification"),
+        ("내일 저녁 일정 등록해줘", "alarm.calendar"),
     )
-    calendar_messages = (
-        "내일 저녁 일정 등록해줘",
-        "캘린더 일정 조회",
-        "내일 캘린더 일정 알려줘",
+    read_cases = (
+        ("리마인더 조회해줘", "alarm.notification"),
+        ("캘린더 일정 조회", "alarm.calendar"),
+        ("내일 캘린더 일정 알려줘", "alarm.calendar"),
     )
 
-    for message in notification_messages:
-        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.notification"
-    for message in calendar_messages:
-        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.calendar"
-
+    for message, expected in write_cases:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == expected
+    for message, expected in read_cases:
+        assert router_node({"text": message, "service": FakeService(expected), "history": []})["intent"] == expected
 
 def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
     """알림 조회는 슈퍼바이저가 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
@@ -1226,7 +1276,7 @@ def test_llm_route_payload_rejects_unknown_values() -> None:
 
     assert payload == {
         "intent": "general",
-        "confidence": 1.0,
+        "confidence": 0.0,
         "slots": {"ingredient": "감자"},
         "tasks": [{"intent": "recipe.search", "text": "감자 레시피"}],
     }
