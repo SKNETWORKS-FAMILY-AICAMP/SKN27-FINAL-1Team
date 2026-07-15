@@ -268,17 +268,23 @@
   box-shadow: 0 8px 18px rgba(69, 42, 25, 0.08);
 }
 
-.floating-chatbot__form input {
+.floating-chatbot__form textarea {
   min-width: 0;
+  min-height: 24px;
+  max-height: 96px;
   flex: 1;
+  field-sizing: content;
+  resize: none;
+  overflow-y: auto;
   border: 0;
   background: transparent;
   color: #1f2521;
   font: inherit;
+  line-height: 1.5;
   outline: none;
 }
 
-.floating-chatbot__form input:focus {
+.floating-chatbot__form textarea:focus {
   box-shadow: none;
 }
 

@@ -136,6 +136,10 @@ class ChatService:
             response = llm.invoke(messages)
             payload = _parse_llm_route_payload(response.content)
             intent = payload.get("intent", "")
+            if intent == "multi_agent":
+                if payload.get("confidence", 0) >= 0.5 and len(payload.get("tasks") or []) >= 2:
+                    return payload
+                return _route_payload("general", confidence=payload.get("confidence", 0))
             if intent in _LLM_ROUTE_INTENTS and payload.get("confidence", 0) >= 0.5:
                 return payload
             return _route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))

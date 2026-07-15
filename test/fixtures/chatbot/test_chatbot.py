@@ -22,6 +22,8 @@ def test_route_intent_examples() -> None:
     cases = {
         "오늘 먼저 먹어야 할 거 뭐야?": "inventory.expiring",
         "재료 기한 다되어 가는거 있어?": "inventory.expiring",
+        "냉장고 재료 중 유통기한 임박 재료": "inventory.expiring",
+        "냉장고 재료 중 유통기한 임박 재료랑 그 재료로 만들 수 있는 레시피 알려줘": "multi_agent",
         "김치 유통기한 언제까지야": "inventory.expiring",
         "내 냉장고 재료 뭐 있어?": "inventory.list",
         "영수증 등록 어디서 해?": "receipt.guide",
@@ -48,6 +50,10 @@ def test_route_intent_examples() -> None:
         "냉장고 재료로 요리 추천해줘": "recipe.recommend",
         "냉장고속 재료로 요리추천": "recipe.recommend",
         "냉장고 재료로 만들 요리 알려줘": "recipe.recommend",
+        "현재 냉장고 재료와 감자로 할 수 있는 레시피 알려줘": "recipe.recommend",
+        "냉장고 재료와 양파로 가능한 메뉴 추천": "recipe.recommend",
+        "보유 식재료로 만들 음식 알려줘": "recipe.recommend",
+        "내 재료 기준 레시피 추천": "recipe.recommend",
         "냉장고 재료로 뭐만들어먹지?": "recipe.recommend",
         "파 빨리 써야 하는데 뭐하지": "recipe.recommend",
         "감자로 간단하게 만들수 있는거 알려줘": "recipe.recommend",
@@ -198,8 +204,10 @@ def test_router_node_keeps_llm_payload_slots() -> None:
             "intent": "recipe.recommend",
             "confidence": 0.9,
             "slots": {"ingredient": "두부"},
+            "tasks": [],
         },
         "slots": {"ingredient": "두부"},
+        "tasks": [],
     }
 
 
@@ -230,6 +238,66 @@ def test_expiring_question_does_not_use_consume_as_ingredient_name() -> None:
     assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("general"), "history": []})["intent"] == "inventory.expiring"
     assert _extract_expiry_keyword("소비기한 임박 재료 있어?") == ""
     assert _extract_expiry_keyword("소비 임박재료 뭐 있어?") == ""
+    assert _extract_expiry_keyword("냉장고 재료 중 유통기한 임박 재료") == ""
+
+
+
+def test_multi_agent_node_runs_tasks_in_order(monkeypatch) -> None:
+    """복합 질문의 작업 목록을 순서대로 실행하고 결과를 합칩니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    calls = []
+
+    def fake_inventory(**kwargs):
+        """테스트용 냉장고 응답을 반환합니다."""
+        calls.append(kwargs["intent"])
+        return {"response_text": "소비기한 확인이 필요한 재료예요. 두부 D-1"}
+
+    def fake_recipe(*args, **kwargs):
+        """테스트용 레시피 응답을 반환합니다."""
+        calls.append(kwargs["intent"])
+        return {
+            "response_text": "두부로 만들 수 있는 레시피예요.",
+            "actions": [{"label": "두부조림", "url": "/recipes/1"}],
+        }
+
+    monkeypatch.setattr(inventory_agent, "run_inventory_agent", fake_inventory)
+    monkeypatch.setattr(supervisor_agent, "run_recipe_agent", fake_recipe)
+
+    text = "냉장고 재료 중 유통기한 임박 재료랑 그 재료로 만들 수 있는 레시피 알려줘"
+    routed = supervisor_agent.router_node({"text": text, "history": [], "service": supervisor_service})
+    result = supervisor_agent.multi_agent_node(
+        {
+            "text": text,
+            "history": [],
+            "db": MagicMock(),
+            "user_id": 1,
+            "tasks": routed["tasks"],
+        }
+    )
+
+    assert routed["intent"] == "multi_agent"
+    assert [task["intent"] for task in routed["tasks"]] == ["inventory.expiring", "recipe.recommend"]
+    assert calls == ["inventory.expiring", "recipe.recommend"]
+    assert "두부 D-1" in result["response_text"]
+    assert "두부로 만들 수 있는 레시피" in result["response_text"]
+    assert result["actions"][0]["label"] == "두부조림"
+
+def test_guide_and_price_request_builds_multi_agent_tasks() -> None:
+    """보관법과 가격을 함께 물으면 두 조회 작업으로 분해합니다."""
+    result = router_node({
+        "text": "감자 보관법이랑 감자 가격 알려줘",
+        "history": [],
+        "service": supervisor_service,
+    })
+
+    assert result["intent"] == "multi_agent"
+    assert [task["intent"] for task in result["tasks"]] == [
+        "ingredient.guide",
+        "shopping.compare",
+    ]
+    assert result["tasks"][1]["text"] == "감자 가격 알려줘"
 
 
 def test_delete_inventory_item_routes_to_inventory_delete() -> None:
@@ -927,8 +995,23 @@ def test_llm_route_payload_json_parser() -> None:
         "intent": "recipe.recommend",
         "confidence": 0.82,
         "slots": {"ingredient": "두부"},
+        "tasks": [],
     }
 
+
+def test_llm_multi_agent_payload_filters_write_tasks() -> None:
+    """LLM 복합 작업에서 조회 전용 intent만 허용합니다."""
+    payload = supervisor_utils._parse_llm_route_payload(
+        '{"intent":"multi_agent","confidence":0.9,"slots":{},"tasks":['
+        '{"intent":"inventory.expiring","text":"임박 재료 알려줘"},'
+        '{"intent":"inventory.action","text":"두부 추가해줘"},'
+        '{"intent":"recipe.recommend","text":"그 재료로 요리 추천해줘"}]}'
+    )
+
+    assert [task["intent"] for task in payload["tasks"]] == [
+        "inventory.expiring",
+        "recipe.recommend",
+    ]
 
 def test_recipe_pairing_reply() -> None:
     """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""

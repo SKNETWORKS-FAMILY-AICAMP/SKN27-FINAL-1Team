@@ -25,6 +25,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     LOGIN_REQUIRED_REPLY,
     _CONTEXT_INTENTS,
     _alarm_result_to_state,
+    _build_read_tasks,
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
     _is_guide_query,
@@ -39,6 +40,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _latest_bot_intent,
     _latest_bot_pending_action,
     _latest_bot_slots,
+    _merge_agent_results,
     _normalize_text,
     _parse_alarm_request,
     _reply_recipe_pairing,
@@ -98,6 +100,11 @@ def router_node(state: GraphState) -> dict:
     if _is_alarm_calendar_query(text):
         return _route_result("alarm.calendar")
 
+    # 읽기 전용 복합 요청은 기존 Agent 작업 목록으로 분해해 순차 실행합니다.
+    read_tasks = _build_read_tasks(text)
+    if len(read_tasks) >= 2:
+        return _route_result("multi_agent", tasks=read_tasks)
+
     # 가이드 질문을 Shopping의 부분 문자열 매칭과 냉장고 목록보다 먼저 처리합니다.
     if _is_guide_query(text):
         return _route_result("ingredient.guide")
@@ -115,6 +122,7 @@ def router_node(state: GraphState) -> dict:
     # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
     if _is_recipe_pairing_query(text):
         return _route_result("recipe.pairing")
+
 
     if _is_expiring_question(text):
         return _route_result("inventory.expiring")
@@ -141,11 +149,10 @@ def router_node(state: GraphState) -> dict:
         return _route_result("inventory.action")
     if any(word in normalized for word in ADD_WORDS):
         return _route_result("inventory.action")
-    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
-        return _route_result("inventory.list")
-
     if _is_recipe_recommend_query(text):
         return _route_result("recipe.recommend")
+    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
+        return _route_result("inventory.list")
     if _is_recipe_search_query(text):
         return _route_result("recipe.search")
 
@@ -154,6 +161,7 @@ def router_node(state: GraphState) -> dict:
         route_payload.get("intent", "general"),
         route_payload.get("confidence", 0.0),
         route_payload.get("slots", {}),
+        route_payload.get("tasks", []),
     )
 
 
@@ -242,9 +250,38 @@ def general_node(state: GraphState) -> dict:
     """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
     return {"response_text": GENERAL_REPLY}
 
+def multi_agent_node(state: GraphState) -> dict:
+    """작업 목록을 기존 Agent 노드로 순차 실행하고 응답을 합칩니다."""
+    handlers = {
+        "inventory_agent_node": inventory_agent_node,
+        "guide_agent_node": guide_agent_node,
+        "recipe_agent_node": recipe_agent_node,
+        "recipe_pairing_node": recipe_pairing_node,
+        "receipt_guide_node": receipt_guide_node,
+        "shopping_agent_node": shopping_agent_node,
+    }
+    results = []
+
+    for task in state.get("tasks") or []:
+        intent = task.get("intent", "")
+        task_state = {
+            **state,
+            "intent": intent,
+            "text": task.get("text") or state["text"],
+            "tasks": [],
+        }
+        handler = handlers.get(route_intent(task_state))
+        if handler:
+            results.append(handler(task_state))
+
+    return _merge_agent_results(*results) if results else general_node(state)
+
+
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
+    if intent == "multi_agent":
+        return "multi_agent_node"
     if intent.startswith("alarm."):
         return "alarm_agent_node"
     if intent.startswith("shopping."):
@@ -269,6 +306,7 @@ def route_intent(state: GraphState) -> str:
 workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)
 workflow.add_node("inventory_agent_node", inventory_agent_node)
+workflow.add_node("multi_agent_node", multi_agent_node)
 workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
@@ -281,6 +319,7 @@ workflow.set_entry_point("router")
 workflow.add_conditional_edges("router", route_intent)
 for node_name in (
     "inventory_agent_node",
+    "multi_agent_node",
     "alarm_agent_node",
     "shopping_agent_node",
     "guide_agent_node",

@@ -156,6 +156,13 @@ function FloatingChatbot() {
     requestChat(message)
   }
 
+  // Enter는 전송하고 Shift+Enter는 줄바꿈으로 유지합니다.
+  const handleMessageKeyDown = (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    requestChat(message)
+  }
+
   return (
     <aside className="floating-chatbot" aria-label="밥벌이 챗봇">
       {isOpen && (
@@ -293,11 +300,12 @@ function FloatingChatbot() {
           </div>
 
           <form className="floating-chatbot__form" onSubmit={sendMessage}>
-            <input
-              type="text"
+            <textarea
+              rows="1"
               value={message}
               placeholder="메시지를 입력하세요..."
               onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={handleMessageKeyDown}
             />
             <button type="submit" aria-label="메시지 전송">
               <svg viewBox="0 0 24 24" aria-hidden="true">

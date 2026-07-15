@@ -173,7 +173,7 @@ def _extract_expiry_keyword(text: str) -> str:
     if not match:
         return ""
     keyword = match.group(1).strip()
-    if keyword in ("재료", "식재료", "냉장고", "오늘", "소비", "소비기한", "유통기한", "기한", "임박", "임박재료", "소비임박재료"):
+    if keyword in ("재료", "식재료", "냉장고", "중", "오늘", "소비", "소비기한", "유통기한", "기한", "임박", "임박재료", "소비임박재료"):
         return ""
     return keyword
 
