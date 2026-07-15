@@ -4,13 +4,13 @@ import './Fridge.css'
 
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
-import imageDefaultIngredient from '../../assets/extracted/images/image_default_ingredient.webp'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 import { API_URL } from '../../utils/api.js'
 import { removeStoredRecipe } from '../../utils/savedRecipes.js'
+import { getFridgeNameClass } from './fridgeName.js'
 
 const FILTER_TYPES = ['전체', '냉장', '냉동', '실온', '소비 임박', '기한 지남']
 
@@ -33,7 +33,15 @@ function getStorageTone(storageMethod = '') {
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
     <span className={`fridge-image-slot ${src ? 'is-filled' : ''} ${className}`}>
-      {src ? <img src={src} alt={alt} /> : null}
+      {src ? (
+        <img src={src} alt={alt} />
+      ) : (
+        <span className="fridge-image-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <path d="M10 34h28M14 31a10 10 0 0 1 20 0M21 18h6M24 18v3" />
+          </svg>
+        </span>
+      )}
     </span>
   )
 }
@@ -75,7 +83,7 @@ const ingredientImages = Object.entries(
 function getIngredientIcon(name = '') {
   const key = normalizeIngredientImageKey(name)
   const image = ingredientImages.find((item) => item.key === key)
-  return image?.src || imageDefaultIngredient
+  return image?.src || ''
 }
 
 // 날짜 문자열을 로컬 Date 객체로 변환합니다.
@@ -913,7 +921,9 @@ function Fridge() {
                     </div>
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
-                        <h2>{item.name}</h2>
+                      <h2 className={getFridgeNameClass(item.name)} title={item.name}>
+                        {item.name}
+                      </h2>
                         <span className={['fridge-storage-badge', getStorageTone(item.storage_method)].filter(Boolean).join(' ')}>{item.storage_method}</span>
                       </div>
                       <dl>
