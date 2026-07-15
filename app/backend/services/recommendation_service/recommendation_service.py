@@ -27,6 +27,7 @@ from app.backend.services.recommendation_service.recipe_query import (
     recipe_to_list_item,
 )
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommend_model import score_recipes
 
 __all__ = [
     "RecipeRecommendConfig",
@@ -243,7 +244,7 @@ class RecommendationService:
         recipes = recipes[: config.pool_size]
 
         # ── 추론 ──
-        model_scores = self._score_recipes([r.id for r in recipes], str(user_id))
+        model_scores = score_recipes([r.id for r in recipes], str(user_id))
 
         # ── 후처리: fridge 매칭 + 정렬 + 응답 ──
         expiry_rows = fetch_fridge_expiry_rows(db, user_id)
@@ -282,12 +283,6 @@ class RecommendationService:
         ).order_by(Recipe.id.desc())
 
         return query_recipes.all()
-
-    @staticmethod
-    def _score_recipes(recipe_ids: list[int], user_id: str = "__catalog__") -> dict[int, float]:
-        # ponytail: placeholder — LightFM pkl 적용 시 lightfm_scorer.py로 분리
-        del user_id
-        return {rid: 0.0 for rid in recipe_ids}
 
     @staticmethod
     def _evaluate_candidates(
