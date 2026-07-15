@@ -109,6 +109,18 @@ def _select_engine(intent: str) -> LegacyRecipeEngine:
     return LegacyRecipeEngine()
 
 
+def _select_template(intent: str, text: str) -> str:
+    """intent + 텍스트로 템플릿을 선택한다. ponytail: 현재 응답 생성에 미사용. P3-4 shadow 비교에서 검증."""
+    if intent == "recipe.search":
+        return TEMPLATE_RECIPE_SEARCH
+    if intent == "recipe.pairing":
+        return TEMPLATE_RECIPE_PAIRING
+    ingredient_keywords = ("냉장고", "재료", "있는 것", "남은")
+    if any(kw in text for kw in ingredient_keywords):
+        return TEMPLATE_FRIDGE_RECOMMEND
+    return TEMPLATE_INGREDIENT_RECOMMEND
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -181,6 +193,11 @@ if __name__ == "__main__":
 
         templates = {TEMPLATE_RECIPE_SEARCH, TEMPLATE_INGREDIENT_RECOMMEND, TEMPLATE_FRIDGE_RECOMMEND, TEMPLATE_RECIPE_PAIRING}
         assert len(templates) == 4
+
+        assert _select_template("recipe.search", "김치볶음밥 레시피") == TEMPLATE_RECIPE_SEARCH
+        assert _select_template("recipe.pairing", "파스타와 어울리는 반찬") == TEMPLATE_RECIPE_PAIRING
+        assert _select_template("recipe.recommend", "냉장고 재료로 뭐 해먹지?") == TEMPLATE_FRIDGE_RECOMMEND
+        assert _select_template("recipe.recommend", "두부로 뭐 해먹지?") == TEMPLATE_INGREDIENT_RECOMMEND
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
