@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import dataclass
 from typing import Any
 
 from .recipe_handlers import handle_recipe_pairing, handle_recipe_recommend, handle_recipe_search
@@ -8,6 +9,16 @@ from .recipe_intents import analyze_recipe_intent
 from .recipe_utils import LOGIN_REQUIRED_REPLY, _requires_login
 
 AGENT_NAME = "recipe"
+
+
+@dataclass
+class RecipeAgentRequest:
+    text: str
+    db: Any
+    user_id: int | None
+    history: list
+    settings_obj: Any
+    intent: str
 
 
 def build_recipe_response(
@@ -55,29 +66,31 @@ def run_recipe_agent(
     intent: str | None = None,
 ) -> dict:
     """Recipe Agent 단일 진입점. Supervisor GraphState subset과 boundary 호환."""
-    resolved_intent = intent or analyze_recipe_intent(text, history)
+    req = RecipeAgentRequest(
+        text=text, db=db, user_id=user_id,
+        history=history or [],
+        settings_obj=settings_obj,
+        intent=intent or analyze_recipe_intent(text, history),
+    )
 
-    if resolved_intent == "recipe.recommend" and _requires_login(resolved_intent, text) and not user_id:
-        internal = build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=resolved_intent)
+    if req.intent == "recipe.recommend" and _requires_login(req.intent, req.text) and not req.user_id:
+        internal = build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=req.intent)
         return to_supervisor_state(internal)
 
-    if resolved_intent == "recipe.search":
-        reply, actions, sources = handle_recipe_search(db, text)
-    elif resolved_intent == "recipe.pairing":
-        reply, actions = handle_recipe_pairing(text)
+    if req.intent == "recipe.search":
+        reply, actions, sources = handle_recipe_search(req.db, req.text)
+    elif req.intent == "recipe.pairing":
+        reply, actions = handle_recipe_pairing(req.text)
         sources = []
-    elif resolved_intent == "recipe.recommend":
-        reply, actions = handle_recipe_recommend(db, user_id or 0, text, history, settings_obj)
+    elif req.intent == "recipe.recommend":
+        reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
         sources = []
     else:
-        reply, actions = handle_recipe_recommend(db, user_id or 0, text, history, settings_obj)
+        reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
         sources = []
 
     internal = build_recipe_response(
-        message=reply,
-        intent=resolved_intent,
-        actions=actions,
-        sources=sources,
+        message=reply, intent=req.intent, actions=actions, sources=sources,
     )
     return to_supervisor_state(internal)
 
@@ -201,5 +214,12 @@ if __name__ == "__main__":
     finally:
         agent.handle_recipe_search = orig_search
         agent.handle_recipe_recommend = orig_recommend
+
+    req = RecipeAgentRequest(
+        text="테스트", db=None, user_id=1,
+        history=[], settings_obj=None, intent="recipe.search",
+    )
+    assert req.text == "테스트"
+    assert req.intent == "recipe.search"
 
     print("recipe_agent ok")
