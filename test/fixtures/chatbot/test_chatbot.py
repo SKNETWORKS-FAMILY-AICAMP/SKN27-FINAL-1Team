@@ -6,8 +6,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
+from ai.agents.supervisor_agent.supervisor_agent import router_node
 from ai.agents.supervisor_agent import supervisor_utils
 import ai.agents.recipe_agent.recipe_handlers as recipe_handlers
+
+
+def _route_intent(message: str) -> str:
+    """실제 LangGraph 라우터를 통해 테스트 문장의 의도를 반환합니다."""
+    return router_node({"text": message, "history": [], "service": supervisor_service})["intent"]
 
 
 def test_route_intent_examples() -> None:
@@ -47,7 +53,7 @@ def test_route_intent_examples() -> None:
     }
 
     for message, expected in cases.items():
-        assert supervisor_service._route_intent(message) == expected
+        assert _route_intent(message) == expected
 
 
 def test_extract_recipe_ingredient() -> None:
@@ -177,7 +183,7 @@ def test_router_node_keeps_llm_payload_slots() -> None:
                 "slots": {"ingredient": "두부"},
             }
 
-    result = router_node({"text": "애매한 추천 질문", "service": PayloadService(), "history": []})
+    result = router_node({"text": "이건 어떻게 하면 좋을까?", "service": PayloadService(), "history": []})
 
     assert result == {
         "intent": "recipe.recommend",
@@ -828,17 +834,6 @@ def test_guide_reply_formats_intake_tip(monkeypatch) -> None:
     assert "크림치즈 섭취 팁이에요." in reply
     assert "빵이나 크래커" in reply
     assert sources == []
-
-def test_llm_router_keeps_rule_based_recipe_recommend() -> None:
-    """규칙으로 잡힌 레시피 추천은 LLM 분류로 넘기지 않습니다."""
-    messages = [
-        "냉장고 재료로 뭐 만들어 먹지?",
-        "냉장고 재료로 만들 요리 알려줘",
-        "냉장고 재료로 뭐만들어먹지?",
-    ]
-
-    for message in messages:
-        assert supervisor_service._route_intent_with_llm(message) == "recipe.recommend"
 
 
 

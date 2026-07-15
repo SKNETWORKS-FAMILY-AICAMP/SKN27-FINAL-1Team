@@ -16,7 +16,6 @@ from ai.agents.inventory_agent.inventory_utils import (
     DELETE_WORDS,
     CONSUME_WORDS,
     INVENTORY_LIST_WORDS,
-    EXPIRING_WORDS
 )
 
 from app.backend.schemas.chat_state import GraphState
@@ -25,11 +24,18 @@ from ai.agents.recipe_agent import run_recipe_agent
 from ai.agents.supervisor_agent.supervisor_utils import (
     LOGIN_REQUIRED_REPLY, GENERAL_REPLY,
     CONFIRM_PREFIX, CANCEL_WORDS,
-    _normalize_text
+    _is_cooking_time_question,
+    _is_expiring_question,
+    _normalize_text,
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 
 _CONTEXT_INTENTS = {"ingredient.guide", "inventory.list", "inventory.expiring"}
+
+# 읽기 질문은 한 곳에서 분류할 수 있도록 의도별 대표 표현을 모아둡니다.
+_RECIPE_RECOMMEND_WORDS = ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들요리", "만들어먹", "요리추천", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")
+_RECIPE_SEARCH_WORDS = ("레시피", "요리법", "요리")
+_GUIDE_WORDS = ("보관법", "보관방법", "보관", "손질", "세척", "씻", "신선", "확인", "가이드", "어떡", "어떻게하지", "먹다남은", "남은", "영양", "영양성분", "칼로리", "열량", "단백질", "탄수화물", "지방", "당류", "나트륨", "맛있게", "먹는법", "섭취", "제철")
 
 
 def _latest_bot_intent(history) -> str | None:
@@ -149,6 +155,11 @@ def router_node(state: GraphState) -> dict:
     if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
         return _route_result("recipe.pairing")
 
+    if _is_expiring_question(text):
+        return _route_result("inventory.expiring")
+    if _is_cooking_time_question(text):
+        return _route_result("recipe.search")
+
     # 생략된 후속 명령은 일반 냉장고 쓰기 규칙보다 직전 에이전트 문맥을 우선합니다.
     previous_intent = _latest_bot_intent(history)
     if previous_intent and _is_context_follow_up(text):
@@ -165,14 +176,21 @@ def router_node(state: GraphState) -> dict:
     # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
     if any(word in normalized for word in DELETE_WORDS):
         return _route_result("inventory.delete")
-    if any(word in normalized for word in EXPIRING_WORDS):
-        return _route_result("inventory.expiring")
     if any(word in normalized for word in CONSUME_WORDS):
         return _route_result("inventory.action")
     if any(word in normalized for word in ADD_WORDS):
         return _route_result("inventory.action")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return _route_result("inventory.list")
+
+    if "냉장고" in normalized and "재료" in normalized and "요리" in normalized:
+        return _route_result("recipe.recommend")
+    if any(word in normalized for word in _RECIPE_RECOMMEND_WORDS):
+        return _route_result("recipe.recommend")
+    if any(word in normalized for word in _RECIPE_SEARCH_WORDS):
+        return _route_result("recipe.search")
+    if any(word in normalized for word in _GUIDE_WORDS):
+        return _route_result("ingredient.guide")
 
     if hasattr(state["service"], "_route_intent_payload_with_llm"):
         route_payload = state["service"]._route_intent_payload_with_llm(text, history)

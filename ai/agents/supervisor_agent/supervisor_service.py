@@ -29,8 +29,6 @@ except ImportError:
 from ai.agents.supervisor_agent.supervisor_utils import (
     _extract_keyword,
     _format_guide_tip,
-    _is_cooking_time_question,
-    _is_expiring_question,
     _is_login_status_question,
     _is_relevant_search_result,
 )
@@ -175,13 +173,9 @@ class ChatService:
         return {"intent": intent, "confidence": confidence, "slots": slots or {}}
 
     def _route_intent_payload_with_llm(self, text: str, history: list[Any] = None) -> dict[str, Any]:
-        """룰베이스 우선 구조를 유지하며 LLM fallback 결과를 JSON dict로 반환합니다."""
-        rule_intent = self._route_intent(text)
-        if rule_intent != "general":
-            return self._route_payload(rule_intent)
-
+        """규칙으로 분류되지 않은 문장을 LLM으로 분류해 JSON dict로 반환합니다."""
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
-            return self._route_payload(self._route_intent(text), confidence=0.0)
+            return self._route_payload("general", confidence=0.0)
 
         try:
             from langchain_openai import ChatOpenAI
@@ -264,43 +258,13 @@ Safety:
 
             if intent in valid_intents and payload.get("confidence", 0) >= 0.5:
                 return payload
-            return self._route_payload(self._route_intent(text), confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
+            return self._route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
         except Exception:
-            return self._route_payload(self._route_intent(text), confidence=0.0)
+            return self._route_payload("general", confidence=0.0)
 
     def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
         """기존 호출부 호환을 위해 LLM 라우팅 dict에서 intent만 반환합니다."""
         return self._route_intent_payload_with_llm(text, history).get("intent", "general")
-
-    def _route_intent(self, text: str) -> str:
-        """키워드 기반으로 1차 챗봇 intent를 분류합니다."""
-        normalized = text.replace(" ", "").lower()
-
-        if any(word in normalized for word in ("영수증", "ocr", "구매내역")):
-            return "receipt.guide"
-            
-        if _is_expiring_question(text):
-            return "inventory.expiring"
-        if _is_cooking_time_question(text):
-            return "recipe.search"
-        if any(word in normalized for word in ('이랑먹기좋은', '같이먹기좋은', '어울리는음식', '곁들일', '곁들이', '사이드메뉴', '반찬추천')):
-            return "recipe.pairing"
-            
-        if "냉장고" in normalized and "재료" in normalized and "요리" in normalized:
-            return "recipe.recommend"
-        if any(word in normalized for word in ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들요리", "만들어먹", "요리추천", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")):
-            return "recipe.recommend"
-        if any(word in normalized for word in ("레시피", "요리법", "요리")):
-            return "recipe.search"
-            
-        if any(word in normalized for word in ('보관법', '보관방법', '보관', '손질', '세척', '씻', '신선', '확인', '가이드', '어떡', '어떻게하지', '먹다남은', '남은', '영양', '영양성분', '칼로리', '열량', '단백질', '탄수화물', '지방', '당류', '나트륨', '맛있게', '먹는법', '섭취', '제철')):
-            return "ingredient.guide"
-        if any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")):
-            return "inventory.expiring"
-        if any(word in normalized for word in ("뭐있", "뭐가있", "냉장고목록", "재료목록", "내재료")):
-            return "inventory.list"
-            
-        return "general"
 
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
         """Guide Agent 공통 응답을 챗봇 말풍선 형식으로 변환합니다."""
