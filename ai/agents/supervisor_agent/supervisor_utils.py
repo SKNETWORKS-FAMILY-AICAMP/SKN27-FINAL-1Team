@@ -48,7 +48,7 @@ _LLM_ROUTE_INTENTS = (
 )
 # LLM 라우팅 결과를 채택할 최소 신뢰도와 허용 슬롯입니다.
 _LLM_ROUTE_CONFIDENCE = 0.5
-_LLM_SLOT_KEYS = {"ingredient", "keyword", "date", "quantity", "storage", "use_inventory", "guide_type"}
+_LLM_SLOT_KEYS = {"ingredient", "keyword", "shopping_product", "date", "quantity", "storage", "use_inventory", "guide_type"}
 # 복합 요청에서 순차 실행을 허용하는 읽기 전용 intent입니다.
 _MULTI_AGENT_TASK_INTENTS = {
     "receipt.guide",
@@ -78,6 +78,7 @@ Response schema:
   "slots": {{
     "ingredient": null,
     "keyword": null,
+    "shopping_product": null,
     "date": null,
     "quantity": null,
     "storage": null
@@ -94,7 +95,7 @@ Rules:
 - inventory.list: list current fridge ingredients.
 - receipt.guide: receipt OCR or purchase upload guide.
 - shopping.current/history: current shopping list or purchase history lookup.
-- shopping.compare: asks for a product price, lowest price, cheaper seller, or why a product is expensive.
+- shopping.compare: asks for a product price, lowest price, cheaper seller, or why a product is expensive. Put an explicitly named product in slots.shopping_product; leave it null for a context-only follow-up.
 - shopping.price_help: only asks why a previous shopping result has no price; never use it for a direct product price question.
 - alarm.notification: notification lookup or management.
 - alarm.calendar: calendar schedule lookup or management.

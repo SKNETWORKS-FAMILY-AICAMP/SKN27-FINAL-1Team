@@ -488,6 +488,48 @@ def test_shopping_create_removes_location_particle() -> None:
     assert extract_ingredient_names(first) == ["냉동 피자"]
     assert extract_ingredient_names(second) == ["냉동 치킨"]
 
+def test_shopping_price_follow_up_reuses_previous_product(monkeypatch) -> None:
+    """상품명이 생략된 가격 후속 질문은 직전 비교 상품을 이어받습니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_shopping_agent(**kwargs):
+        """Shopping Agent에 전달된 상품명을 테스트용으로 기록합니다."""
+        captured.update(kwargs)
+        return {"response_text": "감자 가격 비교 결과예요.", "actions": [], "sources": []}
+
+    monkeypatch.setattr(
+        "ai.agents.shopping_agent.shopping_agent.run_shopping_agent",
+        fake_run_shopping_agent,
+    )
+    history = [
+        MagicMock(
+            role="bot",
+            text="감자 가격 비교 결과예요.",
+            intent="shopping.compare",
+            slots={"shopping_product": "감자"},
+        )
+    ]
+
+    for message in ("더 싼 곳 없어?", "다른 곳 없어?"):
+        routed = router_node({
+            "text": message,
+            "history": history,
+            "service": FakeService("shopping.compare"),
+        })
+        result = supervisor_agent.shopping_agent_node({
+            **routed,
+            "text": message,
+            "history": history,
+            "db": MagicMock(),
+            "user_id": 1,
+        })
+
+        assert routed["intent"] == "shopping.compare"
+        assert captured["text"] == "감자"
+        assert result["slots"]["shopping_product"] == "감자"
+
 def test_price_explanation_uses_shopping_help() -> None:
     """가격 정보 없음의 이유를 묻는 후속 질문은 상품명으로 검색하지 않습니다."""
     routed = router_node({

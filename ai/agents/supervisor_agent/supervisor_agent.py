@@ -102,6 +102,14 @@ def router_node(state: GraphState) -> dict:
 
     # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     previous_intent = _latest_bot_intent(history)
+    previous_slots = _latest_bot_slots(history)
+    # 가격 비교 대상이 생략된 후속 질문은 직전 상품명을 이어받습니다.
+    if (
+        previous_intent == "shopping.compare"
+        and previous_slots.get("shopping_product")
+        and not _strip_shopping_compare_suffix(text)
+    ):
+        return _route_result("shopping.compare", slots=previous_slots)
     # 장보기 목록의 생략 항목 요청은 직전 장보기 문맥을 그대로 이어갑니다.
     if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
         return _route_result("shopping.current", slots=_latest_bot_slots(history))
@@ -139,6 +147,19 @@ def router_node(state: GraphState) -> dict:
             route_payload = {**route_payload, "intent": "shopping.price_help"}
         elif _is_shopping_price_query(text):
             route_payload = {**route_payload, "intent": "shopping.compare"}
+        if route_payload.get("intent") == "shopping.compare":
+            route_slots = route_payload.get("slots") or {}
+            current_product = (
+                route_slots.get("shopping_product")
+                or route_slots.get("ingredient")
+                or route_slots.get("keyword")
+            )
+            inherited_product = previous_slots.get("shopping_product") if previous_intent == "shopping.compare" else None
+            if current_product or inherited_product:
+                route_payload = {
+                    **route_payload,
+                    "slots": {**route_slots, "shopping_product": current_product or inherited_product},
+                }
         if route_payload.get("confidence", 0.0) >= _LLM_ROUTE_CONFIDENCE:
             return _route_result(
                 route_payload.get("intent", "general"),
@@ -254,14 +275,23 @@ def shopping_agent_node(state: GraphState) -> dict:
     if state.get("intent") == "shopping.create":
         text = _normalize_shopping_create_query(text)
     compare_text = _strip_shopping_compare_suffix(text)
+    if state.get("intent") == "shopping.compare":
+        compare_text = (state.get("slots") or {}).get("shopping_product") or compare_text
 
-    return run_shopping_agent(
+    result = run_shopping_agent(
         text=compare_text or text,
         intent=state.get("intent", ""),
         history=state.get("history", []),
         db=state["db"],
         user_id=state.get("user_id"),
     )
+    if state.get("intent") == "shopping.compare":
+        from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
+
+        products = extract_ingredient_names(compare_text or text)
+        if products:
+            result["slots"] = {**(result.get("slots") or {}), "shopping_product": products[0]}
+    return result
 
 def alarm_agent_node(state: GraphState) -> dict:
     """캘린더 및 알림 관리를 Alarm Agent로 위임합니다."""
