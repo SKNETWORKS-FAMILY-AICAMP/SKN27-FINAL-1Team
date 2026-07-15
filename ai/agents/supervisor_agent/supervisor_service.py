@@ -1,4 +1,3 @@
-import json
 import os
 import re
 from datetime import date
@@ -27,30 +26,19 @@ except ImportError:
     LangfuseCallbackHandler = None
 
 from ai.agents.supervisor_agent.supervisor_utils import (
+    _LLM_ROUTE_INTENTS,
     _extract_keyword,
+    _extract_pending_action,
     _format_guide_tip,
     _is_login_status_question,
     _is_relevant_search_result,
+    _parse_llm_route_payload,
+    _route_payload,
 )
-
-def _extract_pending_action(final_state: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """에이전트 결과나 확인 버튼에서 실행 대기 작업을 추출합니다."""
-    pending = final_state.get("pending_action")
-    if isinstance(pending, dict):
-        return pending
-    if pending:
-        return {"action": str(pending)}
-    for action in actions:
-        command = (action.get("data") or {}).get("message")
-        if isinstance(command, str) and command.startswith("확인:"):
-            return {"command": command}
-    return None
 
 
 class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
-
-    EMPTY_INVENTORY_REPLY = '냉장고가 비어 있어요. 재료를 등록하면 소비 임박 재료와 추천 메뉴를 알려드릴게요.'
 
     def handle_message(self, db: Session, user_id: int, message: str, history: list[Any] = None, user_settings: Any = None) -> dict[str, Any]:
         """LangGraph를 활용하여 메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
@@ -144,38 +132,10 @@ class ChatService:
             "pending_action": pending_action,
         }
 
-        
-
-    def _parse_llm_route_payload(self, content: str) -> dict[str, Any]:
-        """LLM이 반환한 JSON 라우팅 결과를 안전한 dict로 변환합니다."""
-        raw = (content or "").strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        if not isinstance(payload, dict):
-            return {}
-        slots = payload.get("slots") if isinstance(payload.get("slots"), dict) else {}
-        try:
-            confidence = float(payload.get("confidence", 0))
-        except (TypeError, ValueError):
-            confidence = 0.0
-        return {
-            "intent": str(payload.get("intent", "")).strip(),
-            "confidence": max(0.0, min(confidence, 1.0)),
-            "slots": slots,
-        }
-
-    def _route_payload(self, intent: str, confidence: float = 1.0, slots: dict[str, Any] | None = None) -> dict[str, Any]:
-        """라우팅 결과를 Supervisor 공통 dict 형식으로 감쌉니다."""
-        return {"intent": intent, "confidence": confidence, "slots": slots or {}}
-
     def _route_intent_payload_with_llm(self, text: str, history: list[Any] = None) -> dict[str, Any]:
         """규칙으로 분류되지 않은 문장을 LLM으로 분류해 JSON dict로 반환합니다."""
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
-            return self._route_payload("general", confidence=0.0)
+            return _route_payload("general", confidence=0.0)
 
         try:
             from langchain_openai import ChatOpenAI
@@ -183,28 +143,13 @@ class ChatService:
 
             llm = ChatOpenAI(model=app_settings.OPENAI_MODEL, api_key=app_settings.OPENAI_API_KEY, temperature=0.0)
 
+            allowed_intents = "\n".join(f"- {intent}" for intent in _LLM_ROUTE_INTENTS)
             system_prompt = """
 You are the Supervisor intent router for the Bobbeori food chatbot.
 Return exactly one JSON object. Do not include markdown, code fences, or explanations.
 
 Allowed intents:
-- receipt.guide
-- recipe.recommend
-- recipe.pairing
-- recipe.search
-- ingredient.guide
-- inventory.expiring
-- inventory.list
-- shopping.current
-- shopping.history
-- shopping.compare
-- shopping.create
-- shopping.purchase
-- shopping.delete_item
-- shopping.check_item
-- alarm.notification
-- alarm.calendar
-- general
+""" + allowed_intents + """
 
 Response schema:
 {
@@ -227,7 +172,7 @@ Rules:
 - inventory.expiring: expiry, use-by date, expiring ingredients.
 - inventory.list: list current fridge ingredients.
 - receipt.guide: receipt OCR or purchase upload guide.
-- shopping.*: shopping list lookup, history, price comparison, creation, purchase, deletion, or checking.
+- shopping.current/history/compare: shopping list lookup, history, or price comparison.
 - alarm.notification: notification lookup or management.
 - alarm.calendar: calendar schedule lookup or management.
 - general: anything else.
@@ -252,19 +197,14 @@ Safety:
             messages.append(HumanMessage(content=text))
 
             response = llm.invoke(messages)
-            payload = self._parse_llm_route_payload(response.content)
+            payload = _parse_llm_route_payload(response.content)
             intent = payload.get("intent", "")
-            valid_intents = ["receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "shopping.current", "shopping.history", "shopping.compare", "shopping.create", "shopping.purchase", "shopping.delete_item", "shopping.check_item", "alarm.notification", "alarm.calendar", "general"]
-
-            if intent in valid_intents and payload.get("confidence", 0) >= 0.5:
+            if intent in _LLM_ROUTE_INTENTS and payload.get("confidence", 0) >= 0.5:
                 return payload
-            return self._route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
+            return _route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
         except Exception:
-            return self._route_payload("general", confidence=0.0)
+            return _route_payload("general", confidence=0.0)
 
-    def _route_intent_with_llm(self, text: str, history: list[Any] = None) -> str:
-        """기존 호출부 호환을 위해 LLM 라우팅 dict에서 intent만 반환합니다."""
-        return self._route_intent_payload_with_llm(text, history).get("intent", "general")
 
     def _reply_guide(self, text: str) -> tuple[str, list[dict[str, str]]]:
         """Guide Agent 공통 응답을 챗봇 말풍선 형식으로 변환합니다."""

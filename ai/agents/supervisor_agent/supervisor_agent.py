@@ -1,5 +1,4 @@
 import json
-import re
 
 from langgraph.graph import END, StateGraph
 
@@ -22,76 +21,29 @@ from app.backend.schemas.chat_state import GraphState
 from ai.agents.recipe_agent import run_recipe_agent
 
 from ai.agents.supervisor_agent.supervisor_utils import (
-    LOGIN_REQUIRED_REPLY, GENERAL_REPLY,
-    CONFIRM_PREFIX, CANCEL_WORDS,
+    CANCEL_WORDS,
+    CONFIRM_PREFIX,
+    GENERAL_REPLY,
+    LOGIN_REQUIRED_REPLY,
+    _CONTEXT_INTENTS,
+    _GUIDE_PHRASES,
+    _RECIPE_RECOMMEND_PHRASES,
+    _RECIPE_SEARCH_PHRASES,
+    _format_calendar_events,
+    _is_context_follow_up,
     _is_cooking_time_question,
     _is_expiring_question,
+    _latest_bot_intent,
+    _latest_bot_pending_action,
+    _latest_bot_slots,
     _normalize_text,
+    _rewrite_context_switch,
+    _rewrite_guide_query,
+    _strip_shopping_compare_suffix,
+    _route_result,
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 
-_CONTEXT_INTENTS = {"ingredient.guide", "inventory.list", "inventory.expiring"}
-
-# 읽기 질문은 한 곳에서 분류할 수 있도록 의도별 대표 표현을 모아둡니다.
-_RECIPE_RECOMMEND_WORDS = ("추천", "뭐해먹", "뭐먹", "뭐하지", "뭘", "만들지", "만들요리", "만들어먹", "요리추천", "만들수", "만들수있는", "만들수있", "할수", "할수있는", "메뉴", "냉장고파먹", "쓸수", "쓸수있", "활용", "어디에쓸", "다른거", "딴거")
-_RECIPE_SEARCH_WORDS = ("레시피", "요리법", "요리")
-_GUIDE_WORDS = ("보관법", "보관방법", "보관", "손질", "세척", "씻", "신선", "확인", "가이드", "어떡", "어떻게하지", "먹다남은", "남은", "영양", "영양성분", "칼로리", "열량", "단백질", "탄수화물", "지방", "당류", "나트륨", "맛있게", "먹는법", "섭취", "제철")
-
-
-def _latest_bot_intent(history) -> str | None:
-    """이전 봇 응답에 저장된 마지막 intent를 반환합니다."""
-    for message in reversed(history or []):
-        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
-        intent = message.get("intent") if isinstance(message, dict) else getattr(message, "intent", None)
-        if role == "bot" and intent:
-            return intent
-    return None
-
-
-def _latest_bot_slots(history) -> dict:
-    """이전 봇 응답에 저장된 마지막 슬롯을 반환합니다."""
-    for message in reversed(history or []):
-        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
-        slots = message.get("slots") if isinstance(message, dict) else getattr(message, "slots", None)
-        if role == "bot" and isinstance(slots, dict):
-            return slots
-    return {}
-
-
-def _latest_bot_pending_action(history) -> dict | None:
-    """이전 봇 응답에 저장된 실행 대기 작업을 반환합니다."""
-    for message in reversed(history or []):
-        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
-        pending = message.get("pending_action") if isinstance(message, dict) else getattr(message, "pending_action", None)
-        if role == "bot" and isinstance(pending, dict):
-            return pending
-    return None
-
-
-def _rewrite_context_switch(text: str, has_pending: bool = False) -> str:
-    """기존 작업을 번복한 문장에서 새로 실행할 명령만 남깁니다."""
-    stripped = text.strip()
-    if has_pending:
-        switch_match = re.search(r"(?:말고|대신)\s*(.+)$", stripped)
-        if switch_match:
-            return switch_match.group(1).strip()
-    replacement = re.sub(r"^(?:아니다|아니야|아니|잠깐|취소하고)(?:\s+|,\s*)", "", stripped).strip()
-    return replacement or stripped
-
-
-def _is_context_follow_up(text: str) -> bool:
-    """직전 응답 없이는 의미가 부족한 짧은 후속 질문인지 확인합니다."""
-    normalized = _normalize_text(text)
-    return (
-        bool(re.match(r"^외\d+개", normalized))
-        or bool(re.fullmatch(r"(?:냉장|냉동|실온)(?:은|는|으로|에)?", normalized.rstrip("?")))
-        or any(word in normalized for word in ("나머지", "그중", "그거", "그걸", "그건", "이거", "이걸", "이건", "첫번째", "두번째", "더알려", "더보여", "전부", "다말해", "다보여"))
-    )
-
-def _route_result(intent: str, confidence: float = 1.0, slots: dict | None = None) -> dict:
-    """라우터 결과를 공통 dict 형식으로 반환합니다."""
-    payload = {"intent": intent, "confidence": confidence, "slots": slots or {}}
-    return {"intent": intent, "intent_payload": payload, "slots": payload["slots"]}
 
 def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
@@ -185,39 +137,19 @@ def router_node(state: GraphState) -> dict:
 
     if "냉장고" in normalized and "재료" in normalized and "요리" in normalized:
         return _route_result("recipe.recommend")
-    if any(word in normalized for word in _RECIPE_RECOMMEND_WORDS):
+    if any(phrase in normalized for phrase in _RECIPE_RECOMMEND_PHRASES):
         return _route_result("recipe.recommend")
-    if any(word in normalized for word in _RECIPE_SEARCH_WORDS):
+    if any(phrase in normalized for phrase in _RECIPE_SEARCH_PHRASES):
         return _route_result("recipe.search")
-    if any(word in normalized for word in _GUIDE_WORDS):
+    if any(phrase in normalized for phrase in _GUIDE_PHRASES):
         return _route_result("ingredient.guide")
 
-    if hasattr(state["service"], "_route_intent_payload_with_llm"):
-        route_payload = state["service"]._route_intent_payload_with_llm(text, history)
-    else:
-        route_payload = {"intent": state["service"]._route_intent_with_llm(text, history), "slots": {}}
+    route_payload = state["service"]._route_intent_payload_with_llm(text, history)
     return _route_result(
         route_payload.get("intent", "general"),
         route_payload.get("confidence", 0.0),
         route_payload.get("slots", {}),
     )
-
-
-def _format_calendar_events(data: dict) -> str | None:
-    """캘린더 조회 결과를 챗봇 말풍선에 보여줄 문장으로 바꿉니다."""
-    events = data.get("events") if isinstance(data, dict) else None
-    if events is None:
-        return None
-    if not events:
-        return "조회한 기간에 등록된 일정이 없어요."
-    lines = ["등록된 일정이에요."]
-    for event in events[:5]:
-        date_key = event.get("dateKey") or "날짜 미정"
-        title = event.get("title") or "제목 없는 일정"
-        lines.append(f"{date_key} - {title}")
-    if len(events) > 5:
-        lines.append(f"외 {len(events) - 5}개가 더 있어요.")
-    return "\n".join(lines)
 
 
 def inventory_agent_node(state: GraphState) -> dict:
@@ -240,7 +172,7 @@ def inventory_agent_node(state: GraphState) -> dict:
 def guide_agent_node(state: GraphState) -> dict:
     """식재료 보관/손질 가이드 에이전트를 안내합니다."""
     # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
-    query = re.sub(r"^.+?(?:말고|대신)\s+", "", state["text"]).strip()
+    query = _rewrite_guide_query(state["text"])
     reply, sources = state["service"]._reply_guide(query)
     return {"response_text": reply, "sources": sources}
 
@@ -276,7 +208,7 @@ def shopping_agent_node(state: GraphState) -> dict:
 
     # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
     text = state["text"]
-    compare_text = re.sub(r"\s*더\s*(?:싼|저렴한)\s*(?:곳|데)(?:은|는)?(?:\s*없어(?:요)?)?\s*\??$", "", text).strip()
+    compare_text = _strip_shopping_compare_suffix(text)
 
     return run_shopping_agent(
         text=compare_text or text,

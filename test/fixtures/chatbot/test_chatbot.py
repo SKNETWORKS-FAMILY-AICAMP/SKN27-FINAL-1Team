@@ -26,6 +26,8 @@ def test_route_intent_examples() -> None:
         "영수증 등록 어디서 해?": "receipt.guide",
         "파 어떻게 보관해?": "ingredient.guide",
         "파 보관법": "ingredient.guide",
+        "파 손질해줘": "ingredient.guide",
+        "감자 세척해줘": "ingredient.guide",
         "아보카도 보관법": "ingredient.guide",
         "남은 피자 보관법": "ingredient.guide",
         "계란 보관 어떻게 해": "ingredient.guide",
@@ -168,8 +170,33 @@ class FakeService:
     def __init__(self, intent: str):
         self.intent = intent
 
-    def _route_intent_with_llm(self, text, history):
-        return self.intent
+    def _route_intent_payload_with_llm(self, text, history):
+        """테스트에서 LLM fallback 결과를 공통 dict 형식으로 반환합니다."""
+        return {
+            "intent": self.intent,
+            "confidence": 0.9,
+            "slots": {},
+        }
+
+
+def test_broad_single_words_use_llm_fallback() -> None:
+    """넓은 단일 표현은 규칙으로 확정하지 않고 LLM fallback에 맡깁니다."""
+    service = FakeService("general")
+
+    for message in ("확인", "다른거", "요리"):
+        assert router_node({"text": message, "service": service, "history": []})["intent"] == "general"
+
+
+def test_llm_fallback_excludes_write_intents() -> None:
+    """DB 변경 intent는 LLM fallback 허용 목록에 포함하지 않습니다."""
+    write_intents = {
+        "shopping.create",
+        "shopping.purchase",
+        "shopping.delete_item",
+        "shopping.check_item",
+    }
+
+    assert write_intents.isdisjoint(supervisor_utils._LLM_ROUTE_INTENTS)
 
 
 def test_router_node_keeps_llm_payload_slots() -> None:
@@ -839,7 +866,7 @@ def test_guide_reply_formats_intake_tip(monkeypatch) -> None:
 
 def test_llm_route_payload_json_parser() -> None:
     """LLM intent 응답을 JSON 객체로 파싱합니다."""
-    payload = supervisor_service._parse_llm_route_payload(
+    payload = supervisor_utils._parse_llm_route_payload(
         '{"intent":"recipe.recommend","confidence":0.82,"slots":{"ingredient":"두부"}}'
     )
 
