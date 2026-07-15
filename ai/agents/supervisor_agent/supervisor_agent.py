@@ -28,6 +28,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
     _is_guide_query,
+    _is_receipt_lookup_query,
     _is_receipt_query,
     _is_recipe_pairing_query,
     _is_recipe_recommend_query,
@@ -87,6 +88,10 @@ def router_node(state: GraphState) -> dict:
         return _route_result("inventory.pending_add")
     if _pending_consume_from_history(history) and _extract_quantity(text):
         return _route_result("inventory.pending_consume")
+
+    # 영수증 조회 요청은 등록 안내와 분리해 질문에 맞는 화면 안내를 제공합니다.
+    if _is_receipt_lookup_query(text):
+        return _route_result("receipt.lookup")
 
     # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
     if _is_receipt_query(text):
@@ -202,6 +207,13 @@ def receipt_guide_node(state: GraphState) -> dict:
         "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
 
+def receipt_lookup_node(state: GraphState) -> dict:
+    """영수증 내역/금액/품목 조회 화면 이동 액션을 안내합니다."""
+    return {
+        "response_text": "최근 영수증 내역과 금액, 품목은 영수증 화면에서 확인할 수 있어요. 아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요.",
+        "actions": [{"label": "영수증 내역 보기", "url": "/receipt-ocr"}],
+    }
+
 def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
@@ -217,6 +229,7 @@ def shopping_agent_node(state: GraphState) -> dict:
         text=compare_text or text,
         intent=state.get("intent", ""),
         history=state.get("history", []),
+        slots=state.get("slots", {}),
         db=state["db"],
         user_id=state.get("user_id"),
     )
@@ -262,6 +275,7 @@ def route_intent(state: GraphState) -> str:
         "recipe.recommend": "recipe_agent_node",
         "recipe.search": "recipe_agent_node",
         "recipe.pairing": "recipe_pairing_node",
+        "receipt.lookup": "receipt_lookup_node",
         "receipt.guide": "receipt_guide_node",
     }
     return routes.get(intent, "general_node")
@@ -274,6 +288,7 @@ workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
 workflow.add_node("recipe_pairing_node", recipe_pairing_node)
+workflow.add_node("receipt_lookup_node", receipt_lookup_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
 workflow.add_node("general_node", general_node)
 
@@ -286,6 +301,7 @@ for node_name in (
     "guide_agent_node",
     "recipe_agent_node",
     "recipe_pairing_node",
+    "receipt_lookup_node",
     "receipt_guide_node",
     "general_node",
 ):

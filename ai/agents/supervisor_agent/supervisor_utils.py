@@ -42,7 +42,7 @@ _GUIDE_TYPE_LABELS = dict(_GUIDE_ACTION_TYPES.values())
 
 # LLM fallback이 반환할 수 있는 읽기 전용 intent입니다.
 _LLM_ROUTE_INTENTS = (
-    "receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search",
+    "receipt.lookup", "receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search",
     "ingredient.guide", "inventory.expiring", "inventory.list",
     "shopping.current", "shopping.history", "shopping.compare", "alarm.notification", "alarm.calendar", "general",
 )
@@ -75,6 +75,7 @@ Rules:
 - ingredient.guide: ingredient overview, storage, washing, prep, freshness, nutrition, calories, seasonal food, or ingredient category lists.
 - inventory.expiring: expiry, use-by date, expiring ingredients.
 - inventory.list: list current fridge ingredients.
+- receipt.lookup: recent receipt history, receipt amount, receipt item, or receipt detail lookup guidance.
 - receipt.guide: receipt OCR or purchase upload guide.
 - shopping.current/history/compare: shopping list lookup, history, or price comparison.
 - alarm.notification: notification lookup or management.
@@ -112,6 +113,20 @@ def _is_receipt_query(text: str) -> bool:
     """영수증 또는 OCR 사용 방법을 묻는 요청인지 확인합니다."""
     normalized = _normalize_text(text)
     return any(word in normalized for word in ("영수증", "ocr", "구매내역"))
+
+
+def _is_receipt_lookup_query(text: str) -> bool:
+    """최근 영수증 내역, 금액, 품목 조회 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    if not any(word in normalized for word in ("영수증", "구매내역")):
+        return False
+
+    lookup_words = (
+        "최근", "내역", "목록", "리스트", "조회", "확인", "보여", "알려",
+        "등록한", "지난", "이전", "금액", "총액", "합계", "얼마",
+        "품목", "상세", "자세히", "뭐샀", "뭘샀", "구매품목",
+    )
+    return any(word in normalized for word in lookup_words)
 
 
 def _is_alarm_notification_query(text: str) -> bool:
@@ -346,7 +361,7 @@ def _is_context_follow_up(text: str) -> bool:
     return (
         bool(re.match(r"^외\d+개", normalized))
         or bool(re.fullmatch(r"(?:냉장|냉동|실온)(?:은|는|으로|에)?", normalized.rstrip("?")))
-        or any(word in normalized for word in ("나머지", "그중", "그거", "그걸", "그건", "이거", "이걸", "이건", "첫번째", "두번째", "더알려", "더보여", "전부", "다말해", "다보여"))
+        or any(word in normalized for word in ("나머지", "그중", "그거", "그걸", "그건", "이거", "이걸", "이건", "첫번째", "두번째", "더알려", "더보여", "전부", "다말해", "다보여", "보유재료", "보유", "있는재료"))
     )
 
 
