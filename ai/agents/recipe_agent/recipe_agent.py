@@ -290,6 +290,13 @@ if __name__ == "__main__":
                 settings_obj=None, intent="recipe.search",
             )
             _check_output_contract(r)
+
+            # -- P3-4: Shadow 비교 --
+            assert _select_template("recipe.search", "김치볶음밥 레시피") == TEMPLATE_RECIPE_SEARCH
+            assert _select_template("recipe.recommend", "두부로 뭐 해먹지?") == TEMPLATE_INGREDIENT_RECOMMEND
+            assert _select_template("recipe.recommend", "오늘 뭐 해먹지?") == TEMPLATE_INGREDIENT_RECOMMEND
+            assert _select_template("recipe.pairing", "김치볶음밥이랑 먹기 좋은 음식") == TEMPLATE_RECIPE_PAIRING
+            assert _select_template("recipe.search", "없는레시피xyz") == TEMPLATE_RECIPE_SEARCH
         finally:
             agent.handle_recipe_search = orig_search
             agent.handle_recipe_recommend = orig_recommend
