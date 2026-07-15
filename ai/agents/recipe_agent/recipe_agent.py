@@ -130,6 +130,22 @@ def _select_template(intent: str, text: str) -> str:
     return TEMPLATE_INGREDIENT_RECOMMEND
 
 
+def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
+    """recipe_search_service를 ToolResult로 감싼다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    try:
+        from .recipe_handlers import recipe_search_service
+        result = recipe_search_service.search_recipes(
+            db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=10,
+        )
+        items = result["items"]
+        if not items:
+            result = recipe_search_service.search_recipes(db=db, query=keyword, page=1, page_size=10)
+            items = result["items"]
+        return ToolResult(ok=True, data={"items": items, "total": result.get("total", len(items))}, source="recipe_search")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="recipe_search")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -214,6 +230,8 @@ if __name__ == "__main__":
         assert not fail_result.ok and fail_result.data is None
         empty_result = ToolResult(ok=True, data=None, source="search")
         assert empty_result.ok and empty_result.data is None
+
+        assert callable(search_recipe_tool)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
