@@ -175,6 +175,15 @@ Allowed intents:
 - ingredient.guide
 - inventory.expiring
 - inventory.list
+- shopping.current
+- shopping.history
+- shopping.compare
+- shopping.create
+- shopping.purchase
+- shopping.delete_item
+- shopping.check_item
+- alarm.notification
+- alarm.calendar
 - general
 
 Response schema:
@@ -198,7 +207,11 @@ Rules:
 - inventory.expiring: expiry, use-by date, expiring ingredients.
 - inventory.list: list current fridge ingredients.
 - receipt.guide: receipt OCR or purchase upload guide.
+- shopping.*: shopping list lookup, history, price comparison, creation, purchase, deletion, or checking.
+- alarm.notification: notification lookup or management.
+- alarm.calendar: calendar schedule lookup or management.
 - general: anything else.
+- Use previous_intent metadata from the latest assistant message when the current message is a short follow-up.
 
 Safety:
 - For DB-changing requests such as add, consume, delete, update ingredients, return general. Rule-based routing already handles them before this LLM fallback.
@@ -212,14 +225,16 @@ Safety:
                     if msg.role == 'user':
                         messages.append(HumanMessage(content=msg.text))
                     elif msg.role == 'bot':
-                        messages.append(AIMessage(content=msg.text))
+                        previous_intent = getattr(msg, "intent", None)
+                        content = f"{msg.text}\n[previous_intent: {previous_intent}]" if previous_intent else msg.text
+                        messages.append(AIMessage(content=content))
 
             messages.append(HumanMessage(content=text))
 
             response = llm.invoke(messages)
             payload = self._parse_llm_route_payload(response.content)
             intent = payload.get("intent", "")
-            valid_intents = ["receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "general"]
+            valid_intents = ["receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search", "ingredient.guide", "inventory.expiring", "inventory.list", "shopping.current", "shopping.history", "shopping.compare", "shopping.create", "shopping.purchase", "shopping.delete_item", "shopping.check_item", "alarm.notification", "alarm.calendar", "general"]
 
             if intent in valid_intents and payload.get("confidence", 0) >= 0.5:
                 return payload
