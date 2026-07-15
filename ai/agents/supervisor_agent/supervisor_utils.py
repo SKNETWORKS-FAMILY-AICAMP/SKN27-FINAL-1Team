@@ -93,8 +93,9 @@ Rules:
 - inventory.expiring: expiry, use-by date, expiring ingredients.
 - inventory.list: list current fridge ingredients.
 - receipt.guide: receipt OCR or purchase upload guide.
-- shopping.current/history/compare: shopping list lookup, history, or price comparison.
-- shopping.price_help: asks why shopping price information is missing.
+- shopping.current/history: current shopping list or purchase history lookup.
+- shopping.compare: asks for a product price, lowest price, cheaper seller, or why a product is expensive.
+- shopping.price_help: only asks why a previous shopping result has no price; never use it for a direct product price question.
 - alarm.notification: notification lookup or management.
 - alarm.calendar: calendar schedule lookup or management.
 - multi_agent: a request that needs two or more read-only intents. Put each task in tasks as {{"intent": "...", "text": "..."}}.
@@ -165,7 +166,7 @@ def _is_alarm_write_query(text: str) -> bool:
 def _is_shopping_price_query(text: str) -> bool:
     """상품 가격 또는 최저가를 묻는 요청인지 확인합니다."""
     normalized = _normalize_text(text)
-    return any(word in normalized for word in ("가격", "얼마", "최저가", "싼곳", "싼데", "저렴", "비싸"))
+    return any(word in normalized for word in ("가격", "최저가", "싼곳", "싼데", "저렴", "비싸"))
 
 
 def _is_shopping_price_explanation(text: str) -> bool:
@@ -550,7 +551,7 @@ def _is_shopping_show_all_request(text: str) -> bool:
     """생략된 장보기 항목을 모두 보여 달라는 후속 요청인지 확인합니다."""
     normalized = _normalize_text(text)
     return bool(re.search(r"^외\d+개", normalized)) or any(
-        word in normalized for word in ("나머지", "전부", "다말해", "다보여", "전체")
+        word in normalized for word in ("나머지", "전부", "다말해", "다알려", "다보여", "전체")
     )
 
 

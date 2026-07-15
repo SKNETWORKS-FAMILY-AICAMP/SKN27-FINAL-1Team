@@ -328,6 +328,7 @@ def test_inventory_consume_plain_word_routes_to_inventory_action() -> None:
     """소비해줘 표현도 냉장고 소비 처리로 보냅니다."""
     assert router_node({"text": "두부 소비해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
     assert router_node({"text": "냉장고에 두부 소비해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
+    assert router_node({"text": "양파 1개 먹엇어", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
 
 
 def test_expiring_question_does_not_use_consume_as_ingredient_name() -> None:
@@ -455,17 +456,29 @@ def test_shopping_follow_up_shows_all_items(monkeypatch) -> None:
     }
     monkeypatch.setattr(shopping_service, "get_current", lambda **kwargs: shopping_list)
 
-    result = shopping_agent_node({
-        "text": "외2개도 보여줘",
-        "intent": "shopping.current",
-        "db": MagicMock(),
-        "user_id": 1,
-        "history": [],
+    for message in ("외2개도 보여줘", "다 알려줘"):
+        result = shopping_agent_node({
+            "text": message,
+            "intent": "shopping.current",
+            "db": MagicMock(),
+            "user_id": 1,
+            "history": [],
+        })
+
+        assert "7. 재료7 - 가격 정보 없음" in result["response_text"]
+        assert "외 2개" not in result["response_text"]
+
+def test_shopping_show_all_follow_up_keeps_current_list_intent() -> None:
+    """장보기 목록 후속 요청은 LLM 결과와 무관하게 현재 목록 문맥을 유지합니다."""
+    previous_message = MagicMock(role="bot", text="현재 장보기 목록이에요.", intent="shopping.current", slots={})
+
+    result = router_node({
+        "text": "다 알려줘",
+        "history": [previous_message],
+        "service": FakeService("general"),
     })
 
-    assert "7. 재료7 - 가격 정보 없음" in result["response_text"]
-    assert "외 2개" not in result["response_text"]
-
+    assert result["intent"] == "shopping.current"
 
 def test_shopping_create_removes_location_particle() -> None:
     """장보기 위치 조사를 제거해 상품명에 에/로가 남지 않게 합니다."""
@@ -480,7 +493,7 @@ def test_price_explanation_uses_shopping_help() -> None:
     routed = router_node({
         "text": "가격 정보 안나오는 이유?",
         "history": [],
-        "service": FakeService("shopping.price_help"),
+        "service": FakeService("shopping.compare"),
     })
 
     assert routed["intent"] == "shopping.price_help"
@@ -493,7 +506,7 @@ def test_expensive_price_question_routes_to_shopping() -> None:
     routed = router_node({
         "text": "바닐라오일 왜 이렇게 비싸?",
         "history": [],
-        "service": FakeService("shopping.compare"),
+        "service": FakeService("shopping.price_help"),
     })
 
     assert routed["intent"] == "shopping.compare"

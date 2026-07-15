@@ -102,6 +102,10 @@ def router_node(state: GraphState) -> dict:
 
     # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     previous_intent = _latest_bot_intent(history)
+    # 장보기 목록의 생략 항목 요청은 직전 장보기 문맥을 그대로 이어갑니다.
+    if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
+        return _route_result("shopping.current", slots=_latest_bot_slots(history))
+
     has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
     if previous_intent and has_write_word and _is_context_follow_up(text):
         previous_slots = _latest_bot_slots(history)
@@ -131,6 +135,10 @@ def router_node(state: GraphState) -> dict:
     service = state.get("service")
     if service:
         route_payload = service._route_intent_payload_with_llm(text, history)
+        if _is_shopping_price_explanation(text):
+            route_payload = {**route_payload, "intent": "shopping.price_help"}
+        elif _is_shopping_price_query(text):
+            route_payload = {**route_payload, "intent": "shopping.compare"}
         if route_payload.get("confidence", 0.0) >= _LLM_ROUTE_CONFIDENCE:
             return _route_result(
                 route_payload.get("intent", "general"),
