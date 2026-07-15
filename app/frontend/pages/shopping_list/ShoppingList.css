@@ -1390,11 +1390,6 @@
   outline: none;
 }
 
-.shopping-history-card.is-recent {
-  border-color: var(--figma-coral);
-  background: #fff8f7;
-}
-
 .shopping-history-card.is-selected {
   border-color: var(--figma-coral-stroke);
   background: #fff8f7;

@@ -141,9 +141,13 @@ def build_shopping_response(
     ok: bool = True,
     actions: list[dict[str, Any]] | None = None,
     sources: list[dict[str, Any]] | None = None,
+    slots: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    resolved_meta = meta or {}
+    if slots is not None:
+        resolved_meta = {**resolved_meta, "slots": slots}
     return {
         "ok": ok and error is None,
         "agent": AGENT_NAME,
@@ -154,16 +158,18 @@ def build_shopping_response(
             "actions": list(actions or []),
             "sources": list(sources or []),
         },
-        "meta": meta or {},
+        "meta": resolved_meta,
     }
 
 
 def to_supervisor_state(agent_result: dict[str, Any]) -> dict[str, Any]:
     ui = agent_result.get("ui") or {}
+    meta = agent_result.get("meta") or {}
     return {
         "response_text": agent_result.get("message", ""),
         "actions": list(ui.get("actions") or []),
         "sources": list(ui.get("sources") or []),
+        "slots": dict(meta.get("slots") or {}),
     }
 
 
@@ -192,6 +198,50 @@ def format_amount(item: dict[str, Any]) -> str:
     number = float(quantity)
     quantity_text = str(int(number)) if number.is_integer() else str(number)
     return f" {quantity_text}{unit or ''}"
+
+
+def is_remaining_request(text: str) -> bool:
+    normalized = normalize_text(text)
+    return any(word in normalized for word in ("나머지", "외", "더보여", "더알려", "계속", "다음"))
+
+
+def extract_requested_count(text: str) -> int | None:
+    match = re.search(r"(\d+)\s*개", text or "")
+    if not match:
+        return None
+    try:
+        return max(1, int(match.group(1)))
+    except ValueError:
+        return None
+
+
+def extract_recipe_title_for_shopping(text: str) -> str:
+    """'야채찜의 장보기 목록'처럼 레시피명을 함께 말한 경우 제목 후보를 뽑습니다."""
+    raw = (text or "").strip()
+    patterns = (
+        r"(.+?)(?:의|에\s*대한)?\s*장보(?:기|ㄱ)?\s*(?:목록|리스트)",
+        r"(.+?)(?:의|에\s*대한)?\s*구매\s*(?:목록|리스트)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, raw)
+        if not match:
+            continue
+        title = match.group(1).strip(" \t\n'\"")
+        title = re.sub(r"^(?:현재|내|나의|이번|최근)\s+", "", title).strip()
+        title = title.rstrip("은는이가을를도")
+        if title and normalize_text(title) not in {"현재", "내", "나의", "이번", "최근", "장보기", "쇼핑", "구매", "목록", "리스트"}:
+            return title
+    return ""
+
+
+def latest_shopping_slots(history) -> dict[str, Any]:
+    for message in reversed(history or []):
+        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
+        intent = message.get("intent") if isinstance(message, dict) else getattr(message, "intent", None)
+        slots = message.get("slots") if isinstance(message, dict) else getattr(message, "slots", None)
+        if role == "bot" and isinstance(intent, str) and intent.startswith("shopping.") and isinstance(slots, dict):
+            return slots
+    return {}
 
 
 def extract_ingredient_names(text: str) -> list[str]:
@@ -235,24 +285,60 @@ def find_item_by_name(shopping_list: dict[str, Any] | None, text: str) -> dict[s
     return None
 
 
-def summarize_shopping_list(shopping_list: dict[str, Any] | None, *, max_items: int = 5) -> str:
+def active_shopping_items(shopping_list: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not shopping_list:
+        return []
+    return [item for item in shopping_list.get("items", []) if not item.get("is_purchased")]
+
+
+def summarize_shopping_list(
+    shopping_list: dict[str, Any] | None,
+    *,
+    max_items: int = 5,
+    start: int = 0,
+    title: str = "현재 장보기 목록이에요.",
+) -> str:
     if not shopping_list:
         return "진행 중인 장보기 목록이 없어요."
 
-    items = [item for item in shopping_list.get("items", []) if not item.get("is_purchased")]
+    items = active_shopping_items(shopping_list)
     if not items:
         return "현재 장보기 목록에 구매할 재료가 없어요."
+    if start >= len(items):
+        return "더 보여드릴 장보기 재료가 없어요."
 
-    lines = ["현재 장보기 목록이에요."]
-    for index, item in enumerate(items[:max_items], start=1):
+    visible_items = items[start:start + max_items]
+    lines = [title]
+    for index, item in enumerate(visible_items, start=start + 1):
         price_text = format_price(item.get("price"))
         lines.append(f"{index}. {item.get('name')}{format_amount(item)} - {price_text}")
-    if len(items) > max_items:
-        lines.append(f"외 {len(items) - max_items}개가 더 있어요.")
+    next_offset = start + len(visible_items)
+    if len(items) > next_offset:
+        lines.append(f"외 {len(items) - next_offset}개가 더 있어요.")
     total_price = shopping_list.get("total_price") or 0
     if total_price:
         lines.append(f"예상 합계는 {format_price(total_price)}이에요.")
     return "\n".join(lines)
+
+
+def shopping_list_slots(
+    shopping_list: dict[str, Any] | None,
+    *,
+    start: int = 0,
+    shown_count: int = 0,
+) -> dict[str, Any]:
+    if not shopping_list:
+        return {}
+    items = active_shopping_items(shopping_list)
+    next_offset = min(start + shown_count, len(items))
+    return {
+        "shopping_list_id": shopping_list.get("id"),
+        "shopping_recipe_id": shopping_list.get("recipe_id"),
+        "shopping_recipe_title": shopping_list.get("recipe_title"),
+        "shopping_total_count": len(items),
+        "shopping_next_offset": next_offset,
+        "shopping_has_more": next_offset < len(items),
+    }
 
 
 def summarize_owned_ingredients(shopping_list: dict[str, Any] | None, *, max_items: int = 8) -> str:

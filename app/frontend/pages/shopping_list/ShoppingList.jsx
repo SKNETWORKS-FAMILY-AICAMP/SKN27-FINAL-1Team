@@ -204,13 +204,6 @@ function buildFallbackShoppingList(context) {
   }
 }
 
-function getShoppingStatusLabel(list) {
-  if (list.status === 'completed') {
-    return '완료'
-  }
-  return '진행 중'
-}
-
 function getRemainingItemCount(list) {
   return (list.items || []).filter((item) => !item.is_purchased).length
 }
@@ -418,9 +411,9 @@ function ShoppingHistory({ lists, recentListId, isDeleting, onOpenList, onDelete
                     aria-hidden="true"
                   />
                   <div>
-                    <span className={`shopping-history-status ${list.status === 'completed' ? 'is-completed' : ''} ${isRecentShopping ? 'is-recent' : ''}`}>
-                      {isRecentShopping ? '최근 장바구니' : getShoppingStatusLabel(list)}
-                    </span>
+                    {isRecentShopping ? (
+                      <span className="shopping-history-status is-recent">최근 장바구니</span>
+                    ) : null}
                     <h3>{getShoppingListTitle(list)}</h3>
                     <p>{itemPreview || '재료 정보 없음'}</p>
                     <small>

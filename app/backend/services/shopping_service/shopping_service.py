@@ -90,7 +90,7 @@ class ShoppingService:
         shopping_lists = (
             db.query(ShoppingList)
             .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
-            .filter(ShoppingList.user_id == user_id)
+            .filter(ShoppingList.user_id == user_id, ShoppingList.status != "completed")
             .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
             .limit(normalized_limit)
             .all()
