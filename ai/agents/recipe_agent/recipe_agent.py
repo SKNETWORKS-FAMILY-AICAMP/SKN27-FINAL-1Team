@@ -101,6 +101,38 @@ def _note_missing_required_fields(state: RecipeExecutionState) -> None:
         state.intermediate["missing_required_fields"] = missing
 
 
+MAX_DISPLAY_RECIPES = 3
+
+
+def check_recipe_integrity(items: list[dict]) -> list[str]:
+    """이슈 코드 목록. 없으면 []. 후보 목록은 수정하지 않음(P9-4)."""
+    issues: list[str] = []
+    if len(items) > MAX_DISPLAY_RECIPES:
+        issues.append("too_many_items")
+    seen_ids: set = set()
+    for i, item in enumerate(items):
+        rid = item.get("recipe_id")
+        if rid is None:
+            issues.append(f"missing_recipe_id:{i}")
+        elif rid in seen_ids:
+            issues.append(f"duplicate_recipe_id:{rid}")
+        else:
+            seen_ids.add(rid)
+        if not (item.get("title") or "").strip():
+            issues.append(f"missing_title:{i}")
+    return issues
+
+
+def _note_integrity_issues(state: RecipeExecutionState) -> None:
+    if state.template == TEMPLATE_FRIDGE_RECOMMEND:
+        items = (state.intermediate.get("ranked_recipes") or [])[:MAX_DISPLAY_RECIPES]
+    else:
+        items = state.intermediate.get("selected_recipes") or []
+    issues = check_recipe_integrity(items)
+    if issues:
+        state.intermediate["integrity_issues"] = issues
+
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -431,6 +463,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
         state.steps_done.append("external_cooking_time")
         state.template = TEMPLATE_RECIPE_SEARCH
         _note_missing_required_fields(state)
+        _note_integrity_issues(state)
         return state
 
     search = search_recipe_tool(state.req.db, keyword)
@@ -448,6 +481,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.intermediate["sources"] = []
     state.template = TEMPLATE_RECIPE_SEARCH
     _note_missing_required_fields(state)
+    _note_integrity_issues(state)
     return state
 
 
@@ -512,6 +546,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
         state.intermediate["actions"] = []
         state.template = TEMPLATE_INGREDIENT_RECOMMEND
         _note_missing_required_fields(state)
+        _note_integrity_issues(state)
         return state
 
     tr = search_ingredient_relax_tool(state.req.db, ingredient)
@@ -528,6 +563,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     state.steps_done.append("exclude_previous")
     state.template = TEMPLATE_INGREDIENT_RECOMMEND
     _note_missing_required_fields(state)
+    _note_integrity_issues(state)
     return state
 
 
@@ -554,6 +590,7 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.intermediate["actions"] = []
     state.template = TEMPLATE_FRIDGE_RECOMMEND
     _note_missing_required_fields(state)
+    _note_integrity_issues(state)
     return state
 
 
@@ -766,6 +803,7 @@ if __name__ == "__main__":
         assert callable(_fridge_login_guard)
         assert callable(_fridge_empty_guard)
         assert callable(check_required_fields)
+        assert callable(check_recipe_integrity)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -897,12 +935,22 @@ if __name__ == "__main__":
             state = agent._fill_search_pipeline(state)
             assert set(SEARCH_TEMPLATE_FIELDS) <= set(state.intermediate)
             assert check_required_fields(state) == []
+            assert not state.intermediate.get("integrity_issues")
             assert state.intermediate["keyword"]
             assert len(state.intermediate["selected_recipes"]) <= 3
             assert state.template == TEMPLATE_RECIPE_SEARCH
             del state.intermediate["keyword"]
             assert "keyword" in check_required_fields(state)
             state.intermediate["keyword"] = "김치볶음밥"
+            assert check_recipe_integrity([]) == []
+            assert "missing_recipe_id:0" in check_recipe_integrity([{"title": "A"}])
+            assert "missing_title:0" in check_recipe_integrity([{"recipe_id": 1, "title": ""}])
+            assert "duplicate_recipe_id:1" in check_recipe_integrity([
+                {"recipe_id": 1, "title": "A"}, {"recipe_id": 1, "title": "B"},
+            ])
+            assert "too_many_items" in check_recipe_integrity([
+                {"recipe_id": i, "title": str(i)} for i in range(4)
+            ])
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
             kw = state.intermediate["keyword"]
@@ -989,6 +1037,7 @@ if __name__ == "__main__":
             state = agent._fill_ingredient_pipeline(state)
             assert set(INGREDIENT_TEMPLATE_FIELDS) <= set(state.intermediate)
             assert check_required_fields(state) == []
+            assert not state.intermediate.get("integrity_issues")
             assert state.intermediate["ingredient"]
             assert state.intermediate["recipe_candidates"]
             assert state.intermediate["selected_recipes"]
@@ -1092,8 +1141,8 @@ if __name__ == "__main__":
                 ok=True,
                 data={
                     "items": [
-                        {"title": "A", "owned_ingredient_count": 1, "missing_ingredient_count": 2, "final_score": 10},
-                        {"title": "B", "owned_ingredient_count": 3, "missing_ingredient_count": 0, "final_score": 5},
+                        {"recipe_id": 1, "title": "A", "owned_ingredient_count": 1, "missing_ingredient_count": 2, "final_score": 10},
+                        {"recipe_id": 2, "title": "B", "owned_ingredient_count": 3, "missing_ingredient_count": 0, "final_score": 5},
                     ],
                     "total": 2,
                 },
@@ -1109,6 +1158,7 @@ if __name__ == "__main__":
             assert state.intermediate["ranked_recipes"][0]["title"] == "B"
             assert state.template == TEMPLATE_FRIDGE_RECOMMEND
             assert check_required_fields(state) == []
+            assert not state.intermediate.get("integrity_issues")
             result = agent._render_fridge_response(state)
             assert "완벽하게" in result.message
             assert "1. B" in result.message
