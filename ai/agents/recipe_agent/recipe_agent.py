@@ -140,10 +140,21 @@ class PairingTemplateEngine:
         )
 
 
-def _select_engine(intent: str) -> LegacyRecipeEngine | PairingTemplateEngine:
+class SearchTemplateEngine:
+    """TEMPLATE_RECIPE_SEARCH를 pipeline + renderer로 채우는 실행기."""
+
+    def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
+        state = RecipeExecutionState(req=req, template=TEMPLATE_RECIPE_SEARCH)
+        state = _fill_search_pipeline(state)
+        return _render_search_response(state)
+
+
+def _select_engine(intent: str) -> LegacyRecipeEngine | PairingTemplateEngine | SearchTemplateEngine:
     """intent에 따라 실행기를 선택한다."""
     if intent == "recipe.pairing":
         return PairingTemplateEngine()
+    if intent == "recipe.search":
+        return SearchTemplateEngine()
     return LegacyRecipeEngine()
 
 
@@ -385,7 +396,7 @@ if __name__ == "__main__":
         assert hasattr(engine, "run")
 
         selected = _select_engine("recipe.search")
-        assert isinstance(selected, LegacyRecipeEngine)
+        assert isinstance(selected, SearchTemplateEngine)
 
         state = RecipeExecutionState(req=req)
         assert state.template is None
@@ -422,21 +433,18 @@ if __name__ == "__main__":
         assert callable(pairing_tool)
         assert hasattr(PairingTemplateEngine(), "run")
         assert isinstance(_select_engine("recipe.pairing"), PairingTemplateEngine)
-        assert isinstance(_select_engine("recipe.search"), LegacyRecipeEngine)
+        assert isinstance(_select_engine("recipe.search"), SearchTemplateEngine)
         assert isinstance(_select_engine("recipe.recommend"), LegacyRecipeEngine)
         assert callable(rank_search_candidates_tool)
         assert callable(_fill_search_pipeline)
         assert callable(_render_search_response)
 
     def _test_behavior():
-        """기능 동작 검증 (mock 핸들러 사용)"""
+        """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
         import ai.agents.recipe_agent.recipe_agent as agent
 
-        orig_search = agent.handle_recipe_search
         orig_recommend = agent.handle_recipe_recommend
-
-        def fake_search(db: Any, text: str) -> tuple[str, list[dict[str, Any]], list[dict[str, str]]]:
-            return f"search:{text}", [{"label": "김치볶음밥", "url": "/recipes/1"}], []
+        orig_search_tool = agent.search_recipe_tool
 
         def fake_recommend(
             db: Any,
@@ -447,13 +455,22 @@ if __name__ == "__main__":
         ) -> tuple[str, list[dict[str, Any]]]:
             return f"recommend:{text}", [{"label": "두부찌개", "url": "/recipes/2"}]
 
-        agent.handle_recipe_search = fake_search
+        def fake_search_tool(db: Any, keyword: str) -> ToolResult:
+            return ToolResult(
+                ok=True,
+                data={"items": [{"recipe_id": 1, "title": "김치볶음밥"}], "total": 1},
+                source="recipe_search",
+            )
+
         agent.handle_recipe_recommend = fake_recommend
+        agent.search_recipe_tool = fake_search_tool
         try:
             r = agent.run_recipe_agent("김치볶음밥 레시피", db=None, intent="recipe.search")
+            assert isinstance(_select_engine("recipe.search"), SearchTemplateEngine)
             assert set(r) == {"response_text", "actions", "sources"}
-            assert r["response_text"] == "search:김치볶음밥 레시피"
-            assert r["actions"][0]["url"] == "/recipes/1"
+            assert "관련 레시피예요." in r["response_text"]
+            assert "김치볶음밥" in r["response_text"]
+            assert r["actions"] and r["actions"][0]["url"] == "/recipes/1"
             assert r["sources"] == []
             _check_output_contract(r)
 
@@ -482,45 +499,39 @@ if __name__ == "__main__":
             assert r["sources"] == []
             _check_output_contract(r)
 
-            orig_search_tool = agent.search_recipe_tool
-            agent.search_recipe_tool = lambda db, keyword: ToolResult(
-                ok=True,
-                data={"items": [{"recipe_id": 1, "title": "김치볶음밥"}], "total": 1},
-                source="recipe_search",
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="김치볶음밥 레시피",
+                    db=None,
+                    user_id=None,
+                    history=[],
+                    settings_obj=None,
+                    intent="recipe.search",
+                ),
             )
-            try:
-                state = RecipeExecutionState(
-                    req=RecipeAgentRequest(
-                        text="김치볶음밥 레시피",
-                        db=None,
-                        user_id=None,
-                        history=[],
-                        settings_obj=None,
-                        intent="recipe.search",
-                    ),
-                )
-                state = agent._fill_search_pipeline(state)
-                assert set(SEARCH_TEMPLATE_FIELDS) <= set(state.intermediate)
-                assert state.intermediate["keyword"]
-                assert len(state.intermediate["selected_recipes"]) <= 3
-                assert state.template == TEMPLATE_RECIPE_SEARCH
-                result = agent._render_search_response(state)
-                out = to_supervisor_state(result)
-                kw = state.intermediate["keyword"]
-                assert f"{kw} 관련 레시피예요." in out["response_text"]
-                assert "1. 김치볶음밥" in out["response_text"]
-                assert out["actions"] and out["actions"][0]["url"] == "/recipes/1"
-                assert out["sources"] == []
-            finally:
-                agent.search_recipe_tool = orig_search_tool
+            state = agent._fill_search_pipeline(state)
+            assert set(SEARCH_TEMPLATE_FIELDS) <= set(state.intermediate)
+            assert state.intermediate["keyword"]
+            assert len(state.intermediate["selected_recipes"]) <= 3
+            assert state.template == TEMPLATE_RECIPE_SEARCH
+            result = agent._render_search_response(state)
+            out = to_supervisor_state(result)
+            kw = state.intermediate["keyword"]
+            assert f"{kw} 관련 레시피예요." in out["response_text"]
+            assert "1. 김치볶음밥" in out["response_text"]
+            assert out["actions"] and out["actions"][0]["url"] == "/recipes/1"
+            assert out["sources"] == []
 
-            agent.handle_recipe_search = lambda db, text: ("결과 없음", [], [])
+            agent.search_recipe_tool = lambda db, keyword: ToolResult(
+                ok=True, data={"items": [], "total": 0}, source="recipe_search",
+            )
             r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
             _check_output_contract(r)
             assert r["actions"] == []
+            assert "찾지 못했어요" in r["response_text"]
 
             # -- P0-4: Supervisor 통합 기준선 --
-            agent.handle_recipe_search = fake_search
+            agent.search_recipe_tool = fake_search_tool
             r = agent.run_recipe_agent(
                 "김치볶음밥 레시피",
                 db=None, user_id=None, history=[], settings_obj=None, intent=None,
@@ -560,8 +571,8 @@ if __name__ == "__main__":
             assert _select_template("recipe.pairing", "김치볶음밥이랑 먹기 좋은 음식") == TEMPLATE_RECIPE_PAIRING
             assert _select_template("recipe.search", "없는레시피xyz") == TEMPLATE_RECIPE_SEARCH
         finally:
-            agent.handle_recipe_search = orig_search
             agent.handle_recipe_recommend = orig_recommend
+            agent.search_recipe_tool = orig_search_tool
 
     _test_contract()
     _test_behavior()
