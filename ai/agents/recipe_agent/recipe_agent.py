@@ -125,6 +125,15 @@ def _fridge_login_guard(req: RecipeAgentRequest) -> RecipeAgentResult | None:
     return None
 
 
+def _fridge_empty_guard(req: RecipeAgentRequest) -> RecipeAgentResult | None:
+    """빈 냉장고 차단. ponytail: Legacy handle_recipe_recommend와 동일. fridge pipeline에서 연결."""
+    from ai.agents.inventory_agent.inventory_agent import EMPTY_INVENTORY_REPLY, is_inventory_empty
+
+    if is_inventory_empty(db=req.db, user_id=req.user_id or 0):
+        return build_recipe_response(message=EMPTY_INVENTORY_REPLY, intent=req.intent)
+    return None
+
+
 class LegacyRecipeEngine:
     """기존 Handler를 그대로 호출하는 레거시 실행기."""
 
@@ -634,6 +643,7 @@ if __name__ == "__main__":
         assert callable(_render_search_response)
         assert callable(_render_ingredient_response)
         assert callable(_fridge_login_guard)
+        assert callable(_fridge_empty_guard)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -895,6 +905,21 @@ if __name__ == "__main__":
             )
             state = agent._fill_ingredient_pipeline(state)
             assert state.intermediate["selected_recipes"] == state.intermediate["recipe_candidates"][:3]
+
+            import ai.agents.inventory_agent.inventory_agent as inv
+            orig_empty = inv.is_inventory_empty
+            inv.is_inventory_empty = lambda **kwargs: True
+            try:
+                req = RecipeAgentRequest(
+                    text="오늘 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                )
+                guarded = agent._fridge_empty_guard(req)
+                assert guarded is not None
+                assert inv.EMPTY_INVENTORY_REPLY in guarded.message
+                assert guarded.actions == []
+            finally:
+                inv.is_inventory_empty = orig_empty
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
