@@ -113,6 +113,25 @@ class LegacyRecipeEngine:
         )
 
 
+class PairingTemplateEngine:
+    """TEMPLATE_RECIPE_PAIRING 필드를 pairing_tool로 채우는 실행기. ponytail: P5-3에서 _select_engine 연결."""
+
+    def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
+        tr = pairing_tool(req.text)
+        if not tr.ok:
+            return build_recipe_response(
+                message=tr.error or "조합 추천에 실패했어요.",
+                intent=req.intent,
+            )
+        data = tr.data or {}
+        return build_recipe_response(
+            message=data.get("reply", ""),
+            intent=req.intent,
+            actions=data.get("actions") or [],
+            sources=[],
+        )
+
+
 def _select_engine(intent: str) -> LegacyRecipeEngine:
     """intent에 따라 실행기를 선택한다. ponytail: 현재 모든 intent가 Legacy를 반환. 신규 Orchestrator 추가 시 여기에 분기."""
     return LegacyRecipeEngine()
@@ -212,6 +231,19 @@ def external_search_tool(keyword: str, query_text: str | None = None) -> ToolRes
         return ToolResult(ok=False, error=str(e), source="external_search")
 
 
+def pairing_tool(text: str) -> ToolResult:
+    """음식 조합(곁들임) 메뉴를 조회한다. ponytail: 정적 dict — P5-3에서 Orchestrator가 호출."""
+    try:
+        reply, actions = handle_recipe_pairing(text)
+        return ToolResult(
+            ok=True,
+            data={"reply": reply, "actions": actions},
+            source="pairing",
+        )
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="pairing")
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -304,6 +336,8 @@ if __name__ == "__main__":
         assert callable(build_actions_tool)
         assert callable(external_search_tool)
         assert callable(handle_recipe_pairing)
+        assert callable(pairing_tool)
+        assert hasattr(PairingTemplateEngine(), "run")
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
@@ -357,6 +391,21 @@ if __name__ == "__main__":
             assert r["actions"] == []
             assert r["sources"] == []
             _check_output_contract(r)
+
+            engine_out = to_supervisor_state(
+                PairingTemplateEngine().run(
+                    RecipeAgentRequest(
+                        text="김치볶음밥이랑 먹기 좋은 음식",
+                        db=None,
+                        user_id=None,
+                        history=[],
+                        settings_obj=None,
+                        intent="recipe.pairing",
+                    )
+                )
+            )
+            assert engine_out["response_text"] == r["response_text"]
+            assert engine_out["actions"] == r["actions"]
 
             agent.handle_recipe_search = lambda db, text: ("결과 없음", [], [])
             r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
