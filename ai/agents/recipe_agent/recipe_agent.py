@@ -491,6 +491,27 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     return state
 
 
+def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
+    """FRIDGE_TEMPLATE_FIELDS 중 candidates/ranked까지 채움. actions는 P8-6."""
+    tr = recommend_recipe_tool(state.req.db, state.req.user_id or 0, state.req.settings_obj)
+    candidates = (tr.data or {}).get("items", []) if tr.ok else []
+    state.intermediate["recipe_candidates"] = candidates
+    state.steps_done.append("recommend_recipe")
+
+    sorted_tr = sort_candidates_tool(candidates)
+    ranked = (sorted_tr.data or {}).get("items", candidates) if sorted_tr.ok else candidates
+    state.intermediate["ranked_recipes"] = ranked
+    state.steps_done.append("sort_candidates")
+
+    state.intermediate.setdefault("inventory_status", None)
+    state.intermediate.setdefault("user_preferences", None)
+    state.intermediate.setdefault("owned_ingredient_count", None)
+    state.intermediate.setdefault("missing_ingredient_count", None)
+    state.intermediate["actions"] = []
+    state.template = TEMPLATE_FRIDGE_RECOMMEND
+    return state
+
+
 def _render_ingredient_response(state: RecipeExecutionState) -> RecipeAgentResult:
     """INGREDIENT_TEMPLATE_FIELDS로 특정 재료 추천 응답을 조립한다."""
     from urllib.parse import quote
@@ -662,6 +683,7 @@ if __name__ == "__main__":
         assert callable(search_ingredient_relax_tool)
         assert callable(_fill_search_pipeline)
         assert callable(_fill_ingredient_pipeline)
+        assert callable(_fill_fridge_pipeline)
         assert callable(_render_search_response)
         assert callable(_render_ingredient_response)
         assert callable(_fridge_login_guard)
@@ -675,6 +697,7 @@ if __name__ == "__main__":
         orig_search_tool = agent.search_recipe_tool
         orig_external = agent.external_search_tool
         orig_relax = agent.search_ingredient_relax_tool
+        orig_recommend_tool = agent.recommend_recipe_tool
 
         def fake_recommend(
             db: Any,
@@ -956,11 +979,33 @@ if __name__ == "__main__":
             assert tr_default.ok
             assert tr_default.data["config"].mode == "fridge_consume"
             assert tr_default.data["exclude_dislikes"] is True
+
+            agent.recommend_recipe_tool = lambda db, user_id, settings_obj=None: ToolResult(
+                ok=True,
+                data={
+                    "items": [
+                        {"title": "A", "owned_ingredient_count": 1, "missing_ingredient_count": 2, "final_score": 10},
+                        {"title": "B", "owned_ingredient_count": 3, "missing_ingredient_count": 0, "final_score": 5},
+                    ],
+                    "total": 2,
+                },
+                source="recommendation",
+            )
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="오늘 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                ),
+            )
+            state = agent._fill_fridge_pipeline(state)
+            assert state.intermediate["ranked_recipes"][0]["title"] == "B"
+            assert state.template == TEMPLATE_FRIDGE_RECOMMEND
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
             agent.external_search_tool = orig_external
             agent.search_ingredient_relax_tool = orig_relax
+            agent.recommend_recipe_tool = orig_recommend_tool
 
     _test_contract()
     _test_behavior()
