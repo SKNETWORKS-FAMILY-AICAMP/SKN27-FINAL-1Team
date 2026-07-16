@@ -6,7 +6,7 @@ from typing import Any
 
 from .recipe_handlers import handle_recipe_pairing, handle_recipe_recommend, handle_recipe_search
 from .recipe_intents import analyze_recipe_intent
-from .recipe_utils import LOGIN_REQUIRED_REPLY, _requires_login
+from .recipe_utils import LOGIN_REQUIRED_REPLY, _extract_recipe_ingredient, _requires_login
 
 AGENT_NAME = "recipe"
 
@@ -160,12 +160,25 @@ class SearchTemplateEngine:
         return _render_search_response(state)
 
 
-def _select_engine(intent: str) -> LegacyRecipeEngine | PairingTemplateEngine | SearchTemplateEngine:
-    """intent에 따라 실행기를 선택한다."""
+class IngredientTemplateEngine:
+    """TEMPLATE_INGREDIENT_RECOMMEND를 pipeline + renderer로 채우는 실행기."""
+
+    def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
+        state = RecipeExecutionState(req=req, template=TEMPLATE_INGREDIENT_RECOMMEND)
+        state = _fill_ingredient_pipeline(state)
+        return _render_ingredient_response(state)
+
+
+def _select_engine(
+    intent: str, text: str = "",
+) -> LegacyRecipeEngine | PairingTemplateEngine | SearchTemplateEngine | IngredientTemplateEngine:
+    """intent + text에 따라 실행기를 선택한다."""
     if intent == "recipe.pairing":
         return PairingTemplateEngine()
     if intent == "recipe.search":
         return SearchTemplateEngine()
+    if intent == "recipe.recommend" and _extract_recipe_ingredient(text):
+        return IngredientTemplateEngine()
     return LegacyRecipeEngine()
 
 
@@ -497,7 +510,7 @@ def run_recipe_agent(
         settings_obj=settings_obj,
         intent=intent or analyze_recipe_intent(text, history),
     )
-    engine = _select_engine(req.intent)
+    engine = _select_engine(req.intent, req.text)
     result = engine.run(req)
     return to_supervisor_state(result)
 
@@ -587,7 +600,9 @@ if __name__ == "__main__":
         assert hasattr(PairingTemplateEngine(), "run")
         assert isinstance(_select_engine("recipe.pairing"), PairingTemplateEngine)
         assert isinstance(_select_engine("recipe.search"), SearchTemplateEngine)
-        assert isinstance(_select_engine("recipe.recommend"), LegacyRecipeEngine)
+        assert isinstance(_select_engine("recipe.recommend", "두부로 뭐 해먹지?"), IngredientTemplateEngine)
+        assert isinstance(_select_engine("recipe.recommend", "오늘 뭐 해먹지?"), LegacyRecipeEngine)
+        assert hasattr(IngredientTemplateEngine(), "run")
         assert callable(rank_search_candidates_tool)
         assert callable(search_ingredient_relax_tool)
         assert callable(_fill_search_pipeline)
@@ -630,6 +645,17 @@ if __name__ == "__main__":
                 source="external_search",
             )
 
+        def fake_relax(db: Any, ingredient: str) -> ToolResult:
+            return ToolResult(
+                ok=True,
+                data={
+                    "items": [{"recipe_id": 2, "title": "두부찌개"}],
+                    "total": 1,
+                    "constraints": dict(CONSTRAINT_EASY_30),
+                },
+                source="ingredient_relax",
+            )
+
         agent.handle_recipe_recommend = fake_recommend
         agent.search_recipe_tool = fake_search_tool
         agent.external_search_tool = fake_external
@@ -643,10 +669,12 @@ if __name__ == "__main__":
             assert r["sources"] == []
             _check_output_contract(r)
 
+            agent.search_ingredient_relax_tool = fake_relax
             r = agent.run_recipe_agent("두부로 뭐 해먹지?", db=None, user_id=1, intent="recipe.recommend")
+            assert isinstance(_select_engine("recipe.recommend", "두부로 뭐 해먹지?"), IngredientTemplateEngine)
             assert set(r) == {"response_text", "actions", "sources"}
-            assert r["response_text"] == "recommend:두부로 뭐 해먹지?"
-            assert len(r["actions"]) == 1
+            assert "30분 이내 초급 레시피는" in r["response_text"]
+            assert "1. 두부찌개" in r["response_text"]
             assert r["sources"] == []
             _check_output_contract(r)
 
@@ -714,7 +742,7 @@ if __name__ == "__main__":
             )
             _check_output_contract(r)
 
-            agent.handle_recipe_recommend = fake_recommend
+            agent.search_ingredient_relax_tool = fake_relax
             r = agent.run_recipe_agent(
                 "두부로 뭐 해먹지?",
                 db=None, user_id=1, history=[], settings_obj=None, intent="recipe.recommend",
