@@ -48,6 +48,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _latest_bot_slots,
     _merge_agent_results,
     _normalize_agent_result,
+    _run_agent_with_retry,
     _normalize_shopping_create_query,
     _normalize_text,
     _parse_alarm_request,
@@ -208,12 +209,15 @@ def inventory_agent_node(state: GraphState) -> dict:
     if (intent.startswith("inventory.") or intent.startswith("action.")) and not state.get("user_id"):
         return _normalize_agent_result({"response_text": LOGIN_REQUIRED_REPLY}, inherited_slots=state.get("slots"))
         
-    result = run_inventory_agent(
-        intent=state.get("intent", ""),
-        text=state["text"],
-        history=state.get("history", []),
-        db=state["db"],
-        user_id=state.get("user_id"),
+    result = _run_agent_with_retry(
+        lambda: run_inventory_agent(
+            intent=intent,
+            text=state["text"],
+            history=state.get("history", []),
+            db=state["db"],
+            user_id=state.get("user_id"),
+        ),
+        enabled=intent in {"inventory.list", "inventory.expiring"},
     )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
@@ -222,18 +226,20 @@ def guide_agent_node(state: GraphState) -> dict:
     """식재료 가이드 요청을 Guide Agent에 전달합니다."""
     # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
     query = _rewrite_guide_query(state["text"])
-    result = state["service"]._reply_guide(query)
+    result = _run_agent_with_retry(lambda: state["service"]._reply_guide(query))
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def recipe_agent_node(state: GraphState) -> dict:
     """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
-    result = run_recipe_agent(
-        state["text"],
-        db=state["db"],
-        user_id=state.get("user_id"),
-        history=state.get("history", []),
-        settings_obj=state.get("settings_obj"),
-        intent=state.get("intent"),
+    result = _run_agent_with_retry(
+        lambda: run_recipe_agent(
+            state["text"],
+            db=state["db"],
+            user_id=state.get("user_id"),
+            history=state.get("history", []),
+            settings_obj=state.get("settings_obj"),
+            intent=state.get("intent"),
+        )
     )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
@@ -285,12 +291,15 @@ def shopping_agent_node(state: GraphState) -> dict:
     if state.get("intent") == "shopping.compare":
         compare_text = (state.get("slots") or {}).get("shopping_product") or compare_text
 
-    result = run_shopping_agent(
-        text=compare_text or text,
-        intent=state.get("intent", ""),
-        history=state.get("history", []),
-        db=state["db"],
-        user_id=state.get("user_id"),
+    result = _run_agent_with_retry(
+        lambda: run_shopping_agent(
+            text=compare_text or text,
+            intent=state.get("intent", ""),
+            history=state.get("history", []),
+            db=state["db"],
+            user_id=state.get("user_id"),
+        ),
+        enabled=state.get("intent") not in _SHOPPING_WRITE_INTENTS,
     )
     if state.get("intent") == "shopping.compare":
         from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
@@ -306,14 +315,17 @@ def alarm_agent_node(state: GraphState) -> dict:
     from ai.agents.alarm_agent.alarm_agent import run as run_alarm_agent
 
     request = _parse_alarm_request(state["text"], state.get("intent", ""))
-    agent_result = run_alarm_agent(
-        text_or_intent=state["text"],
-        payload=request["payload"],
-        intent=request["intent"],
-        action=request["action"],
-        confirmed=request["confirmed"],
-        tools=ALARM_AGENT_TOOLS,
-        context={"user_id": state.get("user_id"), "db": state["db"]},
+    agent_result = _run_agent_with_retry(
+        lambda: run_alarm_agent(
+            text_or_intent=state["text"],
+            payload=request["payload"],
+            intent=request["intent"],
+            action=request["action"],
+            confirmed=request["confirmed"],
+            tools=ALARM_AGENT_TOOLS,
+            context={"user_id": state.get("user_id"), "db": state["db"]},
+        ),
+        enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
     result = _alarm_result_to_state(agent_result)
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
@@ -322,7 +334,9 @@ def fallback_agent_node(state: GraphState) -> dict:
     """기존 Agent가 담당하지 않는 일반 요리 질문을 제한된 fallback Agent에 전달합니다."""
     from ai.agents.fallback_agent import run_food_fallback
 
-    result = run_food_fallback(state["text"], history=state.get("history", []))
+    result = _run_agent_with_retry(
+        lambda: run_food_fallback(state["text"], history=state.get("history", []))
+    )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def general_node(state: GraphState) -> dict:

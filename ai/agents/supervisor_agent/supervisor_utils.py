@@ -756,6 +756,43 @@ def _alarm_result_to_state(agent_result: dict[str, Any]) -> dict[str, Any]:
         result["actions"] = actions
     return result
 
+def _agent_result_needs_retry(agent_result: Any) -> bool:
+    """Agent 응답이 비어 있거나 명시적으로 실패했는지 확인합니다."""
+    if not isinstance(agent_result, dict):
+        return True
+
+    slots = agent_result.get("slots") if isinstance(agent_result.get("slots"), dict) else {}
+    status = str(agent_result.get("status") or slots.get("agent_status") or "").lower()
+    if agent_result.get("ok") is False or status in {"error", "not_found"} or agent_result.get("error"):
+        return True
+
+    response_text = agent_result.get("response_text") or agent_result.get("message")
+    return not isinstance(response_text, str) or not response_text.strip()
+
+
+def _run_agent_with_retry(call: Any, *, enabled: bool = True) -> Any:
+    """안전한 조회 요청의 품질이 낮을 때 동일 Agent를 한 번만 재호출합니다."""
+    if not enabled:
+        return call()
+
+    try:
+        result = call()
+    except Exception:
+        result = call()
+        retried = True
+    else:
+        retried = _agent_result_needs_retry(result)
+        if retried:
+            result = call()
+
+    if retried and isinstance(result, dict):
+        result = {
+            **result,
+            "slots": {**(result.get("slots") or {}), "agent_retry_count": 1},
+        }
+    return result
+
+
 def _normalize_agent_result(
     agent_result: Any,
     *,

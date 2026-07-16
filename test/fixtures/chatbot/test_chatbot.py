@@ -1530,3 +1530,109 @@ def test_recipe_pairing_reply() -> None:
 
     assert "김치볶음밥에는" in reply
     assert "계란국" in reply
+
+
+
+def test_agent_quality_retry_runs_only_after_bad_result() -> None:
+    """빈 Agent 응답은 한 번 재호출하고 정상 응답에는 재시도 횟수를 기록합니다."""
+    responses = iter([
+        {"status": "error", "response_text": ""},
+        {"response_text": "정상 응답입니다."},
+    ])
+    calls = []
+
+    def call_agent():
+        """테스트용 Agent 응답을 순서대로 반환합니다."""
+        calls.append(1)
+        return next(responses)
+
+    result = supervisor_utils._run_agent_with_retry(call_agent)
+
+    assert len(calls) == 2
+    assert result["response_text"] == "정상 응답입니다."
+    assert result["slots"]["agent_retry_count"] == 1
+
+
+def test_agent_quality_retry_skips_valid_result() -> None:
+    """정상 Agent 응답은 불필요하게 다시 호출하지 않습니다."""
+    calls = []
+
+    def call_agent():
+        """호출 횟수 확인용 정상 응답을 반환합니다."""
+        calls.append(1)
+        return {"response_text": "정상 응답입니다."}
+
+    result = supervisor_utils._run_agent_with_retry(call_agent)
+
+    assert len(calls) == 1
+    assert result == {"response_text": "정상 응답입니다."}
+
+
+def test_agent_quality_retry_is_disabled_for_write_action() -> None:
+    """중복 DB 변경을 막기 위해 쓰기 작업은 응답이 비어도 재호출하지 않습니다."""
+    calls = []
+
+    def call_agent():
+        """호출 횟수 확인용 빈 쓰기 응답을 반환합니다."""
+        calls.append(1)
+        return {"response_text": ""}
+
+    result = supervisor_utils._run_agent_with_retry(call_agent, enabled=False)
+
+    assert len(calls) == 1
+    assert result == {"response_text": ""}
+
+
+
+def test_guide_agent_node_retries_not_found_once() -> None:
+    """Guide Agent가 not_found를 반환하면 Supervisor가 한 번만 다시 조회합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    responses = iter([
+        {"response_text": "정보를 찾지 못했어요.", "slots": {"agent_status": "not_found"}},
+        {"response_text": "감자는 서늘하고 어두운 곳에 보관하세요."},
+    ])
+    calls = []
+
+    class GuideService:
+        """재시도 검증용 Guide Service 대역입니다."""
+
+        def _reply_guide(self, text):
+            """호출 순서에 따라 실패 후 정상 응답을 반환합니다."""
+            calls.append(text)
+            return next(responses)
+
+    result = supervisor_agent_module.guide_agent_node({
+        "text": "감자 보관법",
+        "service": GuideService(),
+        "slots": {},
+    })
+
+    assert calls == ["감자 보관법", "감자 보관법"]
+    assert result["response_text"] == "감자는 서늘하고 어두운 곳에 보관하세요."
+    assert result["slots"]["agent_retry_count"] == 1
+
+
+def test_inventory_write_node_never_retries(monkeypatch) -> None:
+    """Inventory 쓰기 노드는 빈 응답이어도 중복 실행하지 않습니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    calls = []
+
+    def fake_inventory_agent(**kwargs):
+        """쓰기 Agent 호출 횟수를 기록하고 빈 응답을 반환합니다."""
+        calls.append(kwargs)
+        return {"response_text": ""}
+
+    monkeypatch.setattr(inventory_agent, "run_inventory_agent", fake_inventory_agent)
+    supervisor_agent_module.inventory_agent_node({
+        "intent": "inventory.action",
+        "text": "두부 1개 추가해줘",
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+        "slots": {},
+    })
+
+    assert len(calls) == 1
