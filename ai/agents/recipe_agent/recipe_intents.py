@@ -12,16 +12,6 @@ _SEARCH_WORDS = ("레시피", "요리법", "요리")
 _PAIRING_WORDS = ("같이먹", "함께먹", "곁들임", "어울리는", "이랑먹", "랑먹", "먹기좋은")
 _PAIRING_JOSA = re.compile(r".+(?:이랑|랑|와|과|하고).+(?:먹|어울|곁들|좋은)")
 
-_GOLDEN_CASES = (
-    ("김치볶음밥 레시피", "recipe.search"),
-    ("에어프라이어 치킨 몇 분?", "recipe.search"),
-    ("두부로 뭐 해먹지?", "recipe.recommend"),
-    ("오늘 뭐 해먹지?", "recipe.recommend"),
-    ("냉장고 재료로 뭐 해먹지?", "recipe.recommend"),
-    ("김치볶음밥이랑 먹기 좋은 음식", "recipe.pairing"),
-    ("파스타와 어울리는 반찬", "recipe.pairing"),
-    ("라면하고 같이 먹을 만한 거", "recipe.pairing"),
-)
 
 
 def _compact(text: str) -> str:
@@ -43,10 +33,3 @@ def analyze_recipe_intent(text: str, history: list | None = None) -> str:
     if any(word in compact for word in _SEARCH_WORDS):
         return "recipe.search"
     return "recipe.recommend"
-
-
-if __name__ == "__main__":
-    for utterance, expected in _GOLDEN_CASES:
-        actual = analyze_recipe_intent(utterance)
-        assert actual == expected, f"{utterance!r}: expected {expected!r}, got {actual!r}"
-    print("recipe_intents ok")

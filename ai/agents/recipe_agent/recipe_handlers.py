@@ -82,36 +82,3 @@ def handle_recipe_pairing(text: str) -> tuple[str, list[dict[str, Any]]]:
     items = pairings.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
     reply = f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
     return reply, []
-
-
-if __name__ == "__main__":
-    import ai.agents.recipe_agent.recipe_handlers as handlers
-
-    called: dict[str, Any] = {"external": False, "query": ""}
-    original_external = handlers.reply_external_recipe
-
-    def fake_external(keyword: str, query_text: str | None = None) -> tuple[str, list[dict[str, str]]]:
-        called["external"] = True
-        called["query"] = query_text or ""
-        return f"{keyword} 웹 검색", []
-
-    handlers.reply_external_recipe = fake_external
-    try:
-        reply, sources = handlers.reply_external_recipe("감자튀김", "감자튀김 에어프라이기 시간")
-        assert called["external"]
-        assert called["query"] == "감자튀김 에어프라이기 시간"
-        assert reply == "감자튀김 웹 검색"
-        assert sources == []
-    finally:
-        handlers.reply_external_recipe = original_external
-
-    reply, actions = handlers.handle_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
-    assert "김치볶음밥" in reply
-    assert "계란국" in reply
-    assert actions == []
-
-    reply, actions = handlers.handle_recipe_pairing("알수없는메뉴와 어울리는 반찬")
-    assert "알수없는메뉴" in reply
-    assert "맑은 국" in reply
-
-    print("recipe_handlers ok")

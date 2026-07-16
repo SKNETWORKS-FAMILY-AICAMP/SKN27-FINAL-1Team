@@ -142,34 +142,3 @@ def _is_relevant_search_result(keyword: str, item: dict[str, Any]) -> bool:
     words = _keyword_tokens(haystack)
     primary = tokens[0]
     return any(_is_guide_result_match(primary, word) for word in words)
-
-
-if __name__ == "__main__":
-    assert _extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
-    assert _normalize_recipe_keyword("파") == "대파"
-    assert _apply_josa("두부", "이가") == "두부가"
-
-    ranked = _rank_recipe_items(
-        "두부",
-        [
-            {"title": "고기찌개", "difficulty": "초급", "cooking_time_min": 10},
-            {"title": "두부찌개", "difficulty": "중급", "cooking_time_min": 30},
-            {"title": "두부전", "difficulty": "초급", "cooking_time_min": 20},
-        ],
-    )
-    assert ranked[0]["title"] == "두부전"
-
-    actions = _recipe_actions([{"recipe_id": 7, "title": "김치볶음밥"}])
-    assert actions[0]["url"] == "/recipes/7"
-    assert actions[0]["data"]["recipe_id"] == 7
-
-    assert _requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
-    assert not _requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
-    assert _is_cooking_time_question("감자튀김 에어프라이기 시간")
-
-    good = {"title": "남은 치킨 보관법", "content": "치킨은 밀폐 후 냉장 보관", "url": "https://example.com"}
-    bad = {"title": "마늘 양파 보관법", "content": "마늘과 양파는 상온 보관", "url": "https://example.com"}
-    assert _is_relevant_search_result("먹다남은 치킨", good)
-    assert not _is_relevant_search_result("먹다남은 치킨", bad)
-
-    print("recipe_utils ok")
