@@ -399,7 +399,7 @@ def _render_search_response(state: RecipeExecutionState) -> RecipeAgentResult:
 
 
 def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
-    """특정 재료 추천 intermediate를 채운다. selected/actions는 P7-3/P7-4."""
+    """특정 재료 추천 intermediate를 채운다. actions는 P7-4."""
     from .recipe_utils import _extract_recipe_ingredient
 
     ingredient = _extract_recipe_ingredient(state.req.text) or ""
@@ -418,9 +418,14 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     data = tr.data or {}
     state.intermediate["constraints"] = data.get("constraints") or {}
     state.intermediate["recipe_candidates"] = (data.get("items") or []) if tr.ok else []
-    state.intermediate["selected_recipes"] = []
     state.intermediate["actions"] = []
     state.steps_done.append("relax_search")
+
+    candidates = state.intermediate.get("recipe_candidates") or []
+    excluded = exclude_previous_tool(candidates, state.req.history)
+    filtered = (excluded.data or {}).get("items", candidates) if excluded.ok else candidates
+    state.intermediate["selected_recipes"] = filtered[:3]
+    state.steps_done.append("exclude_previous")
     state.template = TEMPLATE_INGREDIENT_RECOMMEND
     return state
 
@@ -713,8 +718,50 @@ if __name__ == "__main__":
             assert set(INGREDIENT_TEMPLATE_FIELDS) <= set(state.intermediate)
             assert state.intermediate["ingredient"]
             assert state.intermediate["recipe_candidates"]
+            assert state.intermediate["selected_recipes"]
+            assert state.intermediate["selected_recipes"][0]["title"] == "두부찌개"
             assert state.intermediate["constraints"] == CONSTRAINT_EASY_30
             assert state.template == TEMPLATE_INGREDIENT_RECOMMEND
+
+            agent.search_ingredient_relax_tool = lambda db, ingredient: ToolResult(
+                ok=True,
+                data={
+                    "items": [
+                        {"recipe_id": 1, "title": "두부찌개"},
+                        {"recipe_id": 2, "title": "두부조림"},
+                    ],
+                    "total": 2,
+                    "constraints": dict(CONSTRAINT_EASY_30),
+                },
+                source="ingredient_relax",
+            )
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="두부로 뭐 해먹지?",
+                    db=None,
+                    user_id=1,
+                    history=[FakeMsg("bot", "두부찌개를 추천했습니다.")],
+                    settings_obj=None,
+                    intent="recipe.recommend",
+                ),
+            )
+            state = agent._fill_ingredient_pipeline(state)
+            assert state.intermediate["selected_recipes"]
+            assert state.intermediate["selected_recipes"][0]["title"] == "두부조림"
+            assert len(state.intermediate["selected_recipes"]) <= 3
+
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="두부로 뭐 해먹지?",
+                    db=None,
+                    user_id=1,
+                    history=[FakeMsg("bot", "두부찌개와 두부조림을 추천했습니다.")],
+                    settings_obj=None,
+                    intent="recipe.recommend",
+                ),
+            )
+            state = agent._fill_ingredient_pipeline(state)
+            assert state.intermediate["selected_recipes"] == state.intermediate["recipe_candidates"][:3]
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
