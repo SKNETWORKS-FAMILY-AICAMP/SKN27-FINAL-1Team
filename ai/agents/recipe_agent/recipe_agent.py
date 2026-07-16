@@ -273,6 +273,38 @@ def _note_independent_external_jobs(state: RecipeExecutionState) -> None:
         state.intermediate["independent_external_jobs"] = independent
 
 
+def _run_one_external_job(job: ExternalJob) -> tuple[ExternalJob, ToolResult]:
+    if job.tool == "external_search_tool":
+        return job, external_search_tool(
+            job.kwargs.get("keyword") or "",
+            query_text=job.kwargs.get("query_text"),
+        )
+    return job, ToolResult(ok=False, error=f"unknown tool: {job.tool}", source=job.tool)
+
+
+def run_independent_external_jobs(state: RecipeExecutionState) -> RecipeExecutionState:
+    """independent_external_jobs 실행. job 2+면 ThreadPoolExecutor."""
+    jobs = list(state.intermediate.get("independent_external_jobs") or [])
+    if not jobs:
+        return state
+    if len(jobs) == 1:
+        results = [_run_one_external_job(jobs[0])]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(4, len(jobs))) as pool:
+            results = list(pool.map(_run_one_external_job, jobs))
+    for job, tr in results:
+        if job.fills_field == "external_summary":
+            summary = (tr.data or {}).get("summary", "") if tr.ok else (tr.error or "")
+            sources = (tr.data or {}).get("sources", []) if tr.ok else []
+            state.intermediate["external_summary"] = summary
+            state.intermediate["sources"] = sources
+            state.steps_done.append("run_external_search")
+        else:
+            state.steps_done.append(f"run_skip:{job.name}")
+    return state
+
+
 def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
     """필드당 최대 1회 fallback. 전체 fill 재시작 금지. ponytail: external_search만 실제 호출."""
     repaired: set[str] = set()
@@ -281,6 +313,9 @@ def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
             continue
         repaired.add(target.field)
         if target.fallback_tool == "external_search_tool" and target.field == "recipe_candidates":
+            if "external_summary" in state.intermediate:
+                state.steps_done.append(f"repair_skip:{target.field}")
+                continue
             keyword = state.intermediate.get("keyword") or state.intermediate.get("ingredient") or ""
             ext = external_search_tool(keyword, query_text=state.req.text)
             summary = (ext.data or {}).get("summary", "") if ext.ok else (ext.error or "")
@@ -431,6 +466,7 @@ class SearchTemplateEngine:
     def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
         state = RecipeExecutionState(req=req, template=TEMPLATE_RECIPE_SEARCH)
         state = _fill_search_pipeline(state)
+        state = run_independent_external_jobs(state)
         state = apply_repair_targets(state)
         result = _render_search_response(state)
         return _attach_review_notes(state, result)
@@ -442,6 +478,7 @@ class IngredientTemplateEngine:
     def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
         state = RecipeExecutionState(req=req, template=TEMPLATE_INGREDIENT_RECOMMEND)
         state = _fill_ingredient_pipeline(state)
+        state = run_independent_external_jobs(state)
         state = apply_repair_targets(state)
         result = _render_ingredient_response(state)
         return _attach_review_notes(state, result)
@@ -459,6 +496,7 @@ class FridgeTemplateEngine:
             return empty
         state = RecipeExecutionState(req=req, template=TEMPLATE_FRIDGE_RECOMMEND)
         state = _fill_fridge_pipeline(state)
+        state = run_independent_external_jobs(state)
         state = apply_repair_targets(state)
         result = _render_fridge_response(state)
         return _attach_review_notes(state, result)
@@ -1039,6 +1077,7 @@ if __name__ == "__main__":
         assert ENABLE_LLM_REVIEWER is False
         assert callable(collect_external_jobs)
         assert callable(filter_independent_jobs)
+        assert callable(run_independent_external_jobs)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -1326,6 +1365,26 @@ if __name__ == "__main__":
                 ExternalJob(name="c", tool="not_allowed", kwargs={}, fills_field="other"),
             ]
             assert filter_independent_jobs(bad) == []
+
+            run_st = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="없는레시피xyz", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            run_st.intermediate["independent_external_jobs"] = [
+                ExternalJob(
+                    name="external_search",
+                    tool="external_search_tool",
+                    kwargs={"keyword": "없는레시피xyz", "query_text": "없는레시피xyz"},
+                    fills_field="external_summary",
+                ),
+            ]
+            run_st = agent.run_independent_external_jobs(run_st)
+            assert "run_external_search" in run_st.steps_done
+            assert run_st.intermediate.get("external_summary") is not None
+            assert run_st.intermediate.get("sources")
 
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
