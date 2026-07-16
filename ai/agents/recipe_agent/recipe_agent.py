@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import replace
 from typing import Any, Callable
 from urllib.parse import quote
 
 from .recipe_config import (
     AGENT_NAME,
     CONSTRAINT_EASY_30,
-    ENABLE_LLM_REVIEWER,
     MAX_DISPLAY_RECIPES,
     TOOL_RECOMMEND_BY_INGREDIENT,
     TOOL_RECOMMEND_FROM_FRIDGE,
@@ -19,20 +18,27 @@ from .recipe_config import (
 )
 from .recipe_tools import (
     ToolResult,
-    build_actions_tool,
-    exclude_previous_tool,
-    external_search_tool,
-    pairing_tool,
-    rank_search_candidates_tool,
+    handle_recipe_pairing,
     recommend_recipe_tool,
+    reply_external_recipe,
     search_ingredient_relax_tool,
     search_recipe_tool,
-    sort_candidates_tool,
+)
+from .recipe_types import (
+    PlanStep,
+    RecipeAgentRequest,
+    RecipeAgentResult,
+    RecipeExecutionState,
+    RecipePlan,
 )
 from .recipe_utils import (
     LOGIN_REQUIRED_REPLY,
     _apply_josa,
+    _exclude_previous_items,
+    _rank_recipe_items,
+    _recipe_actions,
     _requires_login,
+    _sort_fridge_candidates,
     analyze_recipe_intent,
 )
 
@@ -57,62 +63,6 @@ __all__ = [
     "run_recipe_agent",
     "to_supervisor_state",
 ]
-
-@dataclass(frozen=True)
-class PlanStep:
-    tool: str
-    args: dict[str, Any] = field(default_factory=dict)
-    when: str = WHEN_ALWAYS
-
-
-@dataclass
-class RecipePlan:
-    steps: list[PlanStep]
-    max_fallback: int = 1
-
-
-@dataclass
-class RecipeAgentRequest:
-    text: str
-    db: Any
-    user_id: int | None
-    history: list
-    settings_obj: Any
-    intent: str
-
-
-@dataclass
-class RecipeAgentResult:
-    ok: bool
-    agent: str
-    intent: str
-    message: str
-    error: dict[str, Any] | None
-    actions: list[dict[str, Any]]
-    sources: list[dict[str, Any]]
-    meta: dict[str, Any]
-
-
-@dataclass
-class RecipeExecutionState:
-    """Agent loop internal state."""
-    req: RecipeAgentRequest
-    plan: RecipePlan | None = None
-    steps_done: list[str] = field(default_factory=list)
-    intermediate: dict[str, Any] = field(default_factory=dict)
-    last_tool: str | None = None
-
-
-def review_recipe_quality(state: RecipeExecutionState, result: RecipeAgentResult) -> list[str]:
-    """응답 품질 힌트(휴리스틱). 응답 본문은 수정하지 않는다."""
-    if not ENABLE_LLM_REVIEWER:
-        return []
-    notes: list[str] = []
-    if not (result.message or "").strip():
-        notes.append("empty_message")
-    if state.last_tool in (TOOL_SEARCH_RECIPES, TOOL_RECOMMEND_BY_INGREDIENT) and not result.actions:
-        notes.append("no_recipe_actions")
-    return notes
 
 
 def build_recipe_response(
@@ -177,12 +127,10 @@ def _tool_search_recipes(req: RecipeAgentRequest, args: dict[str, Any]) -> ToolR
     if not search.ok:
         return search
     candidates = (search.data or {}).get("items", [])
-    ranked = rank_search_candidates_tool(keyword, candidates)
-    items = (ranked.data or {}).get("items", candidates) if ranked.ok else candidates
-    selected = items[:MAX_DISPLAY_RECIPES]
+    items = _rank_recipe_items(keyword, candidates)[:MAX_DISPLAY_RECIPES]
     return ToolResult(
         ok=True,
-        data={"keyword": keyword, "items": selected, "total": len(selected)},
+        data={"keyword": keyword, "items": items, "total": len(items)},
         source=TOOL_SEARCH_RECIPES,
     )
 
@@ -196,8 +144,7 @@ def _tool_recommend_by_ingredient(req: RecipeAgentRequest, args: dict[str, Any])
         return tr
     data = tr.data or {}
     candidates = data.get("items") or []
-    excluded = exclude_previous_tool(candidates, req.history)
-    filtered = (excluded.data or {}).get("items", candidates) if excluded.ok else candidates
+    filtered = _exclude_previous_items(candidates, req.history)
     selected = filtered[:MAX_DISPLAY_RECIPES]
     return ToolResult(
         ok=True,
@@ -221,28 +168,35 @@ def _tool_recommend_from_fridge(req: RecipeAgentRequest, args: dict[str, Any]) -
             source=TOOL_RECOMMEND_FROM_FRIDGE,
         )
     candidates = (tr.data or {}).get("items", [])
-    sorted_tr = sort_candidates_tool(candidates)
-    ranked = (sorted_tr.data or {}).get("items", candidates) if sorted_tr.ok else candidates
+    ranked = _sort_fridge_candidates(candidates)
     return ToolResult(ok=True, data={"items": ranked, "total": len(ranked)}, source=TOOL_RECOMMEND_FROM_FRIDGE)
 
 
 def _tool_search_external(req: RecipeAgentRequest, args: dict[str, Any]) -> ToolResult:
     keyword = args.get("keyword") or ""
     query_text = args.get("query_text") or req.text
-    tr = external_search_tool(keyword, query_text=query_text)
-    if not tr.ok:
-        return tr
-    data = tr.data or {}
-    return ToolResult(
-        ok=True,
-        data={"keyword": keyword, "summary": data.get("summary", ""), "sources": data.get("sources") or []},
-        source=TOOL_SEARCH_EXTERNAL,
-    )
+    try:
+        summary, sources = reply_external_recipe(keyword, query_text=query_text)
+        return ToolResult(
+            ok=True,
+            data={"keyword": keyword, "summary": summary, "sources": sources},
+            source=TOOL_SEARCH_EXTERNAL,
+        )
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source=TOOL_SEARCH_EXTERNAL)
 
 
 def _tool_suggest_pairing(req: RecipeAgentRequest, args: dict[str, Any]) -> ToolResult:
     text = args.get("text") or req.text
-    return pairing_tool(text)
+    try:
+        reply, actions = handle_recipe_pairing(text)
+        return ToolResult(
+            ok=True,
+            data={"reply": reply, "actions": actions},
+            source=TOOL_SUGGEST_PAIRING,
+        )
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source=TOOL_SUGGEST_PAIRING)
 
 
 ToolFn = Callable[[RecipeAgentRequest, dict[str, Any]], ToolResult]
@@ -302,12 +256,26 @@ def execute_plan(state: RecipeExecutionState) -> RecipeExecutionState:
     return state
 
 
+def _numbered_list(items: list[dict[str, Any]]) -> str:
+    return "\n".join(f"{index + 1}. {item.get('title') or ''}" for index, item in enumerate(items))
+
+
+def _recipe_list_response(
+    *,
+    prefix: str,
+    items: list[dict[str, Any]],
+    intent: str,
+    extra_actions: list[dict[str, Any]] | None = None,
+) -> RecipeAgentResult:
+    actions = _recipe_actions(items) + (extra_actions or [])
+    return build_recipe_response(message=prefix + _numbered_list(items), intent=intent, actions=actions)
+
+
 def render_response(state: RecipeExecutionState) -> RecipeAgentResult:
     """Assemble final message from last meaningful tool result."""
     req = state.req
     intent = req.intent
 
-    # Prefer last successful non-empty tool; walk backwards through plan
     if state.plan:
         for step in reversed(state.plan.steps):
             tr = state.intermediate.get(step.tool)
@@ -317,7 +285,6 @@ def render_response(state: RecipeExecutionState) -> RecipeAgentResult:
                 continue
             return _render_tool_result(step.tool, tr, req)
 
-    # All failed or empty
     last = state.last_tool
     if last and last in state.intermediate:
         return _render_tool_result(last, state.intermediate[last], req)
@@ -354,13 +321,11 @@ def _render_tool_result(tool: str, tr: ToolResult, req: RecipeAgentRequest) -> R
                 message=tr.error or (f"{keyword} 관련 레시피를 찾지 못했어요." if keyword else "관련 레시피를 찾지 못했어요."),
                 intent=intent,
             )
-        titles = [item.get("title") or "" for item in selected]
-        reply = f"{keyword} 관련 레시피예요.\n" + "\n".join(
-            f"{index + 1}. {title}" for index, title in enumerate(titles)
+        return _recipe_list_response(
+            prefix=f"{keyword} 관련 레시피예요.\n",
+            items=selected,
+            intent=intent,
         )
-        actions_tr = build_actions_tool(selected)
-        actions = (actions_tr.data or {}).get("actions", []) if actions_tr.ok else []
-        return build_recipe_response(message=reply, intent=intent, actions=actions)
 
     if tool == TOOL_RECOMMEND_BY_INGREDIENT:
         ingredient = data.get("ingredient") or ""
@@ -375,18 +340,18 @@ def _render_tool_result(tool: str, tr: ToolResult, req: RecipeAgentRequest) -> R
             "url": f"/recipes?ingredient={quote(ingredient)}",
             "data": {"ingredient": ingredient},
         }
-        actions_tr = build_actions_tool(selected)
-        actions = (actions_tr.data or {}).get("actions", []) if actions_tr.ok else []
-        actions = actions + [list_action]
         is_easy = constraints == CONSTRAINT_EASY_30
         prefix = (
-            f"{_apply_josa(ingredient, '이가')} 주재료인 30분 이내 초급 레시피는 "
+            f"{_apply_josa(ingredient, '이가')} 주재료인 30분 이내 초급 레시피는 \n"
             if is_easy
-            else f"{_apply_josa(ingredient, '이가')} 주재료인 레시피는 "
+            else f"{_apply_josa(ingredient, '이가')} 주재료인 레시피는 \n"
         )
-        titles = [item.get("title") or "" for item in selected]
-        reply = prefix + "\n" + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles))
-        return build_recipe_response(message=reply, intent=intent, actions=actions)
+        return _recipe_list_response(
+            prefix=prefix,
+            items=selected,
+            intent=intent,
+            extra_actions=[list_action],
+        )
 
     if tool == TOOL_RECOMMEND_FROM_FRIDGE:
         if not tr.ok:
@@ -404,11 +369,7 @@ def _render_tool_result(tool: str, tr: ToolResult, req: RecipeAgentRequest) -> R
                     intent=intent,
                 )
             prefix = "부족한 재료가 약간 있지만, 냉장고 재료를 최대한 활용할 수 있는 레시피예요.\n"
-        actions_tr = build_actions_tool(selected)
-        actions = (actions_tr.data or {}).get("actions", []) if actions_tr.ok else []
-        titles = [i.get("title") or "" for i in selected]
-        reply = prefix + "\n".join(f"{n + 1}. {t}" for n, t in enumerate(titles))
-        return build_recipe_response(message=reply, intent=intent, actions=actions)
+        return _recipe_list_response(prefix=prefix, items=selected, intent=intent)
 
     return build_recipe_response(message=tr.error or "요청을 처리하지 못했어요.", intent=intent)
 
@@ -443,19 +404,7 @@ def run_recipe_agent(
     result = render_response(state)
     meta = dict(result.meta or {})
     meta["planner"] = planner_source
-    result = RecipeAgentResult(
-        ok=result.ok,
-        agent=result.agent,
-        intent=result.intent,
-        message=result.message,
-        error=result.error,
-        actions=result.actions,
-        sources=result.sources,
-        meta=meta,
-    )
-    review_notes = review_recipe_quality(state, result)
-    if review_notes:
-        result.meta["review_notes"] = review_notes
+    result = replace(result, meta=meta)
     out = to_supervisor_state(result)
     shown_recipe_ids = [
         int(action.get("data", {}).get("recipe_id"))

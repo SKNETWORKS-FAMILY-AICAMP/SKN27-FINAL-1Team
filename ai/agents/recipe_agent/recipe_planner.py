@@ -12,7 +12,6 @@ except ImportError:
 
 from .recipe_config import (
     ENABLE_LLM_RECIPE_PLANNER,
-    PLANNER_GOLDEN_CASES,
     PUBLIC_TOOL_NAMES,
     RECIPE_PLANNER_PROMPT,
     TOOL_ARGS_WHITELIST,
@@ -32,20 +31,16 @@ from .recipe_utils import (
     extract_shown_recipe_ids,
 )
 
-from .recipe_agent import PlanStep, RecipeAgentRequest, RecipePlan
+from .recipe_types import PlanStep, RecipeAgentRequest, RecipePlan
 
 
 def _plan_keyword(req: RecipeAgentRequest) -> str:
     return _extract_recipe_ingredient(req.text) or _extract_keyword(req.text)
 
 
-def _planner_intent(req: RecipeAgentRequest) -> str:
-    return analyze_recipe_intent(req.text, req.history)
-
-
 def plan_recipe_request_rule(req: RecipeAgentRequest) -> RecipePlan:
     """Rule-based planner (1단계 stub). LLM 실패 시 폴백."""
-    planner_intent = _planner_intent(req)
+    planner_intent = analyze_recipe_intent(req.text, req.history)
     keyword = _plan_keyword(req)
 
     if planner_intent == "recipe.pairing":
@@ -150,7 +145,7 @@ def _normalize_llm_plan(raw: dict[str, Any] | None, req: RecipeAgentRequest) -> 
 def _call_llm_planner(req: RecipeAgentRequest) -> dict[str, Any] | None:
     if not ENABLE_LLM_RECIPE_PLANNER or OpenAI is None or not app_settings.OPENAI_API_KEY:
         return None
-    planner_intent = _planner_intent(req)
+    planner_intent = analyze_recipe_intent(req.text, req.history)
     shown_recipe_ids = sorted(extract_shown_recipe_ids(req.history))
     payload = json.dumps(
         {

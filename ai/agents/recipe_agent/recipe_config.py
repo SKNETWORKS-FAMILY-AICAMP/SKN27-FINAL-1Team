@@ -7,46 +7,6 @@ import re
 #
 AGENT_NAME = "recipe"
 
-#
-# Templates / fields
-#
-TEMPLATE_RECIPE_SEARCH = "RECIPE_SEARCH"
-TEMPLATE_INGREDIENT_RECOMMEND = "INGREDIENT_RECOMMEND"
-TEMPLATE_FRIDGE_RECOMMEND = "FRIDGE_RECOMMEND"
-TEMPLATE_RECIPE_PAIRING = "RECIPE_PAIRING"
-
-SEARCH_TEMPLATE_FIELDS = (
-    "keyword",
-    "recipe_candidates",
-    "selected_recipes",
-    "actions",
-    "sources",
-)
-
-INGREDIENT_TEMPLATE_FIELDS = (
-    "ingredient",
-    "constraints",
-    "recipe_candidates",
-    "selected_recipes",
-    "actions",
-)
-
-FRIDGE_TEMPLATE_FIELDS = (
-    "inventory_status",
-    "user_preferences",
-    "recipe_candidates",
-    "ranked_recipes",
-    "owned_ingredient_count",
-    "missing_ingredient_count",
-    "actions",
-)
-
-TEMPLATE_FIELDS_BY_NAME = {
-    TEMPLATE_RECIPE_SEARCH: SEARCH_TEMPLATE_FIELDS,
-    TEMPLATE_INGREDIENT_RECOMMEND: INGREDIENT_TEMPLATE_FIELDS,
-    TEMPLATE_FRIDGE_RECOMMEND: FRIDGE_TEMPLATE_FIELDS,
-}
-
 MAX_DISPLAY_RECIPES = 3
 
 #
@@ -54,11 +14,6 @@ MAX_DISPLAY_RECIPES = 3
 #
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
-
-#
-# External tool allowlist (used by orchestrator filters)
-#
-EXTERNAL_TOOLS = frozenset({"external_search_tool"})
 
 #
 # Intent classification (data-only)
@@ -88,11 +43,6 @@ RECOMMEND_WORDS = (
 SEARCH_WORDS = ("레시피", "요리법", "요리")
 PAIRING_WORDS = ("같이먹", "함께먹", "곁들임", "어울리는", "이랑먹", "랑먹", "먹기좋은")
 PAIRING_JOSA = re.compile(r".+(?:이랑|랑|와|과|하고).+(?:먹|어울|곁들|좋은)")
-
-#
-# Template selection keywords
-#
-INGREDIENT_KEYWORDS = ("냉장고", "재료", "있는 것", "남은")
 
 #
 # Pairing menu (data-only)
@@ -168,7 +118,6 @@ KEYWORD_TOKEN_STOPWORDS = {
 #
 ENABLE_LLM_RECIPE_PLANNER = True
 ENABLE_LLM_PAIRING = True
-ENABLE_LLM_REVIEWER = False
 
 TOOL_SEARCH_RECIPES = "search_recipes"
 TOOL_RECOMMEND_BY_INGREDIENT = "recommend_by_ingredient"

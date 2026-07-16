@@ -80,6 +80,38 @@ def _rank_recipe_items(keyword: str, items: list[dict[str, Any]]) -> list[dict[s
     return sorted(items, key=score)
 
 
+def _sort_fridge_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        items,
+        key=lambda x: (
+            -x.get("owned_ingredient_count", 0),
+            x.get("missing_ingredient_count", 0),
+            -x.get("final_score", 0),
+        ),
+    )
+
+
+def _exclude_previous_items(items: list[dict[str, Any]], history: list) -> list[dict[str, Any]]:
+    """이전 봇 응답 레시피를 후보에서 제외한다. slots.shown_recipe_ids 우선."""
+    shown_ids = extract_shown_recipe_ids(history)
+    if shown_ids:
+        filtered = [item for item in items if item.get("recipe_id") not in shown_ids]
+        if not filtered:
+            filtered = list(items)
+        return filtered
+
+    # ponytail: history slots가 없으면 문자열 기반 fallback 유지
+    past_bot_texts = " ".join(
+        msg.get("text", "") if isinstance(msg, dict) else getattr(msg, "text", "")
+        for msg in history
+        if (msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")) == "bot"
+    )
+    filtered = [item for item in items if item.get("title", "") not in past_bot_texts]
+    if not filtered:
+        filtered = list(items)
+    return filtered
+
+
 def _apply_josa(word: str, josa_type: str) -> str:
     if not word:
         return ""

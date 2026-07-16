@@ -24,7 +24,7 @@ from .recipe_config import (
     PAIRING_MENU,
     RECIPE_PAIRING_PROMPT,
 )
-from .recipe_utils import _is_relevant_search_result, _rank_recipe_items, _recipe_actions, extract_shown_recipe_ids
+from .recipe_utils import _is_relevant_search_result, _rank_recipe_items
 
 
 @dataclass
@@ -142,27 +142,20 @@ def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
         return ToolResult(ok=False, error=str(e), source="recipe_search")
 
 
-def build_recommend_config_tool(settings_obj: Any = None) -> ToolResult:
-    """settings_obj → RecipeRecommendConfig. ponytail: Legacy 설정 반영. exclude_dislikes는 config 필드 없음 → data sidecar."""
-    try:
-        from dataclasses import replace
+def _build_recommend_config(settings_obj: Any = None) -> tuple[Any, bool]:
+    """settings_obj → (RecipeRecommendConfig, exclude_dislikes)."""
+    from dataclasses import replace
 
-        from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+    from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 
-        config = RecipeRecommendConfig.fridge_consume_preset()
-        exclude_dislikes = True
-        if settings_obj:
-            if not getattr(settings_obj, "expiringFirst", True):
-                config = replace(config, mode="fridge_all")  # type: ignore[arg-type]
-            if not getattr(settings_obj, "excludeDislikes", True):
-                exclude_dislikes = False
-        return ToolResult(
-            ok=True,
-            data={"config": config, "exclude_dislikes": exclude_dislikes},
-            source="recommend_config",
-        )
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="recommend_config")
+    config = RecipeRecommendConfig.fridge_consume_preset()
+    exclude_dislikes = True
+    if settings_obj:
+        if not getattr(settings_obj, "expiringFirst", True):
+            config = replace(config, mode="fridge_all")  # type: ignore[arg-type]
+        if not getattr(settings_obj, "excludeDislikes", True):
+            exclude_dislikes = False
+    return config, exclude_dislikes
 
 
 def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> ToolResult:
@@ -170,95 +163,12 @@ def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> To
     try:
         from app.backend.services.recommendation_service.recommendation_service import recommendation_service
 
-        cfg = build_recommend_config_tool(settings_obj)
-        if not cfg.ok:
-            return ToolResult(ok=False, error=cfg.error, source="recommendation")
-        config = (cfg.data or {})["config"]
+        config, _exclude_dislikes = _build_recommend_config(settings_obj)
         result = recommendation_service.recommend_recipes(db, user_id, config)
         items = result.get("items", [])
         return ToolResult(ok=True, data={"items": items, "total": len(items)}, source="recommendation")
     except Exception as e:
         return ToolResult(ok=False, error=str(e), source="recommendation")
-
-
-def sort_candidates_tool(items: list[dict[str, Any]]) -> ToolResult:
-    """추천 후보를 보유 재료·부족 재료·점수 기준으로 정렬한다."""
-    try:
-        sorted_items = sorted(
-            items,
-            key=lambda x: (
-                -x.get("owned_ingredient_count", 0),
-                x.get("missing_ingredient_count", 0),
-                -x.get("final_score", 0),
-            ),
-        )
-        return ToolResult(ok=True, data={"items": sorted_items, "total": len(sorted_items)}, source="sort_candidates")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="sort_candidates")
-
-
-def exclude_previous_tool(items: list[dict[str, Any]], history: list) -> ToolResult:
-    """이전 봇 응답 레시피를 후보에서 제외한다. slots.shown_recipe_ids 우선."""
-    try:
-        shown_ids = extract_shown_recipe_ids(history)
-        if shown_ids:
-            filtered = [item for item in items if item.get("recipe_id") not in shown_ids]
-            if not filtered:
-                filtered = list(items)
-            return ToolResult(ok=True, data={"items": filtered, "total": len(filtered)}, source="exclude_previous")
-
-        # ponytail: history slots가 없으면 문자열 기반 fallback 유지
-        past_bot_texts = " ".join(
-            msg.get("text", "") if isinstance(msg, dict) else getattr(msg, "text", "")
-            for msg in history
-            if (msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")) == "bot"
-        )
-        filtered = [item for item in items if item.get("title", "") not in past_bot_texts]
-        if not filtered:
-            filtered = list(items)
-        return ToolResult(ok=True, data={"items": filtered, "total": len(filtered)}, source="exclude_previous")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="exclude_previous")
-
-
-def build_actions_tool(items: list[dict[str, Any]]) -> ToolResult:
-    """레시피 후보에서 프론트엔드 Action 목록을 생성한다."""
-    try:
-        actions = _recipe_actions(items)
-        return ToolResult(ok=True, data={"actions": actions, "total": len(actions)}, source="build_actions")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="build_actions")
-
-
-def external_search_tool(keyword: str, query_text: str | None = None) -> ToolResult:
-    """외부 소스(Tavily)로 레시피를 검색하고 요약한다."""
-    try:
-        summary, sources = reply_external_recipe(keyword, query_text)
-        return ToolResult(ok=True, data={"summary": summary, "sources": sources}, source="external_search")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="external_search")
-
-
-def pairing_tool(text: str) -> ToolResult:
-    """음식 조합(곁들임) 메뉴를 조회한다. ponytail: 정적 dict — P5-3에서 Orchestrator가 호출."""
-    try:
-        reply, actions = handle_recipe_pairing(text)
-        return ToolResult(
-            ok=True,
-            data={"reply": reply, "actions": actions},
-            source="pairing",
-        )
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="pairing")
-
-
-def rank_search_candidates_tool(keyword: str, items: list[dict[str, Any]]) -> ToolResult:
-    """검색 후보를 키워드 매칭 점수로 정렬한다. ponytail: _rank_recipe_items 재사용."""
-    try:
-        ranked = _rank_recipe_items(keyword, items)
-        return ToolResult(ok=True, data={"items": ranked, "total": len(ranked)}, source="rank_search")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="rank_search")
 
 
 def search_ingredient_relax_tool(db: Any, ingredient: str) -> ToolResult:

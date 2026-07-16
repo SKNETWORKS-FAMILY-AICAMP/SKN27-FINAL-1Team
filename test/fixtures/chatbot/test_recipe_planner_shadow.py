@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ai.agents.recipe_agent.recipe_planner as planner
-from ai.agents.recipe_agent.recipe_agent import RecipeAgentRequest
+from ai.agents.recipe_agent.recipe_types import RecipeAgentRequest
 from ai.agents.recipe_agent.recipe_config import (
     PLANNER_GOLDEN_CASES,
     TOOL_RECOMMEND_BY_INGREDIENT,
