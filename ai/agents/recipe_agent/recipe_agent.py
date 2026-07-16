@@ -164,6 +164,56 @@ def _note_constraint_issues(state: RecipeExecutionState) -> None:
         state.intermediate["constraint_issues"] = issues
 
 
+@dataclass(frozen=True)
+class RepairTarget:
+    field: str
+    reason: str
+    fallback_tool: str | None = None
+
+
+def build_repair_targets(state: RecipeExecutionState) -> list[RepairTarget]:
+    """P9-1~P9-3 이슈를 RepairTarget으로 변환. 재실행은 P9-5."""
+    targets: list[RepairTarget] = []
+    for key in state.intermediate.get("missing_required_fields") or []:
+        targets.append(RepairTarget(field=key, reason="missing_required_field"))
+
+    list_field = (
+        "ranked_recipes"
+        if state.template == TEMPLATE_FRIDGE_RECOMMEND
+        else "selected_recipes"
+    )
+    for code in state.intermediate.get("integrity_issues") or []:
+        targets.append(RepairTarget(field=list_field, reason=code))
+    for code in state.intermediate.get("constraint_issues") or []:
+        targets.append(RepairTarget(field=list_field, reason=code))
+
+    if state.template in (TEMPLATE_RECIPE_SEARCH, TEMPLATE_INGREDIENT_RECOMMEND):
+        candidates = state.intermediate.get("recipe_candidates")
+        if candidates is not None and not candidates:
+            targets.append(
+                RepairTarget(
+                    field="recipe_candidates",
+                    reason="empty_candidates",
+                    fallback_tool="external_search_tool",
+                )
+            )
+
+    if state.template == TEMPLATE_FRIDGE_RECOMMEND and state.intermediate.get("recommend_error"):
+        targets.append(
+            RepairTarget(
+                field="recipe_candidates",
+                reason=state.intermediate["recommend_error"] or "recommend_failed",
+            )
+        )
+    return targets
+
+
+def _note_repair_targets(state: RecipeExecutionState) -> None:
+    targets = build_repair_targets(state)
+    if targets:
+        state.intermediate["repair_targets"] = targets
+
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -495,6 +545,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
         state.template = TEMPLATE_RECIPE_SEARCH
         _note_missing_required_fields(state)
         _note_integrity_issues(state)
+        _note_repair_targets(state)
         return state
 
     search = search_recipe_tool(state.req.db, keyword)
@@ -513,6 +564,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.template = TEMPLATE_RECIPE_SEARCH
     _note_missing_required_fields(state)
     _note_integrity_issues(state)
+    _note_repair_targets(state)
     return state
 
 
@@ -579,6 +631,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
         _note_missing_required_fields(state)
         _note_integrity_issues(state)
         _note_constraint_issues(state)
+        _note_repair_targets(state)
         return state
 
     tr = search_ingredient_relax_tool(state.req.db, ingredient)
@@ -597,6 +650,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     _note_missing_required_fields(state)
     _note_integrity_issues(state)
     _note_constraint_issues(state)
+    _note_repair_targets(state)
     return state
 
 
@@ -625,6 +679,7 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     _note_missing_required_fields(state)
     _note_integrity_issues(state)
     _note_constraint_issues(state)
+    _note_repair_targets(state)
     return state
 
 
@@ -839,6 +894,7 @@ if __name__ == "__main__":
         assert callable(check_required_fields)
         assert callable(check_recipe_integrity)
         assert callable(check_recommend_constraints)
+        assert callable(build_repair_targets)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -1011,6 +1067,41 @@ if __name__ == "__main__":
                 {"recipe_id": 1, "title": "X", "owned_ingredient_count": -1, "missing_ingredient_count": 0},
             ]
             assert "owned_missing_contradiction:0" in check_recommend_constraints(bad_fridge)
+            miss_kw = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="김치볶음밥 레시피", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            miss_kw.intermediate["missing_required_fields"] = ["keyword"]
+            targets = build_repair_targets(miss_kw)
+            assert any(t.field == "keyword" and t.reason == "missing_required_field" for t in targets)
+            empty_cand = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="없는레시피", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            empty_cand.intermediate["recipe_candidates"] = []
+            targets = build_repair_targets(empty_cand)
+            assert any(
+                t.field == "recipe_candidates"
+                and t.reason == "empty_candidates"
+                and t.fallback_tool == "external_search_tool"
+                for t in targets
+            )
+            rec_err = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="오늘 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                ),
+                template=TEMPLATE_FRIDGE_RECOMMEND,
+            )
+            rec_err.intermediate["recommend_error"] = "db down"
+            targets = build_repair_targets(rec_err)
+            assert any(t.field == "recipe_candidates" and "db down" in t.reason for t in targets)
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
             kw = state.intermediate["keyword"]
