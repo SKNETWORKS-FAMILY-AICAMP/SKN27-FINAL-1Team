@@ -4,13 +4,14 @@ import './Fridge.css'
 
 import imageAlarm from '../../assets/extracted/images/image_alarm.png'
 import imagePutting from '../../assets/extracted/images/image_putting.png'
-import imageDefaultIngredient from '../../assets/extracted/images/image_default_ingredient.webp'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 import { API_URL } from '../../utils/api.js'
+import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/ingredientImages.js'
 import { removeStoredRecipe } from '../../utils/savedRecipes.js'
+import { getFridgeNameClass } from './fridgeName.js'
 
 const FILTER_TYPES = ['전체', '냉장', '냉동', '실온', '소비 임박', '기한 지남']
 
@@ -33,49 +34,17 @@ function getStorageTone(storageMethod = '') {
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
     <span className={`fridge-image-slot ${src ? 'is-filled' : ''} ${className}`}>
-      {src ? <img src={src} alt={alt} /> : null}
+      {src ? (
+        <img src={src} alt={alt} />
+      ) : (
+        <span className="fridge-image-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <path d="M10 34h28M14 31a10 10 0 0 1 20 0M21 18h6M24 18v3" />
+          </svg>
+        </span>
+      )}
     </span>
   )
-}
-
-// 식재료 이미지 파일명을 검색용 키로 정규화합니다.
-function normalizeIngredientImageName(name = '') {
-  return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
-}
-
-
-const INGREDIENT_IMAGE_ALIASES = {
-  계란: '달걀',
-  쇠고기: '소고기',
-  돈육: '돼지고기',
-  고추가루: '고춧가루',
-  케찹: '케첩',
-}
-
-// 이미지 파일명이 다른 동의어를 대표 이미지명으로 맞춥니다.
-function normalizeIngredientImageKey(name = '') {
-  const key = normalizeIngredientImageName(name)
-  return INGREDIENT_IMAGE_ALIASES[key] || key
-}
-
-const ingredientImages = Object.entries(
-  import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
-    eager: true,
-    import: 'default',
-  }),
-)
-  .map(([path, src]) => {
-    const fileName = path.split('/').pop() || ''
-    const name = fileName.replace(/\.[^.]+$/, '')
-    return { name, key: normalizeIngredientImageName(name), src }
-  })
-  .sort((a, b) => b.key.length - a.key.length)
-
-// 재료 이름에 맞는 대표 식재료 이미지를 선택합니다.
-function getIngredientIcon(name = '') {
-  const key = normalizeIngredientImageKey(name)
-  const image = ingredientImages.find((item) => item.key === key)
-  return image?.src || imageDefaultIngredient
 }
 
 // 날짜 문자열을 로컬 Date 객체로 변환합니다.
@@ -149,6 +118,7 @@ function Fridge() {
   const { dialogNode, showAlert } = useAppDialog()
   const location = useLocation()
   const navigate = useNavigate()
+  const ingredientImageCatalog = useIngredientImageCatalog()
   const [ingredients, setIngredients] = useState([])
   const [summary, setSummary] = useState(buildSummary([]))
   const [activeFilter, setActiveFilter] = useState('전체')
@@ -909,11 +879,16 @@ function Fridge() {
                       </div>
                     )}
                     <div className="fridge-item__left">
-                      <ImageSlot className="fridge-item__image" src={getIngredientIcon(item.name)} />
+                      <ImageSlot
+                        className="fridge-item__image"
+                        src={getIngredientImageUrl(ingredientImageCatalog, item.name, item.category)}
+                      />
                     </div>
                     <div className="fridge-item__body">
                       <div className="fridge-item__title">
-                        <h2>{item.name}</h2>
+                      <h2 className={getFridgeNameClass(item.name)} title={item.name}>
+                        {item.name}
+                      </h2>
                         <span className={['fridge-storage-badge', getStorageTone(item.storage_method)].filter(Boolean).join(' ')}>{item.storage_method}</span>
                       </div>
                       <dl>

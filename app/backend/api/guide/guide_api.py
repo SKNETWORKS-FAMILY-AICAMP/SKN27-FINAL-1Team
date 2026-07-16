@@ -1,4 +1,6 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.backend.api.deps import get_current_user, get_current_user_required
@@ -15,6 +17,27 @@ from app.backend.services.guide_service.guide_service import guide_service
 
 
 router = APIRouter(prefix="/guide", tags=["Guide (식재료 가이드)"])
+INGREDIENT_IMAGE_MANIFEST_URL = (
+    "https://firebasestorage.googleapis.com/v0/b/bobbeori.firebasestorage.app/o/"
+    "ingredient-images%2Fmanifests%2Fv1.json?alt=media"
+)
+
+
+@router.get("/images/manifest")
+async def get_ingredient_image_manifest():
+    """브라우저가 Firebase CORS 설정과 무관하게 공개 매니페스트를 읽도록 전달합니다."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(INGREDIENT_IMAGE_MANIFEST_URL)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="식재료 이미지 매니페스트를 불러오지 못했습니다.") from exc
+
+    return Response(
+        content=response.content,
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @router.get("", response_model=GuideListResponse)

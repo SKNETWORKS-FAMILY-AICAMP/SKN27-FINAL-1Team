@@ -342,6 +342,7 @@
 }
 
 .mypage-account-info dd {
+  padding-inline: 12px;
   color: var(--mypage-text);
   font-weight: 700;
   text-align: right;
@@ -352,7 +353,7 @@
 }
 
 .mypage-account-info dd.is-count {
-  padding: 6px 12px;
+  padding-block: 6px;
   border-radius: 999px;
   background: #ffe7e9;
   color: var(--mypage-primary-dark);

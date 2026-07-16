@@ -5,6 +5,7 @@ import './Guide.css'
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import imageGuide from '../../assets/extracted/images/image_guide_v2.webp'
 import { API_URL } from '../../utils/api.js'
+import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/ingredientImages.js'
 
 const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 16
@@ -12,47 +13,6 @@ const GUEST_RECOMMENDATION_PAGE_SIZE = 8
 const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
 const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
-
-function normalizeIngredientImageName(name = '') {
-  return name.replace(/\.[^.]+$/, '').replace(/\s/g, '').toLowerCase()
-}
-
-const ingredientImageModules = {
-  ...import.meta.glob('../../assets/extracted/ingredients/*.{png,jpg,jpeg,webp,svg}', {
-    eager: true,
-    import: 'default',
-  }),
-}
-
-const ingredientImages = Object.entries(ingredientImageModules)
-  .map(([path, src]) => {
-    const fileName = path.split('/').pop() || ''
-    const name = fileName.replace(/\.[^.]+$/, '')
-    return { name, key: normalizeIngredientImageName(name), src }
-  })
-
-const GUIDE_ICON_NAME_ALIASES = {
-  가염버터: '버터',
-  건다시마: '다시마',
-  돼지삼겹살: '삼겹살',
-  무염버터: '버터',
-  미역: '건미역',
-}
-
-function getIngredientIcon(...names) {
-  const candidates = names
-    .flatMap((name) => String(name || '').split(/[,/|;·]/))
-    .map((name) => name.trim())
-    .filter(Boolean)
-
-  for (const candidate of candidates) {
-    const iconName = GUIDE_ICON_NAME_ALIASES[candidate] || candidate
-    const key = normalizeIngredientImageName(iconName)
-    const image = ingredientImages.find((item) => item.key === key)
-    if (image) return image.src
-  }
-  return null
-}
 
 const TIP_DEFINITIONS = [
   { title: '보관방법', key: 'storage_tips', guideType: 'storage', sourceName: 'storage_source_name', sourceUrl: 'storage_source_url' },
@@ -148,12 +108,16 @@ function formatCookingTime(minutes) {
   return minutes == null ? '시간 정보 없음' : `${minutes}분`
 }
 
-function getGuideIcon(ingredient) {
-  return getIngredientIcon(
-    ingredient?.raw_name,
-    ingredient?.name,
-    ingredient?.representative_name,
-    ...(ingredient?.aliases || []),
+function getGuideIcon(catalog, ingredient) {
+  return getIngredientImageUrl(
+    catalog,
+    [
+      ingredient?.raw_name,
+      ingredient?.name,
+      ingredient?.representative_name,
+      ...(ingredient?.aliases || []),
+    ],
+    [ingredient?.middle_category, ingredient?.major_category],
   )
 }
 
@@ -185,6 +149,7 @@ function ImageSlot({ src, alt = '', className = '' }) {
 function Guide() {
   const navigate = useNavigate()
   const { ingredientName } = useParams()
+  const ingredientImageCatalog = useIngredientImageCatalog()
   const selectedCode = ingredientName ? decodeURIComponent(ingredientName) : ''
   const isDetailPage = Boolean(selectedCode)
 
@@ -651,7 +616,7 @@ function Guide() {
         alt=""
         className="guide-ingredient__image"
         label={ingredient.name}
-        src={getGuideIcon(ingredient)}
+        src={getGuideIcon(ingredientImageCatalog, ingredient)}
       />
       <span
         className={`guide-ingredient__name ${
@@ -919,7 +884,7 @@ function Guide() {
                   alt=""
                   className="guide-all-item__image"
                   label={ingredient.name}
-                  src={getGuideIcon(ingredient)}
+                  src={getGuideIcon(ingredientImageCatalog, ingredient)}
                 />
                 <div>
                   <strong>{ingredient.name}</strong>
@@ -970,7 +935,7 @@ function Guide() {
                       alt=""
                       className="guide-detail-visual__image"
                       label={selectedGuide.name}
-                      src={getGuideIcon(selectedGuide)}
+                      src={getGuideIcon(ingredientImageCatalog, selectedGuide)}
                     />
                     <span className="guide-detail-season">
                       <i aria-hidden="true" />

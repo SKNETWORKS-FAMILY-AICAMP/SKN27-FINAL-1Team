@@ -709,6 +709,7 @@ function Mypage() {
       />
       {showOnboarding && (
         <OnboardingModal
+          initialSettings={onboardingSettings}
           onClose={() => {
             setShowOnboarding(false)
             setOnboardingSettings(readOnboardingSettings())
