@@ -64,6 +64,14 @@ SEARCH_TEMPLATE_FIELDS = (
     "sources",
 )
 
+INGREDIENT_TEMPLATE_FIELDS = (
+    "ingredient",
+    "constraints",
+    "recipe_candidates",
+    "selected_recipes",
+    "actions",
+)
+
 
 def build_recipe_response(
     *,
@@ -437,6 +445,11 @@ if __name__ == "__main__":
             "keyword", "recipe_candidates", "selected_recipes", "actions", "sources",
         )
         assert len(set(SEARCH_TEMPLATE_FIELDS)) == len(SEARCH_TEMPLATE_FIELDS)
+
+        assert INGREDIENT_TEMPLATE_FIELDS == (
+            "ingredient", "constraints", "recipe_candidates", "selected_recipes", "actions",
+        )
+        assert len(set(INGREDIENT_TEMPLATE_FIELDS)) == len(INGREDIENT_TEMPLATE_FIELDS)
 
         assert _select_template("recipe.search", "김치볶음밥 레시피") == TEMPLATE_RECIPE_SEARCH
         assert _select_template("recipe.pairing", "파스타와 어울리는 반찬") == TEMPLATE_RECIPE_PAIRING
