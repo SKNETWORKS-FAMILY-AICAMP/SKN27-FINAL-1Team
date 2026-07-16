@@ -334,13 +334,8 @@ def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
     return state
 
 
-ENABLE_LLM_REVIEWER = False  # ponytail: 기본 off. on 시 stub/휴리스틱.
-
-
 def review_recipe_quality(state: RecipeExecutionState, result: RecipeAgentResult) -> list[str]:
-    """보강 지침 목록. 데이터 수정 금지. flag off면 []."""
-    if not ENABLE_LLM_REVIEWER:
-        return []
+    """보강 제안 목록. 데이터 수정 금지. ponytail: 휴리스틱; 실 LLM은 Backlog."""
     notes: list[str] = []
     if not (result.message or "").strip():
         notes.append("empty_message")
@@ -1052,7 +1047,6 @@ if __name__ == "__main__":
         assert callable(build_repair_targets)
         assert callable(apply_repair_targets)
         assert callable(review_recipe_quality)
-        assert ENABLE_LLM_REVIEWER is False
         assert callable(collect_external_jobs)
         assert callable(filter_independent_jobs)
         assert callable(run_independent_external_jobs)
@@ -1289,17 +1283,12 @@ if __name__ == "__main__":
                     history=[], settings_obj=None, intent="recipe.search",
                 ),
             )
-            assert review_recipe_quality(empty_st, empty_res) == []
-            orig_flag = agent.ENABLE_LLM_REVIEWER
-            agent.ENABLE_LLM_REVIEWER = True
-            try:
-                notes = agent.review_recipe_quality(empty_st, empty_res)
-                assert "empty_message" in notes
-                attached = agent._attach_review_notes(empty_st, empty_res)
-                assert attached.message == ""
-                assert attached.meta.get("review_notes") == notes
-            finally:
-                agent.ENABLE_LLM_REVIEWER = orig_flag
+            assert review_recipe_quality(empty_st, empty_res) == ["empty_message"]
+            notes = agent.review_recipe_quality(empty_st, empty_res)
+            assert "empty_message" in notes
+            attached = agent._attach_review_notes(empty_st, empty_res)
+            assert attached.message == ""
+            assert attached.meta.get("review_notes") == notes
 
             empty_jobs_st = RecipeExecutionState(
                 req=RecipeAgentRequest(
