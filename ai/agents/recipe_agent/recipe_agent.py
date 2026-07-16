@@ -214,6 +214,26 @@ def _note_repair_targets(state: RecipeExecutionState) -> None:
         state.intermediate["repair_targets"] = targets
 
 
+def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
+    """필드당 최대 1회 fallback. 전체 fill 재시작 금지. ponytail: external_search만 실제 호출."""
+    repaired: set[str] = set()
+    for target in state.intermediate.get("repair_targets") or []:
+        if target.field in repaired:
+            continue
+        repaired.add(target.field)
+        if target.fallback_tool == "external_search_tool" and target.field == "recipe_candidates":
+            keyword = state.intermediate.get("keyword") or state.intermediate.get("ingredient") or ""
+            ext = external_search_tool(keyword, query_text=state.req.text)
+            summary = (ext.data or {}).get("summary", "") if ext.ok else (ext.error or "")
+            sources = (ext.data or {}).get("sources", []) if ext.ok else []
+            state.intermediate["external_summary"] = summary
+            state.intermediate["sources"] = sources
+            state.steps_done.append("repair_external_search")
+        else:
+            state.steps_done.append(f"repair_skip:{target.field}")
+    return state
+
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -316,6 +336,7 @@ class SearchTemplateEngine:
     def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
         state = RecipeExecutionState(req=req, template=TEMPLATE_RECIPE_SEARCH)
         state = _fill_search_pipeline(state)
+        state = apply_repair_targets(state)
         return _render_search_response(state)
 
 
@@ -325,6 +346,7 @@ class IngredientTemplateEngine:
     def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
         state = RecipeExecutionState(req=req, template=TEMPLATE_INGREDIENT_RECOMMEND)
         state = _fill_ingredient_pipeline(state)
+        state = apply_repair_targets(state)
         return _render_ingredient_response(state)
 
 
@@ -340,6 +362,7 @@ class FridgeTemplateEngine:
             return empty
         state = RecipeExecutionState(req=req, template=TEMPLATE_FRIDGE_RECOMMEND)
         state = _fill_fridge_pipeline(state)
+        state = apply_repair_targets(state)
         return _render_fridge_response(state)
 
 
@@ -725,6 +748,14 @@ def _render_ingredient_response(state: RecipeExecutionState) -> RecipeAgentResul
     if not ingredient:
         return build_recipe_response(message="", intent=state.req.intent)
 
+    if state.intermediate.get("external_summary") is not None:
+        return build_recipe_response(
+            message=state.intermediate["external_summary"],
+            intent=state.req.intent,
+            actions=[],
+            sources=state.intermediate.get("sources") or [],
+        )
+
     if not selected:
         ext = external_search_tool(ingredient, query_text=state.req.text)
         summary = (ext.data or {}).get("summary", "") if ext.ok else (ext.error or "")
@@ -895,6 +926,7 @@ if __name__ == "__main__":
         assert callable(check_recipe_integrity)
         assert callable(check_recommend_constraints)
         assert callable(build_repair_targets)
+        assert callable(apply_repair_targets)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -1102,6 +1134,36 @@ if __name__ == "__main__":
             rec_err.intermediate["recommend_error"] = "db down"
             targets = build_repair_targets(rec_err)
             assert any(t.field == "recipe_candidates" and "db down" in t.reason for t in targets)
+
+            repair_state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="없는레시피xyz", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            repair_state.intermediate["keyword"] = "없는레시피xyz"
+            repair_state.intermediate["recipe_candidates"] = []
+            repair_state.intermediate["selected_recipes"] = []
+            repair_state.intermediate["actions"] = []
+            repair_state.intermediate["sources"] = []
+            repair_state.intermediate["repair_targets"] = [
+                RepairTarget(
+                    field="recipe_candidates",
+                    reason="empty_candidates",
+                    fallback_tool="external_search_tool",
+                ),
+                RepairTarget(
+                    field="recipe_candidates",
+                    reason="empty_candidates_again",
+                    fallback_tool="external_search_tool",
+                ),
+            ]
+            repair_state = agent.apply_repair_targets(repair_state)
+            assert repair_state.steps_done.count("repair_external_search") == 1
+            assert repair_state.intermediate.get("sources")
+            assert repair_state.intermediate.get("external_summary") is not None
+
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
             kw = state.intermediate["keyword"]
