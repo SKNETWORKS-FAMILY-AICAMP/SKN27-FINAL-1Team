@@ -214,6 +214,39 @@ def _note_repair_targets(state: RecipeExecutionState) -> None:
         state.intermediate["repair_targets"] = targets
 
 
+@dataclass(frozen=True)
+class ExternalJob:
+    name: str
+    tool: str
+    kwargs: dict
+    fills_field: str
+
+
+def collect_external_jobs(state: RecipeExecutionState) -> list[ExternalJob]:
+    """외부 호출 후보만 수집. 실행은 P10-3."""
+    if state.template not in (TEMPLATE_RECIPE_SEARCH, TEMPLATE_INGREDIENT_RECOMMEND):
+        return []
+    candidates = state.intermediate.get("recipe_candidates")
+    if candidates is None or candidates:
+        return []
+    if "external_summary" in state.intermediate:
+        return []
+    keyword = state.intermediate.get("keyword") or state.intermediate.get("ingredient") or ""
+    job = ExternalJob(
+        name="external_search",
+        tool="external_search_tool",
+        kwargs={"keyword": keyword, "query_text": state.req.text},
+        fills_field="external_summary",
+    )
+    return [job]
+
+
+def _note_external_jobs(state: RecipeExecutionState) -> None:
+    jobs = collect_external_jobs(state)
+    if jobs:
+        state.intermediate["external_jobs"] = jobs
+
+
 def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
     """필드당 최대 1회 fallback. 전체 fill 재시작 금지. ponytail: external_search만 실제 호출."""
     repaired: set[str] = set()
@@ -608,6 +641,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
         _note_missing_required_fields(state)
         _note_integrity_issues(state)
         _note_repair_targets(state)
+        _note_external_jobs(state)
         return state
 
     search = search_recipe_tool(state.req.db, keyword)
@@ -627,6 +661,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     _note_missing_required_fields(state)
     _note_integrity_issues(state)
     _note_repair_targets(state)
+    _note_external_jobs(state)
     return state
 
 
@@ -694,6 +729,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
         _note_integrity_issues(state)
         _note_constraint_issues(state)
         _note_repair_targets(state)
+        _note_external_jobs(state)
         return state
 
     tr = search_ingredient_relax_tool(state.req.db, ingredient)
@@ -713,6 +749,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     _note_integrity_issues(state)
     _note_constraint_issues(state)
     _note_repair_targets(state)
+    _note_external_jobs(state)
     return state
 
 
@@ -742,6 +779,7 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     _note_integrity_issues(state)
     _note_constraint_issues(state)
     _note_repair_targets(state)
+    _note_external_jobs(state)
     return state
 
 
@@ -968,6 +1006,7 @@ if __name__ == "__main__":
         assert callable(apply_repair_targets)
         assert callable(review_recipe_quality)
         assert ENABLE_LLM_REVIEWER is False
+        assert callable(collect_external_jobs)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -1223,6 +1262,26 @@ if __name__ == "__main__":
                 assert attached.meta.get("review_notes") == notes
             finally:
                 agent.ENABLE_LLM_REVIEWER = orig_flag
+
+            empty_jobs_st = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="없는레시피xyz", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            empty_jobs_st.intermediate["keyword"] = "없는레시피xyz"
+            empty_jobs_st.intermediate["recipe_candidates"] = []
+            jobs = collect_external_jobs(empty_jobs_st)
+            assert len(jobs) == 1
+            assert jobs[0].tool == "external_search_tool"
+            assert jobs[0].fills_field == "external_summary"
+            filled_st = RecipeExecutionState(
+                req=empty_jobs_st.req,
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            filled_st.intermediate["recipe_candidates"] = [{"recipe_id": 1, "title": "A"}]
+            assert collect_external_jobs(filled_st) == []
 
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
