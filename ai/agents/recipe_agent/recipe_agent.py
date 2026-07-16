@@ -247,6 +247,32 @@ def _note_external_jobs(state: RecipeExecutionState) -> None:
         state.intermediate["external_jobs"] = jobs
 
 
+_EXTERNAL_TOOLS = frozenset({"external_search_tool"})
+
+
+def filter_independent_jobs(jobs: list[ExternalJob]) -> list[ExternalJob]:
+    """§7.2 최소 필터. 실행은 P10-3."""
+    out: list[ExternalJob] = []
+    seen_fields: set[str] = set()
+    for job in jobs:
+        if job.tool not in _EXTERNAL_TOOLS:
+            continue
+        if job.fills_field in seen_fields:
+            continue
+        if any(isinstance(v, str) and v in seen_fields for v in job.kwargs.values()):
+            continue
+        seen_fields.add(job.fills_field)
+        out.append(job)
+    return out
+
+
+def _note_independent_external_jobs(state: RecipeExecutionState) -> None:
+    jobs = state.intermediate.get("external_jobs") or []
+    independent = filter_independent_jobs(jobs)
+    if independent:
+        state.intermediate["independent_external_jobs"] = independent
+
+
 def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
     """필드당 최대 1회 fallback. 전체 fill 재시작 금지. ponytail: external_search만 실제 호출."""
     repaired: set[str] = set()
@@ -642,6 +668,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
         _note_integrity_issues(state)
         _note_repair_targets(state)
         _note_external_jobs(state)
+        _note_independent_external_jobs(state)
         return state
 
     search = search_recipe_tool(state.req.db, keyword)
@@ -662,6 +689,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     _note_integrity_issues(state)
     _note_repair_targets(state)
     _note_external_jobs(state)
+    _note_independent_external_jobs(state)
     return state
 
 
@@ -730,6 +758,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
         _note_constraint_issues(state)
         _note_repair_targets(state)
         _note_external_jobs(state)
+        _note_independent_external_jobs(state)
         return state
 
     tr = search_ingredient_relax_tool(state.req.db, ingredient)
@@ -750,6 +779,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     _note_constraint_issues(state)
     _note_repair_targets(state)
     _note_external_jobs(state)
+    _note_independent_external_jobs(state)
     return state
 
 
@@ -780,6 +810,7 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     _note_constraint_issues(state)
     _note_repair_targets(state)
     _note_external_jobs(state)
+    _note_independent_external_jobs(state)
     return state
 
 
@@ -1007,6 +1038,7 @@ if __name__ == "__main__":
         assert callable(review_recipe_quality)
         assert ENABLE_LLM_REVIEWER is False
         assert callable(collect_external_jobs)
+        assert callable(filter_independent_jobs)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -1282,6 +1314,18 @@ if __name__ == "__main__":
             )
             filled_st.intermediate["recipe_candidates"] = [{"recipe_id": 1, "title": "A"}]
             assert collect_external_jobs(filled_st) == []
+            one = [
+                ExternalJob(name="a", tool="external_search_tool", kwargs={}, fills_field="external_summary"),
+            ]
+            assert filter_independent_jobs(one) == one
+            dup = one + [
+                ExternalJob(name="b", tool="external_search_tool", kwargs={}, fills_field="external_summary"),
+            ]
+            assert len(filter_independent_jobs(dup)) == 1
+            bad = [
+                ExternalJob(name="c", tool="not_allowed", kwargs={}, fills_field="other"),
+            ]
+            assert filter_independent_jobs(bad) == []
 
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
