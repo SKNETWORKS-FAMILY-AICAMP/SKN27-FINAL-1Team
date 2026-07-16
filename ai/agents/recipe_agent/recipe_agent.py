@@ -118,12 +118,20 @@ def to_supervisor_state(result: RecipeAgentResult) -> dict[str, Any]:
     }
 
 
+def _fridge_login_guard(req: RecipeAgentRequest) -> RecipeAgentResult | None:
+    """냉장고 추천 비회원 차단. ponytail: LegacyRecipeEngine과 동일 조건."""
+    if _requires_login(req.intent, req.text) and not req.user_id:
+        return build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=req.intent)
+    return None
+
+
 class LegacyRecipeEngine:
     """기존 Handler를 그대로 호출하는 레거시 실행기."""
 
     def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
-        if req.intent == "recipe.recommend" and _requires_login(req.intent, req.text) and not req.user_id:
-            return build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=req.intent)
+        guarded = _fridge_login_guard(req)
+        if guarded is not None:
+            return guarded
 
         if req.intent == "recipe.search":
             reply, actions, sources = handle_recipe_search(req.db, req.text)
@@ -625,6 +633,7 @@ if __name__ == "__main__":
         assert callable(_fill_ingredient_pipeline)
         assert callable(_render_search_response)
         assert callable(_render_ingredient_response)
+        assert callable(_fridge_login_guard)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
