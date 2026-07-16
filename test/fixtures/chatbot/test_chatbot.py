@@ -102,7 +102,7 @@ def test_intent_evaluator_reports_accuracy_and_failures(monkeypatch) -> None:
     report = benchmark_intent_router.evaluate_cases([
         {"text": "감자 보관법", "expected_intent": "ingredient.guide"},
         {"text": "두부 레시피", "expected_intent": "recipe.search"},
-    ])
+    ], workers=1)
 
     assert report["accuracy"] == 0.5
     assert report["correct"] == 1

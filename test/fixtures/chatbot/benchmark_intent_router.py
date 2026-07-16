@@ -5,6 +5,7 @@ import json
 import sys
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -33,42 +34,51 @@ def load_cases(path: Path) -> list[dict[str, Any]]:
     return cases
 
 
-def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
+def _evaluate_case(case: dict[str, Any]) -> dict[str, Any]:
+    """평가 문장 하나를 실제 Supervisor LLM 분류기로 실행합니다."""
+    started_at = time.perf_counter()
+    result = supervisor_service._route_intent_payload_with_llm(
+        case["text"],
+        case.get("history") or [],
+    )
+    return {
+        "text": case["text"],
+        "expected": case["expected_intent"],
+        "predicted": result.get("intent", "general"),
+        "confidence": result.get("confidence", 0.0),
+        "latency": time.perf_counter() - started_at,
+    }
+
+
+def evaluate_cases(cases: list[dict[str, Any]], workers: int = 5) -> dict[str, Any]:
     """실제 Supervisor LLM 분류기로 정확도와 intent별 실패 사례를 계산합니다."""
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+        evaluated = list(executor.map(_evaluate_case, cases))
+
     correct = 0
-    total_latency = 0.0
-    failures = []
     intent_stats = defaultdict(lambda: {"total": 0, "correct": 0})
+    failures = []
 
-    for case in cases:
-        started_at = time.perf_counter()
-        result = supervisor_service._route_intent_payload_with_llm(
-            case["text"],
-            case.get("history") or [],
-        )
-        total_latency += time.perf_counter() - started_at
-
-        expected = case["expected_intent"]
-        predicted = result.get("intent", "general")
+    for result in evaluated:
+        expected = result["expected"]
         intent_stats[expected]["total"] += 1
-        if predicted == expected:
+        if result["predicted"] == expected:
             correct += 1
             intent_stats[expected]["correct"] += 1
-            continue
-
-        failures.append({
-            "text": case["text"],
-            "expected": expected,
-            "predicted": predicted,
-            "confidence": result.get("confidence", 0.0),
-        })
+        else:
+            failures.append({
+                "text": result["text"],
+                "expected": expected,
+                "predicted": result["predicted"],
+                "confidence": result["confidence"],
+            })
 
     total = len(cases)
     return {
         "total": total,
         "correct": correct,
         "accuracy": round(correct / total, 4),
-        "average_latency_seconds": round(total_latency / total, 4),
+        "average_latency_seconds": round(sum(item["latency"] for item in evaluated) / total, 4),
         "per_intent": dict(sorted(intent_stats.items())),
         "failures": failures,
     }
@@ -79,6 +89,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Supervisor LLM intent 분류 정확도를 평가합니다.")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--min-accuracy", type=float, default=0.8)
+    parser.add_argument("--workers", type=int, default=5)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
@@ -86,7 +97,7 @@ def main() -> int:
         print("OPENAI_API_KEY가 없어 실모델 평가를 실행할 수 없습니다.", file=sys.stderr)
         return 2
 
-    report = evaluate_cases(load_cases(args.dataset))
+    report = evaluate_cases(load_cases(args.dataset), workers=args.workers)
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     print(rendered)
 
