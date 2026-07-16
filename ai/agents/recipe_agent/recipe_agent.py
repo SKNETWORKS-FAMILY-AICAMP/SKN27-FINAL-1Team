@@ -72,6 +72,9 @@ INGREDIENT_TEMPLATE_FIELDS = (
     "actions",
 )
 
+CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
+CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
+
 
 def build_recipe_response(
     *,
@@ -283,6 +286,33 @@ def rank_search_candidates_tool(keyword: str, items: list[dict[str, Any]]) -> To
         return ToolResult(ok=False, error=str(e), source="rank_search")
 
 
+def search_ingredient_relax_tool(db: Any, ingredient: str) -> ToolResult:
+    """주재료+초급+30분 → 주재료만 순으로 검색한다. ponytail: Legacy 완화 순서 고정."""
+    try:
+        from .recipe_handlers import recipe_search_service
+        from .recipe_utils import _rank_recipe_items
+
+        result = recipe_search_service.search_recipes(
+            db=db, ingredient=ingredient, difficulty="초급", cooking_time_label="30분이내",
+            main_ingredient_only=True, page=1, page_size=10,
+        )
+        items = _rank_recipe_items(ingredient, result["items"])
+        constraints = dict(CONSTRAINT_EASY_30)
+        if not items:
+            result = recipe_search_service.search_recipes(
+                db=db, ingredient=ingredient, main_ingredient_only=True, page=1, page_size=10,
+            )
+            items = _rank_recipe_items(ingredient, result["items"])
+            constraints = dict(CONSTRAINT_INGREDIENT_ONLY)
+        return ToolResult(
+            ok=True,
+            data={"items": items, "total": len(items), "constraints": constraints},
+            source="ingredient_relax",
+        )
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="ingredient_relax")
+
+
 def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     """내부 검색 단계로 SEARCH_TEMPLATE_FIELDS를 채운다. 조리시간 질문은 외부 검색으로 조기 분기."""
     from .recipe_utils import _extract_keyword, _extract_recipe_ingredient, _is_cooking_time_question
@@ -366,6 +396,33 @@ def _render_search_response(state: RecipeExecutionState) -> RecipeAgentResult:
         actions=actions,
         sources=[],
     )
+
+
+def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
+    """특정 재료 추천 intermediate를 채운다. selected/actions는 P7-3/P7-4."""
+    from .recipe_utils import _extract_recipe_ingredient
+
+    ingredient = _extract_recipe_ingredient(state.req.text) or ""
+    state.intermediate["ingredient"] = ingredient
+    state.steps_done.append("extract_ingredient")
+
+    if not ingredient:
+        state.intermediate["constraints"] = {}
+        state.intermediate["recipe_candidates"] = []
+        state.intermediate["selected_recipes"] = []
+        state.intermediate["actions"] = []
+        state.template = TEMPLATE_INGREDIENT_RECOMMEND
+        return state
+
+    tr = search_ingredient_relax_tool(state.req.db, ingredient)
+    data = tr.data or {}
+    state.intermediate["constraints"] = data.get("constraints") or {}
+    state.intermediate["recipe_candidates"] = (data.get("items") or []) if tr.ok else []
+    state.intermediate["selected_recipes"] = []
+    state.intermediate["actions"] = []
+    state.steps_done.append("relax_search")
+    state.template = TEMPLATE_INGREDIENT_RECOMMEND
+    return state
 
 
 def run_recipe_agent(
@@ -476,7 +533,9 @@ if __name__ == "__main__":
         assert isinstance(_select_engine("recipe.search"), SearchTemplateEngine)
         assert isinstance(_select_engine("recipe.recommend"), LegacyRecipeEngine)
         assert callable(rank_search_candidates_tool)
+        assert callable(search_ingredient_relax_tool)
         assert callable(_fill_search_pipeline)
+        assert callable(_fill_ingredient_pipeline)
         assert callable(_render_search_response)
 
     def _test_behavior():
@@ -486,6 +545,7 @@ if __name__ == "__main__":
         orig_recommend = agent.handle_recipe_recommend
         orig_search_tool = agent.search_recipe_tool
         orig_external = agent.external_search_tool
+        orig_relax = agent.search_ingredient_relax_tool
 
         def fake_recommend(
             db: Any,
@@ -629,10 +689,37 @@ if __name__ == "__main__":
             assert _select_template("recipe.recommend", "오늘 뭐 해먹지?") == TEMPLATE_INGREDIENT_RECOMMEND
             assert _select_template("recipe.pairing", "김치볶음밥이랑 먹기 좋은 음식") == TEMPLATE_RECIPE_PAIRING
             assert _select_template("recipe.search", "없는레시피xyz") == TEMPLATE_RECIPE_SEARCH
+
+            agent.search_ingredient_relax_tool = lambda db, ingredient: ToolResult(
+                ok=True,
+                data={
+                    "items": [{"recipe_id": 2, "title": "두부찌개"}],
+                    "total": 1,
+                    "constraints": dict(CONSTRAINT_EASY_30),
+                },
+                source="ingredient_relax",
+            )
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="두부로 뭐 해먹지?",
+                    db=None,
+                    user_id=1,
+                    history=[],
+                    settings_obj=None,
+                    intent="recipe.recommend",
+                ),
+            )
+            state = agent._fill_ingredient_pipeline(state)
+            assert set(INGREDIENT_TEMPLATE_FIELDS) <= set(state.intermediate)
+            assert state.intermediate["ingredient"]
+            assert state.intermediate["recipe_candidates"]
+            assert state.intermediate["constraints"] == CONSTRAINT_EASY_30
+            assert state.template == TEMPLATE_INGREDIENT_RECOMMEND
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
             agent.external_search_tool = orig_external
+            agent.search_ingredient_relax_tool = orig_relax
 
     _test_contract()
     _test_behavior()
