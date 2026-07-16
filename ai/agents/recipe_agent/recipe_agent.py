@@ -276,13 +276,26 @@ def rank_search_candidates_tool(keyword: str, items: list[dict[str, Any]]) -> To
 
 
 def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
-    """내부 검색 단계로 SEARCH_TEMPLATE_FIELDS를 채운다. ponytail: 엔진 미연결. P6-4에서 사용."""
-    from .recipe_utils import _extract_keyword, _extract_recipe_ingredient
+    """내부 검색 단계로 SEARCH_TEMPLATE_FIELDS를 채운다. 조리시간 질문은 외부 검색으로 조기 분기."""
+    from .recipe_utils import _extract_keyword, _extract_recipe_ingredient, _is_cooking_time_question
 
     text = state.req.text
     keyword = _extract_recipe_ingredient(text) or _extract_keyword(text)
     state.intermediate["keyword"] = keyword
     state.steps_done.append("extract_keyword")
+
+    if _is_cooking_time_question(text):
+        ext = external_search_tool(keyword, query_text=text)
+        summary = (ext.data or {}).get("summary", "") if ext.ok else (ext.error or "")
+        sources = (ext.data or {}).get("sources", []) if ext.ok else []
+        state.intermediate["recipe_candidates"] = []
+        state.intermediate["selected_recipes"] = []
+        state.intermediate["actions"] = []
+        state.intermediate["sources"] = sources
+        state.intermediate["external_summary"] = summary
+        state.steps_done.append("external_cooking_time")
+        state.template = TEMPLATE_RECIPE_SEARCH
+        return state
 
     search = search_recipe_tool(state.req.db, keyword)
     candidates = (search.data or {}).get("items", []) if search.ok else []
@@ -302,19 +315,33 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
 
 
 def _render_search_response(state: RecipeExecutionState) -> RecipeAgentResult:
-    """SEARCH_TEMPLATE_FIELDS로 검색 응답을 조립한다. ponytail: 엔진 미연결. P6-4에서 사용."""
+    """SEARCH_TEMPLATE_FIELDS로 검색 응답을 조립한다. 0건/조리시간은 external_search_tool fallback."""
     keyword = state.intermediate.get("keyword") or ""
     selected = state.intermediate.get("selected_recipes") or []
 
-    if not selected:
-        # ponytail: 외부 fallback은 P6-5. 지금은 빈 골격만.
-        state.intermediate["actions"] = []
-        state.intermediate["sources"] = []
+    if state.intermediate.get("external_summary") is not None:
+        summary = state.intermediate["external_summary"]
+        sources = state.intermediate.get("sources") or []
         return build_recipe_response(
-            message=f"{keyword} 관련 레시피를 찾지 못했어요." if keyword else "관련 레시피를 찾지 못했어요.",
+            message=summary,
             intent=state.req.intent,
             actions=[],
-            sources=[],
+            sources=sources,
+        )
+
+    if not selected:
+        ext = external_search_tool(keyword, query_text=state.req.text)
+        summary = (ext.data or {}).get("summary", "") if ext.ok else (
+            ext.error or (f"{keyword} 관련 레시피를 찾지 못했어요." if keyword else "관련 레시피를 찾지 못했어요.")
+        )
+        sources = (ext.data or {}).get("sources", []) if ext.ok else []
+        state.intermediate["actions"] = []
+        state.intermediate["sources"] = sources
+        return build_recipe_response(
+            message=summary,
+            intent=state.req.intent,
+            actions=[],
+            sources=sources,
         )
 
     titles = [item.get("title") or "" for item in selected]
@@ -445,6 +472,7 @@ if __name__ == "__main__":
 
         orig_recommend = agent.handle_recipe_recommend
         orig_search_tool = agent.search_recipe_tool
+        orig_external = agent.external_search_tool
 
         def fake_recommend(
             db: Any,
@@ -462,8 +490,19 @@ if __name__ == "__main__":
                 source="recipe_search",
             )
 
+        def fake_external(keyword: str, query_text: str | None = None) -> ToolResult:
+            return ToolResult(
+                ok=True,
+                data={
+                    "summary": f"{keyword} 웹 검색",
+                    "sources": [{"title": "출처", "url": "https://example.com"}],
+                },
+                source="external_search",
+            )
+
         agent.handle_recipe_recommend = fake_recommend
         agent.search_recipe_tool = fake_search_tool
+        agent.external_search_tool = fake_external
         try:
             r = agent.run_recipe_agent("김치볶음밥 레시피", db=None, intent="recipe.search")
             assert isinstance(_select_engine("recipe.search"), SearchTemplateEngine)
@@ -527,8 +566,15 @@ if __name__ == "__main__":
             )
             r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
             _check_output_contract(r)
+            assert "웹 검색" in r["response_text"]
+            assert r["sources"] and r["sources"][0]["url"] == "https://example.com"
             assert r["actions"] == []
-            assert "찾지 못했어요" in r["response_text"]
+
+            r = agent.run_recipe_agent("감자튀김 에어프라이기 시간", db=None, intent="recipe.search")
+            _check_output_contract(r)
+            assert "웹 검색" in r["response_text"]
+            assert r["sources"]
+            assert r["actions"] == []
 
             # -- P0-4: Supervisor 통합 기준선 --
             agent.search_recipe_tool = fake_search_tool
@@ -573,6 +619,7 @@ if __name__ == "__main__":
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
+            agent.external_search_tool = orig_external
 
     _test_contract()
     _test_behavior()
