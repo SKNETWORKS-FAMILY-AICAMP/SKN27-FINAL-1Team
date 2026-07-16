@@ -196,9 +196,24 @@ class IngredientTemplateEngine:
         return _render_ingredient_response(state)
 
 
+class FridgeTemplateEngine:
+    """TEMPLATE_FRIDGE_RECOMMEND를 guard + pipeline + renderer로 채우는 실행기."""
+
+    def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
+        guarded = _fridge_login_guard(req)
+        if guarded is not None:
+            return guarded
+        empty = _fridge_empty_guard(req)
+        if empty is not None:
+            return empty
+        state = RecipeExecutionState(req=req, template=TEMPLATE_FRIDGE_RECOMMEND)
+        state = _fill_fridge_pipeline(state)
+        return _render_fridge_response(state)
+
+
 def _select_engine(
     intent: str, text: str = "",
-) -> LegacyRecipeEngine | PairingTemplateEngine | SearchTemplateEngine | IngredientTemplateEngine:
+) -> LegacyRecipeEngine | PairingTemplateEngine | SearchTemplateEngine | IngredientTemplateEngine | FridgeTemplateEngine:
     """intent + text에 따라 실행기를 선택한다."""
     if intent == "recipe.pairing":
         return PairingTemplateEngine()
@@ -206,6 +221,8 @@ def _select_engine(
         return SearchTemplateEngine()
     if intent == "recipe.recommend" and _extract_recipe_ingredient(text):
         return IngredientTemplateEngine()
+    if intent == "recipe.recommend":
+        return FridgeTemplateEngine()
     return LegacyRecipeEngine()
 
 
@@ -711,8 +728,9 @@ if __name__ == "__main__":
         assert isinstance(_select_engine("recipe.pairing"), PairingTemplateEngine)
         assert isinstance(_select_engine("recipe.search"), SearchTemplateEngine)
         assert isinstance(_select_engine("recipe.recommend", "두부로 뭐 해먹지?"), IngredientTemplateEngine)
-        assert isinstance(_select_engine("recipe.recommend", "오늘 뭐 해먹지?"), LegacyRecipeEngine)
+        assert isinstance(_select_engine("recipe.recommend", "오늘 뭐 해먹지?"), FridgeTemplateEngine)
         assert hasattr(IngredientTemplateEngine(), "run")
+        assert hasattr(FridgeTemplateEngine(), "run")
         assert callable(rank_search_candidates_tool)
         assert callable(search_ingredient_relax_tool)
         assert callable(_fill_search_pipeline)
@@ -771,6 +789,9 @@ if __name__ == "__main__":
                 source="ingredient_relax",
             )
 
+        import ai.agents.inventory_agent.inventory_agent as inv
+
+        orig_empty = inv.is_inventory_empty
         agent.handle_recipe_recommend = fake_recommend
         agent.search_recipe_tool = fake_search_tool
         agent.external_search_tool = fake_external
@@ -793,12 +814,39 @@ if __name__ == "__main__":
             assert r["sources"] == []
             _check_output_contract(r)
 
-            r = agent.run_recipe_agent("오늘 뭐 해먹지?", db=None, user_id=1)
-            assert r["response_text"].startswith("recommend:")
+            inv.is_inventory_empty = lambda **kwargs: False
+            agent.recommend_recipe_tool = lambda db, user_id, settings_obj=None: ToolResult(
+                ok=True,
+                data={
+                    "items": [
+                        {
+                            "recipe_id": 10,
+                            "title": "계란볶음밥",
+                            "owned_ingredient_count": 3,
+                            "missing_ingredient_count": 0,
+                            "final_score": 0.9,
+                        },
+                    ],
+                    "total": 1,
+                },
+                source="recommendation",
+            )
+            r = agent.run_recipe_agent("오늘 뭐 해먹지?", db=None, user_id=1, intent="recipe.recommend")
+            assert isinstance(_select_engine("recipe.recommend", "오늘 뭐 해먹지?"), FridgeTemplateEngine)
+            assert "완벽하게" in r["response_text"]
+            assert "계란볶음밥" in r["response_text"]
+            assert r["actions"] and r["actions"][0]["url"] == "/recipes/10"
+            _check_output_contract(r)
 
             r = agent.run_recipe_agent("오늘 뭐 해먹지?", db=None, user_id=None, intent="recipe.recommend")
             assert LOGIN_REQUIRED_REPLY in r["response_text"]
             assert r["actions"] == [] and r["sources"] == []
+            _check_output_contract(r)
+
+            inv.is_inventory_empty = lambda **kwargs: True
+            r = agent.run_recipe_agent("오늘 뭐 해먹지?", db=None, user_id=1, intent="recipe.recommend")
+            assert inv.EMPTY_INVENTORY_REPLY in r["response_text"]
+            assert r["actions"] == []
             _check_output_contract(r)
 
             assert "placeholder" not in r["response_text"]
@@ -986,20 +1034,15 @@ if __name__ == "__main__":
             state = agent._fill_ingredient_pipeline(state)
             assert state.intermediate["selected_recipes"] == state.intermediate["recipe_candidates"][:3]
 
-            import ai.agents.inventory_agent.inventory_agent as inv
-            orig_empty = inv.is_inventory_empty
             inv.is_inventory_empty = lambda **kwargs: True
-            try:
-                req = RecipeAgentRequest(
-                    text="오늘 뭐 해먹지?", db=None, user_id=1,
-                    history=[], settings_obj=None, intent="recipe.recommend",
-                )
-                guarded = agent._fridge_empty_guard(req)
-                assert guarded is not None
-                assert inv.EMPTY_INVENTORY_REPLY in guarded.message
-                assert guarded.actions == []
-            finally:
-                inv.is_inventory_empty = orig_empty
+            req = RecipeAgentRequest(
+                text="오늘 뭐 해먹지?", db=None, user_id=1,
+                history=[], settings_obj=None, intent="recipe.recommend",
+            )
+            guarded = agent._fridge_empty_guard(req)
+            assert guarded is not None
+            assert inv.EMPTY_INVENTORY_REPLY in guarded.message
+            assert guarded.actions == []
 
             class FakeSettings:
                 expiringFirst = False
@@ -1075,6 +1118,7 @@ if __name__ == "__main__":
             agent.external_search_tool = orig_external
             agent.search_ingredient_relax_tool = orig_relax
             agent.recommend_recipe_tool = orig_recommend_tool
+            inv.is_inventory_empty = orig_empty
 
     _test_contract()
     _test_behavior()
