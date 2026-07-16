@@ -430,6 +430,57 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     return state
 
 
+def _render_ingredient_response(state: RecipeExecutionState) -> RecipeAgentResult:
+    """INGREDIENT_TEMPLATE_FIELDS로 특정 재료 추천 응답을 조립한다."""
+    from urllib.parse import quote
+    from .recipe_utils import _apply_josa
+
+    ingredient = state.intermediate.get("ingredient") or ""
+    selected = state.intermediate.get("selected_recipes") or []
+    constraints = state.intermediate.get("constraints") or {}
+
+    if not ingredient:
+        return build_recipe_response(message="", intent=state.req.intent)
+
+    if not selected:
+        ext = external_search_tool(ingredient, query_text=state.req.text)
+        summary = (ext.data or {}).get("summary", "") if ext.ok else (ext.error or "")
+        state.intermediate["actions"] = []
+        return build_recipe_response(
+            message=summary,
+            intent=state.req.intent,
+            actions=[],
+            sources=[],
+        )
+
+    list_action = {
+        "label": f"{ingredient} 레시피 더 보기",
+        "url": f"/recipes?ingredient={quote(ingredient)}",
+        "data": {"ingredient": ingredient},
+    }
+    actions_tr = build_actions_tool(selected)
+    actions = (actions_tr.data or {}).get("actions", []) if actions_tr.ok else []
+    actions = actions + [list_action]
+    state.intermediate["actions"] = actions
+
+    is_easy = constraints == CONSTRAINT_EASY_30
+    prefix = (
+        f"{_apply_josa(ingredient, '이가')} 주재료인 30분 이내 초급 레시피는 "
+        if is_easy
+        else f"{_apply_josa(ingredient, '이가')} 주재료인 레시피는 "
+    )
+    titles = [item.get("title") or "" for item in selected]
+    reply = prefix + "\n" + "\n".join(
+        f"{index + 1}. {title}" for index, title in enumerate(titles)
+    )
+    return build_recipe_response(
+        message=reply,
+        intent=state.req.intent,
+        actions=actions,
+        sources=[],
+    )
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -542,6 +593,7 @@ if __name__ == "__main__":
         assert callable(_fill_search_pipeline)
         assert callable(_fill_ingredient_pipeline)
         assert callable(_render_search_response)
+        assert callable(_render_ingredient_response)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -722,6 +774,34 @@ if __name__ == "__main__":
             assert state.intermediate["selected_recipes"][0]["title"] == "두부찌개"
             assert state.intermediate["constraints"] == CONSTRAINT_EASY_30
             assert state.template == TEMPLATE_INGREDIENT_RECOMMEND
+            result = agent._render_ingredient_response(state)
+            out = to_supervisor_state(result)
+            assert "30분 이내 초급 레시피는" in out["response_text"]
+            assert "1. 두부찌개" in out["response_text"]
+            assert any(a.get("url") == "/recipes/2" for a in out["actions"])
+            assert any("레시피 더 보기" in a.get("label", "") for a in out["actions"])
+
+            agent.search_ingredient_relax_tool = lambda db, ingredient: ToolResult(
+                ok=True,
+                data={"items": [], "total": 0, "constraints": {}},
+                source="ingredient_relax",
+            )
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="두부로 뭐 해먹지?",
+                    db=None,
+                    user_id=1,
+                    history=[],
+                    settings_obj=None,
+                    intent="recipe.recommend",
+                ),
+            )
+            state = agent._fill_ingredient_pipeline(state)
+            result = agent._render_ingredient_response(state)
+            out = to_supervisor_state(result)
+            assert "웹 검색" in out["response_text"]
+            assert out["actions"] == []
+            assert out["sources"] == []
 
             agent.search_ingredient_relax_tool = lambda db, ingredient: ToolResult(
                 ok=True,
