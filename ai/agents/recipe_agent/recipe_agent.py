@@ -237,17 +237,38 @@ def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
         return ToolResult(ok=False, error=str(e), source="recipe_search")
 
 
+def build_recommend_config_tool(settings_obj: Any = None) -> ToolResult:
+    """settings_obj → RecipeRecommendConfig. ponytail: Legacy 설정 반영. exclude_dislikes는 config 필드 없음 → data sidecar."""
+    try:
+        from dataclasses import replace
+
+        from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+
+        config = RecipeRecommendConfig.fridge_consume_preset()
+        exclude_dislikes = True
+        if settings_obj:
+            if not getattr(settings_obj, "expiringFirst", True):
+                config = replace(config, mode="fridge_all")  # type: ignore[arg-type]
+            if not getattr(settings_obj, "excludeDislikes", True):
+                exclude_dislikes = False
+        return ToolResult(
+            ok=True,
+            data={"config": config, "exclude_dislikes": exclude_dislikes},
+            source="recommend_config",
+        )
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="recommend_config")
+
+
 def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> ToolResult:
     """recommendation_service를 ToolResult로 감싼다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
     try:
         from .recipe_handlers import recommendation_service
-        from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
-        config = RecipeRecommendConfig.fridge_consume_preset()
-        if settings_obj:
-            if not getattr(settings_obj, "expiringFirst", True):
-                config.mode = "fridge_all"
-            if not getattr(settings_obj, "excludeDislikes", True):
-                config.exclude_dislikes = False
+
+        cfg = build_recommend_config_tool(settings_obj)
+        if not cfg.ok:
+            return ToolResult(ok=False, error=cfg.error, source="recommendation")
+        config = (cfg.data or {})["config"]
         result = recommendation_service.recommend_recipes(db, user_id, config)
         items = result.get("items", [])
         return ToolResult(ok=True, data={"items": items, "total": len(items)}, source="recommendation")
@@ -624,6 +645,7 @@ if __name__ == "__main__":
 
         assert callable(search_recipe_tool)
         assert callable(recommend_recipe_tool)
+        assert callable(build_recommend_config_tool)
         assert callable(sort_candidates_tool)
         assert callable(exclude_previous_tool)
         assert callable(build_actions_tool)
@@ -920,6 +942,20 @@ if __name__ == "__main__":
                 assert guarded.actions == []
             finally:
                 inv.is_inventory_empty = orig_empty
+
+            class FakeSettings:
+                expiringFirst = False
+                excludeDislikes = False
+
+            tr = agent.build_recommend_config_tool(FakeSettings())
+            assert tr.ok
+            assert tr.data["config"].mode == "fridge_all"
+            assert tr.data["exclude_dislikes"] is False
+
+            tr_default = agent.build_recommend_config_tool(None)
+            assert tr_default.ok
+            assert tr_default.data["config"].mode == "fridge_consume"
+            assert tr_default.data["exclude_dislikes"] is True
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
