@@ -56,6 +56,14 @@ TEMPLATE_INGREDIENT_RECOMMEND = "INGREDIENT_RECOMMEND"
 TEMPLATE_FRIDGE_RECOMMEND = "FRIDGE_RECOMMEND"
 TEMPLATE_RECIPE_PAIRING = "RECIPE_PAIRING"
 
+SEARCH_TEMPLATE_FIELDS = (
+    "keyword",
+    "recipe_candidates",
+    "selected_recipes",
+    "actions",
+    "sources",
+)
+
 
 def build_recipe_response(
     *,
@@ -318,6 +326,11 @@ if __name__ == "__main__":
 
         templates = {TEMPLATE_RECIPE_SEARCH, TEMPLATE_INGREDIENT_RECOMMEND, TEMPLATE_FRIDGE_RECOMMEND, TEMPLATE_RECIPE_PAIRING}
         assert len(templates) == 4
+
+        assert SEARCH_TEMPLATE_FIELDS == (
+            "keyword", "recipe_candidates", "selected_recipes", "actions", "sources",
+        )
+        assert len(set(SEARCH_TEMPLATE_FIELDS)) == len(SEARCH_TEMPLATE_FIELDS)
 
         assert _select_template("recipe.search", "김치볶음밥 레시피") == TEMPLATE_RECIPE_SEARCH
         assert _select_template("recipe.pairing", "파스타와 어울리는 반찬") == TEMPLATE_RECIPE_PAIRING
