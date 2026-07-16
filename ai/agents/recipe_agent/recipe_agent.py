@@ -114,7 +114,7 @@ class LegacyRecipeEngine:
 
 
 class PairingTemplateEngine:
-    """TEMPLATE_RECIPE_PAIRING 필드를 pairing_tool로 채우는 실행기. ponytail: P5-3에서 _select_engine 연결."""
+    """TEMPLATE_RECIPE_PAIRING 필드를 pairing_tool로 채우는 실행기. _select_engine이 recipe.pairing에 연결."""
 
     def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
         tr = pairing_tool(req.text)
@@ -132,8 +132,10 @@ class PairingTemplateEngine:
         )
 
 
-def _select_engine(intent: str) -> LegacyRecipeEngine:
-    """intent에 따라 실행기를 선택한다. ponytail: 현재 모든 intent가 Legacy를 반환. 신규 Orchestrator 추가 시 여기에 분기."""
+def _select_engine(intent: str) -> LegacyRecipeEngine | PairingTemplateEngine:
+    """intent에 따라 실행기를 선택한다."""
+    if intent == "recipe.pairing":
+        return PairingTemplateEngine()
     return LegacyRecipeEngine()
 
 
@@ -338,6 +340,9 @@ if __name__ == "__main__":
         assert callable(handle_recipe_pairing)
         assert callable(pairing_tool)
         assert hasattr(PairingTemplateEngine(), "run")
+        assert isinstance(_select_engine("recipe.pairing"), PairingTemplateEngine)
+        assert isinstance(_select_engine("recipe.search"), LegacyRecipeEngine)
+        assert isinstance(_select_engine("recipe.recommend"), LegacyRecipeEngine)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
@@ -386,26 +391,12 @@ if __name__ == "__main__":
             assert "placeholder" not in r["response_text"]
 
             r = agent.run_recipe_agent("김치볶음밥이랑 먹기 좋은 음식", db=None, intent="recipe.pairing")
+            assert isinstance(_select_engine("recipe.pairing"), PairingTemplateEngine)
             assert "김치볶음밥" in r["response_text"]
             assert "계란국" in r["response_text"]
             assert r["actions"] == []
             assert r["sources"] == []
             _check_output_contract(r)
-
-            engine_out = to_supervisor_state(
-                PairingTemplateEngine().run(
-                    RecipeAgentRequest(
-                        text="김치볶음밥이랑 먹기 좋은 음식",
-                        db=None,
-                        user_id=None,
-                        history=[],
-                        settings_obj=None,
-                        intent="recipe.pairing",
-                    )
-                )
-            )
-            assert engine_out["response_text"] == r["response_text"]
-            assert engine_out["actions"] == r["actions"]
 
             agent.handle_recipe_search = lambda db, text: ("결과 없음", [], [])
             r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
