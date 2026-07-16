@@ -290,6 +290,38 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     return state
 
 
+def _render_search_response(state: RecipeExecutionState) -> RecipeAgentResult:
+    """SEARCH_TEMPLATE_FIELDS로 검색 응답을 조립한다. ponytail: 엔진 미연결. P6-4에서 사용."""
+    keyword = state.intermediate.get("keyword") or ""
+    selected = state.intermediate.get("selected_recipes") or []
+
+    if not selected:
+        # ponytail: 외부 fallback은 P6-5. 지금은 빈 골격만.
+        state.intermediate["actions"] = []
+        state.intermediate["sources"] = []
+        return build_recipe_response(
+            message=f"{keyword} 관련 레시피를 찾지 못했어요." if keyword else "관련 레시피를 찾지 못했어요.",
+            intent=state.req.intent,
+            actions=[],
+            sources=[],
+        )
+
+    titles = [item.get("title") or "" for item in selected]
+    reply = f"{keyword} 관련 레시피예요.\n" + "\n".join(
+        f"{index + 1}. {title}" for index, title in enumerate(titles)
+    )
+    actions_tr = build_actions_tool(selected)
+    actions = (actions_tr.data or {}).get("actions", []) if actions_tr.ok else []
+    state.intermediate["actions"] = actions
+    state.intermediate["sources"] = []
+    return build_recipe_response(
+        message=reply,
+        intent=state.req.intent,
+        actions=actions,
+        sources=[],
+    )
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -394,6 +426,7 @@ if __name__ == "__main__":
         assert isinstance(_select_engine("recipe.recommend"), LegacyRecipeEngine)
         assert callable(rank_search_candidates_tool)
         assert callable(_fill_search_pipeline)
+        assert callable(_render_search_response)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
@@ -471,6 +504,13 @@ if __name__ == "__main__":
                 assert state.intermediate["keyword"]
                 assert len(state.intermediate["selected_recipes"]) <= 3
                 assert state.template == TEMPLATE_RECIPE_SEARCH
+                result = agent._render_search_response(state)
+                out = to_supervisor_state(result)
+                kw = state.intermediate["keyword"]
+                assert f"{kw} 관련 레시피예요." in out["response_text"]
+                assert "1. 김치볶음밥" in out["response_text"]
+                assert out["actions"] and out["actions"][0]["url"] == "/recipes/1"
+                assert out["sources"] == []
             finally:
                 agent.search_recipe_tool = orig_search_tool
 
