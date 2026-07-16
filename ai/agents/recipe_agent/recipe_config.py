@@ -163,3 +163,71 @@ KEYWORD_TOKEN_STOPWORDS = {
     "어떡해",
 }
 
+#
+# Planner (public tools + LLM)
+#
+ENABLE_LLM_RECIPE_PLANNER = True
+
+TOOL_SEARCH_RECIPES = "search_recipes"
+TOOL_RECOMMEND_BY_INGREDIENT = "recommend_by_ingredient"
+TOOL_RECOMMEND_FROM_FRIDGE = "recommend_from_fridge"
+TOOL_SEARCH_EXTERNAL = "search_external"
+TOOL_SUGGEST_PAIRING = "suggest_pairing"
+
+WHEN_ALWAYS = "always"
+WHEN_PREV_EMPTY = "prev_empty"
+
+PUBLIC_TOOL_NAMES = frozenset({
+    TOOL_SEARCH_RECIPES,
+    TOOL_RECOMMEND_BY_INGREDIENT,
+    TOOL_RECOMMEND_FROM_FRIDGE,
+    TOOL_SEARCH_EXTERNAL,
+    TOOL_SUGGEST_PAIRING,
+})
+
+TOOL_ARGS_WHITELIST: dict[str, frozenset[str]] = {
+    TOOL_SEARCH_RECIPES: frozenset({"keyword"}),
+    TOOL_RECOMMEND_BY_INGREDIENT: frozenset({"ingredient"}),
+    TOOL_RECOMMEND_FROM_FRIDGE: frozenset(),
+    TOOL_SEARCH_EXTERNAL: frozenset({"keyword", "query_text"}),
+    TOOL_SUGGEST_PAIRING: frozenset({"text"}),
+}
+
+RECIPE_PLANNER_PROMPT = """너는 밥벌이 레시피 에이전트의 실행 계획(planner)이다.
+사용자 요청에 맞는 도구 실행 순서를 JSON으로만 반환한다.
+
+허용 도구 (이 이름만 사용):
+- search_recipes: args keyword — 레시피/요리법 검색
+- recommend_by_ingredient: args ingredient — 특정 재료로 만들 메뉴 추천
+- recommend_from_fridge: args 없음 — 냉장고 재료 기반 추천 (재료명 없이 "오늘 뭐 해먹지" 등)
+- search_external: args keyword, query_text — 웹 검색 (조리시간/온도 질문 또는 DB 결과 없을 때 fallback)
+- suggest_pairing: args text — 곁들임/같이 먹기 좋은 메뉴
+
+when 값:
+- always: 항상 실행
+- prev_empty: 직전 단계 결과가 비었을 때만 실행 (fallback)
+
+규칙:
+- 에어프라이어/몇 분/온도/조리시간 → search_external만 (always)
+- 곁들임/같이 먹기 → suggest_pairing만
+- "OO 레시피" 검색 → search_recipes + search_external(prev_empty)
+- "OO로 뭐 해먹지" (재료 있음) → recommend_by_ingredient + search_external(prev_empty)
+- 냉장고/오늘 뭐 해먹지 (특정 재료 없음) → recommend_from_fridge
+- steps는 1~3개, 순차 실행만. 병렬 없음.
+- max_fallback은 0 또는 1 (기본 1)
+
+반환 형식 (JSON만, 설명 없음):
+{"steps":[{"tool":"search_recipes","args":{"keyword":"김치볶음밥"},"when":"always"}],"max_fallback":1}
+"""
+
+# (utterance, intent, expected_tool_sequence, expected_when_for_last_or_none)
+PLANNER_GOLDEN_CASES = (
+    ("김치볶음밥 레시피", "recipe.search", (TOOL_SEARCH_RECIPES, TOOL_SEARCH_EXTERNAL), WHEN_PREV_EMPTY),
+    ("에어프라이어 치킨 몇 분?", "recipe.search", (TOOL_SEARCH_EXTERNAL,), None),
+    ("두부로 뭐 해먹지?", "recipe.recommend", (TOOL_RECOMMEND_BY_INGREDIENT, TOOL_SEARCH_EXTERNAL), WHEN_PREV_EMPTY),
+    ("오늘 뭐 해먹지?", "recipe.recommend", (TOOL_RECOMMEND_FROM_FRIDGE,), None),
+    ("냉장고 재료로 뭐 해먹지?", "recipe.recommend", (TOOL_RECOMMEND_FROM_FRIDGE,), None),
+    ("김치볶음밥이랑 먹기 좋은 음식", "recipe.pairing", (TOOL_SUGGEST_PAIRING,), None),
+    ("파스타와 어울리는 반찬", "recipe.pairing", (TOOL_SUGGEST_PAIRING,), None),
+)
+

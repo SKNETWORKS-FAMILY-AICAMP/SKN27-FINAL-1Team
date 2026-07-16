@@ -4,7 +4,18 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 from urllib.parse import quote
 
-from .recipe_config import AGENT_NAME, CONSTRAINT_EASY_30, MAX_DISPLAY_RECIPES
+from .recipe_config import (
+    AGENT_NAME,
+    CONSTRAINT_EASY_30,
+    MAX_DISPLAY_RECIPES,
+    TOOL_RECOMMEND_BY_INGREDIENT,
+    TOOL_RECOMMEND_FROM_FRIDGE,
+    TOOL_SEARCH_EXTERNAL,
+    TOOL_SEARCH_RECIPES,
+    TOOL_SUGGEST_PAIRING,
+    WHEN_ALWAYS,
+    WHEN_PREV_EMPTY,
+)
 from .recipe_tools import (
     ToolResult,
     build_actions_tool,
@@ -20,23 +31,31 @@ from .recipe_tools import (
 from .recipe_utils import (
     LOGIN_REQUIRED_REPLY,
     _apply_josa,
-    _extract_keyword,
-    _extract_recipe_ingredient,
-    _is_cooking_time_question,
     _requires_login,
     analyze_recipe_intent,
 )
 
-# Public tool names (LLM planner will use this catalog later)
-TOOL_SEARCH_RECIPES = "search_recipes"
-TOOL_RECOMMEND_BY_INGREDIENT = "recommend_by_ingredient"
-TOOL_RECOMMEND_FROM_FRIDGE = "recommend_from_fridge"
-TOOL_SEARCH_EXTERNAL = "search_external"
-TOOL_SUGGEST_PAIRING = "suggest_pairing"
-
-WHEN_ALWAYS = "always"
-WHEN_PREV_EMPTY = "prev_empty"
-
+# Re-export for tests / backward compat
+__all__ = [
+    "PlanStep",
+    "RecipePlan",
+    "RecipeAgentRequest",
+    "RecipeAgentResult",
+    "RecipeExecutionState",
+    "TOOL_SEARCH_RECIPES",
+    "TOOL_RECOMMEND_BY_INGREDIENT",
+    "TOOL_RECOMMEND_FROM_FRIDGE",
+    "TOOL_SEARCH_EXTERNAL",
+    "TOOL_SUGGEST_PAIRING",
+    "WHEN_ALWAYS",
+    "WHEN_PREV_EMPTY",
+    "TOOL_REGISTRY",
+    "build_recipe_response",
+    "execute_plan",
+    "render_response",
+    "run_recipe_agent",
+    "to_supervisor_state",
+]
 
 @dataclass(frozen=True)
 class PlanStep:
@@ -137,55 +156,6 @@ def _apply_policy_guards(req: RecipeAgentRequest, plan: RecipePlan) -> RecipeAge
     if guarded is not None:
         return guarded
     return _fridge_empty_guard(req)
-
-
-def _plan_keyword(req: RecipeAgentRequest) -> str:
-    return _extract_recipe_ingredient(req.text) or _extract_keyword(req.text)
-
-
-def plan_recipe_request(req: RecipeAgentRequest) -> RecipePlan:
-    """Rule-based planner stub. Same schema as future LLM planner."""
-    keyword = _plan_keyword(req)
-
-    if req.intent == "recipe.pairing":
-        return RecipePlan(steps=[PlanStep(tool=TOOL_SUGGEST_PAIRING, args={"text": req.text})])
-
-    if req.intent == "recipe.search" and _is_cooking_time_question(req.text):
-        return RecipePlan(
-            steps=[
-                PlanStep(
-                    tool=TOOL_SEARCH_EXTERNAL,
-                    args={"keyword": keyword, "query_text": req.text},
-                )
-            ]
-        )
-
-    if req.intent == "recipe.search":
-        return RecipePlan(
-            steps=[
-                PlanStep(tool=TOOL_SEARCH_RECIPES, args={"keyword": keyword}),
-                PlanStep(
-                    tool=TOOL_SEARCH_EXTERNAL,
-                    args={"keyword": keyword, "query_text": req.text},
-                    when=WHEN_PREV_EMPTY,
-                ),
-            ]
-        )
-
-    ingredient = _extract_recipe_ingredient(req.text)
-    if ingredient:
-        return RecipePlan(
-            steps=[
-                PlanStep(tool=TOOL_RECOMMEND_BY_INGREDIENT, args={"ingredient": ingredient}),
-                PlanStep(
-                    tool=TOOL_SEARCH_EXTERNAL,
-                    args={"keyword": ingredient, "query_text": req.text},
-                    when=WHEN_PREV_EMPTY,
-                ),
-            ]
-        )
-
-    return RecipePlan(steps=[PlanStep(tool=TOOL_RECOMMEND_FROM_FRIDGE, args={})])
 
 
 def _tool_search_recipes(req: RecipeAgentRequest, args: dict[str, Any]) -> ToolResult:
@@ -440,6 +410,8 @@ def run_recipe_agent(
     intent: str | None = None,
 ) -> dict:
     """Recipe Agent 단일 진입점. plan → execute → render."""
+    from .recipe_planner import plan_recipe_request
+
     req = RecipeAgentRequest(
         text=text,
         db=db,
@@ -448,7 +420,7 @@ def run_recipe_agent(
         settings_obj=settings_obj,
         intent=intent or analyze_recipe_intent(text, history),
     )
-    plan = plan_recipe_request(req)
+    plan, planner_source = plan_recipe_request(req)
     guarded = _apply_policy_guards(req, plan)
     if guarded is not None:
         return to_supervisor_state(guarded)
@@ -456,12 +428,25 @@ def run_recipe_agent(
     state = RecipeExecutionState(req=req, plan=plan)
     state = execute_plan(state)
     result = render_response(state)
+    meta = dict(result.meta or {})
+    meta["planner"] = planner_source
+    result = RecipeAgentResult(
+        ok=result.ok,
+        agent=result.agent,
+        intent=result.intent,
+        message=result.message,
+        error=result.error,
+        actions=result.actions,
+        sources=result.sources,
+        meta=meta,
+    )
     return to_supervisor_state(result)
 
 
 if __name__ == "__main__":
     # ponytail: -m 실행 시 패키지 선로딩과 네임스페이스가 갈릴 수 있어 agent.* 만 사용
     import ai.agents.recipe_agent.recipe_agent as agent
+    import ai.agents.recipe_agent.recipe_planner as planner
 
     def _check_output_contract(result: dict) -> None:
         assert set(result) == {"response_text", "actions", "sources"}
@@ -469,26 +454,26 @@ if __name__ == "__main__":
         assert isinstance(result["actions"], list)
         assert isinstance(result["sources"], list)
 
-    # (a) plan tool order by utterance type
+    # (a) rule plan tool order by utterance type
     req_pairing = agent.RecipeAgentRequest(
         text="김치볶음밥이랑 먹기 좋은 음식", db=None, user_id=1,
         history=[], settings_obj=None, intent="recipe.pairing",
     )
-    plan_p = agent.plan_recipe_request(req_pairing)
+    plan_p = planner.plan_recipe_request_rule(req_pairing)
     assert [s.tool for s in plan_p.steps] == [agent.TOOL_SUGGEST_PAIRING]
 
     req_cook = agent.RecipeAgentRequest(
         text="감자튀김 에어프라이기 시간", db=None, user_id=1,
         history=[], settings_obj=None, intent="recipe.search",
     )
-    plan_c = agent.plan_recipe_request(req_cook)
+    plan_c = planner.plan_recipe_request_rule(req_cook)
     assert [s.tool for s in plan_c.steps] == [agent.TOOL_SEARCH_EXTERNAL]
 
     req_search = agent.RecipeAgentRequest(
         text="김치볶음밥 레시피", db=None, user_id=1,
         history=[], settings_obj=None, intent="recipe.search",
     )
-    plan_s = agent.plan_recipe_request(req_search)
+    plan_s = planner.plan_recipe_request_rule(req_search)
     assert plan_s.steps[0].tool == agent.TOOL_SEARCH_RECIPES
     assert plan_s.steps[1].tool == agent.TOOL_SEARCH_EXTERNAL
     assert plan_s.steps[1].when == agent.WHEN_PREV_EMPTY
@@ -497,7 +482,7 @@ if __name__ == "__main__":
         text="두부로 뭐 해먹지?", db=None, user_id=1,
         history=[], settings_obj=None, intent="recipe.recommend",
     )
-    plan_i = agent.plan_recipe_request(req_ing)
+    plan_i = planner.plan_recipe_request_rule(req_ing)
     assert plan_i.steps[0].tool == agent.TOOL_RECOMMEND_BY_INGREDIENT
     assert plan_i.steps[1].when == agent.WHEN_PREV_EMPTY
 
@@ -505,8 +490,23 @@ if __name__ == "__main__":
         text="오늘 뭐 해먹지?", db=None, user_id=1,
         history=[], settings_obj=None, intent="recipe.recommend",
     )
-    plan_f = agent.plan_recipe_request(req_fridge)
+    plan_f = planner.plan_recipe_request_rule(req_fridge)
     assert [s.tool for s in plan_f.steps] == [agent.TOOL_RECOMMEND_FROM_FRIDGE]
+
+    # (e) LLM fail → rule plan matches
+    orig_llm = planner._call_llm_planner
+    planner._call_llm_planner = lambda r: None
+    try:
+        plan_fb, src = planner.plan_recipe_request(req_search)
+        assert src == "rule"
+        assert [s.tool for s in plan_fb.steps] == [agent.TOOL_SEARCH_RECIPES, agent.TOOL_SEARCH_EXTERNAL]
+    finally:
+        planner._call_llm_planner = orig_llm
+
+    norm = planner._normalize_llm_plan(
+        {"steps": [{"tool": "bogus", "args": {}}]}, req_search,
+    )
+    assert norm is None
 
     # (b) empty search → fallback external once
     def fake_empty_search(req: agent.RecipeAgentRequest, args: dict) -> agent.ToolResult:
