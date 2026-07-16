@@ -4,7 +4,7 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
-from .recipe_handlers import handle_recipe_pairing, handle_recipe_recommend, handle_recipe_search
+from .recipe_handlers import handle_recipe_pairing
 from .recipe_intents import analyze_recipe_intent
 from .recipe_utils import LOGIN_REQUIRED_REPLY, _extract_recipe_ingredient, _requires_login
 
@@ -35,7 +35,7 @@ class RecipeAgentResult:
 
 @dataclass
 class RecipeExecutionState:
-    """Orchestrator 내부 실행 상태. ponytail: 현재 미사용. P3-2 이후 Orchestrator에서 활용."""
+    """Orchestrator 내부 실행 상태."""
     req: RecipeAgentRequest
     template: str | None = None
     steps_done: list[str] = field(default_factory=list)
@@ -44,7 +44,7 @@ class RecipeExecutionState:
 
 @dataclass
 class ToolResult:
-    """Tool 실행 공통 결과. ponytail: 현재 미사용. P4-2 이후 Tool 래퍼에서 활용."""
+    """Tool 실행 공통 결과."""
     ok: bool
     data: Any = None
     error: str | None = None
@@ -407,44 +407,19 @@ def to_supervisor_state(result: RecipeAgentResult) -> dict[str, Any]:
 
 
 def _fridge_login_guard(req: RecipeAgentRequest) -> RecipeAgentResult | None:
-    """냉장고 추천 비회원 차단. ponytail: LegacyRecipeEngine과 동일 조건."""
+    """냉장고 추천 비회원 차단."""
     if _requires_login(req.intent, req.text) and not req.user_id:
         return build_recipe_response(message=LOGIN_REQUIRED_REPLY, intent=req.intent)
     return None
 
 
 def _fridge_empty_guard(req: RecipeAgentRequest) -> RecipeAgentResult | None:
-    """빈 냉장고 차단. ponytail: Legacy handle_recipe_recommend와 동일. fridge pipeline에서 연결."""
+    """빈 냉장고 차단. fridge pipeline에서 연결."""
     from ai.agents.inventory_agent.inventory_agent import EMPTY_INVENTORY_REPLY, is_inventory_empty
 
     if is_inventory_empty(db=req.db, user_id=req.user_id or 0):
         return build_recipe_response(message=EMPTY_INVENTORY_REPLY, intent=req.intent)
     return None
-
-
-class LegacyRecipeEngine:
-    """기존 Handler를 그대로 호출하는 레거시 실행기."""
-
-    def run(self, req: RecipeAgentRequest) -> RecipeAgentResult:
-        guarded = _fridge_login_guard(req)
-        if guarded is not None:
-            return guarded
-
-        if req.intent == "recipe.search":
-            reply, actions, sources = handle_recipe_search(req.db, req.text)
-        elif req.intent == "recipe.pairing":
-            reply, actions = handle_recipe_pairing(req.text)
-            sources = []
-        elif req.intent == "recipe.recommend":
-            reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
-            sources = []
-        else:
-            reply, actions = handle_recipe_recommend(req.db, req.user_id or 0, req.text, req.history, req.settings_obj)
-            sources = []
-
-        return build_recipe_response(
-            message=reply, intent=req.intent, actions=actions, sources=sources,
-        )
 
 
 class PairingTemplateEngine:
@@ -510,17 +485,15 @@ class FridgeTemplateEngine:
 
 def _select_engine(
     intent: str, text: str = "",
-) -> LegacyRecipeEngine | PairingTemplateEngine | SearchTemplateEngine | IngredientTemplateEngine | FridgeTemplateEngine:
-    """intent + text에 따라 실행기를 선택한다."""
+) -> PairingTemplateEngine | SearchTemplateEngine | IngredientTemplateEngine | FridgeTemplateEngine:
+    """intent + text에 따라 실행기를 선택한다. unknown intent는 recommend와 동일 분기."""
     if intent == "recipe.pairing":
         return PairingTemplateEngine()
     if intent == "recipe.search":
         return SearchTemplateEngine()
-    if intent == "recipe.recommend" and _extract_recipe_ingredient(text):
+    if _extract_recipe_ingredient(text):
         return IngredientTemplateEngine()
-    if intent == "recipe.recommend":
-        return FridgeTemplateEngine()
-    return LegacyRecipeEngine()
+    return FridgeTemplateEngine()
 
 
 def _select_template(intent: str, text: str) -> str:
@@ -536,7 +509,7 @@ def _select_template(intent: str, text: str) -> str:
 
 
 def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
-    """recipe_search_service를 ToolResult로 감싼다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    """recipe_search_service를 ToolResult로 감싼다."""
     try:
         from .recipe_handlers import recipe_search_service
         result = recipe_search_service.search_recipes(
@@ -575,7 +548,7 @@ def build_recommend_config_tool(settings_obj: Any = None) -> ToolResult:
 
 
 def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> ToolResult:
-    """recommendation_service를 ToolResult로 감싼다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    """recommendation_service를 ToolResult로 감싼다."""
     try:
         from .recipe_handlers import recommendation_service
 
@@ -591,7 +564,7 @@ def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> To
 
 
 def sort_candidates_tool(items: list[dict[str, Any]]) -> ToolResult:
-    """추천 후보를 보유 재료·부족 재료·점수 기준으로 정렬한다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    """추천 후보를 보유 재료·부족 재료·점수 기준으로 정렬한다."""
     try:
         sorted_items = sorted(
             items,
@@ -619,7 +592,7 @@ def exclude_previous_tool(items: list[dict[str, Any]], history: list) -> ToolRes
 
 
 def build_actions_tool(items: list[dict[str, Any]]) -> ToolResult:
-    """레시피 후보에서 프론트엔드 Action 목록을 생성한다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    """레시피 후보에서 프론트엔드 Action 목록을 생성한다."""
     try:
         from .recipe_utils import _recipe_actions
         actions = _recipe_actions(items)
@@ -629,7 +602,7 @@ def build_actions_tool(items: list[dict[str, Any]]) -> ToolResult:
 
 
 def external_search_tool(keyword: str, query_text: str | None = None) -> ToolResult:
-    """외부 소스(Tavily)로 레시피를 검색하고 요약한다. ponytail: 현재 미사용. Orchestrator 전환 시 활용."""
+    """외부 소스(Tavily)로 레시피를 검색하고 요약한다."""
     try:
         from .recipe_handlers import reply_external_recipe
         summary, sources = reply_external_recipe(keyword, query_text)
@@ -1006,11 +979,10 @@ if __name__ == "__main__":
         assert req.text == "테스트"
         assert req.intent == "recipe.search"
 
-        engine = LegacyRecipeEngine()
-        assert hasattr(engine, "run")
-
         selected = _select_engine("recipe.search")
         assert isinstance(selected, SearchTemplateEngine)
+        assert isinstance(_select_engine("recipe.unknown", "두부로 뭐 해먹지?"), IngredientTemplateEngine)
+        assert isinstance(_select_engine("recipe.unknown", "오늘 뭐 해먹지?"), FridgeTemplateEngine)
 
         state = RecipeExecutionState(req=req)
         assert state.template is None
@@ -1086,23 +1058,13 @@ if __name__ == "__main__":
         assert callable(run_independent_external_jobs)
 
     def _test_behavior():
-        """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
+        """기능 동작 검증 (mock Tool 사용)"""
         import ai.agents.recipe_agent.recipe_agent as agent
 
-        orig_recommend = agent.handle_recipe_recommend
         orig_search_tool = agent.search_recipe_tool
         orig_external = agent.external_search_tool
         orig_relax = agent.search_ingredient_relax_tool
         orig_recommend_tool = agent.recommend_recipe_tool
-
-        def fake_recommend(
-            db: Any,
-            user_id: int,
-            text: str,
-            history: list | None = None,
-            settings_obj: Any = None,
-        ) -> tuple[str, list[dict[str, Any]]]:
-            return f"recommend:{text}", [{"label": "두부찌개", "url": "/recipes/2"}]
 
         def fake_search_tool(db: Any, keyword: str) -> ToolResult:
             return ToolResult(
@@ -1135,7 +1097,6 @@ if __name__ == "__main__":
         import ai.agents.inventory_agent.inventory_agent as inv
 
         orig_empty = inv.is_inventory_empty
-        agent.handle_recipe_recommend = fake_recommend
         agent.search_recipe_tool = fake_search_tool
         agent.external_search_tool = fake_external
         try:
@@ -1724,7 +1685,6 @@ if __name__ == "__main__":
             result = agent._render_fridge_response(state)
             assert "db down" in result.message or "불러오지 못했어요" in result.message
         finally:
-            agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
             agent.external_search_tool = orig_external
             agent.search_ingredient_relax_tool = orig_relax
