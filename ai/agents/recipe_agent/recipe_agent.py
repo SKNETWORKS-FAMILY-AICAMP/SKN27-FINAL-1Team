@@ -133,6 +133,37 @@ def _note_integrity_issues(state: RecipeExecutionState) -> None:
         state.intermediate["integrity_issues"] = issues
 
 
+def check_recommend_constraints(state: RecipeExecutionState) -> list[str]:
+    """조건 위반 이슈 코드. 데이터 없으면 해당 검사 스킵. 응답은 바꾸지 않음(P9-4)."""
+    issues: list[str] = []
+    constraints = state.intermediate.get("constraints") or {}
+    if state.template == TEMPLATE_INGREDIENT_RECOMMEND:
+        items = state.intermediate.get("selected_recipes") or []
+        want_diff = constraints.get("difficulty")
+        easy30 = constraints.get("cooking_time_label") == "30분이내"
+        for i, item in enumerate(items):
+            if want_diff and item.get("difficulty") and item["difficulty"] != want_diff:
+                issues.append(f"difficulty_mismatch:{i}")
+            if easy30 and item.get("cooking_time_min") is not None and item["cooking_time_min"] > 30:
+                issues.append(f"cooking_time_mismatch:{i}")
+    if state.template == TEMPLATE_FRIDGE_RECOMMEND:
+        items = (state.intermediate.get("ranked_recipes") or [])[:MAX_DISPLAY_RECIPES]
+        for i, item in enumerate(items):
+            owned = item.get("owned_ingredient_count")
+            missing = item.get("missing_ingredient_count")
+            if owned is not None and owned < 0:
+                issues.append(f"owned_missing_contradiction:{i}")
+            elif missing is not None and missing < 0:
+                issues.append(f"owned_missing_contradiction:{i}")
+    return issues
+
+
+def _note_constraint_issues(state: RecipeExecutionState) -> None:
+    issues = check_recommend_constraints(state)
+    if issues:
+        state.intermediate["constraint_issues"] = issues
+
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -547,6 +578,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
         state.template = TEMPLATE_INGREDIENT_RECOMMEND
         _note_missing_required_fields(state)
         _note_integrity_issues(state)
+        _note_constraint_issues(state)
         return state
 
     tr = search_ingredient_relax_tool(state.req.db, ingredient)
@@ -564,6 +596,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     state.template = TEMPLATE_INGREDIENT_RECOMMEND
     _note_missing_required_fields(state)
     _note_integrity_issues(state)
+    _note_constraint_issues(state)
     return state
 
 
@@ -591,6 +624,7 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.template = TEMPLATE_FRIDGE_RECOMMEND
     _note_missing_required_fields(state)
     _note_integrity_issues(state)
+    _note_constraint_issues(state)
     return state
 
 
@@ -804,6 +838,7 @@ if __name__ == "__main__":
         assert callable(_fridge_empty_guard)
         assert callable(check_required_fields)
         assert callable(check_recipe_integrity)
+        assert callable(check_recommend_constraints)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -951,6 +986,31 @@ if __name__ == "__main__":
             assert "too_many_items" in check_recipe_integrity([
                 {"recipe_id": i, "title": str(i)} for i in range(4)
             ])
+            bad_ing = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="두부로 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                ),
+                template=TEMPLATE_INGREDIENT_RECOMMEND,
+            )
+            bad_ing.intermediate["constraints"] = dict(CONSTRAINT_EASY_30)
+            bad_ing.intermediate["selected_recipes"] = [
+                {"recipe_id": 1, "title": "A", "difficulty": "고급", "cooking_time_min": 45},
+            ]
+            ci = check_recommend_constraints(bad_ing)
+            assert "difficulty_mismatch:0" in ci
+            assert "cooking_time_mismatch:0" in ci
+            bad_fridge = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="오늘 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                ),
+                template=TEMPLATE_FRIDGE_RECOMMEND,
+            )
+            bad_fridge.intermediate["ranked_recipes"] = [
+                {"recipe_id": 1, "title": "X", "owned_ingredient_count": -1, "missing_ingredient_count": 0},
+            ]
+            assert "owned_missing_contradiction:0" in check_recommend_constraints(bad_fridge)
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
             kw = state.intermediate["keyword"]
@@ -1038,6 +1098,7 @@ if __name__ == "__main__":
             assert set(INGREDIENT_TEMPLATE_FIELDS) <= set(state.intermediate)
             assert check_required_fields(state) == []
             assert not state.intermediate.get("integrity_issues")
+            assert not state.intermediate.get("constraint_issues")
             assert state.intermediate["ingredient"]
             assert state.intermediate["recipe_candidates"]
             assert state.intermediate["selected_recipes"]
@@ -1159,6 +1220,7 @@ if __name__ == "__main__":
             assert state.template == TEMPLATE_FRIDGE_RECOMMEND
             assert check_required_fields(state) == []
             assert not state.intermediate.get("integrity_issues")
+            assert not state.intermediate.get("constraint_issues")
             result = agent._render_fridge_response(state)
             assert "완벽하게" in result.message
             assert "1. B" in result.message
