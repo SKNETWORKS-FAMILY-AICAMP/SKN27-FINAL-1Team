@@ -72,6 +72,16 @@ INGREDIENT_TEMPLATE_FIELDS = (
     "actions",
 )
 
+FRIDGE_TEMPLATE_FIELDS = (
+    "inventory_status",
+    "user_preferences",
+    "recipe_candidates",
+    "ranked_recipes",
+    "owned_ingredient_count",
+    "missing_ingredient_count",
+    "actions",
+)
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -576,6 +586,12 @@ if __name__ == "__main__":
             "ingredient", "constraints", "recipe_candidates", "selected_recipes", "actions",
         )
         assert len(set(INGREDIENT_TEMPLATE_FIELDS)) == len(INGREDIENT_TEMPLATE_FIELDS)
+
+        assert FRIDGE_TEMPLATE_FIELDS == (
+            "inventory_status", "user_preferences", "recipe_candidates",
+            "ranked_recipes", "owned_ingredient_count", "missing_ingredient_count", "actions",
+        )
+        assert len(set(FRIDGE_TEMPLATE_FIELDS)) == len(FRIDGE_TEMPLATE_FIELDS)
 
         assert _select_template("recipe.search", "김치볶음밥 레시피") == TEMPLATE_RECIPE_SEARCH
         assert _select_template("recipe.pairing", "파스타와 어울리는 반찬") == TEMPLATE_RECIPE_PAIRING
