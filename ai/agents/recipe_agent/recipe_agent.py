@@ -494,6 +494,10 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
 def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     """FRIDGE_TEMPLATE_FIELDS 중 candidates/ranked까지 채움. actions는 P8-6."""
     tr = recommend_recipe_tool(state.req.db, state.req.user_id or 0, state.req.settings_obj)
+    if not tr.ok:
+        state.intermediate["recommend_error"] = (
+            tr.error or "냉장고 기반 추천을 불러오지 못했어요. 재료명을 넣어서 다시 물어봐주세요."
+        )
     candidates = (tr.data or {}).get("items", []) if tr.ok else []
     state.intermediate["recipe_candidates"] = candidates
     state.steps_done.append("recommend_recipe")
@@ -510,6 +514,36 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.intermediate["actions"] = []
     state.template = TEMPLATE_FRIDGE_RECOMMEND
     return state
+
+
+def _render_fridge_response(state: RecipeExecutionState) -> RecipeAgentResult:
+    """FRIDGE_TEMPLATE_FIELDS로 냉장고 추천 응답을 조립한다."""
+    if state.intermediate.get("recommend_error"):
+        return build_recipe_response(
+            message=state.intermediate["recommend_error"],
+            intent=state.req.intent,
+        )
+
+    ranked = state.intermediate.get("ranked_recipes") or []
+    perfect = [i for i in ranked if i.get("missing_ingredient_count", 0) == 0]
+    if perfect:
+        selected = perfect[:3]
+        prefix = "현재 냉장고 재료만으로 완벽하게 만들 수 있는 레시피예요.\n"
+    else:
+        selected = ranked[:3]
+        if not selected or selected[0].get("owned_ingredient_count", 0) == 0:
+            return build_recipe_response(
+                message="현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.",
+                intent=state.req.intent,
+            )
+        prefix = "부족한 재료가 약간 있지만, 냉장고 재료를 최대한 활용할 수 있는 레시피예요.\n"
+
+    actions_tr = build_actions_tool(selected)
+    actions = (actions_tr.data or {}).get("actions", []) if actions_tr.ok else []
+    state.intermediate["actions"] = actions
+    titles = [i.get("title") or "" for i in selected]
+    reply = prefix + "\n".join(f"{n + 1}. {t}" for n, t in enumerate(titles))
+    return build_recipe_response(message=reply, intent=state.req.intent, actions=actions)
 
 
 def _render_ingredient_response(state: RecipeExecutionState) -> RecipeAgentResult:
@@ -686,6 +720,7 @@ if __name__ == "__main__":
         assert callable(_fill_fridge_pipeline)
         assert callable(_render_search_response)
         assert callable(_render_ingredient_response)
+        assert callable(_render_fridge_response)
         assert callable(_fridge_login_guard)
         assert callable(_fridge_empty_guard)
 
@@ -1000,6 +1035,40 @@ if __name__ == "__main__":
             state = agent._fill_fridge_pipeline(state)
             assert state.intermediate["ranked_recipes"][0]["title"] == "B"
             assert state.template == TEMPLATE_FRIDGE_RECOMMEND
+            result = agent._render_fridge_response(state)
+            assert "완벽하게" in result.message
+            assert "1. B" in result.message
+
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="오늘 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                ),
+            )
+            state.intermediate["ranked_recipes"] = [
+                {"title": "C", "owned_ingredient_count": 2, "missing_ingredient_count": 1, "final_score": 1},
+            ]
+            result = agent._render_fridge_response(state)
+            assert "부족한 재료가 약간" in result.message
+
+            state.intermediate["ranked_recipes"] = [
+                {"title": "D", "owned_ingredient_count": 0, "missing_ingredient_count": 3, "final_score": 0},
+            ]
+            result = agent._render_fridge_response(state)
+            assert "매칭되는 레시피를 찾지 못했어요" in result.message
+
+            agent.recommend_recipe_tool = lambda db, user_id, settings_obj=None: ToolResult(
+                ok=False, error="db down", source="recommendation",
+            )
+            state = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="오늘 뭐 해먹지?", db=None, user_id=1,
+                    history=[], settings_obj=None, intent="recipe.recommend",
+                ),
+            )
+            state = agent._fill_fridge_pipeline(state)
+            result = agent._render_fridge_response(state)
+            assert "db down" in result.message or "불러오지 못했어요" in result.message
         finally:
             agent.handle_recipe_recommend = orig_recommend
             agent.search_recipe_tool = orig_search_tool
