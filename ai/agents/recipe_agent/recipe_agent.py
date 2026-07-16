@@ -3,11 +3,39 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .recipe_handlers import handle_recipe_pairing
-from .recipe_intents import analyze_recipe_intent
-from .recipe_utils import LOGIN_REQUIRED_REPLY, _extract_recipe_ingredient, _requires_login
-
-AGENT_NAME = "recipe"
+from .recipe_config import (
+    AGENT_NAME,
+    CONSTRAINT_EASY_30,
+    EXTERNAL_TOOLS,
+    INGREDIENT_KEYWORDS,
+    MAX_DISPLAY_RECIPES,
+    TEMPLATE_FIELDS_BY_NAME,
+    TEMPLATE_FRIDGE_RECOMMEND,
+    TEMPLATE_INGREDIENT_RECOMMEND,
+    TEMPLATE_RECIPE_PAIRING,
+    TEMPLATE_RECIPE_SEARCH,
+)
+from .recipe_tools import (
+    ToolResult,
+    build_actions_tool,
+    exclude_previous_tool,
+    external_search_tool,
+    pairing_tool,
+    rank_search_candidates_tool,
+    recommend_recipe_tool,
+    search_ingredient_relax_tool,
+    search_recipe_tool,
+    sort_candidates_tool,
+)
+from .recipe_utils import (
+    LOGIN_REQUIRED_REPLY,
+    _apply_josa,
+    _extract_keyword,
+    _extract_recipe_ingredient,
+    _is_cooking_time_question,
+    _requires_login,
+    analyze_recipe_intent,
+)
 
 
 @dataclass
@@ -41,56 +69,9 @@ class RecipeExecutionState:
     intermediate: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class ToolResult:
-    """Tool 실행 공통 결과."""
-    ok: bool
-    data: Any = None
-    error: str | None = None
-    source: str | None = None
-
-
-TEMPLATE_RECIPE_SEARCH = "RECIPE_SEARCH"
-TEMPLATE_INGREDIENT_RECOMMEND = "INGREDIENT_RECOMMEND"
-TEMPLATE_FRIDGE_RECOMMEND = "FRIDGE_RECOMMEND"
-TEMPLATE_RECIPE_PAIRING = "RECIPE_PAIRING"
-
-SEARCH_TEMPLATE_FIELDS = (
-    "keyword",
-    "recipe_candidates",
-    "selected_recipes",
-    "actions",
-    "sources",
-)
-
-INGREDIENT_TEMPLATE_FIELDS = (
-    "ingredient",
-    "constraints",
-    "recipe_candidates",
-    "selected_recipes",
-    "actions",
-)
-
-FRIDGE_TEMPLATE_FIELDS = (
-    "inventory_status",
-    "user_preferences",
-    "recipe_candidates",
-    "ranked_recipes",
-    "owned_ingredient_count",
-    "missing_ingredient_count",
-    "actions",
-)
-
-_TEMPLATE_FIELDS_BY_NAME = {
-    TEMPLATE_RECIPE_SEARCH: SEARCH_TEMPLATE_FIELDS,
-    TEMPLATE_INGREDIENT_RECOMMEND: INGREDIENT_TEMPLATE_FIELDS,
-    TEMPLATE_FRIDGE_RECOMMEND: FRIDGE_TEMPLATE_FIELDS,
-}
-
-
 def check_required_fields(state: RecipeExecutionState) -> list[str]:
     """누락된 필수 필드 키 목록. 없으면 []. 값 진리값은 보지 않음(P9-2)."""
-    required = _TEMPLATE_FIELDS_BY_NAME.get(state.template or "", ())
+    required = TEMPLATE_FIELDS_BY_NAME.get(state.template or "", ())
     return [k for k in required if k not in state.intermediate]
 
 
@@ -98,9 +79,6 @@ def _note_missing_required_fields(state: RecipeExecutionState) -> None:
     missing = check_required_fields(state)
     if missing:
         state.intermediate["missing_required_fields"] = missing
-
-
-MAX_DISPLAY_RECIPES = 3
 
 
 def check_recipe_integrity(items: list[dict]) -> list[str]:
@@ -246,15 +224,12 @@ def _note_external_jobs(state: RecipeExecutionState) -> None:
         state.intermediate["external_jobs"] = jobs
 
 
-_EXTERNAL_TOOLS = frozenset({"external_search_tool"})
-
-
 def filter_independent_jobs(jobs: list[ExternalJob]) -> list[ExternalJob]:
     """§7.2 최소 필터. 실행은 P10-3."""
     out: list[ExternalJob] = []
     seen_fields: set[str] = set()
     for job in jobs:
-        if job.tool not in _EXTERNAL_TOOLS:
+        if job.tool not in EXTERNAL_TOOLS:
             continue
         if job.fills_field in seen_fields:
             continue
@@ -362,10 +337,6 @@ def _attach_review_notes(state: RecipeExecutionState, result: RecipeAgentResult)
             meta=meta,
         )
     return result
-
-
-CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
-CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
 
 def build_recipe_response(
@@ -496,169 +467,13 @@ def _select_template(intent: str, text: str) -> str:
         return TEMPLATE_RECIPE_SEARCH
     if intent == "recipe.pairing":
         return TEMPLATE_RECIPE_PAIRING
-    ingredient_keywords = ("냉장고", "재료", "있는 것", "남은")
-    if any(kw in text for kw in ingredient_keywords):
+    if any(kw in text for kw in INGREDIENT_KEYWORDS):
         return TEMPLATE_FRIDGE_RECOMMEND
     return TEMPLATE_INGREDIENT_RECOMMEND
 
 
-def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
-    """recipe_search_service를 ToolResult로 감싼다."""
-    try:
-        from .recipe_handlers import recipe_search_service
-        result = recipe_search_service.search_recipes(
-            db=db, ingredient=keyword, main_ingredient_only=True, page=1, page_size=10,
-        )
-        items = result["items"]
-        if not items:
-            result = recipe_search_service.search_recipes(db=db, query=keyword, page=1, page_size=10)
-            items = result["items"]
-        return ToolResult(ok=True, data={"items": items, "total": result.get("total", len(items))}, source="recipe_search")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="recipe_search")
-
-
-def build_recommend_config_tool(settings_obj: Any = None) -> ToolResult:
-    """settings_obj → RecipeRecommendConfig. ponytail: Legacy 설정 반영. exclude_dislikes는 config 필드 없음 → data sidecar."""
-    try:
-        from dataclasses import replace
-
-        from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
-
-        config = RecipeRecommendConfig.fridge_consume_preset()
-        exclude_dislikes = True
-        if settings_obj:
-            if not getattr(settings_obj, "expiringFirst", True):
-                config = replace(config, mode="fridge_all")  # type: ignore[arg-type]
-            if not getattr(settings_obj, "excludeDislikes", True):
-                exclude_dislikes = False
-        return ToolResult(
-            ok=True,
-            data={"config": config, "exclude_dislikes": exclude_dislikes},
-            source="recommend_config",
-        )
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="recommend_config")
-
-
-def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> ToolResult:
-    """recommendation_service를 ToolResult로 감싼다."""
-    try:
-        from .recipe_handlers import recommendation_service
-
-        cfg = build_recommend_config_tool(settings_obj)
-        if not cfg.ok:
-            return ToolResult(ok=False, error=cfg.error, source="recommendation")
-        config = (cfg.data or {})["config"]
-        result = recommendation_service.recommend_recipes(db, user_id, config)
-        items = result.get("items", [])
-        return ToolResult(ok=True, data={"items": items, "total": len(items)}, source="recommendation")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="recommendation")
-
-
-def sort_candidates_tool(items: list[dict[str, Any]]) -> ToolResult:
-    """추천 후보를 보유 재료·부족 재료·점수 기준으로 정렬한다."""
-    try:
-        sorted_items = sorted(
-            items,
-            key=lambda x: (
-                -x.get("owned_ingredient_count", 0),
-                x.get("missing_ingredient_count", 0),
-                -x.get("final_score", 0),
-            ),
-        )
-        return ToolResult(ok=True, data={"items": sorted_items, "total": len(sorted_items)}, source="sort_candidates")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="sort_candidates")
-
-
-def exclude_previous_tool(items: list[dict[str, Any]], history: list) -> ToolResult:
-    """이전 봇 응답에 포함된 레시피를 후보에서 제외한다. ponytail: 문자열 비교 방식. 구조화 이력 전환은 Backlog."""
-    try:
-        past_bot_texts = " ".join(getattr(msg, "text", "") for msg in history if getattr(msg, "role", "") == "bot")
-        filtered = [item for item in items if item.get("title", "") not in past_bot_texts]
-        if not filtered:
-            filtered = list(items)
-        return ToolResult(ok=True, data={"items": filtered, "total": len(filtered)}, source="exclude_previous")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="exclude_previous")
-
-
-def build_actions_tool(items: list[dict[str, Any]]) -> ToolResult:
-    """레시피 후보에서 프론트엔드 Action 목록을 생성한다."""
-    try:
-        from .recipe_utils import _recipe_actions
-        actions = _recipe_actions(items)
-        return ToolResult(ok=True, data={"actions": actions, "total": len(actions)}, source="build_actions")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="build_actions")
-
-
-def external_search_tool(keyword: str, query_text: str | None = None) -> ToolResult:
-    """외부 소스(Tavily)로 레시피를 검색하고 요약한다."""
-    try:
-        from .recipe_handlers import reply_external_recipe
-        summary, sources = reply_external_recipe(keyword, query_text)
-        return ToolResult(ok=True, data={"summary": summary, "sources": sources}, source="external_search")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="external_search")
-
-
-def pairing_tool(text: str) -> ToolResult:
-    """음식 조합(곁들임) 메뉴를 조회한다. ponytail: 정적 dict — P5-3에서 Orchestrator가 호출."""
-    try:
-        reply, actions = handle_recipe_pairing(text)
-        return ToolResult(
-            ok=True,
-            data={"reply": reply, "actions": actions},
-            source="pairing",
-        )
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="pairing")
-
-
-def rank_search_candidates_tool(keyword: str, items: list[dict[str, Any]]) -> ToolResult:
-    """검색 후보를 키워드 매칭 점수로 정렬한다. ponytail: _rank_recipe_items 재사용."""
-    try:
-        from .recipe_utils import _rank_recipe_items
-        ranked = _rank_recipe_items(keyword, items)
-        return ToolResult(ok=True, data={"items": ranked, "total": len(ranked)}, source="rank_search")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="rank_search")
-
-
-def search_ingredient_relax_tool(db: Any, ingredient: str) -> ToolResult:
-    """주재료+초급+30분 → 주재료만 순으로 검색한다. ponytail: Legacy 완화 순서 고정."""
-    try:
-        from .recipe_handlers import recipe_search_service
-        from .recipe_utils import _rank_recipe_items
-
-        result = recipe_search_service.search_recipes(
-            db=db, ingredient=ingredient, difficulty="초급", cooking_time_label="30분이내",
-            main_ingredient_only=True, page=1, page_size=10,
-        )
-        items = _rank_recipe_items(ingredient, result["items"])
-        constraints = dict(CONSTRAINT_EASY_30)
-        if not items:
-            result = recipe_search_service.search_recipes(
-                db=db, ingredient=ingredient, main_ingredient_only=True, page=1, page_size=10,
-            )
-            items = _rank_recipe_items(ingredient, result["items"])
-            constraints = dict(CONSTRAINT_INGREDIENT_ONLY)
-        return ToolResult(
-            ok=True,
-            data={"items": items, "total": len(items), "constraints": constraints},
-            source="ingredient_relax",
-        )
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="ingredient_relax")
-
-
 def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     """내부 검색 단계로 SEARCH_TEMPLATE_FIELDS를 채운다. 조리시간 질문은 외부 검색으로 조기 분기."""
-    from .recipe_utils import _extract_keyword, _extract_recipe_ingredient, _is_cooking_time_question
-
     text = state.req.text
     keyword = _extract_recipe_ingredient(text) or _extract_keyword(text)
     state.intermediate["keyword"] = keyword
@@ -752,8 +567,6 @@ def _render_search_response(state: RecipeExecutionState) -> RecipeAgentResult:
 
 def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     """특정 재료 추천 intermediate를 채운다. actions는 P7-4."""
-    from .recipe_utils import _extract_recipe_ingredient
-
     ingredient = _extract_recipe_ingredient(state.req.text) or ""
     state.intermediate["ingredient"] = ingredient
     state.steps_done.append("extract_ingredient")
@@ -858,7 +671,6 @@ def _render_fridge_response(state: RecipeExecutionState) -> RecipeAgentResult:
 def _render_ingredient_response(state: RecipeExecutionState) -> RecipeAgentResult:
     """INGREDIENT_TEMPLATE_FIELDS로 특정 재료 추천 응답을 조립한다."""
     from urllib.parse import quote
-    from .recipe_utils import _apply_josa
 
     ingredient = state.intermediate.get("ingredient") or ""
     selected = state.intermediate.get("selected_recipes") or []
