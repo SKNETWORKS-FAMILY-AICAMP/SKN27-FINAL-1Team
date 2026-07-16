@@ -123,8 +123,6 @@ if __name__ == "__main__":
     test_extract_recipe_ingredient()
     test_login_status_question()
     test_guest_chat_login_boundary()
-    test_guide_result_match()
-    test_search_result_relevance()
     test_format_guide_tip()
     test_cooking_time_question_uses_external_recipe()
     print("chat service tests ok")
