@@ -82,6 +82,25 @@ FRIDGE_TEMPLATE_FIELDS = (
     "actions",
 )
 
+_TEMPLATE_FIELDS_BY_NAME = {
+    TEMPLATE_RECIPE_SEARCH: SEARCH_TEMPLATE_FIELDS,
+    TEMPLATE_INGREDIENT_RECOMMEND: INGREDIENT_TEMPLATE_FIELDS,
+    TEMPLATE_FRIDGE_RECOMMEND: FRIDGE_TEMPLATE_FIELDS,
+}
+
+
+def check_required_fields(state: RecipeExecutionState) -> list[str]:
+    """누락된 필수 필드 키 목록. 없으면 []. 값 진리값은 보지 않음(P9-2)."""
+    required = _TEMPLATE_FIELDS_BY_NAME.get(state.template or "", ())
+    return [k for k in required if k not in state.intermediate]
+
+
+def _note_missing_required_fields(state: RecipeExecutionState) -> None:
+    missing = check_required_fields(state)
+    if missing:
+        state.intermediate["missing_required_fields"] = missing
+
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -411,6 +430,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
         state.intermediate["external_summary"] = summary
         state.steps_done.append("external_cooking_time")
         state.template = TEMPLATE_RECIPE_SEARCH
+        _note_missing_required_fields(state)
         return state
 
     search = search_recipe_tool(state.req.db, keyword)
@@ -427,6 +447,7 @@ def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.intermediate["actions"] = []
     state.intermediate["sources"] = []
     state.template = TEMPLATE_RECIPE_SEARCH
+    _note_missing_required_fields(state)
     return state
 
 
@@ -490,6 +511,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
         state.intermediate["selected_recipes"] = []
         state.intermediate["actions"] = []
         state.template = TEMPLATE_INGREDIENT_RECOMMEND
+        _note_missing_required_fields(state)
         return state
 
     tr = search_ingredient_relax_tool(state.req.db, ingredient)
@@ -505,6 +527,7 @@ def _fill_ingredient_pipeline(state: RecipeExecutionState) -> RecipeExecutionSta
     state.intermediate["selected_recipes"] = filtered[:3]
     state.steps_done.append("exclude_previous")
     state.template = TEMPLATE_INGREDIENT_RECOMMEND
+    _note_missing_required_fields(state)
     return state
 
 
@@ -530,6 +553,7 @@ def _fill_fridge_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
     state.intermediate.setdefault("missing_ingredient_count", None)
     state.intermediate["actions"] = []
     state.template = TEMPLATE_FRIDGE_RECOMMEND
+    _note_missing_required_fields(state)
     return state
 
 
@@ -741,6 +765,7 @@ if __name__ == "__main__":
         assert callable(_render_fridge_response)
         assert callable(_fridge_login_guard)
         assert callable(_fridge_empty_guard)
+        assert callable(check_required_fields)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -871,9 +896,13 @@ if __name__ == "__main__":
             )
             state = agent._fill_search_pipeline(state)
             assert set(SEARCH_TEMPLATE_FIELDS) <= set(state.intermediate)
+            assert check_required_fields(state) == []
             assert state.intermediate["keyword"]
             assert len(state.intermediate["selected_recipes"]) <= 3
             assert state.template == TEMPLATE_RECIPE_SEARCH
+            del state.intermediate["keyword"]
+            assert "keyword" in check_required_fields(state)
+            state.intermediate["keyword"] = "김치볶음밥"
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
             kw = state.intermediate["keyword"]
@@ -959,6 +988,7 @@ if __name__ == "__main__":
             )
             state = agent._fill_ingredient_pipeline(state)
             assert set(INGREDIENT_TEMPLATE_FIELDS) <= set(state.intermediate)
+            assert check_required_fields(state) == []
             assert state.intermediate["ingredient"]
             assert state.intermediate["recipe_candidates"]
             assert state.intermediate["selected_recipes"]
@@ -1078,6 +1108,7 @@ if __name__ == "__main__":
             state = agent._fill_fridge_pipeline(state)
             assert state.intermediate["ranked_recipes"][0]["title"] == "B"
             assert state.template == TEMPLATE_FRIDGE_RECOMMEND
+            assert check_required_fields(state) == []
             result = agent._render_fridge_response(state)
             assert "완벽하게" in result.message
             assert "1. B" in result.message
