@@ -1445,6 +1445,40 @@ if __name__ == "__main__":
             assert fail_st.intermediate.get("failed_external_jobs")
             assert "run_fail:external_search" in fail_st.steps_done
 
+            # P10-5: sequential (len=1) vs parallel (len=2) same intermediate contract
+            def _mk_req_state():
+                return RecipeExecutionState(
+                    req=RecipeAgentRequest(
+                        text="없는레시피xyz", db=None, user_id=None,
+                        history=[], settings_obj=None, intent="recipe.search",
+                    ),
+                    template=TEMPLATE_RECIPE_SEARCH,
+                )
+
+            ext_job = ExternalJob(
+                name="external_search",
+                tool="external_search_tool",
+                kwargs={"keyword": "없는레시피xyz", "query_text": "없는레시피xyz"},
+                fills_field="external_summary",
+            )
+            skip_job = ExternalJob(
+                name="noop_other",
+                tool="external_search_tool",
+                kwargs={"keyword": "없는레시피xyz", "query_text": "없는레시피xyz"},
+                fills_field="other",
+            )
+            seq_st = _mk_req_state()
+            seq_st.intermediate["independent_external_jobs"] = [ext_job]
+            seq_st = agent.run_independent_external_jobs(seq_st)
+            par_st = _mk_req_state()
+            par_st.intermediate["independent_external_jobs"] = [ext_job, skip_job]
+            par_st = agent.run_independent_external_jobs(par_st)
+            assert seq_st.intermediate.get("external_summary") == par_st.intermediate.get("external_summary")
+            assert seq_st.intermediate.get("sources") == par_st.intermediate.get("sources")
+            assert "run_external_search" in seq_st.steps_done
+            assert "run_external_search" in par_st.steps_done
+            assert "run_skip:noop_other" in par_st.steps_done
+
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
             kw = state.intermediate["keyword"]
