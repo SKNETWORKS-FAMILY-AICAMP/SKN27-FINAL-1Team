@@ -80,6 +80,7 @@ def router_node(state: GraphState) -> dict:
         return result
 
     normalized = _normalize_text(text)
+    is_receipt_query = _is_receipt_query(text)
 
     if normalized.startswith(CONFIRM_PREFIX):
         return _route_result("action.confirm")
@@ -98,24 +99,9 @@ def router_node(state: GraphState) -> dict:
     if _pending_consume_from_history(history) and _extract_quantity(text):
         return _route_result("inventory.pending_consume")
 
-    # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
-    if _is_receipt_query(text):
-        return _route_result("receipt.guide")
-
     # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     previous_intent = _latest_bot_intent(history)
     previous_slots = _latest_bot_slots(history)
-    # 가격 비교 대상이 생략된 후속 질문은 직전 상품명을 이어받습니다.
-    if (
-        previous_intent == "shopping.compare"
-        and previous_slots.get("shopping_product")
-        and not _strip_shopping_compare_suffix(text)
-    ):
-        return _route_result("shopping.compare", slots=previous_slots)
-    # 장보기 목록의 생략 항목 요청은 직전 장보기 문맥을 그대로 이어갑니다.
-    if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
-        return _route_result("shopping.current", slots=_latest_bot_slots(history))
-
     has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
     if previous_intent and has_write_word and _is_context_follow_up(text):
         previous_slots = _latest_bot_slots(history)
@@ -134,11 +120,11 @@ def router_node(state: GraphState) -> dict:
         return _route_result(shopping_intent)
 
     # 냉장고 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
-    if any(word in normalized for word in DELETE_WORDS):
+    if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
         return _route_result("inventory.delete")
-    if not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
+    if not is_receipt_query and not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
         return _route_result("inventory.action")
-    if not _is_guide_query(text) and any(word in normalized for word in ADD_WORDS):
+    if not is_receipt_query and not _is_guide_query(text) and any(word in normalized for word in ADD_WORDS):
         return _route_result("inventory.action")
 
     # 읽기 요청은 LLM JSON 분류를 먼저 채택합니다.
@@ -149,10 +135,6 @@ def router_node(state: GraphState) -> dict:
         # 전담 Agent가 없는 명확한 일반 요리 질문은 잘못 분류된 LLM 결과만 보정합니다.
         if _is_food_general_query(text):
             route_payload = {**route_payload, "intent": "food.general", "confidence": 1.0, "tasks": []}
-        elif _is_shopping_price_explanation(text):
-            route_payload = {**route_payload, "intent": "shopping.price_help"}
-        elif _is_shopping_price_query(text):
-            route_payload = {**route_payload, "intent": "shopping.compare"}
         if route_payload.get("intent") == "shopping.compare":
             route_slots = route_payload.get("slots") or {}
             current_product = (
@@ -175,6 +157,16 @@ def router_node(state: GraphState) -> dict:
             )
 
     # LLM을 사용할 수 없거나 신뢰도가 낮을 때만 기존 읽기 규칙으로 보완합니다.
+    if is_receipt_query:
+        return _route_result("receipt.guide")
+    if (
+        previous_intent == "shopping.compare"
+        and previous_slots.get("shopping_product")
+        and not _strip_shopping_compare_suffix(text)
+    ):
+        return _route_result("shopping.compare", slots=previous_slots)
+    if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
+        return _route_result("shopping.current", slots=previous_slots)
     if _is_alarm_notification_query(text):
         return _route_result("alarm.notification")
     if _is_alarm_calendar_query(text):

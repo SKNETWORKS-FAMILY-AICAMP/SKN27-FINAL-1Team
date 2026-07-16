@@ -1,0 +1,243 @@
+﻿[
+  {
+    "text": "영수증 등록 어디서 해?",
+    "expected_intent": "receipt.guide"
+  },
+  {
+    "text": "OCR로 구매 내역 올리는 방법 알려줘",
+    "expected_intent": "receipt.guide"
+  },
+  {
+    "text": "냉장고 재료로 뭐 만들어 먹지?",
+    "expected_intent": "recipe.recommend"
+  },
+  {
+    "text": "두부로 간단한 메뉴 추천해줘",
+    "expected_intent": "recipe.recommend"
+  },
+  {
+    "text": "남은 감자튀김 어디에 활용할까?",
+    "expected_intent": "recipe.recommend"
+  },
+  {
+    "text": "보유 식재료로 저녁 추천해줘",
+    "expected_intent": "recipe.recommend"
+  },
+  {
+    "text": "김치볶음밥 레시피 알려줘",
+    "expected_intent": "recipe.search"
+  },
+  {
+    "text": "바베큐 만드는 법",
+    "expected_intent": "recipe.search"
+  },
+  {
+    "text": "감자튀김 에어프라이어 조리 시간",
+    "expected_intent": "recipe.search"
+  },
+  {
+    "text": "30분 안에 만드는 파스타 레시피",
+    "expected_intent": "recipe.search"
+  },
+  {
+    "text": "김치볶음밥이랑 먹기 좋은 음식",
+    "expected_intent": "recipe.pairing"
+  },
+  {
+    "text": "파스타에 어울리는 사이드 메뉴",
+    "expected_intent": "recipe.pairing"
+  },
+  {
+    "text": "감자 보관법 알려줘",
+    "expected_intent": "ingredient.guide"
+  },
+  {
+    "text": "오이 세척 방법",
+    "expected_intent": "ingredient.guide"
+  },
+  {
+    "text": "고추가 물러졌는데 먹어도 돼?",
+    "expected_intent": "ingredient.guide"
+  },
+  {
+    "text": "두부 영양성분 알려줘",
+    "expected_intent": "ingredient.guide"
+  },
+  {
+    "text": "7월 제철 음식 뭐야?",
+    "expected_intent": "ingredient.guide"
+  },
+  {
+    "text": "채소에는 어떤 재료가 있어?",
+    "expected_intent": "ingredient.guide"
+  },
+  {
+    "text": "세척은?",
+    "expected_intent": "ingredient.guide",
+    "history": [
+      {
+        "role": "user",
+        "text": "감자 보관법 알려줘"
+      },
+      {
+        "role": "bot",
+        "text": "감자 보관법이에요.",
+        "intent": "ingredient.guide",
+        "slots": {
+          "ingredient": "감자",
+          "guide_type": "storage"
+        }
+      }
+    ]
+  },
+  {
+    "text": "소비기한 임박 재료 알려줘",
+    "expected_intent": "inventory.expiring"
+  },
+  {
+    "text": "오늘 먼저 먹어야 할 재료 있어?",
+    "expected_intent": "inventory.expiring"
+  },
+  {
+    "text": "유통기한 얼마 안 남은 거 뭐야?",
+    "expected_intent": "inventory.expiring"
+  },
+  {
+    "text": "냉장고에서 곧 상할 재료 찾아줘",
+    "expected_intent": "inventory.expiring"
+  },
+  {
+    "text": "내 냉장고 재료 뭐 있어?",
+    "expected_intent": "inventory.list"
+  },
+  {
+    "text": "보유 식재료 목록 보여줘",
+    "expected_intent": "inventory.list"
+  },
+  {
+    "text": "냉동실에 들어 있는 재료 알려줘",
+    "expected_intent": "inventory.list"
+  },
+  {
+    "text": "현재 장보기 목록 보여줘",
+    "expected_intent": "shopping.current"
+  },
+  {
+    "text": "나머지도 전부 보여줘",
+    "expected_intent": "shopping.current",
+    "history": [
+      {
+        "role": "user",
+        "text": "장보기 목록 보여줘"
+      },
+      {
+        "role": "bot",
+        "text": "현재 장보기 목록이에요. 외 2개가 더 있어요.",
+        "intent": "shopping.current",
+        "slots": {}
+      }
+    ]
+  },
+  {
+    "text": "지난 장보기 내역 보여줘",
+    "expected_intent": "shopping.history"
+  },
+  {
+    "text": "감자 가격 알려줘",
+    "expected_intent": "shopping.compare"
+  },
+  {
+    "text": "두부 최저가 찾아줘",
+    "expected_intent": "shopping.compare"
+  },
+  {
+    "text": "바닐라오일 왜 이렇게 비싸?",
+    "expected_intent": "shopping.compare"
+  },
+  {
+    "text": "더 싼 곳 없어?",
+    "expected_intent": "shopping.compare",
+    "history": [
+      {
+        "role": "user",
+        "text": "감자 가격 알려줘"
+      },
+      {
+        "role": "bot",
+        "text": "감자 가격 비교 결과예요.",
+        "intent": "shopping.compare",
+        "slots": {
+          "shopping_product": "감자"
+        }
+      }
+    ]
+  },
+  {
+    "text": "가격 정보가 안 나오는 이유가 뭐야?",
+    "expected_intent": "shopping.price_help"
+  },
+  {
+    "text": "읽지 않은 알림 있어?",
+    "expected_intent": "alarm.notification"
+  },
+  {
+    "text": "내일 알림 조회해줘",
+    "expected_intent": "alarm.notification"
+  },
+  {
+    "text": "오늘 일정 알려줘",
+    "expected_intent": "alarm.calendar"
+  },
+  {
+    "text": "다음 주 캘린더 일정 조회해줘",
+    "expected_intent": "alarm.calendar"
+  },
+  {
+    "text": "설탕 8g은 몇 티스푼이야?",
+    "expected_intent": "food.general"
+  },
+  {
+    "text": "버터 대신 식용유를 써도 돼?",
+    "expected_intent": "food.general"
+  },
+  {
+    "text": "동물성 휘핑크림과 식물성은 뭐가 달라?",
+    "expected_intent": "food.general"
+  },
+  {
+    "text": "남은 치킨 데우는 방법은?",
+    "expected_intent": "food.general"
+  },
+  {
+    "text": "국이 너무 짠데 어떻게 해야 해?",
+    "expected_intent": "food.general"
+  },
+  {
+    "text": "감자 보관법과 가격을 같이 알려줘",
+    "expected_intent": "multi_agent"
+  },
+  {
+    "text": "소비기한 임박 재료와 그걸로 만들 레시피 알려줘",
+    "expected_intent": "multi_agent"
+  },
+  {
+    "text": "냉장고 재료 목록이랑 가능한 메뉴 추천해줘",
+    "expected_intent": "multi_agent"
+  },
+  {
+    "text": "안녕",
+    "expected_intent": "general"
+  },
+  {
+    "text": "오늘 날씨 어때?",
+    "expected_intent": "general"
+  },
+  {
+    "text": "파이썬으로 구구단 코드 짜줘",
+    "expected_intent": "general"
+  },
+  {
+    "text": "너는 무슨 일을 할 수 있어?",
+    "expected_intent": "general"
+  }
+]
