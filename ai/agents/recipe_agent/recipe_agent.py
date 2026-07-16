@@ -234,6 +234,42 @@ def apply_repair_targets(state: RecipeExecutionState) -> RecipeExecutionState:
     return state
 
 
+ENABLE_LLM_REVIEWER = False  # ponytail: 기본 off. on 시 stub/휴리스틱.
+
+
+def review_recipe_quality(state: RecipeExecutionState, result: RecipeAgentResult) -> list[str]:
+    """보강 지침 목록. 데이터 수정 금지. flag off면 []."""
+    if not ENABLE_LLM_REVIEWER:
+        return []
+    notes: list[str] = []
+    if not (result.message or "").strip():
+        notes.append("empty_message")
+    if state.intermediate.get("constraint_issues"):
+        notes.append("has_constraint_issues")
+    if state.intermediate.get("integrity_issues"):
+        notes.append("has_integrity_issues")
+    return notes
+
+
+def _attach_review_notes(state: RecipeExecutionState, result: RecipeAgentResult) -> RecipeAgentResult:
+    notes = review_recipe_quality(state, result)
+    if notes:
+        state.intermediate["review_notes"] = notes
+        meta = dict(result.meta or {})
+        meta["review_notes"] = notes
+        return RecipeAgentResult(
+            ok=result.ok,
+            agent=result.agent,
+            intent=result.intent,
+            message=result.message,
+            error=result.error,
+            actions=result.actions,
+            sources=result.sources,
+            meta=meta,
+        )
+    return result
+
+
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
 
@@ -337,7 +373,8 @@ class SearchTemplateEngine:
         state = RecipeExecutionState(req=req, template=TEMPLATE_RECIPE_SEARCH)
         state = _fill_search_pipeline(state)
         state = apply_repair_targets(state)
-        return _render_search_response(state)
+        result = _render_search_response(state)
+        return _attach_review_notes(state, result)
 
 
 class IngredientTemplateEngine:
@@ -347,7 +384,8 @@ class IngredientTemplateEngine:
         state = RecipeExecutionState(req=req, template=TEMPLATE_INGREDIENT_RECOMMEND)
         state = _fill_ingredient_pipeline(state)
         state = apply_repair_targets(state)
-        return _render_ingredient_response(state)
+        result = _render_ingredient_response(state)
+        return _attach_review_notes(state, result)
 
 
 class FridgeTemplateEngine:
@@ -363,7 +401,8 @@ class FridgeTemplateEngine:
         state = RecipeExecutionState(req=req, template=TEMPLATE_FRIDGE_RECOMMEND)
         state = _fill_fridge_pipeline(state)
         state = apply_repair_targets(state)
-        return _render_fridge_response(state)
+        result = _render_fridge_response(state)
+        return _attach_review_notes(state, result)
 
 
 def _select_engine(
@@ -927,6 +966,8 @@ if __name__ == "__main__":
         assert callable(check_recommend_constraints)
         assert callable(build_repair_targets)
         assert callable(apply_repair_targets)
+        assert callable(review_recipe_quality)
+        assert ENABLE_LLM_REVIEWER is False
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 / Tool 사용)"""
@@ -1163,6 +1204,25 @@ if __name__ == "__main__":
             assert repair_state.steps_done.count("repair_external_search") == 1
             assert repair_state.intermediate.get("sources")
             assert repair_state.intermediate.get("external_summary") is not None
+
+            empty_res = build_recipe_response(message="", intent="recipe.search")
+            empty_st = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="x", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+            )
+            assert review_recipe_quality(empty_st, empty_res) == []
+            orig_flag = agent.ENABLE_LLM_REVIEWER
+            agent.ENABLE_LLM_REVIEWER = True
+            try:
+                notes = agent.review_recipe_quality(empty_st, empty_res)
+                assert "empty_message" in notes
+                attached = agent._attach_review_notes(empty_st, empty_res)
+                assert attached.message == ""
+                assert attached.meta.get("review_notes") == notes
+            finally:
+                agent.ENABLE_LLM_REVIEWER = orig_flag
 
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
