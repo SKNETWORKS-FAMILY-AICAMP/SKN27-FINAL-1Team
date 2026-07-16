@@ -295,8 +295,14 @@ def run_independent_external_jobs(state: RecipeExecutionState) -> RecipeExecutio
             results = list(pool.map(_run_one_external_job, jobs))
     for job, tr in results:
         if job.fills_field == "external_summary":
-            summary = (tr.data or {}).get("summary", "") if tr.ok else (tr.error or "")
-            sources = (tr.data or {}).get("sources", []) if tr.ok else []
+            if not tr.ok:
+                failed = list(state.intermediate.get("failed_external_jobs") or [])
+                failed.append({"name": job.name, "tool": job.tool, "error": tr.error})
+                state.intermediate["failed_external_jobs"] = failed
+                state.steps_done.append(f"run_fail:{job.name}")
+                continue
+            summary = (tr.data or {}).get("summary", "")
+            sources = (tr.data or {}).get("sources", [])
             state.intermediate["external_summary"] = summary
             state.intermediate["sources"] = sources
             state.steps_done.append("run_external_search")
@@ -1385,6 +1391,59 @@ if __name__ == "__main__":
             assert "run_external_search" in run_st.steps_done
             assert run_st.intermediate.get("external_summary") is not None
             assert run_st.intermediate.get("sources")
+
+            # P10-4: fail must not overwrite an existing external_summary
+            keep_st = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="없는레시피xyz", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            keep_st.intermediate["external_summary"] = "keep"
+            keep_st.intermediate["independent_external_jobs"] = [
+                ExternalJob(
+                    name="external_search",
+                    tool="external_search_tool",
+                    kwargs={"keyword": "x", "query_text": "x"},
+                    fills_field="external_summary",
+                ),
+            ]
+            _real_ext = agent.external_search_tool
+            agent.external_search_tool = lambda keyword, query_text=None: ToolResult(
+                ok=False, data=None, source="web_search", error="boom",
+            )
+            keep_st = agent.run_independent_external_jobs(keep_st)
+            agent.external_search_tool = _real_ext
+            assert keep_st.intermediate.get("external_summary") == "keep"
+            assert keep_st.intermediate.get("failed_external_jobs")
+            assert "run_fail:external_search" in keep_st.steps_done
+            assert "run_external_search" not in keep_st.steps_done
+
+            # P10-4: fail with no prior summary → failed only, no summary key
+            fail_st = RecipeExecutionState(
+                req=RecipeAgentRequest(
+                    text="없는레시피xyz", db=None, user_id=None,
+                    history=[], settings_obj=None, intent="recipe.search",
+                ),
+                template=TEMPLATE_RECIPE_SEARCH,
+            )
+            fail_st.intermediate["independent_external_jobs"] = [
+                ExternalJob(
+                    name="external_search",
+                    tool="external_search_tool",
+                    kwargs={"keyword": "x", "query_text": "x"},
+                    fills_field="external_summary",
+                ),
+            ]
+            agent.external_search_tool = lambda keyword, query_text=None: ToolResult(
+                ok=False, data=None, source="web_search", error="boom",
+            )
+            fail_st = agent.run_independent_external_jobs(fail_st)
+            agent.external_search_tool = _real_ext
+            assert "external_summary" not in fail_st.intermediate
+            assert fail_st.intermediate.get("failed_external_jobs")
+            assert "run_fail:external_search" in fail_st.steps_done
 
             result = agent._render_search_response(state)
             out = to_supervisor_state(result)
