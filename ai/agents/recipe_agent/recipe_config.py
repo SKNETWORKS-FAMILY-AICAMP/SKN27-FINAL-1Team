@@ -167,6 +167,8 @@ KEYWORD_TOKEN_STOPWORDS = {
 # Planner (public tools + LLM)
 #
 ENABLE_LLM_RECIPE_PLANNER = True
+ENABLE_LLM_PAIRING = True
+ENABLE_LLM_REVIEWER = False
 
 TOOL_SEARCH_RECIPES = "search_recipes"
 TOOL_RECOMMEND_BY_INGREDIENT = "recommend_by_ingredient"
@@ -230,4 +232,14 @@ PLANNER_GOLDEN_CASES = (
     ("김치볶음밥이랑 먹기 좋은 음식", "recipe.pairing", (TOOL_SUGGEST_PAIRING,), None),
     ("파스타와 어울리는 반찬", "recipe.pairing", (TOOL_SUGGEST_PAIRING,), None),
 )
+
+RECIPE_PAIRING_PROMPT = """너는 한국어 요리 곁들임 추천 도우미다.
+사용자 음식(main_dish)에 어울리는 간단한 곁들임 메뉴 3~4개를 추천하라.
+반드시 JSON만 반환:
+{"items":["계란국","오이무침","단무지"],"reply":"<친절한 한 문장>"}
+규칙:
+- items는 짧은 음식명만
+- 겹치거나 비슷한 항목은 피함
+- 설명은 reply 한 문장 이내
+"""
 

@@ -24,7 +24,13 @@ from .recipe_config import (
     WHEN_ALWAYS,
     WHEN_PREV_EMPTY,
 )
-from .recipe_utils import _extract_keyword, _extract_recipe_ingredient, _is_cooking_time_question
+from .recipe_utils import (
+    _extract_keyword,
+    _extract_recipe_ingredient,
+    _is_cooking_time_question,
+    analyze_recipe_intent,
+    extract_shown_recipe_ids,
+)
 
 from .recipe_agent import PlanStep, RecipeAgentRequest, RecipePlan
 
@@ -33,14 +39,19 @@ def _plan_keyword(req: RecipeAgentRequest) -> str:
     return _extract_recipe_ingredient(req.text) or _extract_keyword(req.text)
 
 
+def _planner_intent(req: RecipeAgentRequest) -> str:
+    return analyze_recipe_intent(req.text, req.history)
+
+
 def plan_recipe_request_rule(req: RecipeAgentRequest) -> RecipePlan:
     """Rule-based planner (1단계 stub). LLM 실패 시 폴백."""
+    planner_intent = _planner_intent(req)
     keyword = _plan_keyword(req)
 
-    if req.intent == "recipe.pairing":
+    if planner_intent == "recipe.pairing":
         return RecipePlan(steps=[PlanStep(tool=TOOL_SUGGEST_PAIRING, args={"text": req.text})])
 
-    if req.intent == "recipe.search" and _is_cooking_time_question(req.text):
+    if planner_intent == "recipe.search" and _is_cooking_time_question(req.text):
         return RecipePlan(
             steps=[
                 PlanStep(
@@ -50,7 +61,7 @@ def plan_recipe_request_rule(req: RecipeAgentRequest) -> RecipePlan:
             ]
         )
 
-    if req.intent == "recipe.search":
+    if planner_intent == "recipe.search":
         return RecipePlan(
             steps=[
                 PlanStep(tool=TOOL_SEARCH_RECIPES, args={"keyword": keyword}),
@@ -139,8 +150,15 @@ def _normalize_llm_plan(raw: dict[str, Any] | None, req: RecipeAgentRequest) -> 
 def _call_llm_planner(req: RecipeAgentRequest) -> dict[str, Any] | None:
     if not ENABLE_LLM_RECIPE_PLANNER or OpenAI is None or not app_settings.OPENAI_API_KEY:
         return None
+    planner_intent = _planner_intent(req)
+    shown_recipe_ids = sorted(extract_shown_recipe_ids(req.history))
     payload = json.dumps(
-        {"text": req.text, "intent": req.intent, "user_id": req.user_id},
+        {
+            "text": req.text,
+            "intent": planner_intent,
+            "user_id": req.user_id,
+            "shown_recipe_ids": shown_recipe_ids[-10:],
+        },
         ensure_ascii=False,
     )
     client = OpenAI(api_key=app_settings.OPENAI_API_KEY)
@@ -167,6 +185,30 @@ def plan_recipe_request(req: RecipeAgentRequest) -> tuple[RecipePlan, str]:
     except Exception:
         pass
     return plan_recipe_request_rule(req), "rule"
+
+
+def compare_planner_shadow(req: RecipeAgentRequest) -> dict[str, Any]:
+    """rule planner와 llm planner의 tool 시퀀스를 비교한다."""
+    rule_plan = plan_recipe_request_rule(req)
+    llm_tools: list[str] = []
+    llm_source = "none"
+    try:
+        raw = _call_llm_planner(req)
+        llm_plan = _normalize_llm_plan(raw, req)
+        if llm_plan is not None:
+            llm_tools = [step.tool for step in llm_plan.steps]
+            llm_source = "llm"
+    except Exception:
+        llm_source = "error"
+
+    rule_tools = [step.tool for step in rule_plan.steps]
+    return {
+        "rule": rule_tools,
+        "llm": llm_tools,
+        "match": rule_tools == llm_tools,
+        "source": llm_source,
+        "diff": {"rule_only": [t for t in rule_tools if t not in llm_tools], "llm_only": [t for t in llm_tools if t not in rule_tools]},
+    }
 
 
 if __name__ == "__main__":
@@ -222,5 +264,21 @@ if __name__ == "__main__":
     rule_plan, source = planner.plan_recipe_request(req)
     assert source == "rule"
     assert [s.tool for s in rule_plan.steps] == [TOOL_SEARCH_RECIPES, TOOL_SEARCH_EXTERNAL]
+
+    # shadow compare (mock)
+    planner._call_llm_planner = lambda r: valid
+    shadow = planner.compare_planner_shadow(req)
+    assert shadow["source"] == "llm"
+    assert shadow["rule"] == shadow["llm"]
+    assert shadow["match"] is True
+
+    # shown_recipe_ids payload extraction smoke
+    req_h = RecipeAgentRequest(
+        text="두부로 뭐 해먹지?", db=None, user_id=1,
+        history=[{"role": "bot", "text": "추천", "slots": {"shown_recipe_ids": [1, "2"]}}],
+        settings_obj=None, intent="recipe.recommend",
+    )
+    payload = json.loads(json.dumps({"shown_recipe_ids": sorted(extract_shown_recipe_ids(req_h.history))[-10:]}, ensure_ascii=False))
+    assert payload["shown_recipe_ids"] == [1, 2]
 
     print("recipe_planner ok")

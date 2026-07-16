@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -16,8 +17,14 @@ try:
 except ImportError:
     OpenAI = None
 
-from .recipe_config import CONSTRAINT_EASY_30, CONSTRAINT_INGREDIENT_ONLY, PAIRING_MENU
-from .recipe_utils import _is_relevant_search_result, _rank_recipe_items, _recipe_actions
+from .recipe_config import (
+    CONSTRAINT_EASY_30,
+    CONSTRAINT_INGREDIENT_ONLY,
+    ENABLE_LLM_PAIRING,
+    PAIRING_MENU,
+    RECIPE_PAIRING_PROMPT,
+)
+from .recipe_utils import _is_relevant_search_result, _rank_recipe_items, _recipe_actions, extract_shown_recipe_ids
 
 
 @dataclass
@@ -84,9 +91,39 @@ def handle_recipe_pairing(text: str) -> tuple[str, list[dict[str, Any]]]:
     """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
     keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
     keyword = re.sub(r"^(남은|먹다남은)\s*", "", keyword) or "그 메뉴"
-    items = PAIRING_MENU.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
+    normalized = keyword.replace(" ", "")
+    items = PAIRING_MENU.get(normalized)
+    if not items:
+        items = _pairing_with_llm(keyword)
+    if not items:
+        items = ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"]
     reply = f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
     return reply, []
+
+
+def _pairing_with_llm(keyword: str) -> list[str]:
+    if not ENABLE_LLM_PAIRING or not app_settings.OPENAI_API_KEY or OpenAI is None:
+        return []
+    try:
+        client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
+        response = client_ai.chat.completions.create(
+            model=app_settings.OPENAI_MODEL,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": RECIPE_PAIRING_PROMPT},
+                {"role": "user", "content": json.dumps({"main_dish": keyword}, ensure_ascii=False)},
+            ],
+        )
+        content = response.choices[0].message.content if response.choices else ""
+        data = json.loads(content or "{}")
+        raw_items = data.get("items") or []
+        if not isinstance(raw_items, list):
+            return []
+        items = [str(item).strip() for item in raw_items if str(item).strip()]
+        return items[:4]
+    except Exception:
+        return []
 
 
 def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
@@ -161,9 +198,21 @@ def sort_candidates_tool(items: list[dict[str, Any]]) -> ToolResult:
 
 
 def exclude_previous_tool(items: list[dict[str, Any]], history: list) -> ToolResult:
-    """이전 봇 응답에 포함된 레시피를 후보에서 제외한다. ponytail: 문자열 비교 방식. 구조화 이력 전환은 Backlog."""
+    """이전 봇 응답 레시피를 후보에서 제외한다. slots.shown_recipe_ids 우선."""
     try:
-        past_bot_texts = " ".join(getattr(msg, "text", "") for msg in history if getattr(msg, "role", "") == "bot")
+        shown_ids = extract_shown_recipe_ids(history)
+        if shown_ids:
+            filtered = [item for item in items if item.get("recipe_id") not in shown_ids]
+            if not filtered:
+                filtered = list(items)
+            return ToolResult(ok=True, data={"items": filtered, "total": len(filtered)}, source="exclude_previous")
+
+        # ponytail: history slots가 없으면 문자열 기반 fallback 유지
+        past_bot_texts = " ".join(
+            msg.get("text", "") if isinstance(msg, dict) else getattr(msg, "text", "")
+            for msg in history
+            if (msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")) == "bot"
+        )
         filtered = [item for item in items if item.get("title", "") not in past_bot_texts]
         if not filtered:
             filtered = list(items)

@@ -150,6 +150,27 @@ def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text or "").lower()
 
 
+def extract_shown_recipe_ids(history: list | None) -> set[int]:
+    """history의 bot slots.shown_recipe_ids에서 recipe_id를 수집한다."""
+    shown: set[int] = set()
+    for message in history or []:
+        role = message.get("role", "") if isinstance(message, dict) else getattr(message, "role", "")
+        if role != "bot":
+            continue
+        slots = message.get("slots", {}) if isinstance(message, dict) else getattr(message, "slots", {}) or {}
+        if not isinstance(slots, dict):
+            continue
+        ids = slots.get("shown_recipe_ids") or []
+        if not isinstance(ids, list):
+            continue
+        for rid in ids:
+            try:
+                shown.add(int(rid))
+            except (TypeError, ValueError):
+                continue
+    return shown
+
+
 def analyze_recipe_intent(text: str, history: list | None = None) -> str:
     """recipe.search / recipe.recommend / recipe.pairing 3-way 분류."""
     del history  # ponytail: P3 — 시그니처만 고정, follow-up/LLM은 P5

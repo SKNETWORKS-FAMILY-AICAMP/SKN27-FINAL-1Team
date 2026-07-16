@@ -7,6 +7,7 @@ from urllib.parse import quote
 from .recipe_config import (
     AGENT_NAME,
     CONSTRAINT_EASY_30,
+    ENABLE_LLM_REVIEWER,
     MAX_DISPLAY_RECIPES,
     TOOL_RECOMMEND_BY_INGREDIENT,
     TOOL_RECOMMEND_FROM_FRIDGE,
@@ -100,6 +101,18 @@ class RecipeExecutionState:
     steps_done: list[str] = field(default_factory=list)
     intermediate: dict[str, Any] = field(default_factory=dict)
     last_tool: str | None = None
+
+
+def review_recipe_quality(state: RecipeExecutionState, result: RecipeAgentResult) -> list[str]:
+    """응답 품질 힌트(휴리스틱). 응답 본문은 수정하지 않는다."""
+    if not ENABLE_LLM_REVIEWER:
+        return []
+    notes: list[str] = []
+    if not (result.message or "").strip():
+        notes.append("empty_message")
+    if state.last_tool in (TOOL_SEARCH_RECIPES, TOOL_RECOMMEND_BY_INGREDIENT) and not result.actions:
+        notes.append("no_recipe_actions")
+    return notes
 
 
 def build_recipe_response(
@@ -440,7 +453,20 @@ def run_recipe_agent(
         sources=result.sources,
         meta=meta,
     )
-    return to_supervisor_state(result)
+    review_notes = review_recipe_quality(state, result)
+    if review_notes:
+        result.meta["review_notes"] = review_notes
+    out = to_supervisor_state(result)
+    shown_recipe_ids = [
+        int(action.get("data", {}).get("recipe_id"))
+        for action in result.actions
+        if isinstance(action, dict)
+        and isinstance(action.get("data"), dict)
+        and action["data"].get("recipe_id") is not None
+    ]
+    if shown_recipe_ids:
+        out["slots"] = {"shown_recipe_ids": shown_recipe_ids}
+    return out
 
 
 if __name__ == "__main__":
@@ -449,10 +475,12 @@ if __name__ == "__main__":
     import ai.agents.recipe_agent.recipe_planner as planner
 
     def _check_output_contract(result: dict) -> None:
-        assert set(result) == {"response_text", "actions", "sources"}
+        assert "response_text" in result and "actions" in result and "sources" in result
         assert isinstance(result["response_text"], str)
         assert isinstance(result["actions"], list)
         assert isinstance(result["sources"], list)
+        if "slots" in result:
+            assert isinstance(result["slots"], dict)
 
     # (a) rule plan tool order by utterance type
     req_pairing = agent.RecipeAgentRequest(
@@ -575,6 +603,7 @@ if __name__ == "__main__":
         assert "관련 레시피예요." in r["response_text"]
         assert r["actions"][0]["url"] == "/recipes/1"
         assert r["sources"] == []
+        assert r.get("slots", {}).get("shown_recipe_ids") == [1]
     finally:
         agent.TOOL_REGISTRY[agent.TOOL_SEARCH_RECIPES] = orig_search
 
