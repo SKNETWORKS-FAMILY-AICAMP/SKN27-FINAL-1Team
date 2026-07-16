@@ -254,6 +254,42 @@ def pairing_tool(text: str) -> ToolResult:
         return ToolResult(ok=False, error=str(e), source="pairing")
 
 
+def rank_search_candidates_tool(keyword: str, items: list[dict[str, Any]]) -> ToolResult:
+    """검색 후보를 키워드 매칭 점수로 정렬한다. ponytail: _rank_recipe_items 재사용."""
+    try:
+        from .recipe_utils import _rank_recipe_items
+        ranked = _rank_recipe_items(keyword, items)
+        return ToolResult(ok=True, data={"items": ranked, "total": len(ranked)}, source="rank_search")
+    except Exception as e:
+        return ToolResult(ok=False, error=str(e), source="rank_search")
+
+
+def _fill_search_pipeline(state: RecipeExecutionState) -> RecipeExecutionState:
+    """내부 검색 단계로 SEARCH_TEMPLATE_FIELDS를 채운다. ponytail: 엔진 미연결. P6-4에서 사용."""
+    from .recipe_utils import _extract_keyword, _extract_recipe_ingredient
+
+    text = state.req.text
+    keyword = _extract_recipe_ingredient(text) or _extract_keyword(text)
+    state.intermediate["keyword"] = keyword
+    state.steps_done.append("extract_keyword")
+
+    search = search_recipe_tool(state.req.db, keyword)
+    candidates = (search.data or {}).get("items", []) if search.ok else []
+    state.intermediate["recipe_candidates"] = candidates
+    state.steps_done.append("search_recipe")
+
+    ranked = rank_search_candidates_tool(keyword, candidates)
+    items = (ranked.data or {}).get("items", []) if ranked.ok else candidates
+    selected = items[:3]
+    state.intermediate["selected_recipes"] = selected
+    state.steps_done.append("rank_and_select")
+
+    state.intermediate["actions"] = []
+    state.intermediate["sources"] = []
+    state.template = TEMPLATE_RECIPE_SEARCH
+    return state
+
+
 def run_recipe_agent(
     text: str,
     *,
@@ -356,6 +392,8 @@ if __name__ == "__main__":
         assert isinstance(_select_engine("recipe.pairing"), PairingTemplateEngine)
         assert isinstance(_select_engine("recipe.search"), LegacyRecipeEngine)
         assert isinstance(_select_engine("recipe.recommend"), LegacyRecipeEngine)
+        assert callable(rank_search_candidates_tool)
+        assert callable(_fill_search_pipeline)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
@@ -410,6 +448,31 @@ if __name__ == "__main__":
             assert r["actions"] == []
             assert r["sources"] == []
             _check_output_contract(r)
+
+            orig_search_tool = agent.search_recipe_tool
+            agent.search_recipe_tool = lambda db, keyword: ToolResult(
+                ok=True,
+                data={"items": [{"recipe_id": 1, "title": "김치볶음밥"}], "total": 1},
+                source="recipe_search",
+            )
+            try:
+                state = RecipeExecutionState(
+                    req=RecipeAgentRequest(
+                        text="김치볶음밥 레시피",
+                        db=None,
+                        user_id=None,
+                        history=[],
+                        settings_obj=None,
+                        intent="recipe.search",
+                    ),
+                )
+                state = agent._fill_search_pipeline(state)
+                assert set(SEARCH_TEMPLATE_FIELDS) <= set(state.intermediate)
+                assert state.intermediate["keyword"]
+                assert len(state.intermediate["selected_recipes"]) <= 3
+                assert state.template == TEMPLATE_RECIPE_SEARCH
+            finally:
+                agent.search_recipe_tool = orig_search_tool
 
             agent.handle_recipe_search = lambda db, text: ("결과 없음", [], [])
             r = agent.run_recipe_agent("없는레시피xyz", db=None, intent="recipe.search")
