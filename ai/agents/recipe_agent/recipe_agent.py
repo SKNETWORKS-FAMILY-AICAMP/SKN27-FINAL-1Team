@@ -303,6 +303,7 @@ if __name__ == "__main__":
         assert callable(exclude_previous_tool)
         assert callable(build_actions_tool)
         assert callable(external_search_tool)
+        assert callable(handle_recipe_pairing)
 
     def _test_behavior():
         """기능 동작 검증 (mock 핸들러 사용)"""
