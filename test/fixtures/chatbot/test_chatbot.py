@@ -1098,6 +1098,57 @@ def test_inventory_add_unknown_name_asks_quantity(monkeypatch) -> None:
 
 
 
+def test_inventory_list_keeps_all_displayed_names(monkeypatch) -> None:
+    """재료가 9개 이상이어도 여덟 번째 이름과 나머지 개수를 모두 표시합니다."""
+    from ai.agents.inventory_agent.inventory_agent import get_inventory_list
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    items = [{"name": f"재료{index}"} for index in range(1, 11)]
+    monkeypatch.setattr(inventory_service, "get_ingredients", lambda **kwargs: items)
+
+    reply = get_inventory_list(MagicMock(), 1)
+
+    assert "재료8 외 2개" in reply
+
+
+def test_unknown_valid_ingredient_uses_unchecked_confirmation(monkeypatch) -> None:
+    """마스터 미등록 식재료는 유효성 확인 후 미등록 추가 명령으로 연결합니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    monkeypatch.setattr(inventory_agent, "is_valid_ingredient", lambda name: True)
+    monkeypatch.setattr(inventory_service, "_resolve_known_ingredient_name", lambda db, name: None)
+
+    result = inventory_agent.run_inventory_agent(
+        intent="inventory.action",
+        text="게살 2개 냉장에 추가해줘",
+        history=[],
+        db=MagicMock(),
+        user_id=1,
+    )
+
+    assert result["actions"][0]["data"]["message"] == "확인:add_ingredient_unchecked:게살:2.0:냉장"
+
+
+def test_unchecked_add_revalidates_before_write(monkeypatch) -> None:
+    """조작된 미등록 추가 확인 명령은 실행 시점의 유효성 검사를 통과해야 합니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+    from app.backend.services.inventory_service.inventory_service import inventory_service
+
+    monkeypatch.setattr(inventory_agent, "is_valid_ingredient", lambda name: False)
+    add_unchecked = MagicMock()
+    monkeypatch.setattr(inventory_service, "add_ingredient_unchecked_by_name", add_unchecked)
+
+    result = inventory_agent.execute_inventory_action(
+        "add_ingredient_unchecked",
+        ["확인", "add_ingredient_unchecked", "안녕", "1", "냉장"],
+        MagicMock(),
+        1,
+    )
+
+    assert result["response_text"] == "올바른 식재료명을 입력해주세요."
+    add_unchecked.assert_not_called()
+
 def test_extract_add_items_keeps_leading_ga() -> None:
     """식재료명 맨 앞의 가를 조사로 잘라내지 않습니다."""
     items = _extract_add_items("가지튀김 냉장고에 넣어줘")

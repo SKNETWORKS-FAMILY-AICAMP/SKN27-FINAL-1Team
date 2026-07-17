@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.backend.services.inventory_service.inventory_service import inventory_service
-from ai.agents.supervisor_agent.supervisor_utils import GENERAL_REPLY, _apply_josa, _normalize_text
+from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text
 from ai.agents.inventory_agent.inventory_utils import (
     _inventory_refresh_action,
     _extract_expiry_keyword,
@@ -18,7 +18,6 @@ from ai.agents.inventory_agent.inventory_utils import (
     _quantity_text,
     _confirm_action,
     _pending_add_from_history,
-    _pending_add_many_from_history,
     _pending_add_storage_from_history,
     _pending_consume_from_history,
     _storage_choice_response
@@ -42,6 +41,8 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
             return {"response_text": reply, "actions": [_inventory_refresh_action()]}
 
         if action == "add_ingredient_unchecked" and len(parts) >= 5:
+            if not is_valid_ingredient(parts[2]):
+                return {"response_text": "올바른 식재료명을 입력해주세요."}
             reply = inventory_service.add_ingredient_unchecked_by_name(db, user_id, parts[2], float(parts[3]), parts[4])
             return {"response_text": reply, "actions": [_inventory_refresh_action()]}
 
@@ -71,9 +72,9 @@ def get_inventory_list(db: Session, user_id: int) -> str:
         return EMPTY_INVENTORY_REPLY
 
     names = [item["name"] for item in items[:8]]
-    suffix = "" if len(items) <= 8 else f" 외 {len(items) - 8}개"
-    target_word = suffix if suffix else names[-1]
-    return f"현재 냉장고에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{_apply_josa(target_word, '이가')} 있어요."
+    if len(items) > 8:
+        return f"현재 냉장고에는 {', '.join(names)} 외 {len(items) - 8}개가 있어요."
+    return f"현재 냉장고에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{_apply_josa(names[-1], '이가')} 있어요."
 
 
 def get_expiring_inventory(db: Session, user_id: int, text: str = "") -> str:
@@ -123,7 +124,13 @@ def _unknown_add_response(items: list[dict], db: Session) -> dict | None:
         if _normalize_text(item["name"]) in {"안녕", "하이", "hello", "hi"}:
             return {"response_text": "올바른 식재료명을 입력해주세요."}
         if not resolve_ingredient_name(db, item["name"]):
-            return {"response_text": f"'{item['name']}'의 수량을 알려주시겠어요? (예: {item['name']} 1개)"}
+            if item["quantity"] is None:
+                return {"response_text": f"'{item['name']}'의 수량을 알려주시겠어요? (예: {item['name']} 1개)"}
+            if not item["storage"]:
+                return _storage_choice_response(item["name"], item["quantity"], unchecked=True)
+            command = f"확인:add_ingredient_unchecked:{item['name']}:{item['quantity']}:{item['storage']}"
+            reply = f"{item['name']} {_quantity_text(item['quantity'])}개를 {item['storage']}에 추가할까요?"
+            return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
     return None
 
 def _handle_inventory_action(text: str, db: Session, user_id: int) -> dict:
@@ -207,18 +214,21 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         if not pending:
             return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
         name, quantity = pending
+        action = "add_ingredient" if resolve_ingredient_name(db, name) else "add_ingredient_unchecked"
         reply = f"{name} {_quantity_text(quantity)}개를 {storage}에 추가할까요?"
-        command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
+        command = f"확인:{action}:{name}:{quantity}:{storage}"
         return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if intent == "inventory.pending_add":
         name = _pending_add_from_history(history) or ""
         quantity = _extract_quantity(text) or 1
         storage = _extract_storage(text)
+        unchecked = not resolve_ingredient_name(db, name)
         if not storage:
-            return _storage_choice_response(name, quantity)
+            return _storage_choice_response(name, quantity, unchecked=unchecked)
+        action = "add_ingredient_unchecked" if unchecked else "add_ingredient"
         reply = f"{name} {_quantity_text(quantity)}개를 {storage}에 추가할까요?"
-        command = f"확인:add_ingredient:{name}:{quantity}:{storage}"
+        command = f"확인:{action}:{name}:{quantity}:{storage}"
         return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")]}
 
     if intent == "inventory.pending_add_many_retry":
