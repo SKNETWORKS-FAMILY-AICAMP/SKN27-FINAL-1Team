@@ -52,7 +52,6 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _normalize_shopping_create_query,
     _normalize_text,
     _parse_alarm_request,
-    _reply_recipe_pairing,
     _rewrite_context_switch,
     _rewrite_guide_query,
     _strip_shopping_compare_suffix,
@@ -243,13 +242,6 @@ def recipe_agent_node(state: GraphState) -> dict:
     )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
-def recipe_pairing_node(state: GraphState) -> dict:
-    """특정 음식과 함께 먹기 좋은 메뉴를 안내합니다."""
-    return _normalize_agent_result(
-        {"response_text": _reply_recipe_pairing(state["text"])},
-        inherited_slots=state.get("slots"),
-    )
-
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
     result = {
@@ -349,7 +341,6 @@ def multi_agent_node(state: GraphState) -> dict:
         "inventory_agent_node": inventory_agent_node,
         "guide_agent_node": guide_agent_node,
         "recipe_agent_node": recipe_agent_node,
-        "recipe_pairing_node": recipe_pairing_node,
         "receipt_guide_node": receipt_guide_node,
         "shopping_agent_node": shopping_agent_node,
     }
@@ -414,7 +405,7 @@ def route_intent(state: GraphState) -> str:
         "ingredient.guide": "guide_agent_node",
         "recipe.recommend": "recipe_agent_node",
         "recipe.search": "recipe_agent_node",
-        "recipe.pairing": "recipe_pairing_node",
+        "recipe.pairing": "recipe_agent_node",
         "receipt.guide": "receipt_guide_node",
         "food.general": "fallback_agent_node",
     }
@@ -428,7 +419,6 @@ workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
-workflow.add_node("recipe_pairing_node", recipe_pairing_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
 workflow.add_node("fallback_agent_node", fallback_agent_node)
 workflow.add_node("general_node", general_node)
@@ -442,7 +432,6 @@ for node_name in (
     "shopping_agent_node",
     "guide_agent_node",
     "recipe_agent_node",
-    "recipe_pairing_node",
     "receipt_guide_node",
     "fallback_agent_node",
     "general_node",

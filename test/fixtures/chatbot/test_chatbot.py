@@ -1018,7 +1018,7 @@ def test_inventory_action_requires_login() -> None:
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
     assert route_intent({"intent": "recipe.search"}) == "recipe_agent_node"
-    assert route_intent({"intent": "recipe.pairing"}) == "recipe_pairing_node"
+    assert route_intent({"intent": "recipe.pairing"}) == "recipe_agent_node"
     assert route_intent({"intent": "inventory.action"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"
 
@@ -1522,15 +1522,6 @@ def test_non_food_request_stays_out_of_fallback() -> None:
 
     assert routed["intent"] == "general"
     assert route_intent(routed) == "general_node"
-
-def test_recipe_pairing_reply() -> None:
-    """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
-    reply = supervisor_utils._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
-
-    assert "김치볶음밥에는" in reply
-    assert "계란국" in reply
-
-
 
 def test_agent_quality_retry_runs_only_after_bad_result() -> None:
     """빈 Agent 응답은 한 번 재호출하고 정상 응답에는 재시도 횟수를 기록합니다."""

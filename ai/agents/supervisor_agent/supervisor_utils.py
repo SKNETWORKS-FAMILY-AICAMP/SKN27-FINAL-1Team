@@ -137,13 +137,6 @@ _SHOPPING_WRITE_INTENTS = {
     "shopping.check_item",
 }
 
-# Supervisor가 직접 제공하는 최소 곁들임 추천 목록입니다.
-_RECIPE_PAIRINGS = {
-    "김치볶음밥": ["계란국", "어묵국", "단무지", "오이무침", "군만두"],
-    "파스타": ["마늘빵", "샐러드", "피클", "구운 채소"],
-    "라면": ["김치", "단무지", "계란말이", "주먹밥"],
-}
-
 def _normalize_text(text: str) -> str:
     """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
     return text.replace(" ", "").lower()
@@ -682,14 +675,6 @@ def _chat_error_response() -> dict[str, Any]:
         "slots": {},
         "pending_action": None,
     }
-
-
-def _reply_recipe_pairing(text: str) -> str:
-    """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
-    keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
-    keyword = re.sub(r"^(남은|먹다남은)\s*", "", keyword) or "그 메뉴"
-    items = _RECIPE_PAIRINGS.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
-    return f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
 
 
 def _parse_alarm_request(text: str, intent: str) -> dict[str, Any]:
