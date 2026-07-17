@@ -1,6 +1,9 @@
+import csv
 import difflib
 import re
 import unicodedata
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -130,8 +133,26 @@ FUZZY_CANDIDATE_LIMIT = 5
 CONFIRM_CANDIDATE_DISPLAY_LIMIT = 5
 
 NUTRITION_PARTIAL_MATCH_LIMIT = 10
+NUTRITION_FUZZY_MIN_SCORE = 0.66
+NUTRITION_ALIAS_CSV_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "storage"
+    / "processed"
+    / "nutrition"
+    / "nutrition_aliases.csv"
+)
 RELATED_INGREDIENT_LIMIT = 30
 RELATED_CARD_LIMIT = 8
+
+NUTRITION_VALID_OPTION_MIN_RANK = 120
+NUTRITION_LOW_PRIORITY_FOOD_WORDS = (
+    "튀긴", "통조림", "젓갈", "염장", "얼간", "소스", "조림",
+    "초밥", "떡갈비", "삼겹살", "햄",
+)
+NUTRITION_LOW_PRIORITY_REPRESENTATIVE_WORDS = (
+    "기타 식육가공품", "기타 수산가공품", "햄", "소스",
+)
+NUTRITION_ORGAN_WORDS = ("알", "간", "머리")
 
 WEB_SEARCH_MAX_RESULTS = 8
 WEB_SOURCE_LIMIT = 3
@@ -152,7 +173,6 @@ UNHELPFUL_WEB_PHRASES = (
     "다른 신뢰할 수 있는 출처",
     "다른 출처를 참조",
 )
-
 
 # =========================================================
 # 3. 응답 생성 함수
@@ -610,6 +630,23 @@ def _normalize_nutrition_match_text(value: Any) -> str:
     return re.sub(r"[^0-9a-zA-Z가-힣]+", "", str(value or "")).lower()
 
 
+@lru_cache(maxsize=1)
+def _nutrition_aliases() -> dict[str, str]:
+    if not NUTRITION_ALIAS_CSV_PATH.exists():
+        return {}
+
+    with NUTRITION_ALIAS_CSV_PATH.open(encoding="utf-8-sig", newline="") as file:
+        return {
+            _normalize_match_text(row.get("alias")): (row.get("normalized") or "").strip()
+            for row in csv.DictReader(file)
+            if row.get("alias") and row.get("normalized")
+        }
+
+
+def _nutrition_alias(value: str) -> str | None:
+    return _nutrition_aliases().get(_normalize_match_text(value))
+
+
 def _is_safe_nutrition_partial_match(keyword: str, row: dict[str, Any]) -> bool:
     normalized_keyword = _normalize_nutrition_match_text(keyword)
     normalized_representative = _normalize_nutrition_match_text(row.get("representative_name"))
@@ -627,21 +664,32 @@ def _wants_representative_nutrition(value: str) -> bool:
 
 
 def _nutrition_lookup_name(value: str) -> str:
-    return re.sub(r"(대표|기본|일반|아무거나)", " ", value or "").strip()
+    name = re.sub(r"(대표|기본|일반|아무거나)", " ", value or "").strip()
+    return _nutrition_alias(name) or name
 
 
 def _nutrition_display_name(food_name: str) -> str:
     return " · ".join(part.strip() for part in str(food_name or "").split("_") if part.strip())
 
 
+def _nutrition_candidate_key(row: dict[str, Any]) -> str:
+    food_name = str(row.get("food_name") or "")
+    representative = str(row.get("representative_name") or "")
+    parts = [part.strip() for part in food_name.split("_") if part.strip()]
+    if len(parts) >= 2:
+        return f"{representative}:{parts[-2]}"
+    return food_name
+
+
 def _nutrition_candidate_response(ingredient: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     candidates = []
-    seen_labels = set()
+    seen_keys = set()
     for row in rows:
-        label = _nutrition_display_name(row["food_name"])
-        if label in seen_labels:
+        key = _nutrition_candidate_key(row)
+        if key in seen_keys:
             continue
-        seen_labels.add(label)
+        seen_keys.add(key)
+        label = _nutrition_display_name(row["food_name"])
         candidates.append(
             {
                 "name": row["food_name"],
@@ -684,6 +732,75 @@ def _nutrition_candidate_response(ingredient: str, rows: list[dict[str, Any]]) -
         ],
         meta={"result_code": "NUTRITION_CONFIRMATION_REQUIRED", "candidate_count": len(rows)},
     )
+
+
+def _nutrition_name_has_token(food_name: str, token: str) -> bool:
+    return bool(re.search(rf"(^|[\s_,()]){re.escape(token)}($|[\s_,()])", food_name))
+
+
+def _nutrition_option_rank(row: dict[str, Any], name: str) -> tuple[int, str]:
+    food_name = str(row.get("food_name") or "")
+    representative = str(row.get("representative_name") or "")
+    score = int(row.get("representative_nutrition_score") or 0)
+    if "생것" in food_name:
+        score += 120
+    if _nutrition_name_has_token(food_name, name):
+        score += 80
+    if representative == name:
+        score += 60
+    elif representative == f"{name}류" and _nutrition_name_has_token(food_name, name):
+        score += 50
+    elif representative == f"{name}류":
+        score -= 220
+    if name in food_name and not _nutrition_name_has_token(food_name, name) and representative not in {name, f"{name}류"}:
+        score -= 180
+    if any(word in food_name for word in ("튀긴", "통조림", "젓갈", "얼간", "염장", "소스", "조림")):
+        score -= 150
+    if any(_nutrition_name_has_token(food_name, word) for word in ("알", "간", "머리")):
+        score -= 300
+    if any(word in food_name for word in NUTRITION_LOW_PRIORITY_FOOD_WORDS):
+        score -= 150
+    if any(
+        word in representative
+        for word in NUTRITION_LOW_PRIORITY_REPRESENTATIVE_WORDS
+    ):
+        score -= 250
+    if any(_nutrition_name_has_token(food_name, word) for word in NUTRITION_ORGAN_WORDS):
+        score -= 300
+    return score, food_name
+
+
+def _representative_nutrition_option(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return next((row for row in rows if row.get("is_representative_nutrition")), None)
+
+
+def _has_part_nutrition_options(rows: list[dict[str, Any]]) -> bool:
+    part_groups = (
+        ("\uac00\uc2b4\uc0b4",),
+        ("\ub0a0\uac1c",),
+        ("\ub2e4\ub9ac\uc0b4", "\ub113\uc801\ub2e4\ub9ac", "\uc544\ub7ab\ub2e4\ub9ac"),
+        ("\uc548\uc2ec",),
+        ("\ubaa9",),
+        ("\ub625\uc9d1",),
+        ("\uac04",),
+        ("\uaecd\uc9c8",),
+        ("\uc0b4\ucf54\uae30",),
+        ("\uc624\uace8\uacc4",),
+        ("\ub4f1\uc2ec",),
+        ("\uac08\ube44",),
+        ("\ubaa9\uc0b4",),
+        ("\uc0bc\uacb9\uc0b4",),
+        ("\uc55e\ub2e4\ub9ac",),
+        ("\ub4b7\ub2e4\ub9ac",),
+        ("\uc0ac\ud0dc",),
+    )
+    matched_groups = {
+        index
+        for row in rows
+        for index, words in enumerate(part_groups)
+        if any(word in str(row.get("food_name") or "") for word in words)
+    }
+    return len(matched_groups) > 1
 
 
 def _query_nutrition(names: list[str]) -> dict[str, Any] | None:
@@ -789,14 +906,15 @@ def _nutrition_options(name: str) -> list[dict[str, Any]]:
                 {"name": name, "limit": CONFIRM_CANDIDATE_DISPLAY_LIMIT},
             ).mappings().all()
         ]
-        if rows:
+        if any(row.get("food_code") == name or row.get("food_name") == name for row in rows):
             return rows
         if not tokens:
-            return []
+            return rows
         conditions = " AND ".join(f"food_name ILIKE :token_{index}" for index, _ in enumerate(tokens[:4]))
         params = {f"token_{index}": f"%{token}%" for index, token in enumerate(tokens[:4])}
-        params["limit"] = CONFIRM_CANDIDATE_DISPLAY_LIMIT
-        return [
+        params["representative_name"] = tokens[-1]
+        params["limit"] = CONFIRM_CANDIDATE_DISPLAY_LIMIT * 4
+        rows.extend(
             dict(row)
             for row in db.execute(
                 text(
@@ -805,7 +923,8 @@ def _nutrition_options(name: str) -> list[dict[str, Any]]:
                            is_representative_nutrition, representative_nutrition_score
                     FROM food_nutrition_facts
                     WHERE {conditions}
-                    ORDER BY is_representative_nutrition DESC,
+                    ORDER BY CASE WHEN representative_name = :representative_name THEN 0 ELSE 1 END,
+                             is_representative_nutrition DESC,
                              representative_nutrition_score DESC,
                              source_priority,
                              food_name
@@ -814,9 +933,64 @@ def _nutrition_options(name: str) -> list[dict[str, Any]]:
                 ),
                 params,
             ).mappings().all()
-        ]
+        )
+        unique_rows = {row.get("food_code") or row.get("food_name"): row for row in rows}
+        return sorted(
+            unique_rows.values(),
+            key=lambda row: _nutrition_option_rank(row, tokens[-1]),
+            reverse=True,
+        )[:CONFIRM_CANDIDATE_DISPLAY_LIMIT]
     finally:
         db.close()
+
+
+def _nutrition_fuzzy_name(name: str) -> str | None:
+    alias = _nutrition_alias(name)
+    if alias:
+        return alias
+
+    normalized_name = _normalize_match_text(name)
+    if len(normalized_name) < 2:
+        return None
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT DISTINCT representative_name
+                FROM food_nutrition_facts
+                WHERE representative_name IS NOT NULL
+                  AND char_length(representative_name) BETWEEN :min_len AND :max_len
+                """
+            ),
+            {
+                "min_len": max(2, len(name) - 1),
+                "max_len": len(name) + 1,
+            },
+        ).scalars().all()
+    finally:
+        db.close()
+
+    scored = []
+    for row in rows:
+        if not row:
+            continue
+        candidate = str(row)
+        if candidate == f"{name}류":
+            continue
+        normalized_candidate = _normalize_match_text(candidate)
+        score = difflib.SequenceMatcher(
+            None,
+            normalized_name,
+            normalized_candidate,
+        ).ratio()
+        scored.append((score, abs(len(candidate) - len(name)), candidate))
+    if not scored:
+        return None
+
+    score, _, candidate = max(scored, key=lambda item: (item[0], -item[1]))
+    return candidate if score >= NUTRITION_FUZZY_MIN_SCORE else None
 
 
 def _ingredient_from_nutrition(nutrition: dict[str, Any] | None, fallback_name: str) -> dict[str, Any]:
@@ -1318,6 +1492,26 @@ def lookup_ingredient_nutrition(ingredient: str) -> dict[str, Any]:
         if not _wants_representative_nutrition(ingredient):
             options = _nutrition_options(lookup_name)
             if len(options) == 1:
+                option = options[0]
+                is_exact_option = (
+                    option.get("food_code") == lookup_name
+                    or option.get("food_name") == lookup_name
+                )
+                if (
+                    not is_exact_option
+                    and _nutrition_option_rank(option, lookup_name)[0] < NUTRITION_VALID_OPTION_MIN_RANK
+                ):
+                    return build_guide_response(
+                        action="lookup_nutrition",
+                        message=f"{ingredient} 영양성분 정보를 찾지 못했어요.",
+                        status="not_found",
+                        data={"ingredient": ingredient_info or {"name": ingredient}},
+                        meta={
+                            "result_code": "NUTRITION_NOT_FOUND",
+                            "data_source": "postgresql",
+                            "fallback_used": False,
+                        },
+                    )
                 nutrition = _query_nutrition([options[0]["food_code"]])
                 if nutrition:
                     source = _source(nutrition.get("source_name"), nutrition.get("source_ref"))
@@ -1332,6 +1526,58 @@ def lookup_ingredient_nutrition(ingredient: str) -> dict[str, Any]:
                         meta={"data_source": "postgresql", "match_type": "food_code"},
                     )
             if len(options) > 1:
+                representative = _representative_nutrition_option(options)
+                has_part_options = _has_part_nutrition_options(options)
+                lookup_tokens = [token for token in re.split(r"[\s_]+", lookup_name.strip()) if token]
+                rank_name = lookup_tokens[-1] if lookup_tokens else lookup_name
+                selected_option = (
+                    representative
+                    if representative
+                    and not has_part_options
+                    and _nutrition_option_rank(representative, rank_name)[0] >= NUTRITION_VALID_OPTION_MIN_RANK
+                    else None
+                )
+                if not selected_option and not has_part_options:
+                    option_score = _nutrition_option_rank(options[0], lookup_tokens[-1])[0] if lookup_tokens else 0
+                    if lookup_tokens and options[0].get("representative_name") == lookup_tokens[-1] and option_score >= NUTRITION_VALID_OPTION_MIN_RANK:
+                        selected_option = options[0]
+                if not selected_option and not has_part_options:
+                    top_score = options[0].get("representative_nutrition_score") or 0
+                    next_score = options[1].get("representative_nutrition_score") or 0
+                    option_score = _nutrition_option_rank(options[0], lookup_name)[0]
+                    if top_score > next_score and option_score >= NUTRITION_VALID_OPTION_MIN_RANK:
+                        selected_option = options[0]
+                if selected_option:
+                    nutrition = _query_nutrition([selected_option["food_code"]])
+                    if nutrition:
+                        source = _source(nutrition.get("source_name"), nutrition.get("source_ref"))
+                        return build_guide_response(
+                            action="lookup_nutrition",
+                            message=f"{nutrition['representative_name'] or nutrition['food_name']} 영양성분을 대표 기준으로 조회했어요.",
+                            data={
+                                "ingredient": _ingredient_from_nutrition(nutrition, lookup_name),
+                                "nutrition": nutrition,
+                            },
+                            sources=[source] if source else [],
+                            meta={"data_source": "postgresql", "match_type": "representative_nutrition"},
+                        )
+                options = [
+                    option
+                    for option in options
+                    if _nutrition_option_rank(option, rank_name)[0] >= NUTRITION_VALID_OPTION_MIN_RANK
+                ]
+                if not options:
+                    return build_guide_response(
+                        action="lookup_nutrition",
+                        message=f"{ingredient} 영양성분 정보를 찾지 못했어요.",
+                        status="not_found",
+                        data={"ingredient": ingredient_info or {"name": ingredient}},
+                        meta={
+                            "result_code": "NUTRITION_NOT_FOUND",
+                            "data_source": "postgresql",
+                            "fallback_used": False,
+                        },
+                    )
                 candidate_response = _nutrition_candidate_response(lookup_name, options)
                 candidates = candidate_response.get("data", {}).get("candidates") or []
                 if len(candidates) == 1:
@@ -1435,6 +1681,19 @@ def answer_guide_query(query: str) -> dict[str, Any]:
             return result
         if result.get("status") in {"success", "needs_input"}:
             return result
+
+        corrected_nutrition_name = _nutrition_fuzzy_name(keyword)
+        if corrected_nutrition_name and corrected_nutrition_name != keyword:
+            corrected_result = lookup_ingredient_nutrition(corrected_nutrition_name)
+            if corrected_result.get("status") in {"success", "needs_input"}:
+                corrected_result["meta"].update(
+                    {
+                        "match_type": "nutrition_fuzzy_auto",
+                        "original_ingredient": keyword,
+                        "matched_ingredient": corrected_nutrition_name,
+                    }
+                )
+                return corrected_result
 
         candidates, fuzzy_error = _safe_guide_fuzzy_candidates(keyword)
         if fuzzy_error:
@@ -1619,3 +1878,9 @@ if __name__ == "__main__":
     assert _candidate_query_value("닭가슴살", "nutrition") == "닭가슴살 영양성분 알려줘"
     assert _candidate_display_label("닭가슴살", "freshness") == "닭가슴살"
     assert _is_unhelpful_web_content("검색 결과에는 우동사리의 보관법에 대한 정보는 포함되어 있지 않습니다.")
+    assert _has_part_nutrition_options([{"food_name": "닭고기_목_생것"}, {"food_name": "닭고기_가슴살_생것"}])
+    assert _nutrition_lookup_name("소안심") == "소고기 안심"
+    assert _nutrition_lookup_name("소 안심") == "소고기 안심"
+    assert _nutrition_lookup_name("쇠안심") == "소고기 안심"
+    assert _nutrition_fuzzy_name("당콩") == "땅콩"
+    assert _nutrition_fuzzy_name("고객") is None
