@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 import logging
+import math
 
 from app.backend.services.inventory_service.inventory_service import inventory_service
 from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text
@@ -10,6 +11,7 @@ from ai.agents.inventory_agent.inventory_utils import (
     ADD_WORDS,
     CONSUME_WORDS,
     DEFAULT_STORAGE,
+    STORAGE_KEYS,
     _extract_add_items,
     _extract_delete_name,
     _extract_consume_name,
@@ -27,20 +29,42 @@ logger = logging.getLogger(__name__)
 
 EMPTY_INVENTORY_REPLY = '냉장고가 비어 있어요. 재료를 등록하면 소비 임박 재료와 추천 메뉴를 알려드릴게요.'
 
+
+def _is_safe_action_name(name: str) -> bool:
+    """내부 확인 명령을 깨뜨릴 수 있는 구분자가 식재료명에 없는지 확인합니다."""
+    value = (name or "").strip()
+    return bool(value) and len(value) <= 100 and not any(char in value for char in (":", "|", "\n", "\r"))
+
+
+def _is_positive_quantity(value: str | float) -> bool:
+    """수량이 유한한 양수인지 확인합니다."""
+    try:
+        quantity = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(quantity) and quantity > 0
+
+
 def execute_inventory_action(action: str, parts: list[str], db: Session, user_id: int) -> dict:
     """
     내부 명령어(parts)를 받아서 실제 재고 CRUD 작업을 실행합니다.
     """
     try:
         if action == "consume_ingredient" and len(parts) >= 4:
+            if not _is_safe_action_name(parts[2]) or not _is_positive_quantity(parts[3]):
+                return {"response_text": "올바른 식재료명과 수량을 입력해주세요.", "slots": {"inventory_pending": None}}
             reply = inventory_service.consume_ingredient_by_name(db, user_id, parts[2], float(parts[3]))
             return {"response_text": reply, "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
         if action == "add_ingredient" and len(parts) >= 5:
+            if not _is_safe_action_name(parts[2]) or not _is_positive_quantity(parts[3]) or parts[4] not in STORAGE_KEYS:
+                return {"response_text": "올바른 식재료명, 수량, 보관 위치를 입력해주세요.", "slots": {"inventory_pending": None}}
             reply = inventory_service.add_ingredient_by_name(db, user_id, parts[2], float(parts[3]), parts[4])
             return {"response_text": reply, "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
         if action == "add_ingredient_unchecked" and len(parts) >= 5:
+            if not _is_positive_quantity(parts[3]) or parts[4] not in STORAGE_KEYS:
+                return {"response_text": "올바른 식재료명, 수량, 보관 위치를 입력해주세요.", "slots": {"inventory_pending": None}}
             if not is_valid_ingredient(parts[2]):
                 return {"response_text": "올바른 식재료명을 입력해주세요.", "slots": {"inventory_pending": None}}
             reply = inventory_service.add_ingredient_unchecked_by_name(db, user_id, parts[2], float(parts[3]), parts[4])
@@ -50,10 +74,20 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
             added = []
             for raw_item in parts[2].split("|"):
                 name, quantity, storage = raw_item.split(",", 2)
-                added.append(inventory_service.add_ingredient_by_name(db, user_id, name, float(quantity), storage))
+                if (
+                    not _is_safe_action_name(name)
+                    or not _is_positive_quantity(quantity)
+                    or storage not in STORAGE_KEYS
+                    or not resolve_ingredient_name(db, name)
+                ):
+                    raise ValueError("잘못된 재료 추가 명령입니다.")
+                added.append(inventory_service.add_ingredient_by_name(db, user_id, name, float(quantity), storage, commit=False))
+            db.commit()
             return {"response_text": "\n".join(added), "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
         if action == "delete_ingredient" and len(parts) >= 3:
+            if not _is_safe_action_name(parts[2]):
+                return {"response_text": "올바른 식재료명을 입력해주세요.", "slots": {"inventory_pending": None}}
             reply = inventory_service.delete_ingredient_by_name(db, user_id, parts[2])
             return {"response_text": reply, "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
@@ -108,7 +142,9 @@ def resolve_ingredient_name(db: Session, name: str) -> str | None:
 
 
 def is_valid_ingredient(name: str) -> bool:
-    """식용 가능한 식재료 이름인지 AI 서비스로 판별합니다."""
+    """안전한 식재료명인지 확인한 뒤 AI 서비스로 유효성을 판별합니다."""
+    if not _is_safe_action_name(name):
+        return False
     from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
     return expiration_ai_service.is_valid_ingredient_name(name)
 

@@ -176,3 +176,82 @@ def test_chat_add_rejects_unknown_ingredient_name(monkeypatch) -> None:
     result = inventory_service.add_ingredient_by_name(EmptyIngredientDb(), 1, "일이삼사오", 3, "냉장")
 
     assert "올바른 식재료명을 입력해주세요" in result
+
+def test_destructive_name_match_rejects_partial_name() -> None:
+    """소비·폐기 작업은 짧은 부분 일치로 다른 식재료를 선택하지 않습니다."""
+    fridge_item = SimpleNamespace(display_name="계란", quantity=Decimal("1"), status="normal")
+    ingredient = SimpleNamespace(name="계란", normalized_name="계란")
+
+    assert inventory_service._find_items_by_name([(fridge_item, ingredient)], "계") == []
+
+
+def test_multi_add_uses_single_transaction(monkeypatch) -> None:
+    """여러 재료 추가는 모두 준비된 뒤 한 번만 커밋합니다."""
+    from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+
+    calls = []
+    db = MagicMock()
+
+    def fake_add(db, user_id, name, quantity, storage, *, commit):
+        """각 재료가 자동 커밋 없이 호출되는지 기록합니다."""
+        calls.append((name, commit))
+        return f"{name} 추가"
+
+    monkeypatch.setattr(inventory_service, "add_ingredient_by_name", fake_add)
+
+    result = execute_inventory_action(
+        "add_ingredients",
+        ["확인", "add_ingredients", "양파,1,냉장|감자,2,실온"],
+        db,
+        1,
+    )
+
+    assert calls == [("양파", False), ("감자", False)]
+    db.commit.assert_called_once()
+    db.rollback.assert_not_called()
+    assert "양파 추가" in result["response_text"]
+
+
+def test_multi_add_rolls_back_when_one_item_fails(monkeypatch) -> None:
+    """여러 재료 중 하나라도 실패하면 전체 작업을 롤백합니다."""
+    from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+
+    db = MagicMock()
+
+    def fake_add(db, user_id, name, quantity, storage, *, commit):
+        """두 번째 재료에서 저장 실패를 재현합니다."""
+        if name == "감자":
+            raise RuntimeError("저장 실패")
+        return f"{name} 추가"
+
+    monkeypatch.setattr(inventory_service, "add_ingredient_by_name", fake_add)
+
+    result = execute_inventory_action(
+        "add_ingredients",
+        ["확인", "add_ingredients", "양파,1,냉장|감자,2,실온"],
+        db,
+        1,
+    )
+
+    db.commit.assert_not_called()
+    db.rollback.assert_called_once()
+    assert "문제가 생겼어요" in result["response_text"]
+
+
+def test_inventory_action_rejects_unsafe_quantity(monkeypatch) -> None:
+    """직접 조작된 확인 명령의 무한대·음수 수량을 저장 전에 차단합니다."""
+    from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+
+    add_mock = MagicMock()
+    monkeypatch.setattr(inventory_service, "add_ingredient_by_name", add_mock)
+
+    for quantity in ("-1", "nan", "inf"):
+        result = execute_inventory_action(
+            "add_ingredient",
+            ["확인", "add_ingredient", "양파", quantity, "냉장"],
+            MagicMock(),
+            1,
+        )
+        assert "올바른" in result["response_text"]
+
+    add_mock.assert_not_called()

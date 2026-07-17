@@ -289,8 +289,7 @@ class InventoryService:
             # 기본값 기타는 식재료 마스터의 기존 카테고리를 덮어쓰지 않습니다.
             if incoming_category and ingredient.category != incoming_category:
                 ingredient.category = incoming_category
-                db.commit()
-                db.refresh(ingredient)
+                db.flush()
             return ingredient
 
         try:
@@ -324,7 +323,7 @@ class InventoryService:
         storage_location, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
         return storage_location, purchase_date + timedelta(days=lifespan_days), True
 
-    def add_ingredient(self, db: Session, user_id: int, data: IngredientCreate):
+    def add_ingredient(self, db: Session, user_id: int, data: IngredientCreate, *, commit: bool = True):
         """사용자 냉장고에 식재료를 추가합니다."""
         ingredient = self._get_or_create_ingredient(db, data)
         storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(db, ingredient, data)
@@ -344,7 +343,10 @@ class InventoryService:
             is_ai_recommended=is_ai_recommended,
         )
         db.add(fridge_item)
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         db.refresh(fridge_item)
         return self._map_to_response(fridge_item, ingredient)
 
@@ -472,7 +474,7 @@ class InventoryService:
 
         return summary
         
-    def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
+    def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None, *, commit: bool = True) -> str:
         """챗봇 Tool에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
         resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
         if not resolved_name:
@@ -485,11 +487,11 @@ class InventoryService:
             unit="개",
             storage_method=storage_method,
         )
-        item = self.add_ingredient(db, user_id, data)
+        item = self.add_ingredient(db, user_id, data, commit=commit)
         display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
         return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}에 추가했어요."
 
-    def add_ingredient_unchecked_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None) -> str:
+    def add_ingredient_unchecked_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None, *, commit: bool = True) -> str:
         """사용자가 확인한 마스터 미등록 식재료를 냉장고에 추가합니다."""
         data = IngredientCreate(
             name=ingredient_name.strip(),
@@ -498,28 +500,20 @@ class InventoryService:
             unit="개",
             storage_method=storage_method,
         )
-        item = self.add_ingredient(db, user_id, data)
+        item = self.add_ingredient(db, user_id, data, commit=commit)
         display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
         return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}에 추가했어요."
 
     def _find_items_by_name(self, items, ingredient_name: str):
-        """챗봇에서 받은 이름과 일치하는 활성 냉장고 항목을 모두 반환합니다."""
+        """챗봇 쓰기 작업에서 식재료명이 정확히 일치하는 활성 항목만 반환합니다."""
         target = self._normalize_ingredient_name(ingredient_name)
-
-        # 정확히 일치하는 항목을 우선하고, 없을 때만 부분 일치를 허용합니다.
-        for allow_partial in (False, True):
-            matches = []
-            for fridge_item, ingredient in items:
-                names = [fridge_item.display_name, ingredient.name, ingredient.normalized_name]
-                normalized_names = [self._normalize_ingredient_name(name) for name in names if name]
-                is_match = target in normalized_names if not allow_partial else any(
-                    target in name or name in target for name in normalized_names
-                )
-                if is_match:
-                    matches.append(fridge_item)
-            if matches:
-                return matches if not allow_partial else matches[:1]
-        return []
+        matches = []
+        for fridge_item, ingredient in items:
+            names = [fridge_item.display_name, ingredient.name, ingredient.normalized_name]
+            normalized_names = [self._normalize_ingredient_name(name) for name in names if name]
+            if target in normalized_names:
+                matches.append(fridge_item)
+        return matches
 
     def _find_item_by_name(self, items, ingredient_name: str):
         """챗봇에서 받은 이름과 가장 먼저 일치하는 냉장고 항목을 반환합니다."""
@@ -536,6 +530,9 @@ class InventoryService:
         )
         target_item = self._find_item_by_name(items, ingredient_name)
         if not target_item:
+            resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
+            target_item = self._find_item_by_name(items, resolved_name) if resolved_name else None
+        if not target_item:
             return f"냉장고에서 {ingredient_name}{_object_particle(ingredient_name)} 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
         target_item.status = "used"
         db.commit()
@@ -551,6 +548,9 @@ class InventoryService:
             .all()
         )
         target_items = self._find_items_by_name(items, ingredient_name)
+        if not target_items:
+            resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
+            target_items = self._find_items_by_name(items, resolved_name) if resolved_name else []
         if not target_items:
             return f"냉장고에서 {ingredient_name}{_object_particle(ingredient_name)} 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
 
