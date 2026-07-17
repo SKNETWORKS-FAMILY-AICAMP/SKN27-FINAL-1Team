@@ -1,6 +1,9 @@
 import json
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # 챗봇 기본 응답 문구
 LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
@@ -127,6 +130,13 @@ _INVENTORY_CONFIRM_ACTIONS = {
     "add_ingredient_unchecked",
     "add_ingredients",
     "delete_ingredient",
+}
+# Supervisor가 Alarm Agent로 전달할 수 있는 확인 명령입니다.
+_ALARM_CONFIRM_ACTIONS = {
+    "alarm",
+    "add_calendar_event",
+    "delete_event",
+    "sync_daily_events",
 }
 
 # 데이터 변경 가능성이 있는 장보기 intent만 규칙 기반으로 고정합니다.
@@ -286,7 +296,7 @@ def _build_read_tasks(text: str) -> list[dict[str, str]]:
     if "ingredient.guide" in intents and "shopping.compare" in intents:
         price_text = re.sub(
             r"^.+?(?:보관법|보관방법|손질법|손질방법|세척법|세척방법|영양성분|칼로리|제철)"
-            r"(?:이랑|랑|과|와|그리고)?s*",
+            r"(?:이랑|랑|과|와|그리고)?\s*",
             "",
             text,
         ).strip()
@@ -552,6 +562,24 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
     }
 
 
+def _is_llm_route_payload_valid(payload: dict[str, Any], text: str = "") -> bool:
+    """LLM 라우팅 결과에 intent별 필수 정보가 있는지 후검증합니다."""
+    intent = payload.get("intent")
+    slots = payload.get("slots") or {}
+    tasks = payload.get("tasks") or []
+
+    if intent not in _LLM_ROUTE_INTENTS:
+        return False
+    if intent == "multi_agent":
+        task_intents = [task.get("intent") for task in tasks if isinstance(task, dict)]
+        return len(task_intents) >= 2
+    if intent == "shopping.compare" and not (slots.get("shopping_product") or payload.get("is_follow_up")):
+        return False
+    if intent in {"alarm.notification", "alarm.calendar"}:
+        normalized = _normalize_text(text)
+        return any(word in normalized for word in ("조회", "목록", "알려", "있어", "확인", "읽지않은", "등록된"))
+    return True
+
 def _route_payload(
     intent: str,
     confidence: float = 1.0,
@@ -736,7 +764,7 @@ def _alarm_result_to_state(agent_result: dict[str, Any]) -> dict[str, Any]:
             message = str(value)
         actions.append({"label": label, "data": {"message": message}})
 
-    result = {"response_text": response_text}
+    result = {"response_text": response_text, "status": agent_result.get("status") or ("error" if agent_result.get("ok") is False else "success")}
     if actions:
         result["actions"] = actions
     return result
@@ -747,28 +775,49 @@ def _agent_result_needs_retry(agent_result: Any) -> bool:
         return True
 
     slots = agent_result.get("slots") if isinstance(agent_result.get("slots"), dict) else {}
-    status = str(agent_result.get("status") or slots.get("agent_status") or "").lower()
-    if agent_result.get("ok") is False or status in {"error", "not_found"} or agent_result.get("error"):
+    status = str(agent_result.get("status") or slots.get("agent_status") or slots.get("guide_status") or "").lower()
+    if agent_result.get("ok") is False or status == "error" or agent_result.get("error"):
         return True
 
     response_text = agent_result.get("response_text") or agent_result.get("message")
     return not isinstance(response_text, str) or not response_text.strip()
 
 
+def _agent_result_failed(agent_result: Any) -> bool:
+    """Agent 실행 결과가 복합 요청의 성공 결과로 사용할 수 있는지 확인합니다."""
+    if not isinstance(agent_result, dict):
+        return True
+    slots = agent_result.get("slots") if isinstance(agent_result.get("slots"), dict) else {}
+    status = str(agent_result.get("status") or slots.get("agent_status") or slots.get("guide_status") or "").lower()
+    return agent_result.get("ok") is False or status in {"error", "unsupported"} or bool(agent_result.get("error"))
+
+
 def _run_agent_with_retry(call: Any, *, enabled: bool = True) -> Any:
-    """안전한 조회 요청의 품질이 낮을 때 동일 Agent를 한 번만 재호출합니다."""
+    """안전한 조회 요청이 실패하면 한 번만 재호출하고 두 번째 실패를 응답으로 변환합니다."""
     if not enabled:
         return call()
 
-    try:
-        result = call()
-    except Exception:
-        result = call()
-        retried = True
-    else:
-        retried = _agent_result_needs_retry(result)
-        if retried:
+    retried = False
+    for attempt in range(2):
+        try:
             result = call()
+        except Exception:
+            if attempt == 0:
+                retried = True
+                continue
+            logger.exception("Agent 재시도까지 실패했습니다.")
+            result = {"status": "error", "response_text": "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."}
+        else:
+            if _agent_result_needs_retry(result):
+                if attempt == 0:
+                    retried = True
+                    continue
+                result = {
+                    **(result if isinstance(result, dict) else {}),
+                    "status": "error",
+                    "response_text": "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
+                }
+        break
 
     if retried and isinstance(result, dict):
         result = {

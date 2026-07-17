@@ -23,8 +23,11 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     CONFIRM_PREFIX,
     GENERAL_REPLY,
     LOGIN_REQUIRED_REPLY,
+    _ALARM_CONFIRM_ACTIONS,
+    _INVENTORY_CONFIRM_ACTIONS,
     _LLM_ROUTE_CONFIDENCE,
     _SHOPPING_WRITE_INTENTS,
+    _agent_result_failed,
     _alarm_result_to_state,
     _build_read_tasks,
     _is_alarm_calendar_query,
@@ -64,8 +67,12 @@ def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
     original_text = state["text"]
     history = state.get("history", [])
+    previous_intent = _latest_bot_intent(history)
+    previous_slots = _latest_bot_slots(history)
+    inventory_pending = previous_slots.get("inventory_pending")
     has_pending = bool(
-        _pending_add_many_from_history(history)
+        inventory_pending
+        or _pending_add_many_from_history(history)
         or _pending_add_storage_from_history(history)
         or _pending_add_from_history(history)
         or _pending_consume_from_history(history)
@@ -85,23 +92,36 @@ def router_node(state: GraphState) -> dict:
     if normalized.startswith(CONFIRM_PREFIX):
         return _route_result("action.confirm")
     if normalized in CANCEL_WORDS:
-        return _route_result("action.cancel")
+        return _route_result("action.cancel", slots=previous_slots)
+
+    # 새 응답은 구조화된 pending 슬롯을 우선 사용하고, 기존 문장 분석은 하위 호환으로 남깁니다.
+    if isinstance(inventory_pending, dict):
+        pending_type = inventory_pending.get("action")
+        if pending_type == "add_many":
+            if len(_extract_add_items(text)) > 1:
+                return _route_result("inventory.pending_add_many", slots=previous_slots)
+            if _is_quantity_only_list(text):
+                return _route_result("inventory.pending_add_many_retry", slots=previous_slots)
+        if pending_type == "add_storage" and _extract_storage(text):
+            return _route_result("inventory.pending_add_storage", slots=previous_slots)
+        if pending_type == "add_quantity" and (_extract_quantity(text) or _extract_storage(text)):
+            return _route_result("inventory.pending_add", slots=previous_slots)
+        if pending_type == "consume_quantity" and _extract_quantity(text):
+            return _route_result("inventory.pending_consume", slots=previous_slots)
 
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
-            return _route_result("inventory.pending_add_many")
+            return _route_result("inventory.pending_add_many", slots=previous_slots)
         if _is_quantity_only_list(text):
-            return _route_result("inventory.pending_add_many_retry")
+            return _route_result("inventory.pending_add_many_retry", slots=previous_slots)
     if _pending_add_storage_from_history(history) and _extract_storage(text):
-        return _route_result("inventory.pending_add_storage")
+        return _route_result("inventory.pending_add_storage", slots=previous_slots)
     if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
-        return _route_result("inventory.pending_add")
+        return _route_result("inventory.pending_add", slots=previous_slots)
     if _pending_consume_from_history(history) and _extract_quantity(text):
-        return _route_result("inventory.pending_consume")
+        return _route_result("inventory.pending_consume", slots=previous_slots)
 
     # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
-    previous_intent = _latest_bot_intent(history)
-    previous_slots = _latest_bot_slots(history)
     has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
     if previous_intent and has_write_word and _is_context_follow_up(text):
         previous_slots = _latest_bot_slots(history)
@@ -215,6 +235,7 @@ def inventory_agent_node(state: GraphState) -> dict:
             history=state.get("history", []),
             db=state["db"],
             user_id=state.get("user_id"),
+            slots=state.get("slots"),
         ),
         enabled=intent in {"inventory.list", "inventory.expiring"},
     )
@@ -364,8 +385,12 @@ def multi_agent_node(state: GraphState) -> dict:
             failed_intents.append(intent)
             continue
         try:
-            results.append(handler(task_state))
-            completed_intents.append(intent)
+            task_result = handler(task_state)
+            if _agent_result_failed(task_result):
+                failed_intents.append(intent)
+            else:
+                results.append(task_result)
+                completed_intents.append(intent)
         except Exception as exc:
             print(f"[Supervisor] {intent} task failed: {type(exc).__name__}: {exc}")
             failed_intents.append(intent)
@@ -396,10 +421,14 @@ def route_intent(state: GraphState) -> str:
     if intent.startswith("inventory.") or intent.startswith("action."):
         if intent == "action.confirm":
             parts = state["text"].split(":")
-            if len(parts) >= 2 and parts[1] in SHOPPING_CONFIRM_ACTIONS:
+            action = parts[1] if len(parts) >= 2 else ""
+            if action in SHOPPING_CONFIRM_ACTIONS:
                 return "shopping_agent_node"
-            if len(parts) >= 2 and parts[1] not in ["consume_ingredient", "add_ingredient", "add_ingredient_unchecked", "add_ingredients", "delete_ingredient"]:
+            if action in _INVENTORY_CONFIRM_ACTIONS:
+                return "inventory_agent_node"
+            if action in _ALARM_CONFIRM_ACTIONS:
                 return "alarm_agent_node"
+            return "general_node"
         return "inventory_agent_node"
     routes = {
         "ingredient.guide": "guide_agent_node",

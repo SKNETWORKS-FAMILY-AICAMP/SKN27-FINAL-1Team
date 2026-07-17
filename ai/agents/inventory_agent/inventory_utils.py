@@ -167,6 +167,14 @@ def _storage_choice_response(name: str, quantity: float, unchecked: bool = False
             _confirm_action("실온", f"확인:{action}:{name}:{quantity}:실온"),
             _confirm_action("취소", "취소"),
         ],
+        "slots": {
+            "inventory_pending": {
+                "action": "add_storage",
+                "name": name,
+                "quantity": quantity,
+                "unchecked": unchecked,
+            }
+        },
     }
 
 def _extract_expiry_keyword(text: str) -> str:

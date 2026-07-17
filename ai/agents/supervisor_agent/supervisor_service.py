@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any
 
@@ -6,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings as app_settings
 from ai.agents.guide_agent import answer_guide_query
+
+logger = logging.getLogger(__name__)
 
 
 try:
@@ -32,6 +35,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _chat_response_from_state,
     _guide_result_to_state,
     _is_login_status_question,
+    _is_llm_route_payload_valid,
     _parse_llm_route_payload,
     _route_payload,
 )
@@ -205,6 +209,9 @@ class ChatService:
 
             response = llm.invoke(messages)
             payload = _parse_llm_route_payload(response.content, fallback_text=text)
+            if not _is_llm_route_payload_valid(payload, text):
+                return _route_payload("general", confidence=0.0)
+
             intent = payload.get("intent", "")
             if intent == "multi_agent":
                 if payload.get("confidence", 0) >= _LLM_ROUTE_CONFIDENCE and len(payload.get("tasks") or []) >= 2:
@@ -214,6 +221,7 @@ class ChatService:
                 return payload
             return _route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
         except Exception:
+            logger.exception("LLM intent 분류에 실패했습니다.")
             return _route_payload("general", confidence=0.0)
 
 

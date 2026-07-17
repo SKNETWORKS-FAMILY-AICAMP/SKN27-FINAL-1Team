@@ -924,7 +924,7 @@ def test_pending_add_many_quantity_only_asks_for_named_quantities() -> None:
     state = {"text": "1,1,1", "service": FakeService("general"), "history": history}
     assert router_node(state)["intent"] == "inventory.pending_add_many_retry"
     result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1,1,1", "intent": "inventory.pending_add_many_retry", "history": history})
-    assert result["response_text"] == "식재료와 갯수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"
+    assert result["response_text"] == "식재료와 개수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1"
 def test_pending_add_quantity_routes_to_inventory_pending() -> None:
     """추가 대기 중 수량만 답해도 inventory pending으로 이어집니다."""
     class Message:
@@ -1625,23 +1625,19 @@ def test_agent_quality_retry_is_disabled_for_write_action() -> None:
 
 
 
-def test_guide_agent_node_retries_not_found_once() -> None:
-    """Guide Agent가 not_found를 반환하면 Supervisor가 한 번만 다시 조회합니다."""
+def test_guide_agent_node_does_not_retry_not_found() -> None:
+    """Guide Agent의 not_found는 정상 조회 결과이므로 다시 호출하지 않습니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
 
-    responses = iter([
-        {"response_text": "정보를 찾지 못했어요.", "slots": {"agent_status": "not_found"}},
-        {"response_text": "감자는 서늘하고 어두운 곳에 보관하세요."},
-    ])
     calls = []
 
     class GuideService:
-        """재시도 검증용 Guide Service 대역입니다."""
+        """not_found 호출 횟수를 검증하는 Guide Service 대역입니다."""
 
         def _reply_guide(self, text):
-            """호출 순서에 따라 실패 후 정상 응답을 반환합니다."""
+            """데이터가 없는 정상 조회 결과를 반환합니다."""
             calls.append(text)
-            return next(responses)
+            return {"response_text": "정보를 찾지 못했어요.", "slots": {"guide_status": "not_found"}}
 
     result = supervisor_agent_module.guide_agent_node({
         "text": "감자 보관법",
@@ -1649,10 +1645,9 @@ def test_guide_agent_node_retries_not_found_once() -> None:
         "slots": {},
     })
 
-    assert calls == ["감자 보관법", "감자 보관법"]
-    assert result["response_text"] == "감자는 서늘하고 어두운 곳에 보관하세요."
-    assert result["slots"]["agent_retry_count"] == 1
-
+    assert calls == ["감자 보관법"]
+    assert result["response_text"] == "정보를 찾지 못했어요."
+    assert "agent_retry_count" not in result["slots"]
 
 def test_inventory_write_node_never_retries(monkeypatch) -> None:
     """Inventory 쓰기 노드는 빈 응답이어도 중복 실행하지 않습니다."""
@@ -1677,3 +1672,126 @@ def test_inventory_write_node_never_retries(monkeypatch) -> None:
     })
 
     assert len(calls) == 1
+
+
+def test_unknown_confirm_action_routes_to_general() -> None:
+    """소유 Agent가 없는 확인 명령은 Alarm Agent로 추측하지 않습니다."""
+    assert route_intent({"intent": "action.confirm", "text": "확인:unknown_action"}) == "general_node"
+
+
+def test_agent_retry_converts_second_exception_to_error() -> None:
+    """Agent가 두 번 모두 예외를 내면 챗봇 공통 오류 응답으로 변환합니다."""
+    calls = []
+
+    def fail_agent():
+        """재시도 횟수 검증을 위해 항상 예외를 발생시킵니다."""
+        calls.append(1)
+        raise RuntimeError("agent failed")
+
+    result = supervisor_utils._run_agent_with_retry(fail_agent)
+
+    assert len(calls) == 2
+    assert result["status"] == "error"
+    assert result["slots"]["agent_retry_count"] == 1
+
+
+def test_multi_agent_marks_error_result_as_failed(monkeypatch) -> None:
+    """예외 없이 오류 dict를 반환한 작업도 완료 목록에 넣지 않습니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    monkeypatch.setattr(
+        supervisor_agent_module,
+        "guide_agent_node",
+        lambda state: {"status": "error", "response_text": "가이드 오류"},
+    )
+    monkeypatch.setattr(
+        supervisor_agent_module,
+        "recipe_agent_node",
+        lambda state: {"response_text": "감자 레시피예요."},
+    )
+
+    result = supervisor_agent_module.multi_agent_node({
+        "text": "감자 보관법과 레시피",
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+        "tasks": [
+            {"intent": "ingredient.guide", "text": "감자 보관법"},
+            {"intent": "recipe.search", "text": "감자 레시피"},
+        ],
+    })
+
+    assert result["slots"]["completed_intents"] == ["recipe.search"]
+    assert result["slots"]["failed_intents"] == ["ingredient.guide"]
+
+
+def test_llm_route_payload_requires_intent_entities() -> None:
+    """LLM 분류 결과가 intent별 필수 슬롯을 만족하는지 후검증합니다."""
+    assert not supervisor_utils._is_llm_route_payload_valid(
+        {"intent": "shopping.compare", "slots": {}, "tasks": [], "is_follow_up": False},
+        "가격 알려줘",
+    )
+    assert supervisor_utils._is_llm_route_payload_valid(
+        {"intent": "shopping.compare", "slots": {"shopping_product": "감자"}, "tasks": []},
+        "감자 가격 알려줘",
+    )
+    assert not supervisor_utils._is_llm_route_payload_valid(
+        {"intent": "multi_agent", "slots": {}, "tasks": [{"intent": "ingredient.guide"}]},
+        "감자 보관법과 가격",
+    )
+
+
+def test_structured_inventory_pending_survives_message_wording_change() -> None:
+    """화면 문구가 바뀌어도 구조화 슬롯으로 재료 추가 대화를 이어갑니다."""
+    class Message:
+        """구조화된 이전 챗봇 응답을 표현하는 테스트 대역입니다."""
+
+        role = "bot"
+        text = "수량을 입력해주세요."
+        intent = "inventory.action"
+        slots = {"inventory_pending": {"action": "add_quantity", "name": "두부", "unchecked": False}}
+        pending_action = None
+
+    history = [Message()]
+    routed = router_node({"text": "2개", "service": FakeService("general"), "history": history})
+    result = inventory_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "2개",
+        "intent": routed["intent"],
+        "history": history,
+        "slots": routed["slots"],
+    })
+
+    assert routed["intent"] == "inventory.pending_add"
+    assert result["response_text"].startswith("두부 2개를 어디에 보관할까요?")
+    assert result["slots"]["inventory_pending"]["name"] == "두부"
+
+
+def test_inventory_cancel_clears_structured_pending() -> None:
+    """사용자가 취소하면 남아 있던 재고 작업 슬롯을 제거합니다."""
+    result = inventory_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "취소",
+        "intent": "action.cancel",
+        "history": [],
+        "slots": {"inventory_pending": {"action": "add_quantity", "name": "두부"}},
+    })
+
+    assert result["slots"]["inventory_pending"] is None
+
+def test_agent_retry_marks_second_empty_result_as_error() -> None:
+    """재시도 후에도 응답이 비어 있으면 명시적인 오류 상태로 반환합니다."""
+    calls = []
+
+    def empty_agent():
+        """빈 응답 재시도 횟수를 확인하는 테스트 Agent입니다."""
+        calls.append(1)
+        return {"response_text": ""}
+
+    result = supervisor_utils._run_agent_with_retry(empty_agent)
+
+    assert len(calls) == 2
+    assert result["status"] == "error"
+    assert result["slots"]["agent_retry_count"] == 1
