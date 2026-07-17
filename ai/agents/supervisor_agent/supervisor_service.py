@@ -14,9 +14,10 @@ except ImportError:
     OpenAI = None
 
 try:
-    from langfuse import propagate_attributes
+    from langfuse import get_client as get_langfuse_client, propagate_attributes
     from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
 except ImportError:
+    get_langfuse_client = None
     propagate_attributes = None
     LangfuseCallbackHandler = None
 
@@ -79,7 +80,8 @@ class ChatService:
 
         try:
             if (
-                propagate_attributes
+                get_langfuse_client
+                and propagate_attributes
                 and LangfuseCallbackHandler
                 and os.getenv("LANGFUSE_PUBLIC_KEY")
                 and os.getenv("LANGFUSE_SECRET_KEY")
@@ -90,8 +92,53 @@ class ChatService:
                     user_id=str(user_id or "guest"),
                     session_id=session_id or str(user_id or "guest"),
                     tags=["supervisor", "chatbot", "langgraph"],
+                    metadata=invoke_config["metadata"],
                 ):
-                    final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
+                    langfuse_client = get_langfuse_client()
+                    with langfuse_client.start_as_current_observation(
+                        name="supervisor-request",
+                        as_type="agent",
+                        input={"text": text, "history_count": len(history or [])},
+                    ) as observation:
+                        try:
+                            final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
+                            route_payload = final_state.get("intent_payload") or {}
+                            route_slots = final_state.get("slots") or {}
+                            try:
+                                observation.update(
+                                    output={"intent": final_state.get("intent", "general")},
+                                    metadata={
+                                        "status": "success",
+                                        "route_confidence": route_payload.get("confidence"),
+                                        "task_count": len(final_state.get("tasks") or []),
+                                        "action_count": len(final_state.get("actions") or []),
+                                        "source_count": len(final_state.get("sources") or []),
+                                        "completed_intents": route_slots.get("completed_intents", []),
+                                        "failed_intents": route_slots.get("failed_intents", []),
+                                    },
+                                )
+                                langfuse_client.score_current_trace(
+                                    name="supervisor_success",
+                                    value=1,
+                                    data_type="BOOLEAN",
+                                )
+                            except Exception as trace_exc:
+                                print(f"[ChatService] Langfuse result recording failed: {trace_exc}")
+                        except Exception as exc:
+                            try:
+                                observation.update(
+                                    level="ERROR",
+                                    status_message=f"{type(exc).__name__}: {exc}",
+                                    metadata={"status": "error"},
+                                )
+                                langfuse_client.score_current_trace(
+                                    name="supervisor_success",
+                                    value=0,
+                                    data_type="BOOLEAN",
+                                )
+                            except Exception as trace_exc:
+                                print(f"[ChatService] Langfuse error recording failed: {trace_exc}")
+                            raise
             else:
                 final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
             response = _chat_response_from_state(final_state)
@@ -122,7 +169,7 @@ class ChatService:
         return response
 
     def _route_intent_payload_with_llm(self, text: str, history: list[Any] | None = None) -> dict[str, Any]:
-        """규칙으로 분류되지 않은 문장을 LLM으로 분류해 JSON dict로 반환합니다."""
+        """읽기 요청을 LLM으로 분류해 검증된 JSON dict로 반환합니다."""
         if not app_settings.OPENAI_API_KEY or OpenAI is None:
             return _route_payload("general", confidence=0.0)
 
@@ -162,7 +209,7 @@ class ChatService:
             if intent == "multi_agent":
                 if payload.get("confidence", 0) >= _LLM_ROUTE_CONFIDENCE and len(payload.get("tasks") or []) >= 2:
                     return payload
-                return _route_payload("general", confidence=payload.get("confidence", 0))
+                return _route_payload("general", confidence=0.0)
             if intent in _LLM_ROUTE_INTENTS and payload.get("confidence", 0) >= _LLM_ROUTE_CONFIDENCE:
                 return payload
             return _route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))

@@ -23,11 +23,13 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     CONFIRM_PREFIX,
     GENERAL_REPLY,
     LOGIN_REQUIRED_REPLY,
-    _CONTEXT_INTENTS,
+    _LLM_ROUTE_CONFIDENCE,
+    _SHOPPING_WRITE_INTENTS,
     _alarm_result_to_state,
     _build_read_tasks,
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
+    _is_alarm_write_query,
     _is_guide_query,
     _is_receipt_query,
     _is_recipe_pairing_query,
@@ -39,14 +41,17 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _is_context_follow_up,
     _is_cooking_time_question,
     _is_expiring_question,
+    _is_food_general_query,
+    _inherit_route_context,
     _latest_bot_intent,
     _latest_bot_pending_action,
     _latest_bot_slots,
     _merge_agent_results,
+    _normalize_agent_result,
+    _run_agent_with_retry,
     _normalize_shopping_create_query,
     _normalize_text,
     _parse_alarm_request,
-    _reply_recipe_pairing,
     _rewrite_context_switch,
     _rewrite_guide_query,
     _strip_shopping_compare_suffix,
@@ -75,6 +80,7 @@ def router_node(state: GraphState) -> dict:
         return result
 
     normalized = _normalize_text(text)
+    is_receipt_query = _is_receipt_query(text)
 
     if normalized.startswith(CONFIRM_PREFIX):
         return _route_result("action.confirm")
@@ -93,83 +99,106 @@ def router_node(state: GraphState) -> dict:
     if _pending_consume_from_history(history) and _extract_quantity(text):
         return _route_result("inventory.pending_consume")
 
-    # 영수증/OCR 요청은 "등록" 단어가 있어도 냉장고 재료 추가로 보내지 않습니다.
-    if _is_receipt_query(text):
-        return _route_result("receipt.guide")
-
-    # 일정/알림 요청은 삭제 문장이더라도 냉장고 삭제로 보내지 않습니다.
-    if _is_alarm_notification_query(text):
-        return _route_result("alarm.notification")
-    if _is_alarm_calendar_query(text):
-        return _route_result("alarm.calendar")
-
-    if _is_shopping_price_explanation(text):
-        return _route_result("shopping.price_help")
-
-    # 읽기 전용 복합 요청은 기존 Agent 작업 목록으로 분해해 순차 실행합니다.
-    read_tasks = _build_read_tasks(text)
-    if len(read_tasks) >= 2:
-        return _route_result("multi_agent", tasks=read_tasks)
-
-    # 가격 질문은 Guide와 일반 LLM보다 Shopping Agent를 우선합니다.
-    if _is_shopping_price_query(text):
-        return _route_result("shopping.compare")
-
-    # 가이드 질문을 Shopping의 부분 문자열 매칭과 냉장고 목록보다 먼저 처리합니다.
-    if _is_guide_query(text):
-        return _route_result("ingredient.guide")
-    # "장본거" 표현은 냉장고 보유 재료가 아니라 장보기 목록 조회로 처리합니다.
-    if "장본" in normalized:
-        return _route_result("shopping.current")
-
-    shopping_intent = analyze_shopping_intent(text)
-    if shopping_intent:
-        return _route_result(shopping_intent)
-    # 곁들임 추천은 레시피 검색이 아니라 짧은 메뉴 조합으로 응답합니다.
-    if _is_recipe_pairing_query(text):
-        return _route_result("recipe.pairing")
-
-
-    if _is_expiring_question(text):
-        return _route_result("inventory.expiring")
-    if _is_cooking_time_question(text):
-        return _route_result("recipe.search")
-
-    # 생략된 후속 명령은 일반 냉장고 쓰기 규칙보다 직전 에이전트 문맥을 우선합니다.
+    # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     previous_intent = _latest_bot_intent(history)
-    if previous_intent and _is_context_follow_up(text):
+    previous_slots = _latest_bot_slots(history)
+    has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
+    if previous_intent and has_write_word and _is_context_follow_up(text):
         previous_slots = _latest_bot_slots(history)
         if previous_intent.startswith("shopping."):
             return _route_result(analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
         if previous_intent.startswith("alarm."):
             return _route_result(previous_intent, slots=previous_slots)
-        if not any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS)) and (
-            previous_intent.startswith("recipe.") or previous_intent in _CONTEXT_INTENTS
-        ):
-            return _route_result(previous_intent, slots=previous_slots)
 
-    # 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
-    if any(word in normalized for word in DELETE_WORDS):
+    # 알림·일정과 장보기의 데이터 변경 요청은 LLM보다 먼저 고정합니다.
+    if _is_alarm_write_query(text):
+        intent = "alarm.notification" if _is_alarm_notification_query(text) else "alarm.calendar"
+        return _route_result(intent)
+
+    shopping_intent = analyze_shopping_intent(text)
+    if shopping_intent in _SHOPPING_WRITE_INTENTS:
+        return _route_result(shopping_intent)
+
+    # 냉장고 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
+    if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
         return _route_result("inventory.delete")
-    if any(word in normalized for word in CONSUME_WORDS):
+    if not is_receipt_query and not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
         return _route_result("inventory.action")
-    if any(word in normalized for word in ADD_WORDS):
+    if not is_receipt_query and not _is_guide_query(text) and any(word in normalized for word in ADD_WORDS):
         return _route_result("inventory.action")
+
+    # 읽기 요청은 LLM JSON 분류를 먼저 채택합니다.
+    service = state.get("service")
+    if service:
+        route_payload = service._route_intent_payload_with_llm(text, history)
+        route_payload = _inherit_route_context(route_payload, previous_intent, previous_slots)
+        # 전담 Agent가 없는 명확한 일반 요리 질문은 잘못 분류된 LLM 결과만 보정합니다.
+        if _is_food_general_query(text):
+            route_payload = {**route_payload, "intent": "food.general", "confidence": 1.0, "tasks": []}
+        if route_payload.get("intent") == "shopping.compare":
+            route_slots = route_payload.get("slots") or {}
+            current_product = (
+                route_slots.get("shopping_product")
+                or route_slots.get("ingredient")
+                or route_slots.get("keyword")
+            )
+            inherited_product = previous_slots.get("shopping_product") if previous_intent == "shopping.compare" else None
+            if current_product or inherited_product:
+                route_payload = {
+                    **route_payload,
+                    "slots": {**route_slots, "shopping_product": current_product or inherited_product},
+                }
+        if route_payload.get("confidence", 0.0) >= _LLM_ROUTE_CONFIDENCE:
+            return _route_result(
+                route_payload.get("intent", "general"),
+                route_payload.get("confidence", 0.0),
+                route_payload.get("slots", {}),
+                route_payload.get("tasks", []),
+            )
+
+    # LLM을 사용할 수 없거나 신뢰도가 낮을 때만 기존 읽기 규칙으로 보완합니다.
+    if is_receipt_query:
+        return _route_result("receipt.guide")
+    if (
+        previous_intent == "shopping.compare"
+        and previous_slots.get("shopping_product")
+        and not _strip_shopping_compare_suffix(text)
+    ):
+        return _route_result("shopping.compare", slots=previous_slots)
+    if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
+        return _route_result("shopping.current", slots=previous_slots)
+    if _is_alarm_notification_query(text):
+        return _route_result("alarm.notification")
+    if _is_alarm_calendar_query(text):
+        return _route_result("alarm.calendar")
+    if _is_shopping_price_explanation(text):
+        return _route_result("shopping.price_help")
+    read_tasks = _build_read_tasks(text)
+    if len(read_tasks) >= 2:
+        return _route_result("multi_agent", tasks=read_tasks)
+    if _is_shopping_price_query(text):
+        return _route_result("shopping.compare")
+    if _is_guide_query(text):
+        return _route_result("ingredient.guide")
+    if "장본" in normalized:
+        return _route_result("shopping.current")
+    if shopping_intent:
+        return _route_result(shopping_intent)
+    if _is_recipe_pairing_query(text):
+        return _route_result("recipe.pairing")
+    if _is_expiring_question(text):
+        return _route_result("inventory.expiring")
+    if _is_cooking_time_question(text):
+        return _route_result("recipe.search")
+    if previous_intent and _is_context_follow_up(text):
+        return _route_result(previous_intent, slots=_latest_bot_slots(history))
     if _is_recipe_recommend_query(text):
         return _route_result("recipe.recommend")
     if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
         return _route_result("inventory.list")
     if _is_recipe_search_query(text):
         return _route_result("recipe.search")
-
-    route_payload = state["service"]._route_intent_payload_with_llm(text, history)
-    return _route_result(
-        route_payload.get("intent", "general"),
-        route_payload.get("confidence", 0.0),
-        route_payload.get("slots", {}),
-        route_payload.get("tasks", []),
-    )
-
+    return _route_result("general")
 
 def inventory_agent_node(state: GraphState) -> dict:
     """재고 관리를 Inventory Agent로 위임합니다."""
@@ -177,55 +206,61 @@ def inventory_agent_node(state: GraphState) -> dict:
     
     intent = state.get("intent", "")
     if (intent.startswith("inventory.") or intent.startswith("action.")) and not state.get("user_id"):
-        return {"response_text": LOGIN_REQUIRED_REPLY}
+        return _normalize_agent_result({"response_text": LOGIN_REQUIRED_REPLY}, inherited_slots=state.get("slots"))
         
-    return run_inventory_agent(
-        intent=state.get("intent", ""),
-        text=state["text"],
-        history=state.get("history", []),
-        db=state["db"],
-        user_id=state.get("user_id")
+    result = _run_agent_with_retry(
+        lambda: run_inventory_agent(
+            intent=intent,
+            text=state["text"],
+            history=state.get("history", []),
+            db=state["db"],
+            user_id=state.get("user_id"),
+        ),
+        enabled=intent in {"inventory.list", "inventory.expiring"},
     )
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 
 def guide_agent_node(state: GraphState) -> dict:
     """식재료 가이드 요청을 Guide Agent에 전달합니다."""
     # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
     query = _rewrite_guide_query(state["text"])
-    return state["service"]._reply_guide(query)
+    result = _run_agent_with_retry(lambda: state["service"]._reply_guide(query))
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def recipe_agent_node(state: GraphState) -> dict:
     """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
-    return run_recipe_agent(
-        state["text"],
-        db=state["db"],
-        user_id=state.get("user_id"),
-        history=state.get("history", []),
-        settings_obj=state.get("settings_obj"),
-        intent=state.get("intent"),
+    result = _run_agent_with_retry(
+        lambda: run_recipe_agent(
+            state["text"],
+            db=state["db"],
+            user_id=state.get("user_id"),
+            history=state.get("history", []),
+            settings_obj=state.get("settings_obj"),
+            intent=state.get("intent"),
+        )
     )
-
-def recipe_pairing_node(state: GraphState) -> dict:
-    """특정 음식과 함께 먹기 좋은 메뉴를 안내합니다."""
-    return {"response_text": _reply_recipe_pairing(state["text"])}
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
-    return {
+    result = {
         "response_text": "영수증은 파일 업로드가 필요해서 아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요.",
         "actions": [{"label": "영수증 등록하러 가기", "url": "/receipt-ocr"}],
     }
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
 
     if state.get("intent") == "shopping.price_help":
-        return {
+        result = {
             "response_text": "가격 정보 없음은 상품 검색 결과에서 판매가를 확인하지 못했다는 뜻이에요. 상품명이나 용량을 더 구체적으로 입력하면 검색 정확도가 좋아질 수 있어요."
         }
+        return _normalize_agent_result(result, inherited_slots=state.get("slots"))
     if not state.get("user_id"):
-        return {"response_text": LOGIN_REQUIRED_REPLY}
+        return _normalize_agent_result({"response_text": LOGIN_REQUIRED_REPLY}, inherited_slots=state.get("slots"))
 
     # 나머지/전체 조회 후속 요청은 기존 Shopping 조회 결과를 모두 펼쳐 보여줍니다.
     if state.get("intent") == "shopping.current" and _is_shopping_show_all_request(state["text"]):
@@ -234,24 +269,37 @@ def shopping_agent_node(state: GraphState) -> dict:
 
         shopping_list = shopping_service.get_current(db=state["db"], user_id=state["user_id"])
         max_items = len((shopping_list or {}).get("items", [])) or 5
-        return {
+        result = {
             "response_text": summarize_shopping_list(shopping_list, max_items=max_items),
             "actions": [shopping_list_action(shopping_list.get("id") if shopping_list else None)],
         }
+        return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
     # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
     text = state["text"]
     if state.get("intent") == "shopping.create":
         text = _normalize_shopping_create_query(text)
     compare_text = _strip_shopping_compare_suffix(text)
+    if state.get("intent") == "shopping.compare":
+        compare_text = (state.get("slots") or {}).get("shopping_product") or compare_text
 
-    return run_shopping_agent(
-        text=compare_text or text,
-        intent=state.get("intent", ""),
-        history=state.get("history", []),
-        db=state["db"],
-        user_id=state.get("user_id"),
+    result = _run_agent_with_retry(
+        lambda: run_shopping_agent(
+            text=compare_text or text,
+            intent=state.get("intent", ""),
+            history=state.get("history", []),
+            db=state["db"],
+            user_id=state.get("user_id"),
+        ),
+        enabled=state.get("intent") not in _SHOPPING_WRITE_INTENTS,
     )
+    if state.get("intent") == "shopping.compare":
+        from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
+
+        products = extract_ingredient_names(compare_text or text)
+        if products:
+            result["slots"] = {**(result.get("slots") or {}), "shopping_product": products[0]}
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def alarm_agent_node(state: GraphState) -> dict:
     """캘린더 및 알림 관리를 Alarm Agent로 위임합니다."""
@@ -259,20 +307,33 @@ def alarm_agent_node(state: GraphState) -> dict:
     from ai.agents.alarm_agent.alarm_agent import run as run_alarm_agent
 
     request = _parse_alarm_request(state["text"], state.get("intent", ""))
-    agent_result = run_alarm_agent(
-        text_or_intent=state["text"],
-        payload=request["payload"],
-        intent=request["intent"],
-        action=request["action"],
-        confirmed=request["confirmed"],
-        tools=ALARM_AGENT_TOOLS,
-        context={"user_id": state.get("user_id"), "db": state["db"]},
+    agent_result = _run_agent_with_retry(
+        lambda: run_alarm_agent(
+            text_or_intent=state["text"],
+            payload=request["payload"],
+            intent=request["intent"],
+            action=request["action"],
+            confirmed=request["confirmed"],
+            tools=ALARM_AGENT_TOOLS,
+            context={"user_id": state.get("user_id"), "db": state["db"]},
+        ),
+        enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
-    return _alarm_result_to_state(agent_result)
+    result = _alarm_result_to_state(agent_result)
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
+
+def fallback_agent_node(state: GraphState) -> dict:
+    """기존 Agent가 담당하지 않는 일반 요리 질문을 제한된 fallback Agent에 전달합니다."""
+    from ai.agents.fallback_agent import run_food_fallback
+
+    result = _run_agent_with_retry(
+        lambda: run_food_fallback(state["text"], history=state.get("history", []))
+    )
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def general_node(state: GraphState) -> dict:
     """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
-    return {"response_text": GENERAL_REPLY}
+    return _normalize_agent_result({"response_text": GENERAL_REPLY}, inherited_slots=state.get("slots"))
 
 def multi_agent_node(state: GraphState) -> dict:
     """작업 목록을 순차 실행하고 일부 Agent 실패가 전체 응답을 막지 않게 합니다."""
@@ -280,7 +341,6 @@ def multi_agent_node(state: GraphState) -> dict:
         "inventory_agent_node": inventory_agent_node,
         "guide_agent_node": guide_agent_node,
         "recipe_agent_node": recipe_agent_node,
-        "recipe_pairing_node": recipe_pairing_node,
         "receipt_guide_node": receipt_guide_node,
         "shopping_agent_node": shopping_agent_node,
     }
@@ -345,8 +405,9 @@ def route_intent(state: GraphState) -> str:
         "ingredient.guide": "guide_agent_node",
         "recipe.recommend": "recipe_agent_node",
         "recipe.search": "recipe_agent_node",
-        "recipe.pairing": "recipe_pairing_node",
+        "recipe.pairing": "recipe_agent_node",
         "receipt.guide": "receipt_guide_node",
+        "food.general": "fallback_agent_node",
     }
     return routes.get(intent, "general_node")
 
@@ -358,8 +419,8 @@ workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
-workflow.add_node("recipe_pairing_node", recipe_pairing_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
+workflow.add_node("fallback_agent_node", fallback_agent_node)
 workflow.add_node("general_node", general_node)
 
 workflow.set_entry_point("router")
@@ -371,8 +432,8 @@ for node_name in (
     "shopping_agent_node",
     "guide_agent_node",
     "recipe_agent_node",
-    "recipe_pairing_node",
     "receipt_guide_node",
+    "fallback_agent_node",
     "general_node",
 ):
     workflow.add_edge(node_name, END)

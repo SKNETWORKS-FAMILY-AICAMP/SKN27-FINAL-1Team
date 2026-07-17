@@ -8,8 +8,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 from ai.agents.supervisor_agent.supervisor_agent import router_node
 from ai.agents.supervisor_agent import supervisor_utils
-import ai.agents.recipe_agent.recipe_handlers as recipe_handlers
+import ai.agents.recipe_agent.recipe_tools as recipe_tools
 import ai.agents.recipe_agent.recipe_utils as recipe_utils
+from ai.agents.recipe_agent import run_recipe_agent
 
 
 def _route_intent(message: str) -> str:
@@ -59,8 +60,54 @@ def test_route_intent_examples() -> None:
     }
 
     for message, expected in cases.items():
-        assert _route_intent(message) == expected
+        assert router_node({"text": message, "service": FakeService(expected), "history": []})["intent"] == expected
 
+
+def test_intent_evaluation_dataset_contract() -> None:
+    """실모델 평가 데이터셋의 형식과 Supervisor 허용 intent를 검증합니다."""
+    import json
+
+    dataset_path = Path(__file__).with_name("intent_evaluation_cases.json")
+    cases = json.loads(dataset_path.read_text(encoding="utf-8-sig"))
+    texts = [case.get("text") for case in cases]
+    allowed_intents = set(supervisor_utils._LLM_ROUTE_INTENTS)
+
+    assert len(cases) == 50
+    assert len(texts) == len(set(texts))
+    assert all(case.get("expected_intent") in allowed_intents for case in cases)
+    assert all(case.get("expected_intent") not in {"inventory.action", "inventory.delete"} for case in cases)
+
+    for case in cases:
+        result = router_node({
+            "text": case["text"],
+            "history": case.get("history") or [],
+            "service": FakeService(case["expected_intent"]),
+        })
+        assert result["intent"] == case["expected_intent"]
+
+def test_intent_evaluator_reports_accuracy_and_failures(monkeypatch) -> None:
+    """실모델 평가기가 정확도와 오분류 사례를 올바르게 집계하는지 확인합니다."""
+    sys.path.insert(0, str(Path(__file__).parent))
+    import benchmark_intent_router
+
+    predictions = iter([
+        {"intent": "ingredient.guide", "confidence": 0.9},
+        {"intent": "general", "confidence": 0.6},
+    ])
+    monkeypatch.setattr(
+        benchmark_intent_router.supervisor_service,
+        "_route_intent_payload_with_llm",
+        lambda text, history: next(predictions),
+    )
+
+    report = benchmark_intent_router.evaluate_cases([
+        {"text": "감자 보관법", "expected_intent": "ingredient.guide"},
+        {"text": "두부 레시피", "expected_intent": "recipe.search"},
+    ], workers=1)
+
+    assert report["accuracy"] == 0.5
+    assert report["correct"] == 1
+    assert report["failures"][0]["predicted"] == "general"
 
 def test_extract_recipe_ingredient() -> None:
     """특정 재료 레시피 질문에서 재료명만 추출되는지 확인합니다."""
@@ -99,7 +146,7 @@ def test_format_guide_tip() -> None:
 
 def test_cooking_time_question_uses_external_recipe() -> None:
     """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
-    original_external = recipe_handlers.reply_external_recipe
+    original_external = recipe_tools.reply_external_recipe
     called = {"external": False, "query": ""}
 
     def fake_external(keyword: str, query_text: str | None = None):
@@ -107,23 +154,21 @@ def test_cooking_time_question_uses_external_recipe() -> None:
         called["query"] = query_text or ""
         return f"{keyword} 웹 검색", []
 
-    recipe_handlers.reply_external_recipe = fake_external
+    recipe_tools.reply_external_recipe = fake_external
     try:
-        reply, actions, sources = recipe_handlers.handle_recipe_search(None, "감자튀김 에어프라이기 시간")
+        result = run_recipe_agent("감자튀김 에어프라이기 시간", db=None, intent="recipe.search")
         assert called["external"]
         assert called["query"] == "감자튀김 에어프라이기 시간"
-        assert reply == "감자튀김 웹 검색"
-        assert actions == []
-        assert sources == []
+        assert result["response_text"] == "감자튀김 웹 검색"
+        assert result["actions"] == []
+        assert result["sources"] == []
     finally:
-        recipe_handlers.reply_external_recipe = original_external
+        recipe_tools.reply_external_recipe = original_external
 if __name__ == "__main__":
     test_route_intent_examples()
     test_extract_recipe_ingredient()
     test_login_status_question()
     test_guest_chat_login_boundary()
-    test_guide_result_match()
-    test_search_result_relevance()
     test_format_guide_tip()
     test_cooking_time_question_uses_external_recipe()
     print("chat service tests ok")
@@ -219,6 +264,57 @@ def test_llm_route_history_keeps_explicit_context() -> None:
     }
 
 
+def test_read_request_uses_llm_before_rule_fallback() -> None:
+    """읽기 요청은 기존 키워드 규칙보다 LLM JSON 분류를 먼저 사용합니다."""
+
+    class TrackingService(FakeService):
+        """LLM 분류 호출 여부를 기록하는 테스트 대역입니다."""
+
+        def __init__(self) -> None:
+            super().__init__("recipe.search")
+            self.called = False
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """호출 상태를 기록하고 규칙과 다른 읽기 intent를 반환합니다."""
+            self.called = True
+            return super()._route_intent_payload_with_llm(text, history)
+
+    service = TrackingService()
+    result = router_node({"text": "감자 보관법", "service": service, "history": []})
+
+    assert service.called
+    assert result["intent"] == "recipe.search"
+
+
+def test_low_confidence_llm_result_uses_read_rule_fallback() -> None:
+    """LLM 신뢰도가 낮으면 기존 읽기 규칙으로 안전하게 보완합니다."""
+
+    class LowConfidenceService:
+        """낮은 신뢰도의 일반 intent를 반환하는 테스트 대역입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """규칙 fallback을 확인하기 위한 낮은 신뢰도 결과를 반환합니다."""
+            return {"intent": "general", "confidence": 0.2, "slots": {}}
+
+    result = router_node({"text": "감자 보관법", "service": LowConfidenceService(), "history": []})
+
+    assert result["intent"] == "ingredient.guide"
+
+
+def test_write_request_does_not_call_llm_router() -> None:
+    """냉장고 쓰기 요청은 LLM을 호출하지 않고 규칙으로 고정합니다."""
+
+    class UnexpectedService:
+        """호출되면 테스트를 실패시키는 LLM 대역입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """쓰기 요청에서 LLM 호출이 발생하면 실패합니다."""
+            raise AssertionError("쓰기 요청에서 LLM 분류기를 호출했습니다.")
+
+    result = router_node({"text": "감자 1개 추가해줘", "service": UnexpectedService(), "history": []})
+
+    assert result["intent"] == "inventory.action"
+
 def test_llm_fallback_excludes_write_intents() -> None:
     """DB 변경 intent는 LLM fallback 허용 목록에 포함하지 않습니다."""
     write_intents = {
@@ -277,11 +373,12 @@ def test_inventory_consume_plain_word_routes_to_inventory_action() -> None:
     """소비해줘 표현도 냉장고 소비 처리로 보냅니다."""
     assert router_node({"text": "두부 소비해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
     assert router_node({"text": "냉장고에 두부 소비해줘", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
+    assert router_node({"text": "양파 1개 먹엇어", "service": FakeService("general"), "history": []})["intent"] == "inventory.action"
 
 
 def test_expiring_question_does_not_use_consume_as_ingredient_name() -> None:
     """소비기한 임박 질문에서 소비를 식재료명으로 보지 않습니다."""
-    assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("general"), "history": []})["intent"] == "inventory.expiring"
+    assert router_node({"text": "소비기한 임박 재료 있어?", "service": FakeService("inventory.expiring"), "history": []})["intent"] == "inventory.expiring"
     assert _extract_expiry_keyword("소비기한 임박 재료 있어?") == ""
     assert _extract_expiry_keyword("소비 임박재료 뭐 있어?") == ""
     assert _extract_expiry_keyword("냉장고 재료 중 유통기한 임박 재료") == ""
@@ -404,18 +501,33 @@ def test_shopping_follow_up_shows_all_items(monkeypatch) -> None:
     }
     monkeypatch.setattr(shopping_service, "get_current", lambda **kwargs: shopping_list)
 
-    result = shopping_agent_node({
-        "text": "외2개도 보여줘",
-        "intent": "shopping.current",
-        "db": MagicMock(),
-        "user_id": 1,
-        "history": [],
+    for message in ("외2개도 보여줘", "다 알려줘"):
+        result = shopping_agent_node({
+            "text": message,
+            "intent": "shopping.current",
+            "db": MagicMock(),
+            "user_id": 1,
+            "history": [],
+        })
+
+        assert "7. 재료7 - 가격 정보 없음" in result["response_text"]
+        assert "외 2개" not in result["response_text"]
+
+def test_shopping_show_all_follow_up_keeps_current_list_intent() -> None:
+    """장보기 목록 후속 요청은 LLM이 직전 목록 문맥을 반영해 분류합니다."""
+    previous_message = MagicMock(role="bot", text="현재 장보기 목록이에요.", intent="shopping.current", slots={})
+    service = FakeService("shopping.current")
+    route_call = service._route_intent_payload_with_llm
+    service._route_intent_payload_with_llm = MagicMock(wraps=route_call)
+
+    result = router_node({
+        "text": "다 알려줘",
+        "history": [previous_message],
+        "service": service,
     })
 
-    assert "7. 재료7 - 가격 정보 없음" in result["response_text"]
-    assert "외 2개" not in result["response_text"]
-
-
+    service._route_intent_payload_with_llm.assert_called_once()
+    assert result["intent"] == "shopping.current"
 def test_shopping_create_removes_location_particle() -> None:
     """장보기 위치 조사를 제거해 상품명에 에/로가 남지 않게 합니다."""
     first = _normalize_shopping_create_query("냉동 피자 장보기에 넣어줘")
@@ -424,12 +536,54 @@ def test_shopping_create_removes_location_particle() -> None:
     assert extract_ingredient_names(first) == ["냉동 피자"]
     assert extract_ingredient_names(second) == ["냉동 치킨"]
 
+def test_shopping_price_follow_up_reuses_previous_product(monkeypatch) -> None:
+    """상품명이 생략된 가격 후속 질문은 직전 비교 상품을 이어받습니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    captured = {}
+
+    def fake_run_shopping_agent(**kwargs):
+        """Shopping Agent에 전달된 상품명을 테스트용으로 기록합니다."""
+        captured.update(kwargs)
+        return {"response_text": "감자 가격 비교 결과예요.", "actions": [], "sources": []}
+
+    monkeypatch.setattr(
+        "ai.agents.shopping_agent.shopping_agent.run_shopping_agent",
+        fake_run_shopping_agent,
+    )
+    history = [
+        MagicMock(
+            role="bot",
+            text="감자 가격 비교 결과예요.",
+            intent="shopping.compare",
+            slots={"shopping_product": "감자"},
+        )
+    ]
+
+    for message in ("더 싼 곳 없어?", "다른 곳 없어?"):
+        routed = router_node({
+            "text": message,
+            "history": history,
+            "service": FakeService("shopping.compare"),
+        })
+        result = supervisor_agent.shopping_agent_node({
+            **routed,
+            "text": message,
+            "history": history,
+            "db": MagicMock(),
+            "user_id": 1,
+        })
+
+        assert routed["intent"] == "shopping.compare"
+        assert captured["text"] == "감자"
+        assert result["slots"]["shopping_product"] == "감자"
+
 def test_price_explanation_uses_shopping_help() -> None:
     """가격 정보 없음의 이유를 묻는 후속 질문은 상품명으로 검색하지 않습니다."""
     routed = router_node({
         "text": "가격 정보 안나오는 이유?",
         "history": [],
-        "service": FakeService("general"),
+        "service": FakeService("shopping.price_help"),
     })
 
     assert routed["intent"] == "shopping.price_help"
@@ -442,7 +596,7 @@ def test_expensive_price_question_routes_to_shopping() -> None:
     routed = router_node({
         "text": "바닐라오일 왜 이렇게 비싸?",
         "history": [],
-        "service": FakeService("general"),
+        "service": FakeService("shopping.compare"),
     })
 
     assert routed["intent"] == "shopping.compare"
@@ -470,31 +624,34 @@ def test_delete_inventory_item_routes_to_inventory_delete() -> None:
     assert result["response_text"] == "두부 폐기 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
 def test_receipt_register_words_route_to_receipt_guide() -> None:
-    """영수증 등록 요청은 냉장고 재료 추가가 아니라 영수증 안내로 보냅니다."""
+    """영수증 등록 안내도 LLM을 먼저 거치고 올바른 Agent로 보냅니다."""
     messages = ("영수증 등록", "영수증 등록 어디서해", "OCR 등록")
+    service = FakeService("receipt.guide")
+    route_call = service._route_intent_payload_with_llm
+    service._route_intent_payload_with_llm = MagicMock(wraps=route_call)
 
     for message in messages:
-        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "receipt.guide"
+        assert router_node({"text": message, "service": service, "history": []})["intent"] == "receipt.guide"
 
+    assert service._route_intent_payload_with_llm.call_count == len(messages)
 def test_alarm_agent_feature_words_route_to_alarm() -> None:
-    """알림과 캘린더 요청을 슈퍼바이저에서 분리해 보냅니다."""
-    notification_messages = (
-        "내일 알람 삭제해줘",
-        "리마인더 조회해줘",
-        "푸시토큰 등록해줘",
-        "알림 읽음 처리해줘",
+    """알림과 캘린더 쓰기는 규칙으로, 조회는 LLM 결과로 분리합니다."""
+    write_cases = (
+        ("내일 알람 삭제해줘", "alarm.notification"),
+        ("푸시토큰 등록해줘", "alarm.notification"),
+        ("알림 읽음 처리해줘", "alarm.notification"),
+        ("내일 저녁 일정 등록해줘", "alarm.calendar"),
     )
-    calendar_messages = (
-        "내일 저녁 일정 등록해줘",
-        "캘린더 일정 조회",
-        "내일 캘린더 일정 알려줘",
+    read_cases = (
+        ("리마인더 조회해줘", "alarm.notification"),
+        ("캘린더 일정 조회", "alarm.calendar"),
+        ("내일 캘린더 일정 알려줘", "alarm.calendar"),
     )
 
-    for message in notification_messages:
-        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.notification"
-    for message in calendar_messages:
-        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == "alarm.calendar"
-
+    for message, expected in write_cases:
+        assert router_node({"text": message, "service": FakeService("general"), "history": []})["intent"] == expected
+    for message, expected in read_cases:
+        assert router_node({"text": message, "service": FakeService(expected), "history": []})["intent"] == expected
 
 def test_alarm_agent_node_passes_notification_intent(monkeypatch) -> None:
     """알림 조회는 슈퍼바이저가 고정하지 않고 알람 에이전트가 분류하게 둡니다."""
@@ -640,6 +797,20 @@ def test_inventory_add_sentence_asks_storage_without_llm(monkeypatch) -> None:
     assert result["response_text"] == "두부 1개를 어디에 보관할까요? 냉장, 냉동, 실온 중에서 알려주세요."
 
 
+
+def test_completed_pending_action_does_not_reactivate() -> None:
+    """완료 응답 뒤에는 과거 실행 대기 작업을 다시 사용하지 않습니다."""
+    history = [
+        MagicMock(
+            role="bot",
+            text="두부 1개를 냉장에 추가할까요?",
+            pending_action={"command": "확인:add_ingredient:두부:1:냉장"},
+        ),
+        MagicMock(role="user", text="확인", pending_action=None),
+        MagicMock(role="bot", text="두부를 추가했어요.", pending_action=None),
+    ]
+
+    assert supervisor_utils._latest_bot_pending_action(history) is None
 
 def test_pending_add_cancel_word_routes_to_cancel() -> None:
     """추가 대기 상태에서 거절 표현은 새 추가 요청으로 보지 않습니다."""
@@ -847,7 +1018,7 @@ def test_inventory_action_requires_login() -> None:
 def test_route_intent_uses_lookup_table() -> None:
     """일반 intent를 대응하는 LangGraph 노드 이름으로 변환합니다."""
     assert route_intent({"intent": "recipe.search"}) == "recipe_agent_node"
-    assert route_intent({"intent": "recipe.pairing"}) == "recipe_pairing_node"
+    assert route_intent({"intent": "recipe.pairing"}) == "recipe_agent_node"
     assert route_intent({"intent": "inventory.action"}) == "inventory_agent_node"
     assert route_intent({"intent": "unknown"}) == "general_node"
 
@@ -952,7 +1123,7 @@ def test_inventory_add_negative_name_rejected_before_storage(monkeypatch) -> Non
     })
 
     assert result["response_text"] == "올바른 식재료명을 입력해주세요."
-    assert "actions" not in result
+    assert result["actions"] == []
 
 
 def test_inventory_add_name_starting_with_an_is_not_blocked(monkeypatch) -> None:
@@ -1196,6 +1367,7 @@ def test_llm_route_payload_json_parser() -> None:
     assert payload == {
         "intent": "recipe.recommend",
         "confidence": 0.82,
+        "is_follow_up": False,
         "slots": {"ingredient": "두부"},
         "tasks": [],
     }
@@ -1226,15 +1398,231 @@ def test_llm_route_payload_rejects_unknown_values() -> None:
 
     assert payload == {
         "intent": "general",
-        "confidence": 1.0,
+        "confidence": 0.0,
+        "is_follow_up": False,
         "slots": {"ingredient": "감자"},
         "tasks": [{"intent": "recipe.search", "text": "감자 레시피"}],
     }
 
 
-def test_recipe_pairing_reply() -> None:
-    """곁들임 질문은 레시피 검색 실패 대신 메뉴 조합을 안내합니다."""
-    reply = supervisor_utils._reply_recipe_pairing("김치볶음밥이랑 먹기 좋은 음식")
+def test_follow_up_inherits_only_same_intent_context() -> None:
+    """후속 질문은 같은 Agent intent의 허용 슬롯만 이어받습니다."""
+    class FollowUpService:
+        """후속 가이드 분류 결과를 반환하는 테스트 대역입니다."""
 
-    assert "김치볶음밥에는" in reply
-    assert "계란국" in reply
+        def _route_intent_payload_with_llm(self, text, history):
+            """식재료명이 생략된 후속 가이드 결과를 반환합니다."""
+            return {
+                "intent": "ingredient.guide",
+                "confidence": 0.9,
+                "is_follow_up": True,
+                "slots": {"guide_type": "washing"},
+                "tasks": [],
+            }
+
+    history = [
+        MagicMock(
+            role="bot",
+            text="감자 보관법이에요.",
+            intent="ingredient.guide",
+            slots={"ingredient": "감자", "guide_type": "storage", "shopping_product": "양파"},
+            pending_action=None,
+        )
+    ]
+
+    result = router_node({"text": "세척은?", "service": FollowUpService(), "history": history})
+
+    assert result["intent"] == "ingredient.guide"
+    assert result["slots"] == {"ingredient": "감자", "guide_type": "washing"}
+
+
+def test_agent_result_contract_normalizes_status_and_ui() -> None:
+    """Agent의 message·ui·status 응답을 Supervisor 공통 계약으로 변환합니다."""
+    result = supervisor_utils._normalize_agent_result(
+        {
+            "ok": True,
+            "status": "needs_input",
+            "action": "confirm_ingredient",
+            "message": "어떤 재료인지 선택해주세요.",
+            "ui": {
+                "actions": [{"label": "감자", "data": {"message": "감자"}}],
+                "sources": [{"title": "출처", "url": "https://example.com"}],
+            },
+        },
+        inherited_slots={"ingredient": "감"},
+    )
+
+    assert result["response_text"] == "어떤 재료인지 선택해주세요."
+    assert result["actions"][0]["label"] == "감자"
+    assert result["sources"][0]["title"] == "출처"
+    assert result["slots"] == {
+        "ingredient": "감",
+        "agent_status": "needs_input",
+        "agent_action": "confirm_ingredient",
+    }
+
+
+def test_food_general_guard_corrects_misclassified_read_intents() -> None:
+    """명확한 식품 비교와 재가열 질문은 잘못된 Guide·Recipe 분류를 보정합니다."""
+    comparison = router_node({
+        "text": "동물성 휘핑크림과 식물성은 뭐가 달라?",
+        "service": FakeService("ingredient.guide"),
+        "history": [],
+    })
+    reheating = router_node({
+        "text": "남은 치킨 데우는 방법은?",
+        "service": FakeService("recipe.search"),
+        "history": [],
+    })
+
+    assert comparison["intent"] == "food.general"
+    assert reheating["intent"] == "food.general"
+
+def test_food_general_prompt_separates_comparison_and_reheating() -> None:
+    """식재료 비교와 남은 음식 재가열 질문을 food.general로 분류하도록 계약합니다."""
+    prompt = supervisor_utils._LLM_ROUTE_SYSTEM_PROMPT
+
+    assert '동물성 휘핑크림과 식물성은 뭐가 달라?' in prompt
+    assert '남은 치킨 데우는 방법은?' in prompt
+    assert 'must be food.general' in prompt
+
+def test_food_fallback_routes_without_receiving_db_actions(monkeypatch) -> None:
+    """일반 요리 지식은 fallback으로 보내고 DB 변경 intent와 분리합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
+
+    monkeypatch.setattr(
+        "ai.agents.fallback_agent.run_food_fallback",
+        lambda text, history=None: {"response_text": "설탕 5g은 일반적으로 약 1작은술이에요."},
+    )
+    routed = router_node({
+        "text": "설탕 5g은 몇 티스푼이야?",
+        "service": FakeService("food.general"),
+        "history": [],
+    })
+    result = supervisor_agent.fallback_agent_node({
+        **routed,
+        "text": "설탕 5g은 몇 티스푼이야?",
+        "history": [],
+        "slots": {},
+    })
+
+    assert routed["intent"] == "food.general"
+    assert result["response_text"].startswith("설탕 5g")
+    assert result["actions"] == []
+    assert "inventory" not in routed["intent"]
+
+
+def test_non_food_request_stays_out_of_fallback() -> None:
+    """음식과 관계없는 질문은 fallback Agent로 보내지 않습니다."""
+    routed = router_node({
+        "text": "파이썬으로 구구단 코드 짜줘",
+        "service": FakeService("general"),
+        "history": [],
+    })
+
+    assert routed["intent"] == "general"
+    assert route_intent(routed) == "general_node"
+
+def test_agent_quality_retry_runs_only_after_bad_result() -> None:
+    """빈 Agent 응답은 한 번 재호출하고 정상 응답에는 재시도 횟수를 기록합니다."""
+    responses = iter([
+        {"status": "error", "response_text": ""},
+        {"response_text": "정상 응답입니다."},
+    ])
+    calls = []
+
+    def call_agent():
+        """테스트용 Agent 응답을 순서대로 반환합니다."""
+        calls.append(1)
+        return next(responses)
+
+    result = supervisor_utils._run_agent_with_retry(call_agent)
+
+    assert len(calls) == 2
+    assert result["response_text"] == "정상 응답입니다."
+    assert result["slots"]["agent_retry_count"] == 1
+
+
+def test_agent_quality_retry_skips_valid_result() -> None:
+    """정상 Agent 응답은 불필요하게 다시 호출하지 않습니다."""
+    calls = []
+
+    def call_agent():
+        """호출 횟수 확인용 정상 응답을 반환합니다."""
+        calls.append(1)
+        return {"response_text": "정상 응답입니다."}
+
+    result = supervisor_utils._run_agent_with_retry(call_agent)
+
+    assert len(calls) == 1
+    assert result == {"response_text": "정상 응답입니다."}
+
+
+def test_agent_quality_retry_is_disabled_for_write_action() -> None:
+    """중복 DB 변경을 막기 위해 쓰기 작업은 응답이 비어도 재호출하지 않습니다."""
+    calls = []
+
+    def call_agent():
+        """호출 횟수 확인용 빈 쓰기 응답을 반환합니다."""
+        calls.append(1)
+        return {"response_text": ""}
+
+    result = supervisor_utils._run_agent_with_retry(call_agent, enabled=False)
+
+    assert len(calls) == 1
+    assert result == {"response_text": ""}
+
+
+
+def test_guide_agent_node_retries_not_found_once() -> None:
+    """Guide Agent가 not_found를 반환하면 Supervisor가 한 번만 다시 조회합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    responses = iter([
+        {"response_text": "정보를 찾지 못했어요.", "slots": {"agent_status": "not_found"}},
+        {"response_text": "감자는 서늘하고 어두운 곳에 보관하세요."},
+    ])
+    calls = []
+
+    class GuideService:
+        """재시도 검증용 Guide Service 대역입니다."""
+
+        def _reply_guide(self, text):
+            """호출 순서에 따라 실패 후 정상 응답을 반환합니다."""
+            calls.append(text)
+            return next(responses)
+
+    result = supervisor_agent_module.guide_agent_node({
+        "text": "감자 보관법",
+        "service": GuideService(),
+        "slots": {},
+    })
+
+    assert calls == ["감자 보관법", "감자 보관법"]
+    assert result["response_text"] == "감자는 서늘하고 어두운 곳에 보관하세요."
+    assert result["slots"]["agent_retry_count"] == 1
+
+
+def test_inventory_write_node_never_retries(monkeypatch) -> None:
+    """Inventory 쓰기 노드는 빈 응답이어도 중복 실행하지 않습니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    calls = []
+
+    def fake_inventory_agent(**kwargs):
+        """쓰기 Agent 호출 횟수를 기록하고 빈 응답을 반환합니다."""
+        calls.append(kwargs)
+        return {"response_text": ""}
+
+    monkeypatch.setattr(inventory_agent, "run_inventory_agent", fake_inventory_agent)
+    supervisor_agent_module.inventory_agent_node({
+        "intent": "inventory.action",
+        "text": "두부 1개 추가해줘",
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+        "slots": {},
+    })
+
+    assert len(calls) == 1
