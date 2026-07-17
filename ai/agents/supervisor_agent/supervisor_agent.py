@@ -9,6 +9,7 @@ from ai.agents.inventory_agent.inventory_utils import (
     _pending_consume_from_history,
     _extract_add_items,
     _extract_quantity,
+    _is_all_quantity_request,
     ADD_WORDS,
     DELETE_WORDS,
     CONSUME_WORDS,
@@ -53,6 +54,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _normalize_agent_result,
     _run_agent_with_retry,
     _normalize_shopping_create_query,
+    _normalize_shopping_delete_query,
     _normalize_text,
     _parse_alarm_request,
     _rewrite_context_switch,
@@ -70,6 +72,7 @@ def router_node(state: GraphState) -> dict:
     previous_intent = _latest_bot_intent(history)
     previous_slots = _latest_bot_slots(history)
     inventory_pending = previous_slots.get("inventory_pending")
+    inventory_last_action = previous_slots.get("inventory_last_action")
     has_pending = bool(
         inventory_pending
         or _pending_add_many_from_history(history)
@@ -82,8 +85,14 @@ def router_node(state: GraphState) -> dict:
 
     # 번복 뒤 새 명령은 오래된 pending 문맥을 버리고 처음부터 다시 분류합니다.
     if text != original_text:
-        result = router_node({**state, "text": text, "history": []})
-        result.update({"text": text, "history": []})
+        keep_delete_context = (
+            isinstance(inventory_pending, dict)
+            and inventory_pending.get("action") in {"delete_quantity", "delete_confirm"}
+            and (_extract_quantity(text) is not None or _is_all_quantity_request(text))
+        )
+        next_history = history if keep_delete_context else []
+        result = router_node({**state, "text": text, "history": next_history})
+        result.update({"text": text, "history": next_history})
         return result
 
     normalized = _normalize_text(text)
@@ -106,8 +115,27 @@ def router_node(state: GraphState) -> dict:
             return _route_result("inventory.pending_add_storage", slots=previous_slots)
         if pending_type == "add_quantity" and (_extract_quantity(text) or _extract_storage(text)):
             return _route_result("inventory.pending_add", slots=previous_slots)
-        if pending_type == "consume_quantity" and _extract_quantity(text):
+        if pending_type in {"consume_quantity", "consume_confirm"} and _extract_quantity(text):
             return _route_result("inventory.pending_consume", slots=previous_slots)
+        if (
+            pending_type in {"delete_quantity", "delete_confirm"}
+            and (_extract_quantity(text) is not None or _is_all_quantity_request(text))
+        ):
+            return _route_result("inventory.pending_delete", slots=previous_slots)
+
+
+    # 취소 직후 수량을 바꿔 다시 요청하면 직전 재료와 작업 종류를 한 번 이어받습니다.
+    if isinstance(inventory_last_action, dict) and _extract_quantity(text):
+        last_type = inventory_last_action.get("action")
+        action_words = DELETE_WORDS if last_type == "delete_confirm" else CONSUME_WORDS
+        if inventory_last_action.get("name") and ("처리" in normalized or any(word in normalized for word in action_words)):
+            resumed_slots = {
+                **previous_slots,
+                "inventory_pending": {"action": last_type, "name": inventory_last_action["name"]},
+                "inventory_last_action": None,
+            }
+            intent = "inventory.pending_delete" if last_type == "delete_confirm" else "inventory.pending_consume"
+            return _route_result(intent, slots=resumed_slots)
 
     if _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
@@ -122,6 +150,9 @@ def router_node(state: GraphState) -> dict:
         return _route_result("inventory.pending_consume", slots=previous_slots)
 
     # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
+    if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
+        return _route_result("shopping.delete_item", slots=previous_slots)
+
     has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
     if previous_intent and has_write_word and _is_context_follow_up(text):
         previous_slots = _latest_bot_slots(history)
@@ -300,6 +331,8 @@ def shopping_agent_node(state: GraphState) -> dict:
     text = state["text"]
     if state.get("intent") == "shopping.create":
         text = _normalize_shopping_create_query(text)
+    if state.get("intent") == "shopping.delete_item":
+        text = _normalize_shopping_delete_query(text)
     compare_text = _strip_shopping_compare_suffix(text)
     if state.get("intent") == "shopping.compare":
         compare_text = (state.get("slots") or {}).get("shopping_product") or compare_text

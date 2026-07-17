@@ -629,6 +629,15 @@ def _normalize_shopping_create_query(text: str) -> str:
         text,
     ).strip()
 
+
+def _normalize_shopping_delete_query(text: str) -> str:
+    """장보기 삭제 후속 문장에서 실제 재료명만 남깁니다."""
+    cleaned = re.sub(r"\s*(?:빼\s*줘|빼|삭제\s*해줘|삭제|지워\s*줘|지워)\s*[?!.]*$", "", text).strip()
+    return re.sub(
+        r"^(?:장보기|쇼핑)(?:\s*목록)?(?:에서|에)?\s*",
+        "",
+        cleaned,
+    ).strip()
 def _strip_shopping_compare_suffix(text: str) -> str:
     """가격 비교 후속 표현을 제거하고 실제 상품명만 반환합니다."""
     cleaned = re.sub(

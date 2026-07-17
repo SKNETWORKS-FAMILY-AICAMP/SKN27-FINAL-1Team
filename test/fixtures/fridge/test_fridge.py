@@ -70,7 +70,8 @@ def test_chat_consume_uses_multiple_matching_inventory_rows() -> None:
     second = SimpleNamespace(display_name="두부", quantity=Decimal("2"), status="normal", expiry_date=date(2026, 7, 20))
     ingredient = SimpleNamespace(name="두부", normalized_name="두부")
     db = MagicMock()
-    db.query.return_value.join.return_value.filter.return_value.all.return_value = [
+    query = db.query.return_value.join.return_value.filter.return_value.order_by.return_value
+    query.with_for_update.return_value.all.return_value = [
         (first, ingredient),
         (second, ingredient),
     ]
@@ -82,6 +83,32 @@ def test_chat_consume_uses_multiple_matching_inventory_rows() -> None:
     assert "3개 소비 처리했어요" in reply
     assert "남은 총수량: 1" in reply
     db.commit.assert_called_once()
+    query.with_for_update.assert_called_once()
+
+def test_chat_discard_reuses_quantity_decrease(monkeypatch) -> None:
+    """폐기는 소비와 같은 수량 차감 로직을 사용하고 안내 문구만 구분합니다."""
+    consume = MagicMock(return_value="호박을 1개 소비 처리했어요. (남은 총수량: 1)")
+    monkeypatch.setattr(inventory_service, "consume_ingredient_by_name", consume)
+
+    reply = inventory_service.discard_ingredient_by_name(None, 1, "호박", 1)
+
+    assert reply == "호박을 1개 폐기 처리했어요. (남은 총수량: 1)"
+
+def test_chat_inventory_total_quantity_sums_matching_rows() -> None:
+    """동일 식재료로 등록된 여러 입고 건의 활성 수량을 합산합니다."""
+    first = SimpleNamespace(display_name="호박", quantity=Decimal("1"))
+    second = SimpleNamespace(display_name="호박", quantity=Decimal("2"))
+    ingredient = SimpleNamespace(name="호박", normalized_name="호박")
+    db = MagicMock()
+    db.query.return_value.join.return_value.filter.return_value.all.return_value = [
+        (first, ingredient),
+        (second, ingredient),
+    ]
+
+    total = inventory_service.get_total_quantity_by_name(db, 1, "호박")
+
+    assert total == 3
+
 
 if __name__ == "__main__":
     test_chat_inventory_name_match_uses_display_name()

@@ -184,7 +184,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_agent import inventory_agent_node, route_intent, router_node, shopping_agent_node
-from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY, _normalize_shopping_create_query, _strip_shopping_compare_suffix
+from ai.agents.supervisor_agent.supervisor_utils import LOGIN_REQUIRED_REPLY, _normalize_shopping_create_query, _normalize_shopping_delete_query, _strip_shopping_compare_suffix
 from ai.agents.inventory_agent.inventory_utils import _extract_add_items, _extract_delete_name, _extract_quantity, _extract_storage, _extract_expiry_keyword, _pending_add_from_history
 from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
 
@@ -536,6 +536,32 @@ def test_shopping_create_removes_location_particle() -> None:
     assert extract_ingredient_names(first) == ["냉동 피자"]
     assert extract_ingredient_names(second) == ["냉동 치킨"]
 
+def test_shopping_delete_follow_up_keeps_context(monkeypatch) -> None:
+    """장보기 삭제 대상 질문 뒤 짧은 재료 답변도 삭제 intent를 유지합니다."""
+    history = [MagicMock(
+        role="bot",
+        text="어떤 재료를 장보기 목록에서 뺄까요? 재료명을 같이 알려주세요.",
+        intent="shopping.delete_item",
+        slots={},
+    )]
+
+    result = router_node({"text": "피자 빼줘", "history": history, "service": FakeService("general")})
+
+    assert result["intent"] == "shopping.delete_item"
+    assert _normalize_shopping_delete_query("피자 빼줘") == "피자"
+    captured = {}
+
+    def fake_run_shopping_agent(**kwargs):
+        """Shopping Agent에 전달된 삭제 대상명을 기록합니다."""
+        captured.update(kwargs)
+        return {"response_text": "피자를 장보기 목록에서 뺄까요?", "actions": []}
+
+    monkeypatch.setattr("ai.agents.shopping_agent.shopping_agent.run_shopping_agent", fake_run_shopping_agent)
+    shopping_agent_node({"text": "피자 빼줘", "intent": result["intent"], "db": MagicMock(), "user_id": 1, "history": history})
+
+    assert captured["text"] == "피자"
+
+
 def test_shopping_price_follow_up_reuses_previous_product(monkeypatch) -> None:
     """상품명이 생략된 가격 후속 질문은 직전 비교 상품을 이어받습니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
@@ -612,17 +638,166 @@ def test_inventory_add_parses_quantity_and_storage_particle() -> None:
     assert _extract_add_items("양파 2개 냉장에 추가해줘") == [
         {"name": "양파", "quantity": 2.0, "storage": "냉장"}
     ]
+    assert _extract_add_items("계란 한피스 추가해줘") == [
+        {"name": "계란", "quantity": 1.0, "storage": None}
+    ]
 
 
 
-def test_delete_inventory_item_routes_to_inventory_delete() -> None:
-    """삭제/폐기 문장은 전체 폐기 확인 플로우로 보냅니다."""
+
+def test_inventory_add_question_uses_correct_particle(monkeypatch) -> None:
+    """받침 있는 식재료의 추가 수량 질문에 올바른 조사를 사용합니다."""
+    import ai.agents.inventory_agent.inventory_agent as inventory_agent
+
+    monkeypatch.setattr(inventory_agent, "is_valid_ingredient", lambda name: True)
+    monkeypatch.setattr(inventory_agent, "resolve_ingredient_name", lambda db, name: name)
+    result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "계란 추가해줘",
+        "intent": "inventory.action", "history": [],
+    })
+
+    assert result["response_text"] == "계란을 몇 개 추가하시겠어요?"
+    piece_result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "계란 한피스 추가해줘",
+        "intent": "inventory.action", "history": [],
+    })
+
+    assert piece_result["response_text"].startswith("계란 1개를 어디에 보관할까요?")
+
+
+def test_delete_inventory_item_routes_to_inventory_delete(monkeypatch) -> None:
+    """수량 없는 폐기 요청은 수량을 확인한 뒤 해당 수량만 처리합니다."""
     text = "냉장고에 두부 폐기처리 해줘"
     assert _extract_delete_name(text) == "두부"
+    assert _extract_delete_name("호박 전체 삭제해줘") == "호박"
+    assert _extract_delete_name("호박전체 삭제해줘") == "호박"
+    assert _extract_delete_name("호박 전부 삭제해줘") == "호박"
+    assert _extract_delete_name("호박 모두 삭제해줘") == "호박"
     assert router_node({"text": text, "service": FakeService("general"), "history": []})["intent"] == "inventory.delete"
     result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": text, "intent": "inventory.delete", "history": []})
-    assert result["response_text"] == "두부 폐기 처리할까요?"
-    assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부"
+    assert result["response_text"] == "두부를 몇 개 폐기할까요?"
+    assert result["slots"]["inventory_pending"] == {"action": "delete_quantity", "name": "두부"}
+    history = [{
+        "role": "bot",
+        "text": result["response_text"],
+        "intent": "inventory.delete",
+        "slots": result["slots"],
+    }]
+    assert router_node({"text": "1개", "service": FakeService("general"), "history": history})["intent"] == "inventory.pending_delete"
+    monkeypatch.setattr(
+        "ai.agents.inventory_agent.inventory_agent.inventory_service.get_total_quantity_by_name",
+        lambda db, user_id, name: 2,
+    )
+    confirmed = inventory_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "1개",
+        "intent": "inventory.pending_delete",
+        "history": [],
+        "slots": result["slots"],
+    })
+    assert confirmed["response_text"] == "두부 1개를 폐기 처리할까요?"
+    assert confirmed["actions"][0]["data"]["message"] == "확인:delete_ingredient:두부:1.0"
+
+
+def test_inventory_delete_caps_quantity_to_current_stock(monkeypatch) -> None:
+    """폐기 요청 수량이 재고보다 많으면 현재 재고 전량만 확인합니다."""
+    monkeypatch.setattr(
+        "ai.agents.inventory_agent.inventory_agent.inventory_service.get_total_quantity_by_name",
+        lambda db, user_id, name: 2,
+    )
+
+    result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "호박 5개 삭제해줘",
+        "intent": "inventory.delete", "history": [],
+    })
+
+    assert result["response_text"] == "현재 호박은 2개 있어요. 2개를 모두 폐기 처리할까요?"
+    assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:호박:2"
+
+
+def test_inventory_delete_all_skips_quantity_question(monkeypatch) -> None:
+    """전량 폐기를 명시하면 수량 질문 없이 현재 재고 전체를 확인합니다."""
+    monkeypatch.setattr(
+        "ai.agents.inventory_agent.inventory_agent.inventory_service.get_total_quantity_by_name",
+        lambda db, user_id, name: 2,
+    )
+
+    result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "호박 전체 삭제해줘",
+        "intent": "inventory.delete", "history": [],
+    })
+
+    assert result["response_text"] == "현재 호박은 2개 있어요. 2개를 모두 폐기 처리할까요?"
+    assert result["actions"][0]["data"]["message"] == "확인:delete_ingredient:호박:2"
+
+
+
+
+def test_inventory_delete_quantity_can_be_revised_from_confirmation(monkeypatch) -> None:
+    """폐기 확인 단계와 취소 직후에 수량을 바꿔 다시 요청할 수 있습니다."""
+    monkeypatch.setattr(
+        "ai.agents.inventory_agent.inventory_agent.inventory_service.get_total_quantity_by_name",
+        lambda db, user_id, name: 5,
+    )
+    initial = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "호박 6개 삭제해줘",
+        "intent": "inventory.delete", "history": [],
+    })
+    history = [{
+        "role": "bot", "text": initial["response_text"],
+        "intent": "inventory.delete", "slots": initial["slots"],
+    }]
+
+    routed = router_node({"text": "3개만 처리해줘", "service": FakeService("general"), "history": history})
+    assert routed["intent"] == "inventory.pending_delete"
+    revised = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "3개만 처리해줘",
+        "intent": routed["intent"], "history": history, "slots": routed["slots"],
+    })
+    assert revised["response_text"] == "호박 3개를 폐기 처리할까요?"
+
+    corrected = router_node({"text": "아니다 다 삭제해줘", "service": FakeService("general"), "history": history})
+    assert corrected["intent"] == "inventory.pending_delete"
+    corrected_result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": corrected["text"],
+        "intent": corrected["intent"], "history": corrected["history"], "slots": corrected["slots"],
+    })
+    assert corrected_result["response_text"] == "현재 호박은 5개 있어요. 5개를 모두 폐기 처리할까요?"
+
+
+    cancelled = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "취소",
+        "intent": "action.cancel", "history": history, "slots": initial["slots"],
+    })
+    cancel_history = [{
+        "role": "bot", "text": cancelled["response_text"],
+        "intent": "action.cancel", "slots": cancelled["slots"],
+    }]
+    resumed = router_node({"text": "3개만삭제", "service": FakeService("general"), "history": cancel_history})
+    assert resumed["intent"] == "inventory.pending_delete"
+    resumed_result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "3개만삭제",
+        "intent": resumed["intent"], "history": cancel_history, "slots": resumed["slots"],
+    })
+    assert resumed_result["response_text"] == "호박 3개를 폐기 처리할까요?"
+
+def test_inventory_consume_caps_quantity_to_current_stock(monkeypatch) -> None:
+    """소비 요청 수량이 재고보다 많으면 현재 재고 전량만 확인합니다."""
+    monkeypatch.setattr(
+        "ai.agents.inventory_agent.inventory_agent.inventory_service.get_total_quantity_by_name",
+        lambda db, user_id, name: 2,
+    )
+
+    result = inventory_agent_node({
+        "db": MagicMock(), "user_id": 1, "text": "호박 5개 먹었어",
+        "intent": "inventory.action", "history": [],
+    })
+
+    assert result["response_text"] == "현재 호박은 2개 있어요. 2개를 모두 소비 처리할까요?"
+    assert result["actions"][0]["data"]["message"] == "확인:consume_ingredient:호박:2"
+
+
 def test_receipt_register_words_route_to_receipt_guide() -> None:
     """영수증 등록 안내도 LLM을 먼저 거치고 올바른 Agent로 보냅니다."""
     messages = ("영수증 등록", "영수증 등록 어디서해", "OCR 등록")
@@ -994,7 +1169,7 @@ def test_latest_pending_question_wins_over_old_add_history() -> None:
     assert router_node({"text": "1", "service": FakeService("general"), "history": history})["intent"] == "inventory.pending_consume"
 
 
-def test_pending_consume_quantity_builds_confirm_action() -> None:
+def test_pending_consume_quantity_builds_confirm_action(monkeypatch) -> None:
     """소비 수량만 답한 경우 직전 소비 대기 요청을 이어받습니다."""
     class Message:
         def __init__(self, role, text):
@@ -1004,6 +1179,10 @@ def test_pending_consume_quantity_builds_confirm_action() -> None:
     history = [Message("bot", "귤을 몇 개 먹으셨나요? 수량을 알려주시면, 냉장고에서 차감해드리겠습니다.")]
     state = {"text": "1개", "service": FakeService("inventory.list"), "history": history}
     assert router_node(state)["intent"] == "inventory.pending_consume"
+    monkeypatch.setattr(
+        "ai.agents.inventory_agent.inventory_agent.inventory_service.get_total_quantity_by_name",
+        lambda db, user_id, name: 1,
+    )
     result = inventory_agent_node({"db": MagicMock(), "user_id": 1, "text": "1개", "intent": "inventory.pending_consume", "history": history})
     assert result["response_text"] == "귤 1개를 소비 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:consume_ingredient:귤:1.0"

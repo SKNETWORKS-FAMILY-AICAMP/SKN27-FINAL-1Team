@@ -17,6 +17,7 @@ from ai.agents.inventory_agent.inventory_utils import (
     _extract_consume_name,
     _extract_storage,
     _extract_quantity,
+    _is_all_quantity_request,
     _quantity_text,
     _confirm_action,
     _pending_add_from_history,
@@ -85,10 +86,10 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
             db.commit()
             return {"response_text": "\n".join(added), "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
-        if action == "delete_ingredient" and len(parts) >= 3:
-            if not _is_safe_action_name(parts[2]):
-                return {"response_text": "올바른 식재료명을 입력해주세요.", "slots": {"inventory_pending": None}}
-            reply = inventory_service.delete_ingredient_by_name(db, user_id, parts[2])
+        if action == "delete_ingredient" and len(parts) >= 4:
+            if not _is_safe_action_name(parts[2]) or not _is_positive_quantity(parts[3]):
+                return {"response_text": "올바른 식재료명과 수량을 입력해주세요.", "slots": {"inventory_pending": None}}
+            reply = inventory_service.discard_ingredient_by_name(db, user_id, parts[2], float(parts[3]))
             return {"response_text": reply, "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
     except Exception:
@@ -169,6 +170,38 @@ def _unknown_add_response(items: list[dict], db: Session) -> dict | None:
             return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "slots": {"inventory_pending": None}}
     return None
 
+
+def _quantity_action_response(db: Session, user_id: int, name: str, quantity: float | None, action: str) -> dict:
+    """보유 수량을 확인해 소비 또는 폐기 확인 응답을 만듭니다."""
+    if quantity is not None and not _is_positive_quantity(quantity):
+        return {"response_text": "수량은 0보다 크게 입력해주세요.", "slots": {"inventory_pending": None}}
+
+    total = inventory_service.get_total_quantity_by_name(db, user_id, name)
+    if total <= 0:
+        return {
+            "response_text": f"냉장고에서 {_apply_josa(name, '을를')} 찾을 수 없어요.",
+            "slots": {"inventory_pending": None},
+        }
+
+    actual_quantity = total if quantity is None else min(float(quantity), total)
+    quantity_text = _quantity_text(actual_quantity)
+    verb = "폐기" if action == "delete_ingredient" else "소비"
+    if quantity is None or float(quantity) > total:
+        reply = f"현재 {_apply_josa(name, '은는')} {_quantity_text(total)}개 있어요. {quantity_text}개를 모두 {verb} 처리할까요?"
+    else:
+        reply = f"{name} {quantity_text}개를 {verb} 처리할까요?"
+    command = f"확인:{action}:{name}:{actual_quantity}"
+    pending_action = "delete_confirm" if action == "delete_ingredient" else "consume_confirm"
+    return {
+        "response_text": reply,
+        "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")],
+        "slots": {
+            "inventory_pending": {"action": pending_action, "name": name},
+            "inventory_last_action": None,
+        },
+    }
+
+
 def _handle_inventory_action(text: str, db: Session, user_id: int) -> dict:
     """식재료 추가/소비를 규칙 기반으로 처리합니다."""
     normalized = _normalize_text(text)
@@ -192,7 +225,7 @@ def _handle_inventory_action(text: str, db: Session, user_id: int) -> dict:
         if len(items) == 1:
             item = items[0]
             if item["quantity"] is None:
-                return {"response_text": f"{item['name']}를 몇 개 추가하시겠어요?", "slots": {"inventory_pending": {"action": "add_quantity", "name": item["name"], "unchecked": False}}}
+                return {"response_text": f"{_apply_josa(item['name'], '을를')} 몇 개 추가하시겠어요?", "slots": {"inventory_pending": {"action": "add_quantity", "name": item["name"], "unchecked": False}}}
             if not item["storage"]:
                 return _storage_choice_response(item["name"], item["quantity"])
             reply_text = f"{item['name']} {_quantity_text(item['quantity'])}개를 {item['storage']}에 추가할까요?"
@@ -206,9 +239,8 @@ def _handle_inventory_action(text: str, db: Session, user_id: int) -> dict:
             return {"response_text": "어떤 식재료를 소비 처리할까요?"}
         quantity = _extract_quantity(text)
         if quantity is None:
-            return {"response_text": f"{name}를 몇 개 소비할까요?", "slots": {"inventory_pending": {"action": "consume_quantity", "name": name}}}
-        command = f"확인:consume_ingredient:{name}:{quantity}"
-        return {"response_text": f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?", "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "slots": {"inventory_pending": None}}
+            return {"response_text": f"{_apply_josa(name, '을를')} 몇 개 소비할까요?", "slots": {"inventory_pending": {"action": "consume_quantity", "name": name}}}
+        return _quantity_action_response(db, user_id, name, quantity, "consume_ingredient")
 
     return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
 
@@ -230,23 +262,36 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         return {"response_text": get_expiring_inventory(db, user_id, text)}
 
     if intent == "inventory.cancel" or intent == "action.cancel":
-        return {"response_text": "알겠습니다. 작업을 취소하겠습니다.", "slots": {"inventory_pending": None}}
+        last_action = None
+        if pending.get("action") in {"delete_confirm", "consume_confirm"}:
+            last_action = {"action": pending["action"], "name": pending.get("name", "")}
+        return {
+            "response_text": "알겠습니다. 작업을 취소하겠습니다.",
+            "slots": {"inventory_pending": None, "inventory_last_action": last_action},
+        }
         
     if intent == "inventory.delete":
         name = _extract_delete_name(text)
         if not name:
             return {"response_text": "음식과 관련된 대화만 지원하고 있어요! 요리 레시피, 식재료 보관법, 냉장고 재료 관리 등을 물어봐주세요!"}
-        reply = f"{name} 폐기 처리할까요?"
-        command = f"확인:delete_ingredient:{name}"
-        return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "slots": {"inventory_pending": None}}
+        quantity = _extract_quantity(text)
+        if quantity is None and not _is_all_quantity_request(text):
+            return {"response_text": f"{_apply_josa(name, '을를')} 몇 개 폐기할까요?", "slots": {"inventory_pending": {"action": "delete_quantity", "name": name}}}
+        return _quantity_action_response(db, user_id, name, quantity, "delete_ingredient")
+
+    if intent == "inventory.pending_delete":
+        name = pending.get("name") if pending.get("action") in {"delete_quantity", "delete_confirm"} else ""
+        quantity = _extract_quantity(text)
+        all_request = _is_all_quantity_request(text)
+        if not name or (quantity is None and not all_request):
+            return {"response_text": "폐기할 식재료와 수량을 다시 알려주세요.", "slots": {"inventory_pending": pending or None}}
+        return _quantity_action_response(db, user_id, name, quantity, "delete_ingredient")
 
     if intent == "inventory.pending_consume":
-        name = pending.get("name") if pending.get("action") == "consume_quantity" else None
+        name = pending.get("name") if pending.get("action") in {"consume_quantity", "consume_confirm"} else None
         name = name or _pending_consume_from_history(history) or ""
         quantity = _extract_quantity(text) or 1
-        reply = f"{name} {_quantity_text(quantity)}개를 소비 처리할까요?"
-        command = f"확인:consume_ingredient:{name}:{quantity}"
-        return {"response_text": reply, "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")], "slots": {"inventory_pending": None}}
+        return _quantity_action_response(db, user_id, name, quantity, "consume_ingredient")
 
     if intent == "inventory.pending_add_storage":
         legacy_pending = _pending_add_storage_from_history(history)

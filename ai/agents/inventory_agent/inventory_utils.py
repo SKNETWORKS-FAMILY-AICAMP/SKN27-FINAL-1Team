@@ -36,14 +36,21 @@ def _quantity_text(quantity: float) -> str:
     return str(int(number)) if number.is_integer() else str(number)
 
 def _extract_quantity(text: str) -> float | None:
-    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:개|g|kg|ml|l)?", text, re.IGNORECASE)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:개|피스|g|kg|ml|l)?", text, re.IGNORECASE)
     if match:
         return float(match.group(1))
     normalized = text.replace(" ", "")
     for word, quantity in KOREAN_QUANTITIES.items():
-        if f"{word}개" in normalized:
+        if any(f"{word}{unit}" in normalized for unit in ("개", "피스")):
             return float(quantity)
     return None
+
+
+def _is_all_quantity_request(text: str) -> bool:
+    """사용자가 현재 작업 대상을 전량 처리하려는지 확인합니다."""
+    normalized = text.replace(" ", "").lower()
+    return any(word in normalized for word in ("전체", "전부", "모두", "다삭제", "다지워", "다버려", "다폐기", "다처리"))
+
 
 def _extract_delete_name(text: str) -> str:
     target = text
@@ -51,9 +58,10 @@ def _extract_delete_name(text: str) -> str:
         if word in target:
             target = target.split(word, 1)[0]
             break
+    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
     for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
-    target = re.sub(r"\s+(다|전부|모두)$", "", target.rstrip())
+    target = re.sub(r"(?:\s+다|\s*(?:전부|모두|전체))$", "", target.rstrip())
     return target.strip().rstrip("을를은는이가도")
 
 def _extract_consume_name(text: str) -> str:
@@ -62,10 +70,10 @@ def _extract_consume_name(text: str) -> str:
         if word in target:
             target = target.split(word, 1)[0]
             break
-    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
+    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
     for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
-    target = re.sub(r"\s+(다|전부|모두)$", "", target.rstrip())
+    target = re.sub(r"(?:\s+다|\s*(?:전부|모두|전체))$", "", target.rstrip())
     return target.strip(" ,/\t\n을를은는이가도")
 
 def _extract_storage(text: str) -> str | None:
@@ -107,9 +115,10 @@ def _extract_add_items(text: str) -> list[dict]:
             continue
         storage = _extract_storage(part)
         quantity = _extract_quantity(part)
-        name = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE)
+        name = re.sub(r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE)
         for word in KOREAN_QUANTITIES:
-            name = name.replace(f"{word}개", " ")
+            for unit in ("개", "피스"):
+                name = name.replace(f"{word}{unit}", " ")
         name = _strip_add_name(name)
         if name:
             items.append({"name": name, "quantity": quantity, "storage": storage})
@@ -128,7 +137,7 @@ def _is_quantity_only_list(text: str) -> bool:
     parts = [part.strip() for part in re.split(r"[,/]", text) if part.strip()]
     return len(parts) > 1 and all(
         _extract_quantity(part) is not None
-        and not _strip_add_name(re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE))
+        and not _strip_add_name(re.sub(r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?", " ", part, flags=re.IGNORECASE))
         for part in parts
     )
 

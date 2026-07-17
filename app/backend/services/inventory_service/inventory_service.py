@@ -519,13 +519,35 @@ class InventoryService:
         """챗봇에서 받은 이름과 가장 먼저 일치하는 냉장고 항목을 반환합니다."""
         matches = self._find_items_by_name(items, ingredient_name)
         return matches[0] if matches else None
+    def get_total_quantity_by_name(self, db: Session, user_id: int, ingredient_name: str) -> float:
 
-    def delete_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str) -> str:
-        """챗봇에서 식재료 이름을 받아 냉장고 항목을 폐기 처리합니다."""
+        """사용자의 활성 냉장고 항목에서 동일 식재료의 총수량을 반환합니다."""
         items = (
             db.query(FridgeItem, Ingredient)
             .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
             .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
+            .all()
+        )
+        matches = self._find_items_by_name(items, ingredient_name)
+        if not matches:
+            resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
+            matches = self._find_items_by_name(items, resolved_name) if resolved_name else []
+        total = sum(
+            (Decimal(str(item.quantity or 1)) for item in matches),
+            Decimal("0"),
+        )
+        return float(total)
+
+
+    def delete_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str) -> str:
+        """챗봇에서 식재료 이름을 받아 냉장고 항목을 폐기 처리합니다."""
+        # ponytail: 사용자별 재고 전체를 잠급니다. 동시 쓰기량이 커지면 대상 식재료 행만 잠그도록 좁힙니다.
+        items = (
+            db.query(FridgeItem, Ingredient)
+            .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
+            .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
+            .order_by(FridgeItem.id)
+            .with_for_update(of=FridgeItem)
             .all()
         )
         target_item = self._find_item_by_name(items, ingredient_name)
@@ -538,13 +560,21 @@ class InventoryService:
         db.commit()
         return f"{ingredient_name}{_object_particle(ingredient_name)} 폐기 처리했어요."
 
+    def discard_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
+        """동일 재료에서 요청 수량만큼 폐기하고 폐기 결과 문구를 반환합니다."""
+        reply = self.consume_ingredient_by_name(db, user_id, ingredient_name, quantity)
+        return reply.replace("소비 처리", "폐기 처리")
+
 
     def consume_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float) -> str:
         """동일 재료의 여러 입고 건에서 요청 수량만큼 소비 처리합니다."""
+        # ponytail: 사용자별 재고 전체를 잠급니다. 동시 쓰기량이 커지면 대상 식재료 행만 잠그도록 좁힙니다.
         items = (
             db.query(FridgeItem, Ingredient)
             .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
             .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
+            .order_by(FridgeItem.id)
+            .with_for_update(of=FridgeItem)
             .all()
         )
         target_items = self._find_items_by_name(items, ingredient_name)
