@@ -22,6 +22,7 @@ class ChatRequest(BaseModel):
     """챗봇 메시지 요청 스키마입니다."""
 
     message: str = Field(..., min_length=1, description="사용자 메시지")
+    session_id: str | None = Field(default=None, max_length=100, description="Langfuse 대화 추적 세션 ID")
     history: list[ChatMessage] = Field(default_factory=list, description="이전 대화 내역")
     settings: ChatSettings = Field(default_factory=ChatSettings, description="사용자 설정 값")
 

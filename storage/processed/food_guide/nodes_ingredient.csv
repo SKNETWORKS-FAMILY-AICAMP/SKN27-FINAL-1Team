@@ -1,699 +1,636 @@
-ingredient_id,name,display_name,classification,data_source_type,seasonal_source_name,seasonal_source_url
-ingredient_0001,갓김치,갓김치,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0002,고추장아찌,고추장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0003,깍두기,깍두기,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0004,깻잎장아찌,깻잎장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0005,낫또,낫또,콩/견과류,영양만 있음,,
-ingredient_0006,단무지,단무지,가공식품류,영양만 있음,,
-ingredient_0007,더덕장아찌,더덕장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0008,레몬청,레몬청,가공식품류,영양만 있음,,
-ingredient_0009,마늘장아찌,마늘장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0010,마늘쫑장아찌,마늘쫑장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0011,매실장아찌,매실장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0012,매실청,매실청,가공식품류,영양만 있음,,
-ingredient_0013,명란젓,명란젓,조미료/양념,영양만 있음,,
-ingredient_0014,무말랭이,무말랭이,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0015,무장아찌,무장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0016,묵은지,묵은지,가공식품류,영양만 있음,,
-ingredient_0017,배추김치,배추김치,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0018,블랙올리브,블랙올리브,가공식품류,영양만 있음,,
-ingredient_0019,생강청,생강청,가공식품류,영양만 있음,,
-ingredient_0020,쌈무,쌈무,가공식품류,영양만 있음,,
-ingredient_0021,양파장아찌,양파장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0022,열무김치,열무김치,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0023,염장새우,액젓 / 젓갈,조미료/양념,영양만 있음,,
-ingredient_0024,오이장아찌,오이장아찌,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0025,유자청,유자청,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0026,총각김치,총각김치,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0027,케이퍼,케이퍼,조미료/양념,영양만 있음,,
-ingredient_0028,파김치,파김치,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0029,피클,피클,가공식품류,영양만 있음,,
-ingredient_0030,할라피뇨,할라피뇨,채소류,영양만 있음,,
-ingredient_0031,곤약면,곤약면,면/빵/떡,영양만 있음,,
-ingredient_0032,당면,당면,면/빵/떡,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0033,떡,떡,면/빵/떡,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0034,또띠아,또띠아 / 토르티야,면/빵/떡,영양만 있음,,
-ingredient_0035,마카로니,마카로니,면/빵/떡,영양만 있음,,
-ingredient_0036,만두,만두,면/빵/떡,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0037,만두피,만두피,면/빵/떡,영양만 있음,,
-ingredient_0038,모닝빵,모닝빵,면/빵/떡,영양만 있음,,
-ingredient_0039,바게트빵,바게트,면/빵/떡,영양만 있음,,
-ingredient_0040,소면,소면,면/빵/떡,영양만 있음,,
-ingredient_0041,식빵,식빵,면/빵/떡,영양만 있음,,
-ingredient_0042,우동사리,우동사리,면/빵/떡,영양만 있음,,
-ingredient_0043,중화면,중화면,면/빵/떡,영양만 있음,,
-ingredient_0044,쫄면,쫄면,면/빵/떡,영양만 있음,,
-ingredient_0045,칼국수면,칼국수면,면/빵/떡,영양만 있음,,
-ingredient_0046,파스타,파스타,면/빵/떡,영양만 있음,,
-ingredient_0047,호밀빵,호밀빵,면/빵/떡,영양만 있음,,
-ingredient_0049,굴소스,굴소스,조미료/양념,영양만 있음,,
-ingredient_0050,냉면육수,냉면육수,조미료/양념,영양만 있음,,
-ingredient_0051,다대기,다대기,조미료/양념,영양만 있음,,
-ingredient_0052,다시다,MSG,조미료/양념,영양만 있음,,
-ingredient_0053,돈가스소스,돈가스소스,조미료/양념,영양만 있음,,
-ingredient_0054,마요네즈,마요네즈,조미료/양념,영양만 있음,,
-ingredient_0055,바베큐소스,바베큐소스,조미료/양념,영양만 있음,,
-ingredient_0056,불닭소스,불닭소스,조미료/양념,영양만 있음,,
-ingredient_0057,사골육수,사골육수,조미료/양념,영양만 있음,,
-ingredient_0058,스테이크소스,스테이크소스,조미료/양념,영양만 있음,,
-ingredient_0059,우스터소스,우스터소스,조미료/양념,영양만 있음,,
-ingredient_0060,짜장분말,짜장가루,조미료/양념,영양만 있음,,
-ingredient_0061,쯔란,쯔란,조미료/양념,영양만 있음,,
-ingredient_0062,치킨스톡,스톡,조미료/양념,영양만 있음,,
-ingredient_0063,칠리소스,칠리소스,조미료/양념,영양만 있음,,
-ingredient_0064,케첩,케첩,조미료/양념,영양만 있음,,
-ingredient_0065,토마토소스,토마토소스,조미료/양념,영양만 있음,,
-ingredient_0067,핫소스,핫소스,조미료/양념,영양만 있음,,
-ingredient_0068,들기름,들기름,조미료/양념,영양만 있음,,
-ingredient_0069,식용유,식용유,조미료/양념,영양만 있음,,
-ingredient_0070,올리브유,올리브유,조미료/양념,영양만 있음,,
-ingredient_0071,참기름,참기름,조미료/양념,영양만 있음,,
-ingredient_0072,카놀라유,카놀라유,조미료/양념,영양만 있음,,
-ingredient_0073,포도씨유,포도씨유,조미료/양념,영양만 있음,,
-ingredient_0074,해바라기유,해바라기유,조미료/양념,영양만 있음,,
-ingredient_0075,현미유,현미유,조미료/양념,영양만 있음,,
-ingredient_0076,간장,쯔유,조미료/양념,영양만 있음,,
-ingredient_0077,카레가루,카레가루,조미료/양념,영양만 있음,,
-ingredient_0078,계피가루,계피가루,조미료/양념,영양만 있음,,
-ingredient_0079,고추장,고추장,조미료/양념,영양만 있음,,
-ingredient_0080,고추플레이크,페페론치노,조미료/양념,영양만 있음,,
-ingredient_0081,고춧가루,고춧가루,조미료/양념,영양만 있음,,
-ingredient_0082,꿀,꿀,조미료/양념,영양만 있음,,
-ingredient_0083,된장,된장,조미료/양념,영양만 있음,,
-ingredient_0084,로즈마리,로즈마리,채소류,영양만 있음,,
-ingredient_0085,물엿,물엿,조미료/양념,영양만 있음,,
-ingredient_0086,바질,바질,채소류,영양만 있음,,
-ingredient_0087,생강가루,생강가루,조미료/양념,영양만 있음,,
-ingredient_0088,설탕,설탕,조미료/양념,영양만 있음,,
-ingredient_0089,식초,식초,조미료/양념,영양만 있음,,
-ingredient_0090,쌈장,쌈장,조미료/양념,영양만 있음,,
-ingredient_0091,알룰로스,알룰로스,조미료/양념,영양만 있음,,
-ingredient_0092,애플민트,민트,채소류,영양만 있음,,
-ingredient_0094,오레가노,오레가노,채소류,영양만 있음,,
-ingredient_0095,올리고당,올리고당,조미료/양념,영양만 있음,,
-ingredient_0096,와사비,와사비,조미료/양념,영양만 있음,,
-ingredient_0097,월계수잎,월계수잎,조미료/양념,영양만 있음,,
-ingredient_0098,조청,조청,조미료/양념,영양만 있음,,
-ingredient_0099,천일염,소금,조미료/양념,영양만 있음,,
-ingredient_0100,청국장,청국장,조미료/양념,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0101,초고추장,초고추장,조미료/양념,영양만 있음,,
-ingredient_0102,춘장,춘장,조미료/양념,영양만 있음,,
-ingredient_0103,타임,타임,조미료/양념,영양만 있음,,
-ingredient_0104,파슬리,파슬리,채소류,영양만 있음,,
-ingredient_0105,홀그레인,홀그레인머스타드,조미료/양념,영양만 있음,,
-ingredient_0106,후추,후추,조미료/양념,영양만 있음,,
-ingredient_0107,두유,두유,콩/견과류,영양만 있음,,
-ingredient_0108,레몬즙,레몬즙,가공식품류,영양만 있음,,
-ingredient_0109,맥주,맥주,조미료/양념,영양만 있음,,
-ingredient_0110,배즙,배즙,가공식품류,영양만 있음,,
-ingredient_0111,사과즙,사과즙,가공식품류,영양만 있음,,
-ingredient_0112,사이다,사이다,가공식품류,영양만 있음,,
-ingredient_0113,생강즙,생강즙,가공식품류,영양만 있음,,
-ingredient_0114,소주,소주,조미료/양념,영양만 있음,,
-ingredient_0115,청주,맛술,조미료/양념,영양만 있음,,
-ingredient_0116,커피분말,커피가루,조미료/양념,영양만 있음,,
-ingredient_0117,콜라,콜라,가공식품류,영양만 있음,,
-ingredient_0118,탄산수,탄산수,가공식품류,영양만 있음,,
-ingredient_0119,화이트와인,화이트와인,조미료/양념,영양만 있음,,
-ingredient_0120,곤약,곤약,가공식품류,영양만 있음,,
-ingredient_0121,그래놀라,그래놀라,곡류/전분,영양만 있음,,
-ingredient_0122,녹말,녹말가루,곡류/전분,영양만 있음,,
-ingredient_0123,도토리묵,묵,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0124,두부,두부,콩/견과류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0125,들깨가루,들깨가루,콩/견과류,영양만 있음,,
-ingredient_0126,땅콩버터,땅콩버터 / 땅콩잼,가공식품류,영양만 있음,,
-ingredient_0127,메밀가루,메밀가루,곡류/전분,영양만 있음,,
-ingredient_0128,미숫가루,미숫가루,곡류/전분,영양만 있음,,
-ingredient_0129,밀가루,밀가루,곡류/전분,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0130,부침가루,부침가루,곡류/전분,영양만 있음,,
-ingredient_0131,빵가루,빵가루,곡류/전분,영양만 있음,,
-ingredient_0132,스위트콘,스위트콘,가공식품류,영양만 있음,,
-ingredient_0133,앙금,앙금,콩/견과류,영양만 있음,,
-ingredient_0134,옥수수전분,전분,곡류/전분,영양만 있음,,
-ingredient_0135,유부,유부,콩/견과류,영양만 있음,,
-ingredient_0136,잼,잼,가공식품류,영양만 있음,,
-ingredient_0137,중력분,중력분,곡류/전분,영양만 있음,,
-ingredient_0138,찹쌀가루,찹쌀가루,곡류/전분,영양만 있음,,
-ingredient_0139,콩가루,콩가루,콩/견과류,영양만 있음,,
-ingredient_0140,튀김가루,튀김가루,곡류/전분,영양만 있음,,
-ingredient_0141,감자,감자,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0142,고구마,고구마,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0143,귀리,귀리,곡류/전분,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0144,기장,기장,곡류/전분,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0145,메밀,메밀면,면/빵/떡,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0146,보리,보리,곡류/전분,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0147,수수,수수,곡류/전분,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0148,쌀,쌀,쌀/밥류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0149,오곡,오곡,곡류/전분,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0150,오트밀,오트밀,곡류/전분,영양만 있음,,
-ingredient_0151,옥수수,옥수수,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0152,율무,율무,곡류/전분,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0153,조,조,곡류/전분,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0154,찹쌀,찹쌀,쌀/밥류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0155,현미,밥,쌀/밥류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0156,흑미,흑미,쌀/밥류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0157,건대추,건대추,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0158,건살구,건살구,과일류,영양만 있음,,
-ingredient_0159,건포도,건포도,과일류,영양만 있음,,
-ingredient_0160,귤,귤,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0161,단감,단감,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0162,대추,대추,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0163,딸기,딸기,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0164,라임,라임,과일류,영양만 있음,,
-ingredient_0165,레몬,레몬,과일류,영양만 있음,,
-ingredient_0166,망고,망고,과일류,영양만 있음,,
-ingredient_0167,매실,매실,과일류,영양만 있음,,
-ingredient_0168,멜론,멜론,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0169,모과,모과,과일류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0170,무화과,무화과,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0171,바나나,바나나,과일류,영양만 있음,,
-ingredient_0172,배,배,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0173,복숭아,복숭아,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0174,블루베리,블루베리,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0175,사과,사과,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0176,산딸기,산딸기,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0177,석류,석류,과일류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0178,수박,수박,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0179,아보카도,아보카도,과일류,영양만 있음,,
-ingredient_0180,오디,오디,과일류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0181,오렌지,오렌지,과일류,영양만 있음,,
-ingredient_0182,자두,자두,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0183,자몽,자몽,과일류,영양만 있음,,
-ingredient_0184,참외,참외즙 / 참외,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0185,청포도,포도,과일류,영양만 있음,,
-ingredient_0186,체리,체리,과일류,영양만 있음,,
-ingredient_0187,크랜베리,크랜베리,과일류,영양만 있음,,
-ingredient_0188,키위,키위,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0189,파인애플,파인애플,과일류,영양만 있음,,
-ingredient_0190,포도,블랙사파이어 / 샤인머스켓,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0191,고사리,고사리,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0192,곤드레,곤드레,채소류,영양만 있음,,
-ingredient_0193,삼나물,묵은나물,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0194,시래기,시래기,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0195,무순,무순,채소류,영양만 있음,,
-ingredient_0196,새싹,새싹,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0197,견과류,견과류,콩/견과류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0198,녹두,녹두,콩/견과류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0199,도토리,도토리가루,콩/견과류,영양만 있음,,
-ingredient_0200,들깨,깨,조미료/양념,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0201,땅콩,땅콩,콩/견과류,영양만 있음,,
-ingredient_0202,밤,밤,과일류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0203,은행,은행,콩/견과류,영양만 있음,,
-ingredient_0204,참깨,흑임자,콩/견과류,영양만 있음,,
-ingredient_0205,콩,콩,콩/견과류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0206,팥,팥,콩/견과류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0207,느타리버섯,느타리버섯,버섯류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0208,만가닥버섯,만가닥버섯,버섯류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0209,새송이버섯,새송이버섯,버섯류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0210,팽이버섯,팽이버섯,버섯류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0211,표고버섯,표고버섯,버섯류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0212,가지,가지,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0213,고수,고수,채소류,영양만 있음,,
-ingredient_0214,고추,고추,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0215,깻잎,깻잎,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0216,냉이,냉이,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0217,단호박,단호박,채소류,영양만 있음,,
-ingredient_0218,달래,달래,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0219,당근,당근,채소류,영양만 있음,,
-ingredient_0220,더덕,더덕,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0221,도라지,도라지,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0222,돌나물,돌나물,채소류,영양만 있음,,
-ingredient_0223,두릅,두릅,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0224,로메인,로메인,채소류,영양만 있음,,
-ingredient_0225,루꼴라,루꼴라,채소류,영양만 있음,,
-ingredient_0226,마늘,마늘,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0227,머위,건머위,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0228,무,무,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0229,미나리,미나리,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0230,배추,배추,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0231,부추,부추,채소류,영양만 있음,,
-ingredient_0232,브로콜리,브로콜리,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0233,상추,상추,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0234,생강,생강,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0235,숙주나물,숙주,채소류,영양만 있음,,
-ingredient_0236,시금치,시금치,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0237,쑥갓,쑥갓,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0238,아스파라거스,아스파라거스,채소류,영양만 있음,,
-ingredient_0239,애호박,애호박,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0240,양배추,양배추,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0241,양상추,양상추,채소류,영양만 있음,,
-ingredient_0242,양파,양파,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0243,연근,연근,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0244,열무,열무,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0245,오이,오이,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0246,우엉,우엉,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0247,인삼,인삼,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0248,죽순,죽순,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0249,참나물,참나물,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0250,청경채,청경채,채소류,영양만 있음,,
-ingredient_0251,치커리,치커리,채소류,영양만 있음,,
-ingredient_0252,케일,케일,채소류,영양만 있음,,
-ingredient_0253,콩나물,콩나물,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0254,토란,토란,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0255,토란대,토란대,채소류,가이드만 있음,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0256,토마토,토마토,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0257,파,파,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0258,파프리카,파프리카,채소류,영양만 있음,,
-ingredient_0259,호박,호박,채소류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0260,꽃게,게,해물류,영양만 있음,,
-ingredient_0261,대게,대게,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0262,대하,대하,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0263,새우,새우살 / 새우,해물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0264,홍게,홍게,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0265,해삼,해삼,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0266,가자미,가자미,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0267,감성돔,감성돔,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0268,고등어,고등어,해물류,영양만 있음,,
-ingredient_0269,농어,농어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0270,대구,대구,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0271,도다리,도다리,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0272,동태,동태,해물류,영양만 있음,,
-ingredient_0273,메기,메기,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0274,명태,코다리,해물류,영양만 있음,,
-ingredient_0275,미꾸라지,미꾸라지,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0276,민물장어,민물장어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0277,민어,민어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0278,방어,방어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0279,밴댕이,디포리,건어물류,영양만 있음,,
-ingredient_0280,뱀장어,뱀장어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0281,병어,병어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0282,복어,복어,해물류,제철만 있음,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0283,붕장어,붕장어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0284,삼치,삼치,해물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0285,서대,서대,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0286,송어,송어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0287,숭어,숭어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0288,아귀,아귀,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0289,임연수어,임연수어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0290,전갱이,전갱이,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0291,조피볼락,조피볼락,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0292,참다랑어,참치,해물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0293,참돔,참돔,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0295,청어,청어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0296,홍어,홍어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0297,가리비관자,관자,해물류,영양만 있음,,
-ingredient_0298,가쓰오부시,가쓰오부시,건어물류,영양만 있음,,
-ingredient_0299,각시수염고둥,골뱅이,해물류,영양만 있음,,
-ingredient_0300,건새우,건새우 / 건새우가루 / 새우가루,건어물류,영양만 있음,,
-ingredient_0301,과메기,과메기,건어물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0302,굴비,굴비,해물류,영양만 있음,,
-ingredient_0303,날치알,날치알,해물류,영양만 있음,,
-ingredient_0304,냉동새우,칵테일새우,해물류,영양만 있음,,
-ingredient_0305,마른오징어,마른오징어,건어물류,영양만 있음,,
-ingredient_0306,멸치,멸치 / 멸치가루,건어물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0307,명엽채,진미채,건어물류,영양만 있음,,
-ingredient_0308,북어,북어 / 황태 / 황태포,건어물류,영양만 있음,,
-ingredient_0309,어묵,어묵,가공식품류,영양만 있음,,
-ingredient_0310,연어,연어,해물류,영양만 있음,,
-ingredient_0311,쥐치포,쥐포,건어물류,영양만 있음,,
-ingredient_0312,크래미,크래미,가공식품류,영양만 있음,,
-ingredient_0313,해물믹스,해물믹스,해물류,영양만 있음,,
-ingredient_0314,황태,북어채 / 황태,건어물류,영양만 있음,,
-ingredient_0315,황태채,황태채,건어물류,영양만 있음,,
-ingredient_0316,훈제연어,훈제연어,해물류,영양만 있음,,
-ingredient_0317,갑오징어,갑오징어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0318,낙지,낙지,해물류,영양만 있음,,
-ingredient_0319,문어,문어,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0320,오징어,오징어,해물류,영양만 있음,,
-ingredient_0321,한치,한치,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0322,굴,굴,해물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0323,꼬막,꼬막,해물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0324,다슬기,다슬기,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0325,멍게,멍게,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0326,바지락,바지락,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0327,재첩,재첩,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0328,전복,전복,해물류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0329,조개,조개,해물류,영양만 있음,,
-ingredient_0330,키조개,키조개,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0331,홍가리비,홍가리비,해물류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0332,건다시마,건다시마,건어물류,영양만 있음,,
-ingredient_0333,건미역,건미역,건어물류,영양만 있음,,
-ingredient_0334,김,김,해조류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0335,다시마,다시마,해조류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0337,매생이,매생이,해조류,영양만 있음+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0338,미역,미역,해조류,영양+제철,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0339,파래,파래,건어물류,영양만 있음,,
-ingredient_0340,달걀,달걀,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0341,메추리알,메추리알,달걀/유제품,영양만 있음,,
-ingredient_0342,닭가슴살,닭가슴살,닭고기,영양만 있음,,
-ingredient_0344,닭날개,닭날개,닭고기,영양만 있음,,
-ingredient_0345,닭다리살,닭다리살,닭고기,영양만 있음,,
-ingredient_0346,닭안심,닭안심,닭고기,영양만 있음,,
-ingredient_0347,오리,오리,육류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0348,돼지갈비,돼지갈비,돼지고기,영양만 있음,,
-ingredient_0350,돼지등갈비,등갈비,돼지고기,영양만 있음,,
-ingredient_0351,돼지목살,목살,돼지고기,영양만 있음,,
-ingredient_0352,삼겹살,삼겹살,돼지고기,영양만 있음,,
-ingredient_0353,돼지항정살,항정살,돼지고기,영양만 있음,,
-ingredient_0354,등심,등심,소고기,영양만 있음,,
-ingredient_0355,소고기,소고기,소고기,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0356,소부채살,부채살,소고기,영양만 있음,,
-ingredient_0357,소살치살,살치살,소고기,영양만 있음,,
-ingredient_0358,소안심,안심,소고기,영양만 있음,,
-ingredient_0359,소우둔살,우둔살,소고기,영양만 있음,,
-ingredient_0360,소채끝살,채끝살,소고기,영양만 있음,,
-ingredient_0361,소홍두깨살,홍두깨살,소고기,영양만 있음,,
-ingredient_0362,육우차돌박이,차돌박이,소고기,영양만 있음,,
-ingredient_0363,한우양지,양지,소고기,영양만 있음,,
-ingredient_0364,가염버터,가염버터,달걀/유제품,영양만 있음,,
-ingredient_0365,그라다파다노치즈,그라다파다노치즈,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0366,리코타치즈,리코타치즈,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0367,마스카포네치즈,마스카포네치즈,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0368,모짜렐라치즈,모짜렐라치즈,달걀/유제품,영양만 있음,,
-ingredient_0369,무염버터,무염버터,달걀/유제품,영양만 있음,,
-ingredient_0370,사워크림,사워크림,달걀/유제품,영양만 있음,,
-ingredient_0371,생크림,생크림,달걀/유제품,영양만 있음,,
-ingredient_0373,스트링치즈,스트링치즈,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0374,연유,연유,달걀/유제품,영양만 있음,,
-ingredient_0375,요구르트,요구르트,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0376,우유,우유,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0377,체다치즈,체다치즈,달걀/유제품,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0378,크림치즈,크림치즈,달걀/유제품,영양만 있음,,
-ingredient_0379,파마산치즈,파마산치즈,달걀/유제품,영양만 있음,,
-ingredient_0382,돈가스,돈가스,가공식품류,영양만 있음,,
-ingredient_0383,떡갈비,떡갈비,가공식품류,영양만 있음,,
-ingredient_0384,베이컨,베이컨,가공식품류,영양만 있음,,
-ingredient_0385,소시지,소시지,가공식품류,영양만 있음,,
-ingredient_0386,순대,순대,가공식품류,영양만 있음,,
-ingredient_0387,스팸,스팸,가공식품류,영양만 있음,,
-ingredient_0388,햄,햄,가공식품류,영양+가이드,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0389,훈제오리,훈제오리,육류,영양만 있음,,
-ingredient_0390,그레나딘시럽,그레나딘시럽,,,,
-ingredient_0391,뉴슈가,뉴슈가,,,,
-ingredient_0392,라즈베리시럽,라즈베리시럽,,,,
-ingredient_0393,머스코바도,머스코바도,,,,
-ingredient_0394,메이플시럽,메이플시럽,,,,
-ingredient_0395,바닐라시럽,바닐라시럽,,,,
-ingredient_0396,버터스카치시럽,버터스카치시럽,,,,
-ingredient_0397,블루큐라소시럽,블루큐라소시럽,,,,
-ingredient_0399,설탕시럽,설탕시럽,,,,
-ingredient_0400,솔티드카라멜시럽,솔티드카라멜시럽,,,,
-ingredient_0401,아가베시럽,아가베시럽,,,,
-ingredient_0402,얼그레이시럽,얼그레이시럽,,,,
-ingredient_0403,요리당,요리당,,,,
-ingredient_0404,원당,원당,,,,
-ingredient_0405,청귤청,청귤청,,,,
-ingredient_0407,카라멜시럽,카라멜시럽,,,,
-ingredient_0408,카라멜피넛시럽,카라멜피넛시럽,,,,
-ingredient_0409,코코넛시럽,코코넛시럽,,,,
-ingredient_0410,팝콘시럽,팝콘시럽,,,,
-ingredient_0411,헤이즐넛시럽,헤이즐넛시럽,,,,
-ingredient_0412,동부묵,동부묵,,,,
-ingredient_0413,두부면,두부면,,,,
-ingredient_0415,우무묵,우무묵,,,,
-ingredient_0416,유부초밥,유부초밥,,,,
-ingredient_0417,콩비지,콩비지,,,,
-ingredient_0418,포두부,포두부,,,,
-ingredient_0419,푸주,푸주,,,,
-ingredient_0420,한천가루,한천가루,,,,
-ingredient_0421,고추절임,고추절임,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0422,깍두기 국물,깍두기 국물,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0423,낙지젓갈,낙지젓갈,,,,
-ingredient_0424,멸치젓,멸치젓,,,,
-ingredient_0425,명이나물,명이나물,,,,
-ingredient_0426,무나물,무나물,,,,
-ingredient_0427,무말랭이김치,무말랭이김치,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0428,백김치,백김치,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0429,소라젓,소라젓,,,,
-ingredient_0430,조개젓,조개젓,,,,
-ingredient_0431,짜사이,짜사이,,,,
-ingredient_0432,창난젓,창난젓,,,,
-ingredient_0433,피클초,피클초,,,,
-ingredient_0434,마늘가루,마늘가루,,,,
-ingredient_0435,메주가루,메주가루,,,,
-ingredient_0436,보리가루,보리가루,,,,
-ingredient_0437,보리떡용가루,보리떡용가루,,,,
-ingredient_0438,산초가루,산초가루,,,,
-ingredient_0439,선인장가루,선인장가루,,,,
-ingredient_0440,쌀가루,쌀가루,,,,
-ingredient_0441,아몬드가루,아몬드가루,,,,
-ingredient_0443,파프리카가루,파프리카가루,,,,
-ingredient_0445,표고버섯가루,표고버섯가루,,,,
-ingredient_0446,핫케이크가루,핫케이크가루,,,,
-ingredient_0447,국수,국수,,,,
-ingredient_0448,꽃빵,꽃빵,,,,
-ingredient_0449,냉면,냉면,,,,
-ingredient_0450,냉면사리,냉면사리,,,,
-ingredient_0451,도삭면,도삭면,,,,
-ingredient_0452,도토리면,도토리면,,,,
-ingredient_0453,라면사리,라면사리,,,,
-ingredient_0454,라이스페이퍼,라이스페이퍼,,,,
-ingredient_0455,버미셀리,버미셀리,,,,
-ingredient_0456,사리곰탕면,사리곰탕면,,,,
-ingredient_0457,소바면,소바면,,,,
-ingredient_0458,옥수수면,옥수수면,,,,
-ingredient_0459,중면,중면,,,,
-ingredient_0460,치아바타,치아바타,,,,
-ingredient_0461,카다이프,카다이프,,,,
-ingredient_0462,크로와상,크로와상,,,,
-ingredient_0463,피타브레드,피타브레드,,,,
-ingredient_0466,고추장버터,고추장버터,,,,
-ingredient_0467,느억맘소스,느억맘소스,,,,
-ingredient_0468,달래양념장,달래양념장,,,,
-ingredient_0469,두반장,두반장,,,,
-ingredient_0470,땅콩소스,땅콩소스,,,,
-ingredient_0471,땡초장,땡초장,,,,
-ingredient_0472,떡볶이소스,떡볶이소스,,,,
-ingredient_0473,똠얌꿍 페이스트,똠얌꿍 페이스트,,,,
-ingredient_0474,마라샹궈소스,마라샹궈소스,,,,
-ingredient_0475,마라소스,마라소스,,,,
-ingredient_0476,물김치소스,물김치소스,,,,
-ingredient_0477,바질페스토,바질페스토,,,,
-ingredient_0478,발사믹글레이즈,발사믹글레이즈,,,,
-ingredient_0479,발사믹소스,발사믹소스,,,,
-ingredient_0480,볼로네제소스,볼로네제소스,,,,
-ingredient_0481,불고기소스,불고기소스,,,,
-ingredient_0482,살사소스,살사소스,,,,
-ingredient_0483,샤브샤브소스,샤브샤브소스,,,,
-ingredient_0484,소갈비소스,소갈비소스,,,,
-ingredient_0485,스리라차소스,스리라차소스,,,,
-ingredient_0489,양념치킨소스,양념치킨소스,,,,
-ingredient_0490,월남쌈소스,월남쌈소스,,,,
-ingredient_0491,조미소스,조미소스,,,,
-ingredient_0492,참깨드레싱,참깨드레싱,,,,
-ingredient_0493,참소스,참소스,,,,
-ingredient_0494,초대리,초대리,,,,
-ingredient_0496,치폴레소스,치폴레소스,,,,
-ingredient_0497,크림소스,크림소스,,,,
-ingredient_0498,타르타르소스,타르타르소스,,,,
-ingredient_0499,타바스코소스,타바스코소스,,,,
-ingredient_0500,트러플소스,트러플소스,,,,
-ingredient_0501,피스타치오 스프레드,피스타치오 스프레드,,,,
-ingredient_0502,피시소스,피시소스,,,,
-ingredient_0503,해선장,해선장,,,,
-ingredient_0505,허니머스터드소스,허니머스터드소스,,,,
-ingredient_0506,고추참치캔,고추참치캔,,,,
-ingredient_0507,김자반,김자반,,,,
-ingredient_0508,꽁치통조림,꽁치통조림,,,,
-ingredient_0509,먹태,먹태,,,,
-ingredient_0510,아귀포,아귀포,,,,
-ingredient_0512,참치캔,참치캔,,,,
-ingredient_0513,고추기름,고추기름,,,,
-ingredient_0515,아보카도오일,아보카도오일,,,,
-ingredient_0516,옥수수유,옥수수유,,,,
-ingredient_0517,올리브,올리브,,,,
-ingredient_0518,칠리오일,칠리오일,,,,
-ingredient_0519,트러플오일,트러플오일,,,,
-ingredient_0520,화조유,화조유,,,,
-ingredient_0521,건더기스프,건더기스프,,,,
-ingredient_0522,라면스프,라면스프,,,,
-ingredient_0523,발효조미료,발효조미료,,,,
-ingredient_0524,샤브샤브육수,샤브샤브육수,,,,
-ingredient_0525,소금장,소금장,,,,
-ingredient_0526,액상스프,액상스프,,,,
-ingredient_0527,양파당,양파당,,,,
-ingredient_0528,우동건더기스프,우동건더기스프,,,,
-ingredient_0529,치킨파우더,치킨파우더,,,,
-ingredient_0531,피클스파이스,피클스파이스,,,,
-ingredient_0532,혼다시,혼다시,,,,
-ingredient_0533,홀스래디쉬,홀스래디쉬,,,,
-ingredient_0534,후리가케,후리가케,,,,
-ingredient_0535,너겟,너겟,,,,
-ingredient_0536,만두소,만두소,,,,
-ingredient_0537,불고기,불고기,,,,
-ingredient_0540,육포,육포,,,,
-ingredient_0541,족발,족발,,,,
-ingredient_0542,치킨가라아게,치킨가라아게,,,,
-ingredient_0543,편육,편육,,,,
-ingredient_0545,곰탕육수,곰탕육수,,,,
-ingredient_0546,다시마육수,다시마육수,,,,
-ingredient_0548,다시팩,다시팩,,,,
-ingredient_0549,닭육수,닭육수,,,,
-ingredient_0550,동치미육수,동치미육수,,,,
-ingredient_0551,멸치다시마육수,멸치다시마육수,,,,
-ingredient_0552,멸치육수,멸치육수,,,,
-ingredient_0553,멸치육수 코인,멸치육수 코인,,,,
-ingredient_0554,멸치육수티백,멸치육수티백,,,,
-ingredient_0555,멸치육수팩,멸치육수팩,,,,
-ingredient_0556,양지육수,양지육수,,,,
-ingredient_0557,육수분말,육수분말,,,,
-ingredient_0559,조개멸치육수,조개멸치육수,,,,
-ingredient_0560,코인육수,코인육수,,,,
-ingredient_0562,해물육수팩,해물육수팩,,,,
-ingredient_0563,황태채소육수,황태채소육수,,,,
-ingredient_0564,녹차티백,녹차티백,,,,
-ingredient_0565,레몬생강차,레몬생강차,,,,
-ingredient_0566,막걸리,막걸리,,,,
-ingredient_0567,말차가루,말차가루,,,,
-ingredient_0568,망고주스,망고주스,,,,
-ingredient_0569,배음료,배음료,,,,
-ingredient_0570,보리차티백,보리차티백,,,,
-ingredient_0571,사과청,사과청,,,,
-ingredient_0572,아몬드브리즈,아몬드브리즈,,,,
-ingredient_0573,양파즙,양파즙,,,,
-ingredient_0574,양파청,양파청,,,,
-ingredient_0576,얼그레이티백,얼그레이티백,,,,
-ingredient_0577,에스프레소,에스프레소,,,,
-ingredient_0578,오트밀크,오트밀크,,,,
-ingredient_0579,완두콩 우유,완두콩 우유,,,,
-ingredient_0580,위스키,위스키,,,,
-ingredient_0581,진저에일,진저에일,,,,
-ingredient_0582,코코넛밀크,코코넛밀크,,,,
-ingredient_0583,핫초코가루,핫초코가루,,,,
-ingredient_0584,히비스커스티백,히비스커스티백,,,,
-ingredient_0585,감자튀김,감자튀김,,,,
-ingredient_0586,드라이이스트,드라이이스트,,,,
-ingredient_0587,번데기,번데기,,,,
-ingredient_0588,베이크드빈,베이크드빈,,,,
-ingredient_0589,부라타치즈,부라타치즈,,,,
-ingredient_0590,브라운치즈,브라운치즈,,,,
-ingredient_0591,브리치즈,브리치즈,,,,
-ingredient_0592,선드라이 토마토,선드라이 토마토,,,,
-ingredient_0594,잡채,잡채,,,,
-ingredient_0595,젤라틴,젤라틴,,,,
-ingredient_0596,짜장,짜장,,,,
-ingredient_0598,타히니,타히니,,,,
-ingredient_0599,토마토퓨레,토마토퓨레,,,,
-ingredient_0600,파인애플통조림국물,파인애플통조림국물,,,,
-ingredient_0601,후르츠칵테일,후르츠칵테일,,,,
-ingredient_0602,마시멜로,마시멜로,,,,
-ingredient_0604,빈츠,빈츠,,,,
-ingredient_0605,쌀튀밥,쌀튀밥,,,,
-ingredient_0606,연양갱,연양갱,,,,
-ingredient_0607,오란다,오란다,,,,
-ingredient_0609,코코아파우더,코코아파우더,,,,
-ingredient_0610,마,마,,,,
-ingredient_0611,비트,비트,,,,
-ingredient_0613,총각무,총각무,,,,
-ingredient_0614,칡뿌리,칡뿌리,,,,
-ingredient_0615,퀴노아,퀴노아,,,,
-ingredient_0616,곶감,곶감,,,,
-ingredient_0617,코코넛,코코넛,,,,
-ingredient_0618,고춧잎,고춧잎,,,,
-ingredient_0619,무청우거지,무청우거지,,,,
-ingredient_0620,우거지,우거지,,,,
-ingredient_0621,껍질콩,껍질콩,,,,
-ingredient_0622,콩잎,콩잎,,,,
-ingredient_0623,노루궁뎅이버섯,노루궁뎅이버섯,,,,
-ingredient_0624,만송이버섯,만송이버섯,,,,
-ingredient_0625,목이버섯,목이버섯,,,,
-ingredient_0626,송이버섯,송이버섯,,,,
-ingredient_0627,양송이버섯,양송이버섯,,,,
-ingredient_0628,고구마순,고구마순,,,,
-ingredient_0629,다래순,다래순,,,,
-ingredient_0630,마늘종,마늘종,,,,
-ingredient_0631,엄나무순,엄나무순,,,,
-ingredient_0632,오가피순,오가피순,,,,
-ingredient_0633,가시오가피,가시오가피,,,,
-ingredient_0634,감초,감초,,,,
-ingredient_0635,느릅나무,느릅나무,,,,
-ingredient_0636,엄나무,엄나무,,,,
-ingredient_0637,황기,황기,,,,
-ingredient_0639,갓,갓,,,,
-ingredient_0640,개두릅,개두릅,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0641,고들빼기,고들빼기,,,,
-ingredient_0642,공심채,공심채,,,,
-ingredient_0643,궁채,궁채,,,,
-ingredient_0644,근대,근대,,,,
-ingredient_0645,망초나물,망초나물,,,,
-ingredient_0646,머위대,머위대,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0647,무청,무청,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0648,방울양배추,방울양배추,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0649,방풍나물,방풍나물,,,,
-ingredient_0650,부지갱이,부지갱이,,,,
-ingredient_0651,비름나물,비름나물,,,,
-ingredient_0652,뽕잎나물,뽕잎나물,,,,
-ingredient_0654,샬롯,샬롯,,,,
-ingredient_0655,세발나물,세발나물,,,,
-ingredient_0656,셀러리,셀러리,,,,
-ingredient_0657,쑥,쑥,,,,
-ingredient_0658,아욱,아욱,,,,
-ingredient_0659,아주까리나물,아주까리나물,,,,
-ingredient_0660,왕고들빼기,왕고들빼기,,,,
-ingredient_0661,유채나물,유채나물,,,,
-ingredient_0662,적겨자잎,적겨자잎,,,,
-ingredient_0663,취나물,취나물,,,,
-ingredient_0664,콜리플라워,콜리플라워,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0665,파채,파채,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0666,풋마늘,풋마늘,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0667,피마자잎,피마자잎,,,,
-ingredient_0668,피망,피망,,,,
-ingredient_0669,호박고지,호박고지,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0670,호박잎,호박잎,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0671,홍갓,홍갓,,,,
-ingredient_0672,겨자,겨자,,,,
-ingredient_0673,넛맥,넛맥,,,,
-ingredient_0674,딜,딜,,,,
-ingredient_0675,레몬그라스,레몬그라스,,,,
-ingredient_0676,방아잎,방아잎,,,,
-ingredient_0677,베트남고추,베트남고추,,,,
-ingredient_0678,스테비아,스테비아,,,,
-ingredient_0680,랍스터,랍스터,,,,
-ingredient_0681,보리새우,보리새우,,,,
-ingredient_0682,킹크랩,킹크랩,,,,
-ingredient_0683,알곤이,알곤이,,,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0684,미더덕,미더덕,,,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0685,성게알,성게알,,,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0687,청어알,청어알,,,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0688,해파리,해파리,,,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0689,가오리,가오리,,,,
-ingredient_0690,갈치,갈치,,,,
-ingredient_0691,곰치,곰치,,,,
-ingredient_0692,광어,광어,,,,
-ingredient_0693,도루묵,도루묵,,,,
-ingredient_0694,도미,도미,,,,
-ingredient_0695,양미리,양미리,,,,
-ingredient_0696,옥돔,옥돔,,,,
-ingredient_0697,조기,조기,,,어식백세 블로그(korfish01) 이달의 수산물 월별 목록,https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2
-ingredient_0698,학꽁치,학꽁치,,,,
-ingredient_0699,꼴뚜기,꼴뚜기,,,,
-ingredient_0700,주꾸미,주꾸미,,,,
-ingredient_0701,대합,대합,,,,
-ingredient_0702,동죽,동죽,,,,
-ingredient_0703,맛조개,맛조개,,,,
-ingredient_0704,백합,백합,,,,
-ingredient_0705,보말,보말,,,,
-ingredient_0706,뿔소라,뿔소라,,,,
-ingredient_0707,새조개,새조개,,,,
-ingredient_0708,우렁,우렁,,,,
-ingredient_0709,참소라,참소라,,,,
-ingredient_0710,감태,감태,,,,
-ingredient_0711,꼬시래기,꼬시래기,,,,
-ingredient_0712,청각,청각,,,,
-ingredient_0713,톳,톳,,,,
-ingredient_0714,돼지고기 안심,돼지고기 안심,,,,
-ingredient_0715,돼지고기 앞다리살,돼지고기 앞다리살,,,,
-ingredient_0716,돼지 사태,돼지 사태,,,,
-ingredient_0717,오겹살,오겹살,,,,
-ingredient_0718,닭똥집,닭똥집,,,,
-ingredient_0719,닭발,닭발,,,,
-ingredient_0720,도가니,도가니,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0721,돼지곱창,돼지곱창,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0722,돼지껍데기,돼지껍데기,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0723,돼지대창,돼지대창,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0724,사골,사골,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0725,선지,선지,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0726,소곱창,소곱창,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0727,소꼬리,소꼬리,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0728,소대창,소대창,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0729,소양,소양,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0730,스지,스지,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0731,오소리감투,오소리감투,,,농촌진흥청 국립농업과학원/NICS 이달의 식재료,https://nics.go.kr/food/kfi/foodMonth/list
-ingredient_0732,소갈비,소갈비,,,,
-ingredient_0733,소고기 사태,소고기 사태,,,,
-ingredient_0734,아롱사태,아롱사태,,,,
-ingredient_0735,우삼겹,우삼겹,,,,
-ingredient_0736,토마호크,토마호크,,,,
-ingredient_0737,티본스테이크,티본스테이크,,,,
-ingredient_0738,양갈비,양갈비,,,,
-ingredient_0381,휘핑크림,휘핑크림,달걀/유제품,영양만 있음,,
+﻿"ingredient_id","name","display_name","classification","data_source_type","seasonal_source_name","seasonal_source_url"
+"ingredient_0001","갓김치","갓김치","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0002","고추장아찌","고추장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0003","깍두기","깍두기","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0004","깻잎장아찌","깻잎장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0005","낫토","낫토","콩/견과류","영양만 있음","",""
+"ingredient_0006","단무지","단무지","가공식품류","영양만 있음","",""
+"ingredient_0007","더덕장아찌","더덕장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0008","레몬청","레몬청","가공식품류","영양만 있음","",""
+"ingredient_0009","마늘장아찌","마늘장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0010","마늘종장아찌","마늘종장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0011","매실장아찌","매실장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0012","매실청","매실청","가공식품류","영양만 있음","",""
+"ingredient_0013","명란젓","명란젓","조미료/양념","영양만 있음","",""
+"ingredient_0014","무말랭이","무말랭이","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0015","무장아찌","무장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0016","묵은지","묵은지","가공식품류","영양만 있음","",""
+"ingredient_0017","배추김치","배추김치","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0018","블랙올리브","블랙올리브","가공식품류","영양만 있음","",""
+"ingredient_0019","생강청","생강청","가공식품류","영양만 있음","",""
+"ingredient_0020","쌈무","쌈무","가공식품류","영양만 있음","",""
+"ingredient_0021","양파장아찌","양파장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0022","열무김치","열무김치","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0023","염장새우","액젓 / 젓갈","조미료/양념","영양만 있음","",""
+"ingredient_0024","오이장아찌","오이장아찌","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0025","유자청","유자청","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0026","총각김치","총각김치","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0027","케이퍼","케이퍼","조미료/양념","영양만 있음","",""
+"ingredient_0028","파김치","파김치","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0029","피클","피클","가공식품류","영양만 있음","",""
+"ingredient_0030","할라페뇨","할라페뇨","채소류","영양만 있음","",""
+"ingredient_0031","곤약면","곤약면","면/빵/떡","영양만 있음","",""
+"ingredient_0032","당면","당면","면/빵/떡","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0033","떡","떡","면/빵/떡","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0034","또띠아","또띠아 / 토르티야","면/빵/떡","영양만 있음","",""
+"ingredient_0035","마카로니","마카로니","면/빵/떡","영양만 있음","",""
+"ingredient_0036","만두","만두","면/빵/떡","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0037","만두피","만두피","면/빵/떡","영양만 있음","",""
+"ingredient_0038","모닝빵","모닝빵","면/빵/떡","영양만 있음","",""
+"ingredient_0039","바게트빵","바게트","면/빵/떡","영양만 있음","",""
+"ingredient_0040","소면","소면","면/빵/떡","영양만 있음","",""
+"ingredient_0041","식빵","식빵","면/빵/떡","영양만 있음","",""
+"ingredient_0042","우동사리","우동사리","면/빵/떡","영양만 있음","",""
+"ingredient_0043","중화면","중화면","면/빵/떡","영양만 있음","",""
+"ingredient_0044","쫄면","쫄면","면/빵/떡","영양만 있음","",""
+"ingredient_0045","칼국수면","칼국수면","면/빵/떡","영양만 있음","",""
+"ingredient_0046","파스타","파스타","면/빵/떡","영양만 있음","",""
+"ingredient_0047","호밀빵","호밀빵","면/빵/떡","영양만 있음","",""
+"ingredient_0049","굴소스","굴소스","조미료/양념","영양만 있음","",""
+"ingredient_0051","다대기","다대기","조미료/양념","영양만 있음","",""
+"ingredient_0052","다시다","MSG","조미료/양념","영양만 있음","",""
+"ingredient_0053","돈가스소스","돈가스소스","조미료/양념","영양만 있음","",""
+"ingredient_0054","마요네즈","마요네즈","조미료/양념","영양만 있음","",""
+"ingredient_0055","바비큐소스","바비큐소스","조미료/양념","영양만 있음","",""
+"ingredient_0056","불닭소스","불닭소스","조미료/양념","영양만 있음","",""
+"ingredient_0058","스테이크소스","스테이크소스","조미료/양념","영양만 있음","",""
+"ingredient_0059","우스터소스","우스터소스","조미료/양념","영양만 있음","",""
+"ingredient_0060","짜장분말","짜장가루","조미료/양념","영양만 있음","",""
+"ingredient_0061","쯔란","쯔란","조미료/양념","영양만 있음","",""
+"ingredient_0062","치킨스톡","스톡","조미료/양념","영양만 있음","",""
+"ingredient_0063","칠리소스","칠리소스","조미료/양념","영양만 있음","",""
+"ingredient_0064","케첩","케첩","조미료/양념","영양만 있음","",""
+"ingredient_0065","토마토소스","토마토소스","조미료/양념","영양만 있음","",""
+"ingredient_0067","핫소스","핫소스","조미료/양념","영양만 있음","",""
+"ingredient_0068","들기름","들기름","조미료/양념","영양만 있음","",""
+"ingredient_0069","식용유","식용유","조미료/양념","영양만 있음","",""
+"ingredient_0070","올리브유","올리브유","조미료/양념","영양만 있음","",""
+"ingredient_0071","참기름","참기름","조미료/양념","영양만 있음","",""
+"ingredient_0072","카놀라유","카놀라유","조미료/양념","영양만 있음","",""
+"ingredient_0073","포도씨유","포도씨유","조미료/양념","영양만 있음","",""
+"ingredient_0074","해바라기유","해바라기유","조미료/양념","영양만 있음","",""
+"ingredient_0075","현미유","현미유","조미료/양념","영양만 있음","",""
+"ingredient_0076","간장","쯔유","조미료/양념","영양만 있음","",""
+"ingredient_0077","카레가루","카레가루","조미료/양념","영양만 있음","",""
+"ingredient_0078","계피가루","계피가루","조미료/양념","영양만 있음","",""
+"ingredient_0079","고추장","고추장","조미료/양념","영양만 있음","",""
+"ingredient_0080","고추플레이크","페페론치노","조미료/양념","영양만 있음","",""
+"ingredient_0081","고춧가루","고춧가루","조미료/양념","영양만 있음","",""
+"ingredient_0082","꿀","꿀","조미료/양념","영양만 있음","",""
+"ingredient_0083","된장","된장","조미료/양념","영양만 있음","",""
+"ingredient_0084","로즈마리","로즈마리","채소류","영양만 있음","",""
+"ingredient_0085","물엿","물엿","조미료/양념","영양만 있음","",""
+"ingredient_0086","바질","바질","채소류","영양만 있음","",""
+"ingredient_0087","생강가루","생강가루","조미료/양념","영양만 있음","",""
+"ingredient_0088","설탕","설탕","조미료/양념","영양만 있음","",""
+"ingredient_0089","식초","식초","조미료/양념","영양만 있음","",""
+"ingredient_0090","쌈장","쌈장","조미료/양념","영양만 있음","",""
+"ingredient_0091","알룰로스","알룰로스","조미료/양념","영양만 있음","",""
+"ingredient_0092","애플민트","민트","채소류","영양만 있음","",""
+"ingredient_0094","오레가노","오레가노","채소류","영양만 있음","",""
+"ingredient_0095","올리고당","올리고당","조미료/양념","영양만 있음","",""
+"ingredient_0096","와사비","와사비","조미료/양념","영양만 있음","",""
+"ingredient_0097","월계수잎","월계수잎","조미료/양념","영양만 있음","",""
+"ingredient_0098","조청","조청","조미료/양념","영양만 있음","",""
+"ingredient_0099","천일염","소금","조미료/양념","영양만 있음","",""
+"ingredient_0100","청국장","청국장","조미료/양념","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0101","초고추장","초고추장","조미료/양념","영양만 있음","",""
+"ingredient_0102","춘장","춘장","조미료/양념","영양만 있음","",""
+"ingredient_0103","타임","타임","조미료/양념","영양만 있음","",""
+"ingredient_0104","파슬리","파슬리","채소류","영양만 있음","",""
+"ingredient_0105","홀그레인","홀그레인머스타드","조미료/양념","영양만 있음","",""
+"ingredient_0106","후추","후추","조미료/양념","영양만 있음","",""
+"ingredient_0107","두유","두유","콩/견과류","영양만 있음","",""
+"ingredient_0108","레몬즙","레몬즙","가공식품류","영양만 있음","",""
+"ingredient_0109","맥주","맥주","조미료/양념","영양만 있음","",""
+"ingredient_0110","배즙","배즙","가공식품류","영양만 있음","",""
+"ingredient_0111","사과즙","사과즙","가공식품류","영양만 있음","",""
+"ingredient_0113","생강즙","생강즙","가공식품류","영양만 있음","",""
+"ingredient_0114","소주","소주","조미료/양념","영양만 있음","",""
+"ingredient_0115","청주","맛술","조미료/양념","영양만 있음","",""
+"ingredient_0116","커피분말","커피가루","조미료/양념","영양만 있음","",""
+"ingredient_0119","화이트와인","화이트와인","조미료/양념","영양만 있음","",""
+"ingredient_0120","곤약","곤약","가공식품류","영양만 있음","",""
+"ingredient_0122","녹말","녹말가루","곡류/전분","영양만 있음","",""
+"ingredient_0123","도토리묵","묵","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0124","두부","두부","콩/견과류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0125","들깨가루","들깨가루","콩/견과류","영양만 있음","",""
+"ingredient_0126","땅콩버터","땅콩버터 / 땅콩잼","가공식품류","영양만 있음","",""
+"ingredient_0127","메밀가루","메밀가루","곡류/전분","영양만 있음","",""
+"ingredient_0128","미숫가루","미숫가루","곡류/전분","영양만 있음","",""
+"ingredient_0129","밀가루","밀가루","곡류/전분","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0130","부침가루","부침가루","곡류/전분","영양만 있음","",""
+"ingredient_0131","빵가루","빵가루","곡류/전분","영양만 있음","",""
+"ingredient_0134","옥수수전분","전분","곡류/전분","영양만 있음","",""
+"ingredient_0135","유부","유부","콩/견과류","영양만 있음","",""
+"ingredient_0137","중력분","중력분","곡류/전분","영양만 있음","",""
+"ingredient_0138","찹쌀가루","찹쌀가루","곡류/전분","영양만 있음","",""
+"ingredient_0139","콩가루","콩가루","콩/견과류","영양만 있음","",""
+"ingredient_0140","튀김가루","튀김가루","곡류/전분","영양만 있음","",""
+"ingredient_0141","감자","감자","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0142","고구마","고구마","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0143","귀리","귀리","곡류/전분","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0144","기장","기장","곡류/전분","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0145","메밀","메밀면","면/빵/떡","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0146","보리","보리","곡류/전분","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0147","수수","수수","곡류/전분","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0148","쌀","쌀","쌀/밥류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0149","오곡","오곡","곡류/전분","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0150","오트밀","오트밀","곡류/전분","영양만 있음","",""
+"ingredient_0151","옥수수","옥수수","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0152","율무","율무","곡류/전분","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0153","조","조","곡류/전분","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0154","찹쌀","찹쌀","쌀/밥류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0155","현미","밥","쌀/밥류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0156","흑미","흑미","쌀/밥류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0157","건대추","건대추","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0158","건살구","건살구","과일류","영양만 있음","",""
+"ingredient_0159","건포도","건포도","과일류","영양만 있음","",""
+"ingredient_0160","귤","귤","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0161","단감","단감","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0162","대추","대추","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0163","딸기","딸기","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0164","라임","라임","과일류","영양만 있음","",""
+"ingredient_0165","레몬","레몬","과일류","영양만 있음","",""
+"ingredient_0166","망고","망고","과일류","영양만 있음","",""
+"ingredient_0167","매실","매실","과일류","영양만 있음","",""
+"ingredient_0168","멜론","멜론","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0169","모과","모과","과일류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0170","무화과","무화과","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0171","바나나","바나나","과일류","영양만 있음","",""
+"ingredient_0172","배","배","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0173","복숭아","복숭아","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0174","블루베리","블루베리","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0175","사과","사과","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0176","산딸기","산딸기","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0177","석류","석류","과일류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0178","수박","수박","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0179","아보카도","아보카도","과일류","영양만 있음","",""
+"ingredient_0180","오디","오디","과일류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0181","오렌지","오렌지","과일류","영양만 있음","",""
+"ingredient_0182","자두","자두","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0183","자몽","자몽","과일류","영양만 있음","",""
+"ingredient_0184","참외","참외즙 / 참외","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0185","청포도","포도","과일류","영양만 있음","",""
+"ingredient_0186","체리","체리","과일류","영양만 있음","",""
+"ingredient_0187","크랜베리","크랜베리","과일류","영양만 있음","",""
+"ingredient_0188","키위","키위","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0189","파인애플","파인애플","과일류","영양만 있음","",""
+"ingredient_0190","포도","블랙사파이어 / 샤인머스켓","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0191","고사리","고사리","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0192","곤드레","곤드레","채소류","영양만 있음","",""
+"ingredient_0193","삼나물","묵은나물","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0194","시래기","시래기","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0195","무순","무순","채소류","영양만 있음","",""
+"ingredient_0196","새싹","새싹","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0197","견과류","견과류","콩/견과류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0198","녹두","녹두","콩/견과류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0199","도토리","도토리가루","콩/견과류","영양만 있음","",""
+"ingredient_0200","들깨","깨","조미료/양념","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0201","땅콩","땅콩","콩/견과류","영양만 있음","",""
+"ingredient_0202","밤","밤","과일류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0203","은행","은행","콩/견과류","영양만 있음","",""
+"ingredient_0204","참깨","흑임자","콩/견과류","영양만 있음","",""
+"ingredient_0205","콩","콩","콩/견과류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0206","팥","팥","콩/견과류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0207","느타리버섯","느타리버섯","버섯류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0208","만가닥버섯","만가닥버섯","버섯류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0209","새송이버섯","새송이버섯","버섯류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0210","팽이버섯","팽이버섯","버섯류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0211","표고버섯","표고버섯","버섯류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0212","가지","가지","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0213","고수","고수","채소류","영양만 있음","",""
+"ingredient_0214","고추","고추","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0215","깻잎","깻잎","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0216","냉이","냉이","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0217","단호박","단호박","채소류","영양만 있음","",""
+"ingredient_0218","달래","달래","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0219","당근","당근","채소류","영양만 있음","",""
+"ingredient_0220","더덕","더덕","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0221","도라지","도라지","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0222","돌나물","돌나물","채소류","영양만 있음","",""
+"ingredient_0223","두릅","두릅","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0224","로메인","로메인","채소류","영양만 있음","",""
+"ingredient_0225","루꼴라","루꼴라","채소류","영양만 있음","",""
+"ingredient_0226","마늘","마늘","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0227","머위","건머위","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0228","무","무","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0229","미나리","미나리","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0230","배추","배추","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0231","부추","부추","채소류","영양만 있음","",""
+"ingredient_0232","브로콜리","브로콜리","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0233","상추","상추","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0234","생강","생강","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0235","숙주나물","숙주","채소류","영양만 있음","",""
+"ingredient_0236","시금치","시금치","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0237","쑥갓","쑥갓","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0238","아스파라거스","아스파라거스","채소류","영양만 있음","",""
+"ingredient_0239","애호박","애호박","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0240","양배추","양배추","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0241","양상추","양상추","채소류","영양만 있음","",""
+"ingredient_0242","양파","양파","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0243","연근","연근","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0244","열무","열무","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0245","오이","오이","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0246","우엉","우엉","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0247","인삼","인삼","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0248","죽순","죽순","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0249","참나물","참나물","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0250","청경채","청경채","채소류","영양만 있음","",""
+"ingredient_0251","치커리","치커리","채소류","영양만 있음","",""
+"ingredient_0252","케일","케일","채소류","영양만 있음","",""
+"ingredient_0253","콩나물","콩나물","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0254","토란","토란","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0255","토란대","토란대","채소류","가이드만 있음","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0256","토마토","토마토","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0257","파","파","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0258","파프리카","파프리카","채소류","영양만 있음","",""
+"ingredient_0259","호박","호박","채소류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0260","꽃게","게","해물류","영양만 있음","",""
+"ingredient_0261","대게","대게","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0262","대하","대하","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0263","새우","새우살 / 새우","해물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0264","홍게","홍게","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0265","해삼","해삼","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0266","가자미","가자미","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0267","감성돔","감성돔","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0268","고등어","고등어","해물류","영양만 있음","",""
+"ingredient_0269","농어","농어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0270","대구","대구","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0271","도다리","도다리","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0272","동태","동태","해물류","영양만 있음","",""
+"ingredient_0273","메기","메기","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0274","명태","코다리","해물류","영양만 있음","",""
+"ingredient_0275","미꾸라지","미꾸라지","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0276","민물장어","민물장어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0277","민어","민어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0278","방어","방어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0279","밴댕이","디포리","건어물류","영양만 있음","",""
+"ingredient_0280","뱀장어","뱀장어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0281","병어","병어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0282","복어","복어","해물류","제철만 있음","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0283","붕장어","붕장어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0284","삼치","삼치","해물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0285","서대","서대","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0286","송어","송어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0287","숭어","숭어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0288","아귀","아귀","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0289","임연수어","임연수어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0290","전갱이","전갱이","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0291","조피볼락","조피볼락","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0292","참다랑어","참치","해물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0293","참돔","참돔","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0295","청어","청어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0296","홍어","홍어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0297","가리비관자","관자","해물류","영양만 있음","",""
+"ingredient_0298","가다랑어포","가다랑어포","건어물류","영양만 있음","",""
+"ingredient_0299","각시수염고둥","골뱅이","해물류","영양만 있음","",""
+"ingredient_0300","건새우","건새우 / 건새우가루 / 새우가루","건어물류","영양만 있음","",""
+"ingredient_0301","과메기","과메기","건어물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0302","굴비","굴비","해물류","영양만 있음","",""
+"ingredient_0303","날치알","날치알","해물류","영양만 있음","",""
+"ingredient_0304","냉동새우","칵테일새우","해물류","영양만 있음","",""
+"ingredient_0305","마른오징어","마른오징어","건어물류","영양만 있음","",""
+"ingredient_0306","멸치","멸치 / 멸치가루","건어물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0307","명엽채","진미채","건어물류","영양만 있음","",""
+"ingredient_0308","북어","북어 / 황태 / 황태포","건어물류","영양만 있음","",""
+"ingredient_0309","어묵","어묵","가공식품류","영양만 있음","",""
+"ingredient_0310","연어","연어","해물류","영양만 있음","",""
+"ingredient_0311","쥐치포","쥐포","건어물류","영양만 있음","",""
+"ingredient_0312","크래미","크래미","가공식품류","영양만 있음","",""
+"ingredient_0313","해물믹스","해물믹스","해물류","영양만 있음","",""
+"ingredient_0314","황태","북어채 / 황태","건어물류","영양만 있음","",""
+"ingredient_0315","황태채","황태채","건어물류","영양만 있음","",""
+"ingredient_0316","훈제연어","훈제연어","해물류","영양만 있음","",""
+"ingredient_0317","갑오징어","갑오징어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0318","낙지","낙지","해물류","영양만 있음","",""
+"ingredient_0319","문어","문어","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0320","오징어","오징어","해물류","영양만 있음","",""
+"ingredient_0321","한치","한치","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0322","굴","굴","해물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0323","꼬막","꼬막","해물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0324","다슬기","다슬기","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0325","멍게","멍게","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0326","바지락","바지락","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0327","재첩","재첩","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0328","전복","전복","해물류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0329","조개","조개","해물류","영양만 있음","",""
+"ingredient_0330","키조개","키조개","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0331","홍가리비","홍가리비","해물류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0332","건다시마","건다시마","건어물류","영양만 있음","",""
+"ingredient_0333","건미역","건미역","건어물류","영양만 있음","",""
+"ingredient_0334","김","김","해조류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0335","다시마","다시마","해조류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0337","매생이","매생이","해조류","영양만 있음+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0338","미역","미역","해조류","영양+제철","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0339","파래","파래","건어물류","영양만 있음","",""
+"ingredient_0340","달걀","달걀","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0341","메추리알","메추리알","달걀/유제품","영양만 있음","",""
+"ingredient_0342","닭가슴살","닭가슴살","닭고기","영양만 있음","",""
+"ingredient_0344","닭날개","닭날개","닭고기","영양만 있음","",""
+"ingredient_0345","닭다리살","닭다리살","닭고기","영양만 있음","",""
+"ingredient_0346","닭안심","닭안심","닭고기","영양만 있음","",""
+"ingredient_0347","오리","오리","육류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0348","돼지갈비","돼지갈비","돼지고기","영양만 있음","",""
+"ingredient_0350","돼지등갈비","등갈비","돼지고기","영양만 있음","",""
+"ingredient_0351","돼지목살","목살","돼지고기","영양만 있음","",""
+"ingredient_0352","삼겹살","삼겹살","돼지고기","영양만 있음","",""
+"ingredient_0353","돼지항정살","항정살","돼지고기","영양만 있음","",""
+"ingredient_0354","등심","등심","소고기","영양만 있음","",""
+"ingredient_0355","소고기","소고기","소고기","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0356","소부채살","부채살","소고기","영양만 있음","",""
+"ingredient_0357","소살치살","살치살","소고기","영양만 있음","",""
+"ingredient_0358","소안심","안심","소고기","영양만 있음","",""
+"ingredient_0359","소우둔살","우둔살","소고기","영양만 있음","",""
+"ingredient_0360","소채끝살","채끝살","소고기","영양만 있음","",""
+"ingredient_0361","소홍두깨살","홍두깨살","소고기","영양만 있음","",""
+"ingredient_0362","육우차돌박이","차돌박이","소고기","영양만 있음","",""
+"ingredient_0363","한우양지","양지","소고기","영양만 있음","",""
+"ingredient_0364","가염버터","가염버터","달걀/유제품","영양만 있음","",""
+"ingredient_0365","그라나파다노치즈","그라나파다노치즈","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0366","리코타치즈","리코타치즈","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0367","마스카르포네치즈","마스카르포네치즈","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0368","모차렐라치즈","모차렐라치즈","달걀/유제품","영양만 있음","",""
+"ingredient_0369","무염버터","무염버터","달걀/유제품","영양만 있음","",""
+"ingredient_0370","사워크림","사워크림","달걀/유제품","영양만 있음","",""
+"ingredient_0371","생크림","생크림","달걀/유제품","영양만 있음","",""
+"ingredient_0373","스트링치즈","스트링치즈","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0374","연유","연유","달걀/유제품","영양만 있음","",""
+"ingredient_0375","요구르트","요구르트","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0376","우유","우유","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0377","체더치즈","체더치즈","달걀/유제품","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0378","크림치즈","크림치즈","달걀/유제품","영양만 있음","",""
+"ingredient_0379","파르메산치즈","파르메산치즈","달걀/유제품","영양만 있음","",""
+"ingredient_0382","돈가스","돈가스","가공식품류","영양만 있음","",""
+"ingredient_0383","떡갈비","떡갈비","가공식품류","영양만 있음","",""
+"ingredient_0384","베이컨","베이컨","가공식품류","영양만 있음","",""
+"ingredient_0385","소시지","소시지","가공식품류","영양+가이드","",""
+"ingredient_0386","순대","순대","가공식품류","영양만 있음","",""
+"ingredient_0387","스팸","스팸","가공식품류","영양만 있음","",""
+"ingredient_0388","햄","햄","가공식품류","영양+가이드","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0389","훈제오리","훈제오리","육류","영양만 있음","",""
+"ingredient_0391","뉴슈가","뉴슈가","","","",""
+"ingredient_0393","머스코바도","머스코바도","","","",""
+"ingredient_0399","설탕시럽","설탕시럽","","","",""
+"ingredient_0403","요리당","요리당","","","",""
+"ingredient_0404","원당","원당","","","",""
+"ingredient_0405","청귤청","청귤청","","","",""
+"ingredient_0412","동부묵","동부묵","","","",""
+"ingredient_0413","두부면","두부면","","","",""
+"ingredient_0415","우무묵","우무묵","","","",""
+"ingredient_0417","콩비지","콩비지","","","",""
+"ingredient_0418","포두부","포두부","","","",""
+"ingredient_0419","푸주","푸주","","","",""
+"ingredient_0420","한천가루","한천가루","","","",""
+"ingredient_0421","고추절임","고추절임","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0423","낙지젓갈","낙지젓갈","","","",""
+"ingredient_0424","멸치젓","멸치젓","","","",""
+"ingredient_0425","명이나물","명이나물","","","",""
+"ingredient_0426","무나물","무나물","","","",""
+"ingredient_0427","무말랭이김치","무말랭이김치","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0428","백김치","백김치","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0429","소라젓","소라젓","","","",""
+"ingredient_0430","조개젓","조개젓","","","",""
+"ingredient_0431","짜사이","짜사이","","","",""
+"ingredient_0432","창난젓","창난젓","","","",""
+"ingredient_0433","피클초","피클초","","","",""
+"ingredient_0434","마늘가루","마늘가루","","","",""
+"ingredient_0435","메주가루","메주가루","","","",""
+"ingredient_0436","보리가루","보리가루","","","",""
+"ingredient_0437","보리떡용가루","보리떡용가루","","","",""
+"ingredient_0438","산초가루","산초가루","","","",""
+"ingredient_0439","선인장가루","선인장가루","","","",""
+"ingredient_0440","쌀가루","쌀가루","","","",""
+"ingredient_0441","아몬드가루","아몬드가루","","","",""
+"ingredient_0443","파프리카가루","파프리카가루","","","",""
+"ingredient_0445","표고버섯가루","표고버섯가루","","","",""
+"ingredient_0446","핫케이크가루","핫케이크가루","","","",""
+"ingredient_0447","국수","국수","","","",""
+"ingredient_0448","꽃빵","꽃빵","","","",""
+"ingredient_0449","냉면","냉면","","","",""
+"ingredient_0450","냉면사리","냉면사리","","","",""
+"ingredient_0451","도삭면","도삭면","","","",""
+"ingredient_0452","도토리면","도토리면","","","",""
+"ingredient_0453","라면사리","라면사리","","","",""
+"ingredient_0454","라이스페이퍼","라이스페이퍼","","","",""
+"ingredient_0455","버미셀리","버미셀리","","","",""
+"ingredient_0456","사리곰탕면","사리곰탕면","","","",""
+"ingredient_0457","소바면","소바면","","","",""
+"ingredient_0458","옥수수면","옥수수면","","","",""
+"ingredient_0459","중면","중면","","","",""
+"ingredient_0460","치아바타","치아바타","","","",""
+"ingredient_0461","카다이프","카다이프","","","",""
+"ingredient_0462","크루아상","크루아상","","","",""
+"ingredient_0463","피타브레드","피타브레드","","","",""
+"ingredient_0467","느억맘소스","느억맘소스","","","",""
+"ingredient_0469","두반장","두반장","","","",""
+"ingredient_0470","땅콩소스","땅콩소스","","","",""
+"ingredient_0472","떡볶이소스","떡볶이소스","","","",""
+"ingredient_0473","똠얌꿍 페이스트","똠얌꿍 페이스트","","","",""
+"ingredient_0474","마라샹궈소스","마라샹궈소스","","","",""
+"ingredient_0475","마라소스","마라소스","","","",""
+"ingredient_0477","바질페스토","바질페스토","","","",""
+"ingredient_0478","발사믹글레이즈","발사믹글레이즈","","","",""
+"ingredient_0479","발사믹소스","발사믹소스","","","",""
+"ingredient_0480","볼로네제소스","볼로네제소스","","","",""
+"ingredient_0481","불고기소스","불고기소스","","","",""
+"ingredient_0482","살사소스","살사소스","","","",""
+"ingredient_0483","샤브샤브소스","샤브샤브소스","","","",""
+"ingredient_0484","소갈비소스","소갈비소스","","","",""
+"ingredient_0485","스리라차소스","스리라차소스","","","",""
+"ingredient_0489","양념치킨소스","양념치킨소스","","","",""
+"ingredient_0490","월남쌈소스","월남쌈소스","","","",""
+"ingredient_0492","참깨드레싱","참깨드레싱","","","",""
+"ingredient_0493","참소스","참소스","","","",""
+"ingredient_0494","초대리","초대리","","","",""
+"ingredient_0496","치폴레소스","치폴레소스","","","",""
+"ingredient_0497","크림소스","크림소스","","","",""
+"ingredient_0498","타르타르소스","타르타르소스","","","",""
+"ingredient_0499","타바스코소스","타바스코소스","","","",""
+"ingredient_0500","트러플소스","트러플소스","","","",""
+"ingredient_0501","피스타치오 스프레드","피스타치오 스프레드","","","",""
+"ingredient_0502","피시소스","피시소스","","","",""
+"ingredient_0503","해선장","해선장","","","",""
+"ingredient_0505","허니머스터드소스","허니머스터드소스","","","",""
+"ingredient_0506","고추참치캔","고추참치캔","","","",""
+"ingredient_0507","김자반","김자반","","","",""
+"ingredient_0508","꽁치통조림","꽁치통조림","","","",""
+"ingredient_0509","먹태","먹태","","","",""
+"ingredient_0510","아귀포","아귀포","","","",""
+"ingredient_0512","참치캔","참치캔","","","",""
+"ingredient_0513","고추기름","고추기름","","","",""
+"ingredient_0515","아보카도오일","아보카도오일","","","",""
+"ingredient_0516","옥수수유","옥수수유","","","",""
+"ingredient_0517","올리브","올리브","","","",""
+"ingredient_0518","칠리오일","칠리오일","","","",""
+"ingredient_0519","트러플오일","트러플오일","","","",""
+"ingredient_0520","화조유","화조유","","","",""
+"ingredient_0523","발효조미료","발효조미료","","","",""
+"ingredient_0524","샤브샤브육수","샤브샤브육수","","","",""
+"ingredient_0527","양파당","양파당","","","",""
+"ingredient_0529","치킨파우더","치킨파우더","","","",""
+"ingredient_0531","피클스파이스","피클스파이스","","","",""
+"ingredient_0532","혼다시","혼다시","","","",""
+"ingredient_0533","호스래디시","호스래디시","","","",""
+"ingredient_0534","후리카케","후리카케","","","",""
+"ingredient_0535","너겟","너겟","","","",""
+"ingredient_0536","만두소","만두소","","","",""
+"ingredient_0540","육포","육포","","","",""
+"ingredient_0541","족발","족발","","","",""
+"ingredient_0542","치킨가라아게","치킨가라아게","","","",""
+"ingredient_0543","편육","편육","","","",""
+"ingredient_0545","곰탕육수","곰탕육수","","","",""
+"ingredient_0548","다시팩","다시팩","","","",""
+"ingredient_0550","동치미육수","동치미육수","","","",""
+"ingredient_0557","육수분말","육수분말","","","",""
+"ingredient_0560","코인육수","코인육수","","","",""
+"ingredient_0562","해물육수팩","해물육수팩","","","",""
+"ingredient_0564","녹차티백","녹차티백","","","",""
+"ingredient_0566","막걸리","막걸리","","","",""
+"ingredient_0567","말차가루","말차가루","","","",""
+"ingredient_0570","보리차티백","보리차티백","","","",""
+"ingredient_0571","사과청","사과청","","","",""
+"ingredient_0573","양파즙","양파즙","","","",""
+"ingredient_0574","양파청","양파청","","","",""
+"ingredient_0576","얼그레이티백","얼그레이티백","","","",""
+"ingredient_0577","에스프레소","에스프레소","","","",""
+"ingredient_0579","완두콩 우유","완두콩 우유","","","",""
+"ingredient_0580","위스키","위스키","","","",""
+"ingredient_0581","진저에일","진저에일","","","",""
+"ingredient_0582","코코넛밀크","코코넛밀크","","","",""
+"ingredient_0584","히비스커스티백","히비스커스티백","","","",""
+"ingredient_0585","감자튀김","감자튀김","","","",""
+"ingredient_0586","드라이이스트","드라이이스트","","","",""
+"ingredient_0587","번데기","번데기","","","",""
+"ingredient_0589","부라타치즈","부라타치즈","","","",""
+"ingredient_0590","브라운치즈","브라운치즈","","","",""
+"ingredient_0591","브리치즈","브리치즈","","","",""
+"ingredient_0592","선드라이 토마토","선드라이 토마토","","","",""
+"ingredient_0596","짜장","짜장","","","",""
+"ingredient_0598","타히니","타히니","","","",""
+"ingredient_0599","토마토퓨레","토마토퓨레","","","",""
+"ingredient_0605","쌀튀밥","쌀튀밥","","","",""
+"ingredient_0610","마","마","","","",""
+"ingredient_0611","비트","비트","","","",""
+"ingredient_0613","총각무","총각무","","","",""
+"ingredient_0614","칡뿌리","칡뿌리","","","",""
+"ingredient_0615","퀴노아","퀴노아","","","",""
+"ingredient_0616","곶감","곶감","","","",""
+"ingredient_0617","코코넛","코코넛","","","",""
+"ingredient_0618","고춧잎","고춧잎","","","",""
+"ingredient_0619","무청우거지","무청우거지","","","",""
+"ingredient_0620","우거지","우거지","","","",""
+"ingredient_0621","껍질콩","껍질콩","","","",""
+"ingredient_0622","콩잎","콩잎","","","",""
+"ingredient_0623","노루궁뎅이버섯","노루궁뎅이버섯","","","",""
+"ingredient_0624","만송이버섯","만송이버섯","","","",""
+"ingredient_0625","목이버섯","목이버섯","","","",""
+"ingredient_0626","송이버섯","송이버섯","","","",""
+"ingredient_0627","양송이버섯","양송이버섯","","","",""
+"ingredient_0628","고구마순","고구마순","","","",""
+"ingredient_0629","다래순","다래순","","","",""
+"ingredient_0630","마늘종","마늘종","","","",""
+"ingredient_0631","음나무순","음나무순","","","",""
+"ingredient_0632","오갈피순","오갈피순","","","",""
+"ingredient_0633","가시오갈피","가시오갈피","","","",""
+"ingredient_0634","감초","감초","","","",""
+"ingredient_0635","느릅나무","느릅나무","","","",""
+"ingredient_0636","음나무","음나무","","","",""
+"ingredient_0637","황기","황기","","","",""
+"ingredient_0639","갓","갓","","","",""
+"ingredient_0640","개두릅","개두릅","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0641","고들빼기","고들빼기","","","",""
+"ingredient_0642","공심채","공심채","","","",""
+"ingredient_0643","궁채","궁채","","","",""
+"ingredient_0644","근대","근대","","","",""
+"ingredient_0645","망초나물","망초나물","","","",""
+"ingredient_0646","머위대","머위대","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0647","무청","무청","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0648","방울양배추","방울양배추","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0649","방풍나물","방풍나물","","","",""
+"ingredient_0650","부지갱이","부지갱이","","","",""
+"ingredient_0651","비름나물","비름나물","","","",""
+"ingredient_0652","뽕잎나물","뽕잎나물","","","",""
+"ingredient_0654","샬롯","샬롯","","","",""
+"ingredient_0655","세발나물","세발나물","","","",""
+"ingredient_0656","셀러리","셀러리","","","",""
+"ingredient_0657","쑥","쑥","","","",""
+"ingredient_0658","아욱","아욱","","","",""
+"ingredient_0659","아주까리나물","아주까리나물","","","",""
+"ingredient_0660","왕고들빼기","왕고들빼기","","","",""
+"ingredient_0661","유채나물","유채나물","","","",""
+"ingredient_0662","적겨자잎","적겨자잎","","","",""
+"ingredient_0663","취나물","취나물","","","",""
+"ingredient_0664","콜리플라워","콜리플라워","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0665","파채","파채","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0666","풋마늘","풋마늘","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0667","피마자잎","피마자잎","","","",""
+"ingredient_0668","피망","피망","","","",""
+"ingredient_0669","호박고지","호박고지","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0670","호박잎","호박잎","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0671","홍갓","홍갓","","","",""
+"ingredient_0672","겨자","겨자","","","",""
+"ingredient_0673","넛맥","넛맥","","","",""
+"ingredient_0674","딜","딜","","","",""
+"ingredient_0675","레몬그라스","레몬그라스","","","",""
+"ingredient_0676","방아잎","방아잎","","","",""
+"ingredient_0677","베트남고추","베트남고추","","","",""
+"ingredient_0678","스테비아","스테비아","","","",""
+"ingredient_0680","랍스터","랍스터","","","",""
+"ingredient_0681","보리새우","보리새우","","","",""
+"ingredient_0682","킹크랩","킹크랩","","","",""
+"ingredient_0683","알곤이","알곤이","","","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0684","미더덕","미더덕","","","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0685","성게알","성게알","","","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0687","청어알","청어알","","","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0688","해파리","해파리","","","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0689","가오리","가오리","","","",""
+"ingredient_0690","갈치","갈치","","","",""
+"ingredient_0691","곰치","곰치","","","",""
+"ingredient_0692","광어","광어","","","",""
+"ingredient_0693","도루묵","도루묵","","","",""
+"ingredient_0694","도미","도미","","","",""
+"ingredient_0695","양미리","양미리","","","",""
+"ingredient_0696","옥돔","옥돔","","","",""
+"ingredient_0697","조기","조기","","","어식백세 블로그(korfish01) 이달의 수산물 월별 목록","https://blog.naver.com/PostList.naver?from=postList&blogId=korfish01&categoryNo=142&parentCategoryNo=142&currentPage=2"
+"ingredient_0698","학공치","학공치","","","",""
+"ingredient_0699","꼴뚜기","꼴뚜기","","","",""
+"ingredient_0700","주꾸미","주꾸미","","","",""
+"ingredient_0701","대합","대합","","","",""
+"ingredient_0702","동죽","동죽","","","",""
+"ingredient_0703","맛조개","맛조개","","","",""
+"ingredient_0704","백합","백합","","","",""
+"ingredient_0705","보말","보말","","","",""
+"ingredient_0706","뿔소라","뿔소라","","","",""
+"ingredient_0707","새조개","새조개","","","",""
+"ingredient_0708","우렁","우렁","","","",""
+"ingredient_0709","참소라","참소라","","","",""
+"ingredient_0710","감태","감태","","","",""
+"ingredient_0711","꼬시래기","꼬시래기","","","",""
+"ingredient_0712","청각","청각","","","",""
+"ingredient_0713","톳","톳","","","",""
+"ingredient_0714","돼지고기 안심","돼지고기 안심","","","",""
+"ingredient_0715","돼지고기 앞다리살","돼지고기 앞다리살","","","",""
+"ingredient_0716","돼지 사태","돼지 사태","","","",""
+"ingredient_0717","오겹살","오겹살","","","",""
+"ingredient_0718","닭똥집","닭똥집","","","",""
+"ingredient_0719","닭발","닭발","","","",""
+"ingredient_0720","도가니","도가니","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0721","돼지곱창","돼지곱창","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0722","돼지껍데기","돼지껍데기","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0723","돼지대창","돼지대창","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0724","사골","사골","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0725","선지","선지","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0726","소곱창","소곱창","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0727","소꼬리","소꼬리","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0728","소대창","소대창","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0729","소양","소양","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0730","스지","스지","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0731","오소리감투","오소리감투","","","농촌진흥청 국립농업과학원/NICS 이달의 식재료","https://nics.go.kr/food/kfi/foodMonth/list"
+"ingredient_0732","소갈비","소갈비","","","",""
+"ingredient_0733","소고기 사태","소고기 사태","","","",""
+"ingredient_0734","아롱사태","아롱사태","","","",""
+"ingredient_0735","우삼겹","우삼겹","","","",""
+"ingredient_0736","토마호크","토마호크","","","",""
+"ingredient_0738","양갈비","양갈비","","","",""
+"ingredient_0381","휘핑크림","휘핑크림","달걀/유제품","영양만 있음","",""

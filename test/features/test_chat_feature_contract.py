@@ -12,7 +12,7 @@ from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 
 
 def test_supervisor_service_maps_graph_state_to_chat_response(monkeypatch):
-    def fake_invoke(state):
+    def fake_invoke(state, config=None):
         assert state["text"] == "두부로 뭐 해먹지?"
         assert state["history"][0].role == "user"
         return {
