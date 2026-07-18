@@ -911,8 +911,7 @@ function ReceiptOcr() {
         setCropSource(source || 'receipt image')
         setHasUploaded(false)
         setIsProcessing(false)
-        setAnalysisStep(0)
-        setActiveStep(STEP.CROP)
+        setActiveStep(STEP.UPLOAD)
         setDetectedRows([])
         setEditingRows({})
         setReceiptMeta(null)
@@ -952,7 +951,6 @@ function ReceiptOcr() {
         totalAmount: data.total_amount,
         confidenceNote: data.confidence_note,
       })
-      setAnalysisStep(aiAnalysisSteps.length - 1)
       setActiveStep(STEP.CONFIRM)
     } catch (error) {
       if (uploadRunIdRef.current !== uploadRunId) {
@@ -1366,8 +1364,7 @@ function ReceiptOcr() {
     setCropSource('수동 영역 조정')
     setHasUploaded(false)
     setIsProcessing(false)
-    setAnalysisStep(0)
-    setActiveStep(STEP.CROP)
+    setActiveStep(STEP.UPLOAD)
   }
 
   const handleRetakeFileChange = (event) => {

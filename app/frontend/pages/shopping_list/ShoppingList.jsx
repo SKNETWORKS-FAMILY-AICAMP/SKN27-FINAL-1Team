@@ -798,23 +798,15 @@ function ShoppingList() {
         item_ids: selectedItems.map((item) => item.id),
       })
 
-      if (!result.shopping_list || getRemainingItemCount(result.shopping_list) === 0) {
-        try {
-          await deleteShoppingList(shoppingList.id)
-          setShoppingList(null)
-          setRecentList((prev) => (Number(prev?.id) === Number(shoppingList.id) ? null : prev))
-          setHistoryLists((prev) => prev.filter((list) => Number(list.id) !== Number(shoppingList.id)))
-          navigate('/shopping-list')
-          await showAlert(`${result.message || '구매한 재료를 냉장고에 입고했어요.'} 완료된 장보기 목록은 자동으로 삭제됐어요.`, {
-            title: '냉장고 입고 완료',
-          })
-        } catch (deleteError) {
-          setShoppingList(result.shopping_list)
-          await showAlert(
-            `${result.message || '구매한 재료를 냉장고에 입고했어요.'} 다만 완료된 장보기 목록을 자동 삭제하지 못했어요.`,
-            { title: '목록 자동 삭제 실패' },
-          )
-        }
+      if (!result.shopping_list) {
+        // 모든 재료가 입고되어 백엔드에서 완료된 목록을 자동 삭제한 경우
+        setShoppingList(null)
+        setRecentList((prev) => (Number(prev?.id) === Number(shoppingList.id) ? null : prev))
+        setHistoryLists((prev) => prev.filter((list) => Number(list.id) !== Number(shoppingList.id)))
+        navigate('/shopping-list')
+        await showAlert(result.message || '구매한 재료를 냉장고에 입고하고 장보기를 완료했어요.', {
+          title: '냉장고 입고 완료',
+        })
         return
       }
 
