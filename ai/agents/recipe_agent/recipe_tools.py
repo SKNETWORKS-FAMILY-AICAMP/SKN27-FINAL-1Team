@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -33,20 +34,19 @@ from .recipe_utils import (
     _sort_fridge_candidates,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ToolResult:
     """Tool 실행 공통 결과."""
+
     ok: bool
     data: Any = None
     error: str | None = None
     source: str | None = None
 
 
-# =============================================================================
-# search_external 지역 함수
-# - search_external_recipe: Tavily 검색 결과와 실제 출처 조회
-# =============================================================================
 def search_external_recipe(keyword: str, query_text: str | None = None) -> ToolResult:
     """필터링된 Tavily 결과를 main Agent가 요약할 수 있도록 반환한다."""
     if not app_settings.TAVILY_API_KEY or TavilyClient is None:
@@ -56,6 +56,7 @@ def search_external_recipe(keyword: str, query_text: str | None = None) -> ToolR
     try:
         result = client.search(query=query_text or f"{keyword} 레시피", search_depth="basic", max_results=3)
     except Exception:
+        logger.exception("Tavily 레시피 검색에 실패했습니다.")
         return ToolResult(ok=False, error="웹 검색 연결이 불안정해요. 잠시 후 다시 시도해주세요.", source="tavily")
 
     results = [
@@ -79,10 +80,6 @@ def search_external_recipe(keyword: str, query_text: str | None = None) -> ToolR
     )
 
 
-# =============================================================================
-# search_recipes 지역 함수
-# - search_recipe_tool: 재료 검색 후 결과가 없으면 요리명 검색
-# =============================================================================
 def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
     """recipe_search_service를 ToolResult로 감싼다."""
     try:
@@ -95,50 +92,32 @@ def search_recipe_tool(db: Any, keyword: str) -> ToolResult:
             result = recipe_search_service.search_recipes(db=db, query=keyword, page=1, page_size=10)
             items = result["items"]
         return ToolResult(ok=True, data={"items": items, "total": result.get("total", len(items))}, source="recipe_search")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="recipe_search")
+    except Exception:
+        logger.exception("내부 레시피 검색에 실패했습니다.")
+        return ToolResult(ok=False, error="레시피 검색에 실패했어요. 잠시 후 다시 시도해주세요.", source="recipe_search")
 
 
-# =============================================================================
-# recommend_from_fridge 지역 함수
-# - _build_recommend_config: 사용자 추천 설정 변환
-# - recommend_recipe_tool: 냉장고 기반 추천 서비스 호출
-# =============================================================================
-def _build_recommend_config(settings_obj: Any = None) -> tuple[Any, bool]:
-    """settings_obj → (RecipeRecommendConfig, exclude_dislikes)."""
-    from dataclasses import replace
+def recommend_recipe_tool(db: Any, user_id: int) -> ToolResult:
+    """냉장고 소비 정책으로 추천 서비스를 호출한다.
 
-    from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
-
-    config = RecipeRecommendConfig.fridge_consume_preset()
-    exclude_dislikes = True
-    if settings_obj:
-        if not getattr(settings_obj, "expiringFirst", True):
-            config = replace(config, mode="fridge_all")  # type: ignore[arg-type]
-        if not getattr(settings_obj, "excludeDislikes", True):
-            exclude_dislikes = False
-    return config, exclude_dislikes
-
-
-def recommend_recipe_tool(db: Any, user_id: int, settings_obj: Any = None) -> ToolResult:
-    """recommendation_service를 ToolResult로 감싼다."""
+    알레르기·기피 재료 제외와 유통기한 우선순위는 추천 서비스의 고정 정책이며,
+    챗봇 도구 입력으로 변경하지 않는다.
+    """
     try:
+        from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
         from app.backend.services.recommendation_service.recommendation_service import recommendation_service
 
-        config, _exclude_dislikes = _build_recommend_config(settings_obj)
+        config = RecipeRecommendConfig.fridge_consume_preset()
         result = recommendation_service.recommend_recipes(db, user_id, config)
         items = result.get("items", [])
         return ToolResult(ok=True, data={"items": items, "total": len(items)}, source="recommendation")
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="recommendation")
+    except Exception:
+        logger.exception("냉장고 기반 레시피 추천에 실패했습니다.")
+        return ToolResult(ok=False, error="냉장고 기반 추천을 불러오지 못했어요. 잠시 후 다시 시도해주세요.", source="recommendation")
 
 
-# =============================================================================
-# recommend_by_ingredient 지역 함수
-# - search_ingredient_relax_tool: 초급·30분 조건 검색 후 주재료 검색으로 완화
-# =============================================================================
 def search_ingredient_relax_tool(db: Any, ingredient: str) -> ToolResult:
-    """주재료+초급+30분 → 주재료만 순으로 검색한다. ponytail: Legacy 완화 순서 고정."""
+    """쉬운 메뉴를 우선 찾고, 결과가 없을 때만 주재료 조건으로 완화한다."""
     try:
         from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
 
@@ -159,14 +138,11 @@ def search_ingredient_relax_tool(db: Any, ingredient: str) -> ToolResult:
             data={"items": items, "total": len(items), "constraints": constraints},
             source="ingredient_relax",
         )
-    except Exception as e:
-        return ToolResult(ok=False, error=str(e), source="ingredient_relax")
+    except Exception:
+        logger.exception("재료 기반 레시피 검색에 실패했습니다.")
+        return ToolResult(ok=False, error="재료 기반 추천에 실패했어요. 잠시 후 다시 시도해주세요.", source="ingredient_relax")
 
 
-# =============================================================================
-# 모든 recipe tool 공용 지역 함수
-# - _payload: ToolResult를 모델이 읽는 RecipeToolPayload JSON으로 변환
-# =============================================================================
 def _payload(
     *,
     tool_name: str,
@@ -197,6 +173,13 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     @tool("search_recipes", args_schema=SearchRecipesInput)
     def search_recipes(keyword: str) -> str:
         """요리명이나 키워드로 내부 DB의 레시피를 검색합니다."""
+        keyword = keyword.strip()
+        if not keyword:
+            return _payload(
+                tool_name="search_recipes",
+                status="empty",
+                message="검색할 요리명이나 키워드를 확인하지 못했어요.",
+            )
         result = search_recipe_tool(context.db, keyword)
         if not result.ok:
             return _payload(
@@ -270,8 +253,8 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
 
     # =========================================================================
     # Tool: recommend_from_fridge
-    # 지역 함수: _build_recommend_config, recommend_recipe_tool,
-    #            is_inventory_empty, _sort_fridge_candidates, _recipe_actions
+    # 지역 함수: recommend_recipe_tool, is_inventory_empty,
+    #            _sort_fridge_candidates, _recipe_actions
     # 공용 함수: _payload
     # =========================================================================
     @tool("recommend_from_fridge")
@@ -293,7 +276,7 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                 message=EMPTY_INVENTORY_REPLY,
             )
 
-        result = recommend_recipe_tool(context.db, context.user_id, context.settings_obj)
+        result = recommend_recipe_tool(context.db, context.user_id)
         if not result.ok:
             return _payload(
                 tool_name="recommend_from_fridge",

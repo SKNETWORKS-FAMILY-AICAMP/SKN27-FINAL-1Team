@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from langchain_core.messages import ToolMessage
 
 import ai.agents.recipe_agent.recipe_agent as recipe_agent
@@ -30,6 +32,68 @@ def test_recommend_by_ingredient_handles_empty_input() -> None:
     )
     assert payload.status == "empty"
     assert payload.actions == []
+
+
+def test_search_recipes_handles_whitespace_input(monkeypatch) -> None:
+    """공백 검색어는 내부 검색 서비스까지 전달하지 않는다."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("빈 검색어는 검색 서비스에 전달하면 안 됩니다.")
+
+    monkeypatch.setattr(recipe_tools, "search_recipe_tool", fail_if_called)
+    payload = RecipeToolPayload.model_validate_json(
+        _tools()["search_recipes"].invoke({"keyword": "   "})
+    )
+
+    assert payload.status == "empty"
+    assert payload.actions == []
+
+
+def test_search_recipe_tool_hides_internal_error(monkeypatch, caplog) -> None:
+    """상세 예외는 로그에 남기고 사용자용 오류에는 포함하지 않는다."""
+
+    class BrokenSearchService:
+        def search_recipes(self, **kwargs):
+            raise RuntimeError("database-password-leak")
+
+    import app.backend.services.recommendation_service.recipe_search_service as search_module
+
+    monkeypatch.setattr(search_module, "recipe_search_service", BrokenSearchService())
+    with caplog.at_level(logging.ERROR, logger=recipe_tools.__name__):
+        result = recipe_tools.search_recipe_tool(db=None, keyword="김치찌개")
+
+    assert result.ok is False
+    assert "database-password-leak" not in (result.error or "")
+    assert "database-password-leak" in caplog.text
+
+
+def test_recommend_recipe_tool_uses_fixed_fridge_policy(monkeypatch) -> None:
+    """챗봇 설정과 무관하게 냉장고 소비 preset을 사용한다."""
+
+    import app.backend.services.recommendation_service.recommend_config as config_module
+    import app.backend.services.recommendation_service.recommendation_service as service_module
+
+    expected_config = object()
+
+    class FakeConfig:
+        @classmethod
+        def fridge_consume_preset(cls):
+            return expected_config
+
+    class FakeRecommendationService:
+        def recommend_recipes(self, db, user_id, config):
+            assert db == "db"
+            assert user_id == 7
+            assert config is expected_config
+            return {"items": []}
+
+    monkeypatch.setattr(config_module, "RecipeRecommendConfig", FakeConfig)
+    monkeypatch.setattr(service_module, "recommendation_service", FakeRecommendationService())
+
+    result = recipe_tools.recommend_recipe_tool(db="db", user_id=7)
+
+    assert result.ok is True
+    assert result.data == {"items": [], "total": 0}
 
 
 def test_fridge_tool_requires_login() -> None:
