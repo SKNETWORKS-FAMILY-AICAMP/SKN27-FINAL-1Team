@@ -3,8 +3,9 @@ import logging
 import math
 
 from app.backend.services.inventory_service.inventory_service import inventory_service
-from ai.agents.supervisor_agent.supervisor_utils import _apply_josa, _normalize_text
 from ai.agents.inventory_agent.inventory_utils import (
+    _apply_josa,
+    _normalize_text,
     _inventory_refresh_action,
     _extract_expiry_keyword,
     _format_d_day,
@@ -304,7 +305,9 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
     if intent == "inventory.pending_consume":
         name = pending.get("name") if pending.get("action") in {"consume_quantity", "consume_confirm"} else None
         name = name or _pending_consume_from_history(history) or ""
-        quantity = _extract_quantity(text) or 1
+        quantity = _extract_quantity(text)
+        if quantity is None:
+            return {"response_text": "소비할 수량을 숫자와 함께 알려주세요. 예: 1개", "slots": {"inventory_pending": pending or None}}
         return _quantity_action_response(db, user_id, name, quantity, "consume_ingredient")
 
     if intent == "inventory.pending_add_storage":
@@ -327,7 +330,9 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
     if intent == "inventory.pending_add":
         name = pending.get("name") if pending.get("action") == "add_quantity" else None
         name = name or _pending_add_from_history(history) or ""
-        quantity = _extract_quantity(text) or 1
+        quantity = _extract_quantity(text)
+        if quantity is None:
+            return {"response_text": "추가할 수량을 숫자와 함께 알려주세요. 예: 1개", "slots": {"inventory_pending": pending or None}}
         storage = _extract_storage(text)
         unchecked = bool(pending.get("unchecked")) if pending.get("action") == "add_quantity" else not resolve_ingredient_name(db, name)
         if not storage:

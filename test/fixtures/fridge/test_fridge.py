@@ -36,6 +36,29 @@ def test_object_particle_matches_final_consonant() -> None:
     assert _object_particle("귤") == "을"
     assert _object_particle("egg") == "를"
 
+
+def test_inventory_reads_do_not_commit(monkeypatch) -> None:
+    """냉장고 목록과 요약 조회는 DB 트랜잭션을 커밋하지 않습니다."""
+    item = SimpleNamespace(purchased_date=date.today(), storage_location="냉장")
+    ingredient = SimpleNamespace()
+    db = MagicMock()
+    db.query.return_value.join.return_value.filter.return_value.all.return_value = [(item, ingredient)]
+    monkeypatch.setattr(
+        inventory_service,
+        "_map_to_response",
+        lambda fridge_item, master: {
+            "status": "expired",
+            "is_expired": True,
+            "is_expiring_soon": False,
+        },
+    )
+
+    inventory_service.get_ingredients(db, 1)
+    inventory_service.get_inventory_summary(db, 1)
+
+    db.commit.assert_not_called()
+
+
 if __name__ == "__main__":
     test_map_to_response_defaults_empty_category_to_etc()
     test_object_particle_matches_final_consonant()

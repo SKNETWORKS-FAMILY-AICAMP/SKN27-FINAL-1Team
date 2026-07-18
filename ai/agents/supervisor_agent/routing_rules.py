@@ -111,22 +111,6 @@ def _is_guide_query(text: str) -> bool:
         and any(phrase in normalized for phrase in _GUIDE_LIST_PHRASES)
     )
 
-def _apply_josa(word: str, josa_type: str) -> str:
-    if not word: return ""
-    last_char = word[-1]
-    if not ('가' <= last_char <= '힣'):
-        return word + ("가" if josa_type == "이가" else "는" if josa_type == "은는" else "를")
-    has_jongseong = (ord(last_char) - 44032) % 28 > 0
-    if josa_type == "이가":
-        return word + ("이" if has_jongseong else "가")
-    elif josa_type == "은는":
-        return word + ("은" if has_jongseong else "는")
-    elif josa_type == "을를":
-        return word + ("을" if has_jongseong else "를")
-    elif josa_type == "과와":
-        return word + ("과" if has_jongseong else "와")
-    return word
-
 def _is_login_status_question(text: str) -> bool:
     """사용자가 현재 로그인 상태를 묻는 문장인지 확인합니다."""
     normalized = text.replace(" ", "").lower()

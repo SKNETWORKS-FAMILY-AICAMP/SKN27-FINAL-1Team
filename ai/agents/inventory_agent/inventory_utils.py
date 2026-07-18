@@ -25,6 +25,30 @@ KOREAN_QUANTITIES = {
     "넷": 4,
 }
 
+
+def _normalize_text(text: str) -> str:
+    """사용자 문장을 공백과 대소문자에 영향받지 않도록 정규화합니다."""
+    return text.replace(" ", "").lower()
+
+
+def _apply_josa(word: str, josa_type: str) -> str:
+    """한국어 단어의 받침 여부에 맞는 조사를 붙입니다."""
+    if not word:
+        return ""
+    last_char = word[-1]
+    if not "가" <= last_char <= "힣":
+        return word + ("가" if josa_type == "이가" else "는" if josa_type == "은는" else "를")
+    has_jongseong = (ord(last_char) - ord("가")) % 28 > 0
+    particles = {
+        "이가": ("이", "가"),
+        "은는": ("은", "는"),
+        "을를": ("을", "를"),
+        "과와": ("과", "와"),
+    }
+    with_jongseong, without_jongseong = particles.get(josa_type, ("", ""))
+    return word + (with_jongseong if has_jongseong else without_jongseong)
+
+
 def _confirm_action(label: str, command: str) -> dict:
     return {"label": label, "data": {"message": command}}
 

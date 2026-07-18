@@ -1219,6 +1219,37 @@ def test_pending_consume_quantity_builds_confirm_action(monkeypatch) -> None:
     assert result["response_text"] == "귤 1개를 소비 처리할까요?"
     assert result["actions"][0]["data"]["message"] == "확인:consume_ingredient:귤:1.0"
 
+
+def test_pending_consume_reasks_when_quantity_is_missing() -> None:
+    """소비 대기 중 수량을 해석하지 못하면 1개로 처리하지 않고 다시 묻습니다."""
+    result = inventory_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "조금",
+        "intent": "inventory.pending_consume",
+        "history": [],
+        "slots": {"inventory_pending": {"action": "consume_quantity", "name": "귤"}},
+    })
+
+    assert "수량" in result["response_text"]
+    assert result["slots"]["inventory_pending"]["name"] == "귤"
+
+
+def test_pending_add_reasks_when_quantity_is_missing() -> None:
+    """추가 대기 중 수량을 해석하지 못하면 1개로 처리하지 않고 다시 묻습니다."""
+    result = inventory_agent_node({
+        "db": MagicMock(),
+        "user_id": 1,
+        "text": "적당히",
+        "intent": "inventory.pending_add",
+        "history": [],
+        "slots": {"inventory_pending": {"action": "add_quantity", "name": "감자"}},
+    })
+
+    assert "수량" in result["response_text"]
+    assert result["slots"]["inventory_pending"]["name"] == "감자"
+
+
 def test_inventory_action_requires_login() -> None:
     """action 쓰기 작업은 비회원 상태에서 실행하지 않습니다."""
     assert inventory_agent_node({"db": MagicMock(), "user_id": 0, "text": "감자 먹었어", "intent": "inventory.action"})["response_text"] == LOGIN_REQUIRED_REPLY

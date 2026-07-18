@@ -239,13 +239,6 @@ class InventoryService:
             "status": self._get_status_from_d_day(d_day),
         }
 
-    def _sync_status(self, item: FridgeItem, calculated_status: str) -> bool:
-        """계산된 상태와 DB 상태가 다르면 메모리 객체에 반영하고 변경 여부를 반환합니다."""
-        if item.status != calculated_status:
-            item.status = calculated_status
-            return True
-        return False
-
     def _map_to_response(self, item: FridgeItem, ingredient: Ingredient, is_ai_recommended: bool = False) -> dict:
         """FridgeItem과 Ingredient를 프론트엔드 응답 스키마로 변환합니다."""
         calc_info = self._calculate_expiration_info(
@@ -359,17 +352,7 @@ class InventoryService:
             .all()
         )
 
-        results = []
-        status_changed = False
-        for fridge_item, ingredient in items:
-            mapped = self._map_to_response(fridge_item, ingredient)
-            status_changed = self._sync_status(fridge_item, mapped["status"]) or status_changed
-            results.append(mapped)
-
-        if status_changed:
-            db.commit()
-
-        return results
+        return [self._map_to_response(fridge_item, ingredient) for fridge_item, ingredient in items]
 
     def delete_ingredient(self, db: Session, user_id: int, ingredient_id: int):
         """사용자 냉장고에서 식재료를 삭제합니다."""
@@ -453,10 +436,8 @@ class InventoryService:
             "storage": {"냉장": 0, "냉동": 0, "실온": 0, "기타": 0},
         }
 
-        status_changed = False
         for fridge_item, ingredient in items:
             mapped = self._map_to_response(fridge_item, ingredient)
-            status_changed = self._sync_status(fridge_item, mapped["status"]) or status_changed
 
             if mapped["is_expired"]:
                 summary["expired"] += 1
@@ -468,9 +449,6 @@ class InventoryService:
 
             storage_key = fridge_item.storage_location if fridge_item.storage_location in STORAGE_KEYS else "기타"
             summary["storage"][storage_key] += 1
-
-        if status_changed:
-            db.commit()
 
         return summary
         

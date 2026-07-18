@@ -8,7 +8,7 @@ from uuid import uuid4
 from jose import JWTError, jwt
 
 from app.backend.core.config import settings
-from ai.agents.supervisor_agent.routing_rules import _apply_josa, _normalize_text
+from ai.agents.supervisor_agent.routing_rules import _normalize_text
 
 # 챗봇 기본 응답 문구
 LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
