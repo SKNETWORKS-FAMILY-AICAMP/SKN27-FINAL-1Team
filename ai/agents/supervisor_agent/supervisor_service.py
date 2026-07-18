@@ -131,7 +131,7 @@ class ChatService:
                                     data_type="BOOLEAN",
                                 )
                             except Exception as trace_exc:
-                                print(f"[ChatService] Langfuse result recording failed: {trace_exc}")
+                                logger.warning("Langfuse result recording failed: %s", trace_exc)
                         except Exception as exc:
                             try:
                                 observation.update(
@@ -145,13 +145,13 @@ class ChatService:
                                     data_type="BOOLEAN",
                                 )
                             except Exception as trace_exc:
-                                print(f"[ChatService] Langfuse error recording failed: {trace_exc}")
+                                logger.warning("Langfuse error recording failed: %s", trace_exc)
                             raise
             else:
                 final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
             response = _chat_response_from_state(final_state, session_id=session_id)
         except Exception as exc:
-            print(f"[ChatService] graph failed: {type(exc).__name__}: {exc}")
+            logger.exception("Supervisor graph failed: user_id=%s session_id=%s", user_id, session_id)
             response = _chat_error_response()
 
         reply = response["reply"]

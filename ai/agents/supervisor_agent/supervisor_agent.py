@@ -1,3 +1,5 @@
+import logging
+
 from langgraph.graph import END, StateGraph
 
 from ai.agents.inventory_agent.inventory_utils import (
@@ -65,6 +67,10 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _route_result,
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
+
+logger = logging.getLogger(__name__)
+
+
 def _route_write_request(
     text: str,
     previous_intent: str | None,
@@ -482,8 +488,8 @@ def multi_agent_node(state: GraphState) -> dict:
                 results.append(task_result)
                 completed_intents.append(intent)
                 task_results[intent] = task_result
-        except Exception as exc:
-            print(f"[Supervisor] {intent} task failed: {type(exc).__name__}: {exc}")
+        except Exception:
+            logger.exception("Supervisor task failed: intent=%s", intent)
             failed_intents.append(intent)
 
     if failed_intents:
