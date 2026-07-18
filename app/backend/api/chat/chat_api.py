@@ -22,5 +22,6 @@ def send_chat_message(
         message=request_data.message,
         history=request_data.history,
         user_settings=request_data.settings,
-        session_id=request_data.session_id
+        session_id=request_data.session_id,
+        context_token=request_data.context_token,
     )

@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChatMessage(BaseModel):
@@ -23,6 +23,7 @@ class ChatRequest(BaseModel):
 
     message: str = Field(..., min_length=1, description="사용자 메시지")
     session_id: str | None = Field(default=None, max_length=100, description="Langfuse 대화 추적 세션 ID")
+    context_token: str | None = Field(default=None, description="서버가 서명한 직전 대화 문맥")
     history: list[ChatMessage] = Field(default_factory=list, description="이전 대화 내역")
     settings: ChatSettings = Field(default_factory=ChatSettings, description="사용자 설정 값")
 
@@ -51,3 +52,22 @@ class ChatResponse(BaseModel):
     sources: list[ChatSource] = Field(default_factory=list, description="응답 출처 목록")
     slots: dict[str, Any] = Field(default_factory=dict, description="다음 대화에 전달할 문맥 슬롯")
     pending_action: dict[str, Any] | None = Field(default=None, description="사용자 확인을 기다리는 작업")
+    context_token: str | None = Field(default=None, description="다음 요청에 전달할 서명된 대화 문맥")
+
+
+class AgentResult(BaseModel):
+    """서로 다른 에이전트 응답을 Supervisor에서 검증할 공통 스키마입니다."""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool | None = None
+    status: str | None = None
+    response_text: str | None = None
+    message: str | None = None
+    actions: list[dict[str, Any]] | None = None
+    sources: list[dict[str, Any]] | None = None
+    slots: dict[str, Any] = Field(default_factory=dict)
+    pending_action: dict[str, Any] | None = None
+    ui: dict[str, Any] = Field(default_factory=dict)
+    action: str | None = None
+    error: Any = None

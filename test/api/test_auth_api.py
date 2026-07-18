@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -77,6 +79,25 @@ def test_dev_login_issues_bearer_token(monkeypatch):
     assert response.json() == {"access_token": "dev.jwt.token", "token_type": "bearer"}
     assert calls["provider"] == "kakao"
     assert calls["provider_id"] == "dev_cheat_id_9999"
+
+
+def test_dev_login_is_hidden_in_production(monkeypatch):
+    """운영 환경에서는 개발용 로그인 API를 노출하지 않습니다."""
+    monkeypatch.setattr(auth_api.settings, "DEV_MODE", False)
+    client = create_client()
+
+    response = client.post("/api/v1/auth/dev-login")
+
+    assert response.status_code == 404
+
+
+def test_short_jwt_secret_is_rejected(monkeypatch):
+    """짧거나 누락된 JWT 서명 키는 서버 시작 검증에서 거부합니다."""
+    monkeypatch.setattr(auth_api.settings, "DEV_MODE", False)
+    monkeypatch.setattr(auth_api.settings, "JWT_SECRET_KEY", "short-secret")
+
+    with pytest.raises(RuntimeError, match="JWT_SECRET_KEY"):
+        auth_api.settings.validate_security()
 
 
 def test_social_login_uses_oauth_profile_and_issues_token(monkeypatch):
