@@ -33,7 +33,9 @@ class RecipeSource(BaseModel):
 class RecipeAgentReply(BaseModel):
     """모델이 슈퍼바이저에 반환할 최종 응답."""
 
-    message: str = Field(description="사용자에게 보여줄 한국어 답변")
+    message: str = Field(
+        description="사용자에게 보여줄 한국어 평문. URL·이미지·마크다운 링크 없이 텍스트만."
+    )
     actions: list[RecipeAction] = Field(
         default_factory=list,
         description="도구 결과에 포함된 이동 버튼. 임의로 만들지 않는다.",
