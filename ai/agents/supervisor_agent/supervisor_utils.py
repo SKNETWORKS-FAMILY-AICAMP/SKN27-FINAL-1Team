@@ -137,13 +137,6 @@ _SHOPPING_WRITE_INTENTS = {
     "shopping.check_item",
 }
 
-# Supervisor가 직접 제공하는 최소 곁들임 추천 목록입니다.
-_RECIPE_PAIRINGS = {
-    "김치볶음밥": ["계란국", "어묵국", "단무지", "오이무침", "군만두"],
-    "파스타": ["마늘빵", "샐러드", "피클", "구운 채소"],
-    "라면": ["김치", "단무지", "계란말이", "주먹밥"],
-}
-
 def _normalize_text(text: str) -> str:
     """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
     return text.replace(" ", "").lower()
@@ -684,14 +677,6 @@ def _chat_error_response() -> dict[str, Any]:
     }
 
 
-def _reply_recipe_pairing(text: str) -> str:
-    """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
-    keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
-    keyword = re.sub(r"^(남은|먹다남은)\s*", "", keyword) or "그 메뉴"
-    items = _RECIPE_PAIRINGS.get(keyword.replace(" ", ""), ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"])
-    return f"{keyword}에는 " + ", ".join(items) + "처럼 맛을 정리해주는 메뉴가 잘 어울려요."
-
-
 def _parse_alarm_request(text: str, intent: str) -> dict[str, Any]:
     """Supervisor 확인 문자열을 Alarm Agent 실행 인자로 변환합니다."""
     confirmed = intent == "action.confirm"
@@ -755,6 +740,43 @@ def _alarm_result_to_state(agent_result: dict[str, Any]) -> dict[str, Any]:
     if actions:
         result["actions"] = actions
     return result
+
+def _agent_result_needs_retry(agent_result: Any) -> bool:
+    """Agent 응답이 비어 있거나 명시적으로 실패했는지 확인합니다."""
+    if not isinstance(agent_result, dict):
+        return True
+
+    slots = agent_result.get("slots") if isinstance(agent_result.get("slots"), dict) else {}
+    status = str(agent_result.get("status") or slots.get("agent_status") or "").lower()
+    if agent_result.get("ok") is False or status in {"error", "not_found"} or agent_result.get("error"):
+        return True
+
+    response_text = agent_result.get("response_text") or agent_result.get("message")
+    return not isinstance(response_text, str) or not response_text.strip()
+
+
+def _run_agent_with_retry(call: Any, *, enabled: bool = True) -> Any:
+    """안전한 조회 요청의 품질이 낮을 때 동일 Agent를 한 번만 재호출합니다."""
+    if not enabled:
+        return call()
+
+    try:
+        result = call()
+    except Exception:
+        result = call()
+        retried = True
+    else:
+        retried = _agent_result_needs_retry(result)
+        if retried:
+            result = call()
+
+    if retried and isinstance(result, dict):
+        result = {
+            **result,
+            "slots": {**(result.get("slots") or {}), "agent_retry_count": 1},
+        }
+    return result
+
 
 def _normalize_agent_result(
     agent_result: Any,
