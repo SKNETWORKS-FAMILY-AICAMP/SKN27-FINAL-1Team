@@ -10,7 +10,6 @@ from ai.agents.supervisor_agent.supervisor_agent import router_node
 from ai.agents.supervisor_agent import supervisor_utils
 import ai.agents.recipe_agent.recipe_tools as recipe_tools
 import ai.agents.recipe_agent.recipe_utils as recipe_utils
-from ai.agents.recipe_agent import run_recipe_agent
 
 
 def _route_intent(message: str) -> str:
@@ -145,7 +144,9 @@ def test_format_guide_tip() -> None:
 
 
 def test_cooking_time_question_uses_external_recipe() -> None:
-    """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
+    """외부 검색 tool이 조리 시간 원문을 보존합니다."""
+    from ai.agents.recipe_agent.recipe_state import RecipeToolContext, RecipeToolPayload
+
     original_external = recipe_tools.reply_external_recipe
     called = {"external": False, "query": ""}
 
@@ -156,12 +157,23 @@ def test_cooking_time_question_uses_external_recipe() -> None:
 
     recipe_tools.reply_external_recipe = fake_external
     try:
-        result = run_recipe_agent("감자튀김 에어프라이기 시간", db=None, intent="recipe.search")
+        tools = {
+            tool.name: tool
+            for tool in recipe_tools.build_recipe_tools(RecipeToolContext(db=None))
+        }
+        result = RecipeToolPayload.model_validate_json(
+            tools["search_external"].invoke(
+                {
+                    "keyword": "감자튀김",
+                    "query_text": "감자튀김 에어프라이기 시간",
+                }
+            )
+        )
         assert called["external"]
         assert called["query"] == "감자튀김 에어프라이기 시간"
-        assert result["response_text"] == "감자튀김 웹 검색"
-        assert result["actions"] == []
-        assert result["sources"] == []
+        assert result.message == "감자튀김 웹 검색"
+        assert result.actions == []
+        assert result.sources == []
     finally:
         recipe_tools.reply_external_recipe = original_external
 if __name__ == "__main__":

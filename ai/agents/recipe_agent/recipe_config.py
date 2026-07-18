@@ -1,12 +1,5 @@
 from __future__ import annotations
 
-import re
-
-#
-# Agent identity
-#
-AGENT_NAME = "recipe"
-
 MAX_DISPLAY_RECIPES = 3
 
 #
@@ -14,35 +7,6 @@ MAX_DISPLAY_RECIPES = 3
 #
 CONSTRAINT_EASY_30 = {"difficulty": "초급", "cooking_time_label": "30분이내", "main_ingredient_only": True}
 CONSTRAINT_INGREDIENT_ONLY = {"main_ingredient_only": True}
-
-#
-# Intent classification (data-only)
-#
-RECOMMEND_WORDS = (
-    "추천",
-    "뭐해먹",
-    "뭐먹",
-    "뭐하지",
-    "뭘",
-    "만들지",
-    "만들수",
-    "만들수있는",
-    "만들수있",
-    "할수",
-    "할수있는",
-    "메뉴",
-    "냉장고파먹",
-    "쓸수",
-    "쓸수있",
-    "활용",
-    "어디에쓸",
-    "다른거",
-    "딴거",
-)
-
-SEARCH_WORDS = ("레시피", "요리법", "요리")
-PAIRING_WORDS = ("같이먹", "함께먹", "곁들임", "어울리는", "이랑먹", "랑먹", "먹기좋은")
-PAIRING_JOSA = re.compile(r".+(?:이랑|랑|와|과|하고).+(?:먹|어울|곁들|좋은)")
 
 #
 # Pairing menu (data-only)
@@ -113,74 +77,7 @@ KEYWORD_TOKEN_STOPWORDS = {
     "어떡해",
 }
 
-#
-# Planner (public tools + LLM)
-#
-ENABLE_LLM_RECIPE_PLANNER = True
 ENABLE_LLM_PAIRING = True
-
-TOOL_SEARCH_RECIPES = "search_recipes"
-TOOL_RECOMMEND_BY_INGREDIENT = "recommend_by_ingredient"
-TOOL_RECOMMEND_FROM_FRIDGE = "recommend_from_fridge"
-TOOL_SEARCH_EXTERNAL = "search_external"
-TOOL_SUGGEST_PAIRING = "suggest_pairing"
-
-WHEN_ALWAYS = "always"
-WHEN_PREV_EMPTY = "prev_empty"
-
-PUBLIC_TOOL_NAMES = frozenset({
-    TOOL_SEARCH_RECIPES,
-    TOOL_RECOMMEND_BY_INGREDIENT,
-    TOOL_RECOMMEND_FROM_FRIDGE,
-    TOOL_SEARCH_EXTERNAL,
-    TOOL_SUGGEST_PAIRING,
-})
-
-TOOL_ARGS_WHITELIST: dict[str, frozenset[str]] = {
-    TOOL_SEARCH_RECIPES: frozenset({"keyword"}),
-    TOOL_RECOMMEND_BY_INGREDIENT: frozenset({"ingredient"}),
-    TOOL_RECOMMEND_FROM_FRIDGE: frozenset(),
-    TOOL_SEARCH_EXTERNAL: frozenset({"keyword", "query_text"}),
-    TOOL_SUGGEST_PAIRING: frozenset({"text"}),
-}
-
-RECIPE_PLANNER_PROMPT = """너는 밥벌이 레시피 에이전트의 실행 계획(planner)이다.
-사용자 요청에 맞는 도구 실행 순서를 JSON으로만 반환한다.
-
-허용 도구 (이 이름만 사용):
-- search_recipes: args keyword — 레시피/요리법 검색
-- recommend_by_ingredient: args ingredient — 특정 재료로 만들 메뉴 추천
-- recommend_from_fridge: args 없음 — 냉장고 재료 기반 추천 (재료명 없이 "오늘 뭐 해먹지" 등)
-- search_external: args keyword, query_text — 웹 검색 (조리시간/온도 질문 또는 DB 결과 없을 때 fallback)
-- suggest_pairing: args text — 곁들임/같이 먹기 좋은 메뉴
-
-when 값:
-- always: 항상 실행
-- prev_empty: 직전 단계 결과가 비었을 때만 실행 (fallback)
-
-규칙:
-- 에어프라이어/몇 분/온도/조리시간 → search_external만 (always)
-- 곁들임/같이 먹기 → suggest_pairing만
-- "OO 레시피" 검색 → search_recipes + search_external(prev_empty)
-- "OO로 뭐 해먹지" (재료 있음) → recommend_by_ingredient + search_external(prev_empty)
-- 냉장고/오늘 뭐 해먹지 (특정 재료 없음) → recommend_from_fridge
-- steps는 1~3개, 순차 실행만. 병렬 없음.
-- max_fallback은 0 또는 1 (기본 1)
-
-반환 형식 (JSON만, 설명 없음):
-{"steps":[{"tool":"search_recipes","args":{"keyword":"김치볶음밥"},"when":"always"}],"max_fallback":1}
-"""
-
-# (utterance, intent, expected_tool_sequence, expected_when_for_last_or_none)
-PLANNER_GOLDEN_CASES = (
-    ("김치볶음밥 레시피", "recipe.search", (TOOL_SEARCH_RECIPES, TOOL_SEARCH_EXTERNAL), WHEN_PREV_EMPTY),
-    ("에어프라이어 치킨 몇 분?", "recipe.search", (TOOL_SEARCH_EXTERNAL,), None),
-    ("두부로 뭐 해먹지?", "recipe.recommend", (TOOL_RECOMMEND_BY_INGREDIENT, TOOL_SEARCH_EXTERNAL), WHEN_PREV_EMPTY),
-    ("오늘 뭐 해먹지?", "recipe.recommend", (TOOL_RECOMMEND_FROM_FRIDGE,), None),
-    ("냉장고 재료로 뭐 해먹지?", "recipe.recommend", (TOOL_RECOMMEND_FROM_FRIDGE,), None),
-    ("김치볶음밥이랑 먹기 좋은 음식", "recipe.pairing", (TOOL_SUGGEST_PAIRING,), None),
-    ("파스타와 어울리는 반찬", "recipe.pairing", (TOOL_SUGGEST_PAIRING,), None),
-)
 
 RECIPE_PAIRING_PROMPT = """너는 한국어 요리 곁들임 추천 도우미다.
 사용자 음식(main_dish)에 어울리는 간단한 곁들임 메뉴 3~4개를 추천하라.
@@ -191,4 +88,32 @@ RECIPE_PAIRING_PROMPT = """너는 한국어 요리 곁들임 추천 도우미다
 - 겹치거나 비슷한 항목은 피함
 - 설명은 reply 한 문장 이내
 """
+
+RECIPE_AGENT_SYSTEM_PROMPT = """당신은 밥벌이 서비스의 레시피 전담 에이전트입니다.
+
+Supervisor가 전달한 의도는 {intent}입니다. 이 값은 라우팅 힌트일 뿐이며,
+사용자 원문과 대화 맥락을 우선해 적절한 도구를 직접 선택하세요.
+
+도구 사용 규칙:
+- 요리명이나 레시피 검색은 search_recipes를 먼저 사용하세요.
+- 특정 재료로 만들 메뉴 추천은 recommend_by_ingredient를 사용하세요.
+- 특정 재료 없이 냉장고/보유 재료 기반 추천을 원하면 recommend_from_fridge를 사용하세요.
+- 조리 시간·온도 질문은 search_external을 사용하세요.
+- DB 검색이나 재료 추천 결과가 비어 있을 때만 search_external을 한 번 사용하세요.
+- 곁들임이나 함께 먹을 메뉴는 suggest_pairing을 사용하세요.
+- 같은 도구를 같은 인자로 반복 호출하지 마세요.
+
+응답 규칙:
+- 도구가 반환한 사실만 사용하고 레시피, 링크, 출처를 임의로 만들지 마세요.
+- 최종 message는 간결하고 자연스러운 한국어로 작성하세요.
+- actions와 sources는 도구 결과에 있는 값만 그대로 사용하세요.
+- 이미 보여준 recipe_id는 가능하면 다시 추천하지 마세요: {shown_recipe_ids}
+"""
+
+
+def build_recipe_system_prompt(intent: str | None, shown_recipe_ids: set[int]) -> str:
+    return RECIPE_AGENT_SYSTEM_PROMPT.format(
+        intent=intent or "recipe",
+        shown_recipe_ids=sorted(shown_recipe_ids),
+    )
 

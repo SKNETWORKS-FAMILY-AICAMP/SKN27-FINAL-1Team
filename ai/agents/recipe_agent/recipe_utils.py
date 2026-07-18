@@ -7,13 +7,9 @@ from .recipe_config import (
     GUIDE_MATCH_ALIASES,
     GUIDE_MISLEADING_SUFFIXES,
     KEYWORD_TOKEN_STOPWORDS,
-    PAIRING_JOSA,
-    PAIRING_WORDS,
     RECIPE_INGREDIENT_EXCLUDE_KEYWORDS,
     RECIPE_KEYWORD_ALIASES,
-    RECOMMEND_WORDS,
     REQUIRES_LOGIN_PERSONAL_WORDS,
-    SEARCH_WORDS,
 )
 
 LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
@@ -178,10 +174,6 @@ def _is_relevant_search_result(keyword: str, item: dict[str, Any]) -> bool:
     return any(_is_guide_result_match(primary, word) for word in words)
 
 
-def _compact(text: str) -> str:
-    return re.sub(r"\s+", "", text or "").lower()
-
-
 def extract_shown_recipe_ids(history: list | None) -> set[int]:
     """history의 bot slots.shown_recipe_ids에서 recipe_id를 수집한다."""
     shown: set[int] = set()
@@ -201,20 +193,3 @@ def extract_shown_recipe_ids(history: list | None) -> set[int]:
             except (TypeError, ValueError):
                 continue
     return shown
-
-
-def analyze_recipe_intent(text: str, history: list | None = None) -> str:
-    """recipe.search / recipe.recommend / recipe.pairing 3-way 분류."""
-    del history  # ponytail: P3 — 시그니처만 고정, follow-up/LLM은 P5
-
-    if _is_cooking_time_question(text):
-        return "recipe.search"
-
-    compact = _compact(text)
-    if any(word in compact for word in PAIRING_WORDS) or PAIRING_JOSA.search(compact):
-        return "recipe.pairing"
-    if any(word in compact for word in RECOMMEND_WORDS):
-        return "recipe.recommend"
-    if any(word in compact for word in SEARCH_WORDS):
-        return "recipe.search"
-    return "recipe.recommend"
