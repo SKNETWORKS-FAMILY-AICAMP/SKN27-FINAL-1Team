@@ -146,6 +146,10 @@ def search_recipes_by_ingredient_with_fallback(db: Any, ingredient: str) -> Tool
 def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     """실행 의존성을 감춘 LangChain recipe tools를 생성한다."""
 
+    # 같은 Agent 실행에서 확보한 내부 결과 수를 Tool들이 공유한다.
+    # 충분한 내부 결과가 있으면 불필요한 외부 검색을 실행하지 않는다.
+    internal_result_count = 0
+
     # =========================================================================
     # Tool: search_recipes
     # 내부 DB 검색 결과를 공통 payload와 화면 액션으로 변환한다.
@@ -153,6 +157,8 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     @tool("search_recipes", args_schema=SearchRecipesInput)
     def search_recipes(keyword: str) -> str:
         """요리명이나 키워드로 내부 DB의 레시피를 검색합니다."""
+        nonlocal internal_result_count
+
         keyword = keyword.strip()
         if not keyword:
             return build_tool_payload_json(
@@ -175,9 +181,11 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                 message=f"{keyword} 관련 레시피를 내부 DB에서 찾지 못했어요.",
                 data={"keyword": keyword},
             )
+        internal_result_count = max(internal_result_count, len(items))
         return build_tool_payload_json(
             tool_name="search_recipes",
             status="success",
+            metadata_policy="actions",
             message="내부 DB에서 레시피를 찾았어요.",
             actions=build_recipe_actions(items),
             data={"keyword": keyword, "items": items, "total": len(items)},
@@ -190,6 +198,8 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     @tool("recommend_by_ingredient", args_schema=RecommendByIngredientInput)
     def recommend_by_ingredient(ingredient: str) -> str:
         """특정 주재료로 만들 수 있는 쉬운 레시피를 추천합니다."""
+        nonlocal internal_result_count
+
         ingredient = ingredient.strip()
         if not ingredient:
             return build_tool_payload_json(
@@ -222,9 +232,11 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                 "data": {"ingredient": ingredient},
             }
         )
+        internal_result_count = max(internal_result_count, len(items))
         return build_tool_payload_json(
             tool_name="recommend_by_ingredient",
             status="success",
+            metadata_policy="actions",
             message="재료 기반 레시피를 찾았어요.",
             actions=actions,
             data={"ingredient": ingredient, "items": items, "total": len(items), "constraints": constraints},
@@ -237,6 +249,8 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     @tool("recommend_from_fridge")
     def recommend_from_fridge() -> str:
         """로그인 사용자의 냉장고 재료를 최대한 활용하는 레시피를 추천합니다."""
+        nonlocal internal_result_count
+
         if not context.user_id:
             return build_tool_payload_json(
                 tool_name="recommend_from_fridge",
@@ -274,9 +288,11 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                     message="현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.",
                 )
             match_type = "partial"
+        internal_result_count = max(internal_result_count, len(items))
         return build_tool_payload_json(
             tool_name="recommend_from_fridge",
             status="success",
+            metadata_policy="actions",
             message="냉장고 재료 기반 레시피를 찾았어요.",
             actions=build_recipe_actions(items),
             data={"items": items, "total": len(items), "match_type": match_type},
@@ -289,6 +305,13 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     @tool("search_external", args_schema=SearchExternalInput)
     def search_external(keyword: str, query_text: str) -> str:
         """조리 시간·온도를 찾거나 내부 DB 결과가 없을 때 웹에서 레시피를 검색합니다."""
+        if internal_result_count >= MAX_DISPLAY_RECIPES:
+            return build_tool_payload_json(
+                tool_name="search_external",
+                status="empty",
+                message="내부 레시피 검색 결과가 충분해 외부 검색을 생략했어요.",
+            )
+
         result = search_external_recipes(keyword, query_text=query_text)
         if not result.ok:
             return build_tool_payload_json(
@@ -301,6 +324,7 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
         return build_tool_payload_json(
             tool_name="search_external",
             status="success" if results else "empty",
+            metadata_policy="sources" if results else "none",
             message="웹 검색 결과를 찾았어요." if results else f"{keyword} 관련 레시피를 웹에서 찾지 못했어요.",
             sources=data.get("sources") or [],
             data=data,

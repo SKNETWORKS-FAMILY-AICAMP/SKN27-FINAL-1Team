@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 from .recipe_config import (
     GUIDE_MATCH_ALIASES,
@@ -101,7 +101,8 @@ def is_relevant_external_result(keyword: str, item: dict[str, Any]) -> bool:
 def build_tool_payload_json(
     *,
     tool_name: str,
-    status: str,
+    status: Literal["success", "empty", "error"],
+    metadata_policy: Literal["actions", "sources", "both", "none"] = "none",
     message: str,
     actions: list[dict[str, Any]] | None = None,
     sources: list[dict[str, str]] | None = None,
@@ -112,6 +113,7 @@ def build_tool_payload_json(
     return RecipeToolPayload(
         tool=tool_name,
         status=status,
+        metadata_policy=metadata_policy,
         message=message,
         actions=actions or [],
         sources=sources or [],

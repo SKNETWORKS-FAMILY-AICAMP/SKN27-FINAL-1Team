@@ -51,6 +51,7 @@ class RecipeToolPayload(BaseModel):
 
     tool: str
     status: Literal["success", "empty", "error"]
+    metadata_policy: Literal["actions", "sources", "both", "none"] = "none"
     message: str
     actions: list[RecipeAction] = Field(default_factory=list)
     sources: list[RecipeSource] = Field(default_factory=list)

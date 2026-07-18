@@ -93,13 +93,23 @@ def parse_recipe_agent_result(result: dict[str, Any]) -> RecipeAgentReply:
         last_payload = payloads[-1]
         reply = RecipeAgentReply(message=last_payload.message)
 
-    # UI 링크와 출처는 모델 생성값이 아니라 실제 도구 결과만 반환한다.
-    actions = deduplicate_models_by_content([action for payload in payloads for action in payload.actions])
-    sources = deduplicate_models_by_content([source for payload in payloads for source in payload.sources])
+    # 마지막으로 성공한 Tool을 최종 결과의 근거로 사용한다. 실행 도중 발생한
+    # 이전 Tool의 액션이나 출처가 최종 응답에 섞이지 않도록 정책별로 선택한다.
+    successful_payloads = [payload for payload in payloads if payload.status == "success"]
+    selected_payload = successful_payloads[-1] if successful_payloads else None
+
+    actions: list[RecipeAction] = []
+    sources: list[RecipeSource] = []
+    if selected_payload is not None:
+        if selected_payload.metadata_policy in {"actions", "both"}:
+            actions = deduplicate_models_by_content(selected_payload.actions)
+        if selected_payload.metadata_policy in {"sources", "both"}:
+            sources = deduplicate_models_by_content(selected_payload.sources)
+
     return reply.model_copy(
         update={
-            "actions": [RecipeAction.model_validate(action) for action in actions],
-            "sources": [RecipeSource.model_validate(source) for source in sources],
+            "actions": actions,
+            "sources": sources,
         }
     )
 
