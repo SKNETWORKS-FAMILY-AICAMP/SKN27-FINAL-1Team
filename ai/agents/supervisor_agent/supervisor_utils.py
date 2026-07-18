@@ -8,32 +8,7 @@ from uuid import uuid4
 from jose import JWTError, jwt
 
 from app.backend.core.config import settings
-from ai.agents.supervisor_agent.agent_execution import (
-    _agent_result_failed,
-    _agent_result_needs_retry,
-    _merge_agent_results,
-    _normalize_agent_result,
-    _run_agent_with_retry,
-)from ai.agents.supervisor_agent.routing_rules import (
-    _apply_josa,
-    _build_read_tasks,
-    _is_alarm_calendar_query,
-    _is_alarm_notification_query,
-    _is_alarm_write_query,
-    _is_cooking_time_question,
-    _is_expiring_question,
-    _is_food_general_query,
-    _is_guide_query,
-    _is_login_status_question,
-    _is_receipt_query,
-    _is_recipe_pairing_query,
-    _is_recipe_recommend_query,
-    _is_recipe_search_query,
-    _is_shopping_price_explanation,
-    _is_shopping_price_query,
-    _normalize_text,
-)
-
+from ai.agents.supervisor_agent.routing_rules import _apply_josa, _normalize_text
 
 # 챗봇 기본 응답 문구
 LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
@@ -55,7 +30,6 @@ _TRUSTED_CONTEXT_SLOT_KEYS = {
     "inventory_pending", "inventory_last_action", "ingredient", "keyword",
     "guide_type", "shopping_product", "date", "quantity", "storage", "use_inventory",
 }
-
 
 _CONTEXT_SLOT_KEYS = {
     "ingredient.guide": {"ingredient", "keyword", "guide_type"},
@@ -174,219 +148,6 @@ _SHOPPING_WRITE_INTENTS = {
     "shopping.check_item",
 }
 
-def _format_guide_tip(tip: str) -> str:
-    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?。])\s+", tip) if sentence.strip()]
-    if len(sentences) <= 1:
-        sentences = [sentence.strip() for sentence in re.split(r"[;；]\s*", tip) if sentence.strip()]
-    if len(sentences) <= 1:
-        return sentences[0] if sentences else tip.strip()
-    return "\n".join(f"{index + 1}. {sentence}" for index, sentence in enumerate(sentences[:3]))
-
-def _format_guide_message(agent_result: dict[str, Any]) -> str:
-    """Guide Agent의 action과 data를 챗봇에서 읽기 좋은 문장으로 변환합니다."""
-    message = agent_result.get("message") or "가이드 정보를 찾지 못했어요."
-    if agent_result.get("status") != "success":
-        return message
-
-    action = agent_result.get("action") or ""
-    data = agent_result.get("data") or {}
-    ingredient = data.get("ingredient") or {}
-    item_name = ingredient.get("name") or ingredient.get("representative_name") or "식재료"
-
-    if action == "list_seasonal_ingredients":
-        month = data.get("month")
-        names = [item.get("name") for item in data.get("items", []) if item.get("name")]
-        if month and names:
-            suffix = " 등" if len(names) > 10 else ""
-            return f"{month}월 제철 식재료는 {', '.join(names[:10])}{suffix}이에요."
-
-    if action == "lookup_nutrition":
-        nutrition = data.get("nutrition") or {}
-        lines = []
-        base = nutrition.get("nutrition_base_amount") or nutrition.get("base_amount")
-        if base:
-            lines.append(f"기준량: {base}")
-        for key, label, unit in (
-            ("energy_kcal", "열량", "kcal"),
-            ("protein_g", "단백질", "g"),
-            ("carbohydrate_g", "탄수화물", "g"),
-            ("fat_g", "지방", "g"),
-            ("sugar_g", "당류", "g"),
-            ("sodium_mg", "나트륨", "mg"),
-        ):
-            value = nutrition.get(key)
-            if value is not None:
-                lines.append(f"{label}: {value}{unit}")
-        if lines:
-            return f"{item_name} 영양성분이에요.\n" + "\n".join(lines[:7])
-
-    action_type = _GUIDE_ACTION_TYPES.get(action)
-    if not action_type and data.get("guide_type"):
-        guide_type = data["guide_type"]
-        action_type = (guide_type, _GUIDE_TYPE_LABELS.get(guide_type, "가이드"))
-    if action_type:
-        guide_type, label = action_type
-        guide = (data.get("guides") or {}).get(guide_type) or {}
-        tip = guide.get("content")
-        if tip:
-            return f"{item_name} {label}이에요.\n{_format_guide_tip(tip)}"
-
-    return message
-
-
-def _guide_result_to_state(agent_result: dict[str, Any]) -> dict[str, Any]:
-    """Guide Agent 공통 응답을 Supervisor GraphState 형식으로 변환합니다."""
-    status = agent_result.get("status") or "error"
-    ui = agent_result.get("ui") or {}
-    actions = []
-    for action in ui.get("actions") or []:
-        label = action.get("label")
-        data = dict(action.get("data") or {})
-        message = data.get("message") or action.get("value")
-        if message:
-            data["message"] = message
-        for key in ("intent", "guide_type", "original_query"):
-            if action.get(key) is not None:
-                data[key] = action[key]
-        url = action.get("url") or ""
-        if label and (message or url):
-            actions.append({"label": label, "url": url, "data": data})
-
-    sources = [
-        {"title": source.get("title") or "출처", "url": source.get("url") or ""}
-        for source in ui.get("sources") or []
-        if isinstance(source, dict)
-    ]
-    if not agent_result.get("ok") or status == "error":
-        response_text = "가이드 정보를 조회하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요."
-        actions = []
-    else:
-        response_text = _format_guide_message(agent_result)
-
-    return {
-        "response_text": response_text,
-        "actions": actions,
-        "sources": sources,
-        "slots": {
-            "guide_status": status,
-            "guide_action": agent_result.get("action"),
-        },
-    }
-
-def _message_value(message: Any, key: str, default: Any = None) -> Any:
-    """딕셔너리와 메시지 객체에서 같은 방식으로 값을 읽습니다."""
-    return message.get(key, default) if isinstance(message, dict) else getattr(message, key, default)
-
-
-def _build_llm_route_history(history: list[Any] | None) -> list[dict[str, Any]]:
-    """최근 대화를 LLM 라우팅에 전달할 공통 JSON 문맥으로 정리합니다."""
-    route_history = []
-    for message in (history or [])[-4:]:
-        item = {
-            "role": _message_value(message, "role", ""),
-            "text": _message_value(message, "text", ""),
-        }
-        if item["role"] == "bot":
-            item.update({
-                "intent": _message_value(message, "intent"),
-                "slots": _message_value(message, "slots", {}) or {},
-                "pending_action": _message_value(message, "pending_action"),
-            })
-        route_history.append(item)
-    return route_history
-
-
-def _latest_bot_intent(history) -> str | None:
-    """이전 봇 응답에 저장된 마지막 intent를 반환합니다."""
-    for message in reversed(history or []):
-        intent = _message_value(message, "intent")
-        if _message_value(message, "role", "") == "bot" and intent:
-            return intent
-    return None
-
-
-def _latest_bot_slots(history) -> dict:
-    """이전 봇 응답에 저장된 마지막 슬롯을 반환합니다."""
-    for message in reversed(history or []):
-        slots = _message_value(message, "slots")
-        if _message_value(message, "role", "") == "bot" and isinstance(slots, dict):
-            return slots
-    return {}
-
-
-def _latest_bot_pending_action(history) -> dict | None:
-    """가장 최근 봇 응답에서 아직 실행을 기다리는 작업만 반환합니다."""
-    for message in reversed(history or []):
-        if _message_value(message, "role", "") != "bot":
-            continue
-        pending = _message_value(message, "pending_action")
-        return pending if isinstance(pending, dict) else None
-    return None
-
-
-def _rewrite_context_switch(text: str, has_pending: bool = False) -> str:
-    """기존 작업을 번복한 문장에서 새로 실행할 명령만 남깁니다."""
-    stripped = text.strip()
-    if has_pending:
-        switch_match = re.search(r"(?:말고|대신)\s*(.+)$", stripped)
-        if switch_match:
-            return switch_match.group(1).strip()
-    replacement = re.sub(r"^(?:아니다|아니야|아니|잠깐|취소하고)(?:\s+|,\s*)", "", stripped).strip()
-    return replacement or stripped
-
-
-def _is_context_follow_up(text: str) -> bool:
-    """직전 응답 없이는 의미가 부족한 짧은 후속 질문인지 확인합니다."""
-    normalized = _normalize_text(text)
-    return (
-        bool(re.match(r"^외\d+개", normalized))
-        or bool(re.fullmatch(r"(?:냉장|냉동|실온)(?:은|는|으로|에)?", normalized.rstrip("?")))
-        or any(word in normalized for word in ("나머지", "그중", "그거", "그걸", "그건", "이거", "이걸", "이건", "첫번째", "두번째", "더알려", "더보여", "전부", "다말해", "다보여"))
-    )
-
-
-def _route_result(
-    intent: str,
-    confidence: float = 1.0,
-    slots: dict | None = None,
-    tasks: list[dict[str, str]] | None = None,
-) -> dict:
-    """라우터 결과를 공통 dict 형식으로 반환합니다."""
-    payload = {"intent": intent, "confidence": confidence, "slots": slots or {}, "tasks": tasks or []}
-    return {"intent": intent, "intent_payload": payload, "slots": payload["slots"], "tasks": payload["tasks"]}
-
-
-def _format_calendar_events(data: dict) -> str | None:
-    """캘린더 조회 결과를 챗봇 말풍선에 보여줄 문장으로 바꿉니다."""
-    events = data.get("events") if isinstance(data, dict) else None
-    if events is None:
-        return None
-    if not events:
-        return "조회한 기간에 등록된 일정이 없어요."
-    lines = ["등록된 일정이에요."]
-    for event in events[:5]:
-        date_key = event.get("dateKey") or "날짜 미정"
-        title = event.get("title") or "제목 없는 일정"
-        lines.append(f"{date_key} - {title}")
-    if len(events) > 5:
-        lines.append(f"외 {len(events) - 5}개가 더 있어요.")
-    return "\n".join(lines)
-
-
-def _extract_pending_action(final_state: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """에이전트 결과나 확인 버튼에서 실행 대기 작업을 추출합니다."""
-    pending = final_state.get("pending_action")
-    if isinstance(pending, dict):
-        return pending
-    if pending:
-        return {"action": str(pending)}
-    for action in actions:
-        command = (action.get("data") or {}).get("message")
-        if isinstance(command, str) and command.startswith((CONFIRM_PREFIX, SIGNED_CONFIRM_PREFIX)):
-            return {"command": command}
-    return None
-
-
 def _issue_confirm_token(command: str, user_id: int | None) -> str:
     """서버 내부 쓰기 명령을 사용자 귀속 일회용 JWT로 서명합니다."""
     if not user_id or not command.startswith(CONFIRM_PREFIX):
@@ -405,7 +166,6 @@ def _issue_confirm_token(command: str, user_id: int | None) -> str:
         algorithm=settings.JWT_ALGORITHM,
     )
     return f"{SIGNED_CONFIRM_PREFIX}{token}"
-
 
 def _verify_and_claim_confirm_token(text: str, user_id: int | None) -> str | None:
     """확인 JWT의 서명·사용자·만료·재사용 여부를 검증하고 내부 명령을 반환합니다."""
@@ -443,7 +203,6 @@ def _verify_and_claim_confirm_token(text: str, user_id: int | None) -> str | Non
         _consumed_confirm_tokens[jti] = float(expires_at)
     return command
 
-
 def _secure_confirm_actions(actions: list[dict[str, Any]], user_id: int | None) -> list[dict[str, Any]]:
     """응답 액션의 평문 확인 명령을 서명된 확인 토큰으로 교체합니다."""
     secured = []
@@ -454,58 +213,6 @@ def _secure_confirm_actions(actions: list[dict[str, Any]], user_id: int | None) 
             copied["data"]["message"] = _issue_confirm_token(command, user_id)
         secured.append(copied)
     return secured
-
-
-def _issue_context_token(response: dict[str, Any], user_id: int | None, session_id: str | None) -> str | None:
-    """다음 요청에 사용할 최소 대화 문맥을 세션 귀속 JWT로 서명합니다."""
-    if not session_id:
-        return None
-    slots = {
-        key: value
-        for key, value in (response.get("slots") or {}).items()
-        if key in _TRUSTED_CONTEXT_SLOT_KEYS
-    }
-    safe_slots = json.loads(json.dumps(slots, ensure_ascii=False, default=str))
-    now = datetime.now(timezone.utc)
-    return jwt.encode(
-        {
-            "type": "chat_context",
-            "sub": str(user_id or "guest"),
-            "session_id": session_id,
-            "intent": response.get("intent") or "general",
-            "slots": safe_slots,
-            "iat": now,
-            "exp": now + timedelta(minutes=_CONTEXT_TOKEN_TTL_MINUTES),
-        },
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-    )
-
-
-def _verify_context_token(token: str | None, user_id: int | None, session_id: str | None) -> dict[str, Any]:
-    """서명된 대화 문맥이 현재 사용자와 채팅 세션에 속하는지 검증합니다."""
-    if not token or not session_id:
-        return {}
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-    except JWTError:
-        return {}
-    if (
-        payload.get("type") != "chat_context"
-        or payload.get("sub") != str(user_id or "guest")
-        or payload.get("session_id") != session_id
-    ):
-        return {}
-    return {
-        "intent": payload.get("intent") or "general",
-        "slots": payload.get("slots") if isinstance(payload.get("slots"), dict) else {},
-    }
-
-
 
 def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str, Any]:
     """LLM이 반환한 JSON 라우팅 결과를 안전한 dict로 변환합니다."""
@@ -546,7 +253,6 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
         "tasks": tasks,
     }
 
-
 def _is_llm_route_payload_valid(payload: dict[str, Any], text: str = "") -> bool:
     """LLM 라우팅 결과에 intent별 필수 정보가 있는지 후검증합니다."""
     intent = payload.get("intent")
@@ -581,7 +287,6 @@ def _route_payload(
         "tasks": tasks or [],
     }
 
-
 def _inherit_route_context(payload: dict[str, Any], previous_intent: str | None, previous_slots: dict) -> dict[str, Any]:
     """같은 의도의 후속 질문에서 허용된 직전 슬롯만 안전하게 이어받습니다."""
     intent = payload.get("intent")
@@ -592,11 +297,9 @@ def _inherit_route_context(payload: dict[str, Any], previous_intent: str | None,
     current = {key: value for key, value in (payload.get("slots") or {}).items() if value is not None}
     return {**payload, "slots": {**inherited, **current}}
 
-
 def _rewrite_guide_query(text: str) -> str:
     """정정 표현이 포함된 가이드 질문에서 마지막 식재료 질문만 남깁니다."""
     return re.sub(r"^.+?(?:말고|대신)\s+", "", text).strip()
-
 
 def _is_shopping_show_all_request(text: str) -> bool:
     """생략된 장보기 항목을 모두 보여 달라는 후속 요청인지 확인합니다."""
@@ -605,7 +308,6 @@ def _is_shopping_show_all_request(text: str) -> bool:
         word in normalized for word in ("나머지", "전부", "다말해", "다알려", "다보여", "전체")
     )
 
-
 def _normalize_shopping_create_query(text: str) -> str:
     """장보기 위치 조사만 제거해 실제 상품명이 오염되지 않도록 정리합니다."""
     return re.sub(
@@ -613,7 +315,6 @@ def _normalize_shopping_create_query(text: str) -> str:
         r"\1 ",
         text,
     ).strip()
-
 
 def _normalize_shopping_delete_query(text: str) -> str:
     """장보기 삭제 후속 문장에서 실제 재료명만 남깁니다."""
@@ -631,78 +332,6 @@ def _strip_shopping_compare_suffix(text: str) -> str:
         text,
     )
     return re.sub(r"\s*왜\s*(?:이렇게\s*)?비싸(?:요)?\s*\??$", "", cleaned).strip()
-
-def _auth_status_response(user_id: int | None) -> dict[str, Any]:
-    """현재 로그인 상태를 챗봇 공통 응답으로 반환합니다."""
-    reply = "현재 로그인된 상태예요." if user_id else "현재 비로그인 상태예요. 보관법이나 일반 레시피 검색은 이용할 수 있어요."
-    return {
-        "intent": "auth.status",
-        "reply": reply,
-        "actions": [],
-        "sources": [],
-        "slots": {},
-        "pending_action": None,
-    }
-
-
-def _build_chat_state(
-    *,
-    db: Any,
-    user_id: int | None,
-    text: str,
-    history: list[Any] | None,
-    user_settings: Any,
-    service: Any,
-    trusted_context: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """LangGraph 실행에 필요한 초기 Supervisor 상태를 구성합니다."""
-    return {
-        "user_id": user_id,
-        "text": text,
-        "history": history or [],
-        "settings_obj": user_settings,
-        "db": db,
-        "context_enforced": True,
-        "trusted_context": trusted_context or {},
-        "service": service,
-        "intent": None,
-        "intent_payload": {},
-        "slots": {},
-        "tasks": [],
-        "pending_action": None,
-        "keyword": None,
-        "response_text": None,
-        "actions": [],
-        "sources": [],
-    }
-
-
-def _chat_response_from_state(final_state: dict[str, Any], session_id: str | None = None) -> dict[str, Any]:
-    """LangGraph 최종 상태를 채팅 API 응답 형식으로 변환합니다."""
-    actions = _secure_confirm_actions(final_state.get("actions") or [], final_state.get("user_id"))
-    response = {
-        "intent": final_state.get("intent", "general"),
-        "reply": final_state.get("response_text", ""),
-        "actions": actions,
-        "sources": final_state.get("sources") or [],
-        "slots": final_state.get("slots") or {},
-        "pending_action": _extract_pending_action(final_state, actions),
-    }
-
-    response["context_token"] = _issue_context_token(response, final_state.get("user_id"), session_id)
-    return response
-
-def _chat_error_response() -> dict[str, Any]:
-    """Supervisor 실행 실패 시 사용할 공통 채팅 응답을 반환합니다."""
-    return {
-        "intent": "error",
-        "reply": "요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.",
-        "actions": [],
-        "sources": [],
-        "slots": {},
-        "pending_action": None,
-    }
-
 
 def _parse_alarm_request(text: str, intent: str) -> dict[str, Any]:
     """Supervisor 확인 문자열을 Alarm Agent 실행 인자로 변환합니다."""
@@ -742,28 +371,3 @@ def _parse_alarm_request(text: str, intent: str) -> dict[str, Any]:
         "payload": payload,
         "intent": alarm_intent,
     }
-
-
-def _alarm_result_to_state(agent_result: dict[str, Any]) -> dict[str, Any]:
-    """Alarm Agent 공통 응답을 Supervisor GraphState 형식으로 변환합니다."""
-    response_text = _format_calendar_events(agent_result.get("data", {})) if agent_result.get("intent") == "calendar.list" else None
-    response_text = response_text or agent_result.get("message", "요청을 처리했습니다.")
-    actions = []
-
-    for action in (agent_result.get("ui") or {}).get("actions") or []:
-        label = action.get("label", "")
-        value = action.get("value", {})
-        if isinstance(value, dict):
-            if value.get("action") == "cancel":
-                message = "취소"
-            else:
-                payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-                message = f"확인:alarm:{payload}"
-        else:
-            message = str(value)
-        actions.append({"label": label, "data": {"message": message}})
-
-    result = {"response_text": response_text, "status": agent_result.get("status") or ("error" if agent_result.get("ok") is False else "success")}
-    if actions:
-        result["actions"] = actions
-    return result

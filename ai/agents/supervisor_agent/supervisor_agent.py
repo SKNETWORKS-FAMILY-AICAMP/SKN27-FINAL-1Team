@@ -21,18 +21,21 @@ from ai.agents.inventory_agent.inventory_utils import (
 from app.backend.schemas.chat_state import GraphState
 from ai.agents.recipe_agent import run_recipe_agent
 
-from ai.agents.supervisor_agent.supervisor_utils import (
-    CANCEL_WORDS,
-    CONFIRM_PREFIX,
-    SIGNED_CONFIRM_PREFIX,
-    GENERAL_REPLY,
-    LOGIN_REQUIRED_REPLY,
-    _ALARM_CONFIRM_ACTIONS,
-    _INVENTORY_CONFIRM_ACTIONS,
-    _LLM_ROUTE_CONFIDENCE,
-    _SHOPPING_WRITE_INTENTS,
+from ai.agents.supervisor_agent.agent_execution import (
     _agent_result_failed,
-    _alarm_result_to_state,
+    _merge_agent_results,
+    _normalize_agent_result,
+    _run_agent_with_retry,
+)
+from ai.agents.supervisor_agent.chat_context import (
+    _is_context_follow_up,
+    _latest_bot_intent,
+    _latest_bot_pending_action,
+    _latest_bot_slots,
+    _rewrite_context_switch,
+)
+from ai.agents.supervisor_agent.chat_response_mapper import _alarm_result_to_state
+from ai.agents.supervisor_agent.routing_rules import (
     _build_read_tasks,
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
@@ -43,28 +46,31 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _is_recipe_recommend_query,
     _is_recipe_search_query,
     _is_shopping_price_explanation,
-    _is_shopping_show_all_request,
     _is_shopping_price_query,
-    _is_context_follow_up,
     _is_cooking_time_question,
     _is_expiring_question,
     _is_food_general_query,
+    _normalize_text,
+    _route_result,
+)
+from ai.agents.supervisor_agent.supervisor_utils import (
+    CANCEL_WORDS,
+    CONFIRM_PREFIX,
+    SIGNED_CONFIRM_PREFIX,
+    GENERAL_REPLY,
+    LOGIN_REQUIRED_REPLY,
+    _ALARM_CONFIRM_ACTIONS,
+    _INVENTORY_CONFIRM_ACTIONS,
+    _LLM_ROUTE_CONFIDENCE,
+    _SHOPPING_WRITE_INTENTS,
+    _is_shopping_show_all_request,
     _inherit_route_context,
-    _latest_bot_intent,
-    _latest_bot_pending_action,
-    _latest_bot_slots,
-    _merge_agent_results,
-    _normalize_agent_result,
-    _run_agent_with_retry,
     _normalize_shopping_create_query,
     _normalize_shopping_delete_query,
-    _normalize_text,
     _parse_alarm_request,
-    _rewrite_context_switch,
     _rewrite_guide_query,
     _strip_shopping_compare_suffix,
     _verify_and_claim_confirm_token,
-    _route_result,
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
 

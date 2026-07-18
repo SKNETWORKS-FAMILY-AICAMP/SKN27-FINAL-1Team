@@ -7,7 +7,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 from ai.agents.supervisor_agent.supervisor_agent import router_node
-from ai.agents.supervisor_agent import supervisor_utils
+from ai.agents.supervisor_agent import (
+    agent_execution,
+    chat_context,
+    chat_response_mapper,
+    routing_rules,
+    supervisor_utils,
+)
 import ai.agents.recipe_agent.recipe_tools as recipe_tools
 import ai.agents.recipe_agent.recipe_utils as recipe_utils
 from ai.agents.recipe_agent import run_recipe_agent
@@ -122,9 +128,9 @@ def test_extract_recipe_ingredient() -> None:
 
 def test_login_status_question() -> None:
     """로그인 상태를 묻는 문장을 별도로 인식합니다."""
-    assert supervisor_utils._is_login_status_question("지금 로그인 되어 있어?")
-    assert supervisor_utils._is_login_status_question("나 로그인 상태야?")
-    assert not supervisor_utils._is_login_status_question("로그인하려면 어디로 가?")
+    assert routing_rules._is_login_status_question("지금 로그인 되어 있어?")
+    assert routing_rules._is_login_status_question("나 로그인 상태야?")
+    assert not routing_rules._is_login_status_question("로그인하려면 어디로 가?")
 
 def test_guest_chat_login_boundary() -> None:
     """비회원은 개인 냉장고 기능만 막고 일반 레시피/보관법은 허용합니다."""
@@ -139,9 +145,9 @@ def test_guest_chat_login_boundary() -> None:
 
 def test_format_guide_tip() -> None:
     """긴 보관법 문장을 번호 목록으로 줄여 보여주는지 확인합니다."""
-    formatted = supervisor_utils._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
+    formatted = chat_response_mapper._format_guide_tip("첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다. 넷째 문장입니다.")
     assert formatted == "1. 첫 문장입니다.\n2. 둘째 문장입니다.\n3. 셋째 문장입니다."
-    assert supervisor_utils._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
+    assert chat_response_mapper._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
 
 
 def test_cooking_time_question_uses_external_recipe() -> None:
@@ -255,7 +261,7 @@ def test_llm_route_history_keeps_explicit_context() -> None:
         },
     ]
 
-    assert supervisor_utils._build_llm_route_history(history)[-1] == {
+    assert chat_context._build_llm_route_history(history)[-1] == {
         "role": "bot",
         "text": "두부를 몇 개 추가하시겠어요?",
         "intent": "inventory.action",
@@ -466,7 +472,7 @@ def test_merge_agent_results_removes_duplicate_ui_data() -> None:
     """복합 Agent 응답의 중복 버튼과 출처를 한 번만 반환합니다."""
     action = {"label": "감자 레시피", "url": "/recipes?ingredient=감자"}
     source = {"title": "농촌진흥청", "url": "https://example.com"}
-    result = supervisor_utils._merge_agent_results(
+    result = agent_execution._merge_agent_results(
         {"response_text": "첫 번째 응답", "actions": [action], "sources": [source]},
         {"response_text": "두 번째 응답", "actions": [action], "sources": [source]},
     )
@@ -1011,7 +1017,7 @@ def test_completed_pending_action_does_not_reactivate() -> None:
         MagicMock(role="bot", text="두부를 추가했어요.", pending_action=None),
     ]
 
-    assert supervisor_utils._latest_bot_pending_action(history) is None
+    assert chat_context._latest_bot_pending_action(history) is None
 
 def test_pending_add_cancel_word_routes_to_cancel() -> None:
     """추가 대기 상태에서 거절 표현은 새 추가 요청으로 보지 않습니다."""
@@ -1620,18 +1626,18 @@ def test_context_token_is_bound_to_user_and_session() -> None:
         "intent": "inventory.action",
         "slots": {"inventory_pending": {"action": "add_quantity", "name": "두부"}},
     }
-    token = supervisor_utils._issue_context_token(response, 1, "session-a")
+    token = chat_context._issue_context_token(response, 1, "session-a")
 
-    restored = supervisor_utils._verify_context_token(token, 1, "session-a")
+    restored = chat_context._verify_context_token(token, 1, "session-a")
 
     assert restored == response
-    assert supervisor_utils._verify_context_token(token, 2, "session-a") == {}
-    assert supervisor_utils._verify_context_token(token, 1, "session-b") == {}
+    assert chat_context._verify_context_token(token, 2, "session-a") == {}
+    assert chat_context._verify_context_token(token, 1, "session-b") == {}
 
 
 def test_chat_response_signs_confirm_action_and_context() -> None:
     """채팅 응답은 확인 명령과 다음 대화 문맥을 모두 서명해 반환합니다."""
-    response = supervisor_utils._chat_response_from_state(
+    response = chat_response_mapper._chat_response_from_state(
         {
             "user_id": 1,
             "intent": "inventory.action",
@@ -1657,7 +1663,7 @@ def test_api_state_ignores_unsigned_history_for_write_pending() -> None:
             pending_action=None,
         )
     ]
-    state = supervisor_utils._build_chat_state(
+    state = chat_context._build_chat_state(
         db=MagicMock(),
         user_id=1,
         text="1",
@@ -1750,7 +1756,7 @@ def test_follow_up_inherits_only_same_intent_context() -> None:
 
 def test_agent_result_contract_normalizes_status_and_ui() -> None:
     """Agent의 message·ui·status 응답을 Supervisor 공통 계약으로 변환합니다."""
-    result = supervisor_utils._normalize_agent_result(
+    result = agent_execution._normalize_agent_result(
         {
             "ok": True,
             "status": "needs_input",
@@ -1848,7 +1854,7 @@ def test_agent_quality_retry_runs_only_after_bad_result() -> None:
         calls.append(1)
         return next(responses)
 
-    result = supervisor_utils._run_agent_with_retry(call_agent)
+    result = agent_execution._run_agent_with_retry(call_agent)
 
     assert len(calls) == 2
     assert result["response_text"] == "정상 응답입니다."
@@ -1864,7 +1870,7 @@ def test_agent_quality_retry_skips_valid_result() -> None:
         calls.append(1)
         return {"response_text": "정상 응답입니다."}
 
-    result = supervisor_utils._run_agent_with_retry(call_agent)
+    result = agent_execution._run_agent_with_retry(call_agent)
 
     assert len(calls) == 1
     assert result == {"response_text": "정상 응답입니다."}
@@ -1879,7 +1885,7 @@ def test_agent_quality_retry_is_disabled_for_write_action() -> None:
         calls.append(1)
         return {"response_text": ""}
 
-    result = supervisor_utils._run_agent_with_retry(call_agent, enabled=False)
+    result = agent_execution._run_agent_with_retry(call_agent, enabled=False)
 
     assert len(calls) == 1
     assert result == {"response_text": ""}
@@ -1949,7 +1955,7 @@ def test_agent_retry_converts_second_exception_to_error() -> None:
         calls.append(1)
         raise RuntimeError("agent failed")
 
-    result = supervisor_utils._run_agent_with_retry(fail_agent)
+    result = agent_execution._run_agent_with_retry(fail_agent)
 
     assert len(calls) == 2
     assert result["status"] == "error"
@@ -2051,7 +2057,7 @@ def test_agent_retry_marks_second_empty_result_as_error() -> None:
         calls.append(1)
         return {"response_text": ""}
 
-    result = supervisor_utils._run_agent_with_retry(empty_agent)
+    result = agent_execution._run_agent_with_retry(empty_agent)
 
     assert len(calls) == 2
     assert result["status"] == "error"

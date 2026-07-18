@@ -177,3 +177,14 @@ def _build_read_tasks(text: str) -> list[dict[str, str]]:
             if task["intent"] == "shopping.compare":
                 task["text"] = price_text or text
     return tasks
+
+
+def _route_result(
+    intent: str,
+    confidence: float = 1.0,
+    slots: dict | None = None,
+    tasks: list[dict[str, str]] | None = None,
+) -> dict:
+    """라우터 결과를 공통 dict 형식으로 반환합니다."""
+    payload = {"intent": intent, "confidence": confidence, "slots": slots or {}, "tasks": tasks or []}
+    return {"intent": intent, "intent_payload": payload, "slots": payload["slots"], "tasks": payload["tasks"]}
