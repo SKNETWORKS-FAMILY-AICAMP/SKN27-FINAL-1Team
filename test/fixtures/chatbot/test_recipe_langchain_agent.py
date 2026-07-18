@@ -40,7 +40,7 @@ def test_search_recipes_handles_whitespace_input(monkeypatch) -> None:
     def fail_if_called(*args, **kwargs):
         raise AssertionError("빈 검색어는 검색 서비스에 전달하면 안 됩니다.")
 
-    monkeypatch.setattr(recipe_tools, "search_recipe_tool", fail_if_called)
+    monkeypatch.setattr(recipe_tools, "search_internal_recipes", fail_if_called)
     payload = RecipeToolPayload.model_validate_json(
         _tools()["search_recipes"].invoke({"keyword": "   "})
     )
@@ -49,7 +49,7 @@ def test_search_recipes_handles_whitespace_input(monkeypatch) -> None:
     assert payload.actions == []
 
 
-def test_search_recipe_tool_hides_internal_error(monkeypatch, caplog) -> None:
+def test_search_internal_recipes_hides_internal_error(monkeypatch, caplog) -> None:
     """상세 예외는 로그에 남기고 사용자용 오류에는 포함하지 않는다."""
 
     class BrokenSearchService:
@@ -60,14 +60,14 @@ def test_search_recipe_tool_hides_internal_error(monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(search_module, "recipe_search_service", BrokenSearchService())
     with caplog.at_level(logging.ERROR, logger=recipe_tools.__name__):
-        result = recipe_tools.search_recipe_tool(db=None, keyword="김치찌개")
+        result = recipe_tools.search_internal_recipes(db=None, keyword="김치찌개")
 
     assert result.ok is False
     assert "database-password-leak" not in (result.error or "")
     assert "database-password-leak" in caplog.text
 
 
-def test_recommend_recipe_tool_uses_fixed_fridge_policy(monkeypatch) -> None:
+def test_recommend_fridge_recipes_uses_fixed_policy(monkeypatch) -> None:
     """챗봇 설정과 무관하게 냉장고 소비 preset을 사용한다."""
 
     import app.backend.services.recommendation_service.recommend_config as config_module
@@ -90,7 +90,7 @@ def test_recommend_recipe_tool_uses_fixed_fridge_policy(monkeypatch) -> None:
     monkeypatch.setattr(config_module, "RecipeRecommendConfig", FakeConfig)
     monkeypatch.setattr(service_module, "recommendation_service", FakeRecommendationService())
 
-    result = recipe_tools.recommend_recipe_tool(db="db", user_id=7)
+    result = recipe_tools.recommend_fridge_recipes(db="db", user_id=7)
 
     assert result.ok is True
     assert result.data == {"items": [], "total": 0}

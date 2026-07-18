@@ -8,10 +8,12 @@ from .recipe_graph import build_recipe_agent, parse_recipe_agent_result
 from .recipe_state import RecipeAgentReply, RecipeToolContext
 from .recipe_utils import extract_shown_recipe_ids
 
-__all__ = ["run_recipe_agent", "to_supervisor_state"]
+__all__ = ["build_supervisor_result", "run_recipe_agent"]
 
 
-def _history_messages(history: list[Any]) -> list[BaseMessage]:
+def build_history_messages(history: list[Any]) -> list[BaseMessage]:
+    """최근 대화 기록을 LangChain 메시지 형식으로 변환한다."""
+
     messages: list[BaseMessage] = []
     for item in history[-10:]:
         if isinstance(item, BaseMessage):
@@ -28,7 +30,9 @@ def _history_messages(history: list[Any]) -> list[BaseMessage]:
     return messages
 
 
-def to_supervisor_state(reply: RecipeAgentReply) -> dict[str, Any]:
+def build_supervisor_result(reply: RecipeAgentReply) -> dict[str, Any]:
+    """Recipe Agent 응답을 Supervisor 반환 계약에 맞게 구성한다."""
+
     result: dict[str, Any] = {
         "response_text": reply.message,
         "actions": [action.model_dump() for action in reply.actions],
@@ -67,9 +71,9 @@ def run_recipe_agent(
         intent=route_intent,
         shown_recipe_ids=extract_shown_recipe_ids(history),
     )
-    messages = [*_history_messages(history), HumanMessage(content=text)]
+    messages = [*build_history_messages(history), HumanMessage(content=text)]
     state = agent.invoke(
         {"messages": messages},
         config={"recursion_limit": 8},
     )
-    return to_supervisor_state(parse_recipe_agent_result(state))
+    return build_supervisor_result(parse_recipe_agent_result(state))

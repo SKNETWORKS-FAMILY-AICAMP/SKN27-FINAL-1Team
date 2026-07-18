@@ -27,7 +27,7 @@ def build_recipe_agent(
     shown_recipe_ids: set[int],
     model: Any = None,
 ):
-    """모델, 프롬프트, Pydantic 응답, @tool을 결합한 표준 LangChain agent."""
+    """모델, 프롬프트, Pydantic 응답, @tool을 모아서 agent로 정의한다."""
     llm = model or ChatOpenAI(
         api_key=app_settings.OPENAI_API_KEY,
         model=app_settings.OPENAI_MODEL,
@@ -41,7 +41,9 @@ def build_recipe_agent(
     )
 
 
-def _tool_payload(message: ToolMessage) -> RecipeToolPayload | None:
+def parse_tool_payload(message: ToolMessage) -> RecipeToolPayload | None:
+    """ToolMessage의 JSON 본문을 검증된 Recipe Tool 응답으로 변환한다."""
+
     content = message.content
     if not isinstance(content, str):
         return None
@@ -51,7 +53,9 @@ def _tool_payload(message: ToolMessage) -> RecipeToolPayload | None:
         return None
 
 
-def _dedupe_models(models: list[Any]) -> list[Any]:
+def deduplicate_models_by_content(models: list[Any]) -> list[Any]:
+    """Pydantic 모델의 직렬화 결과를 기준으로 중복을 제거한다."""
+
     seen: set[str] = set()
     result: list[Any] = []
     for model in models:
@@ -81,7 +85,7 @@ def parse_recipe_agent_result(result: dict[str, Any]) -> RecipeAgentReply:
         payload
         for message in result.get("messages") or []
         if isinstance(message, ToolMessage)
-        if (payload := _tool_payload(message)) is not None
+        if (payload := parse_tool_payload(message)) is not None
     ]
     if reply is None:
         if not payloads:
@@ -90,8 +94,8 @@ def parse_recipe_agent_result(result: dict[str, Any]) -> RecipeAgentReply:
         reply = RecipeAgentReply(message=last_payload.message)
 
     # UI 링크와 출처는 모델 생성값이 아니라 실제 도구 결과만 반환한다.
-    actions = _dedupe_models([action for payload in payloads for action in payload.actions])
-    sources = _dedupe_models([source for payload in payloads for source in payload.sources])
+    actions = deduplicate_models_by_content([action for payload in payloads for action in payload.actions])
+    sources = deduplicate_models_by_content([source for payload in payloads for source in payload.sources])
     return reply.model_copy(
         update={
             "actions": [RecipeAction.model_validate(action) for action in actions],
