@@ -13,7 +13,6 @@ from .recipe_config import build_recipe_system_prompt
 from .recipe_state import (
     RecipeAction,
     RecipeAgentReply,
-    RecipeAgentState,
     RecipeSource,
     RecipeToolContext,
     RecipeToolPayload,
@@ -39,7 +38,6 @@ def build_recipe_agent(
         tools=build_recipe_tools(context),
         system_prompt=build_recipe_system_prompt(intent, shown_recipe_ids),
         response_format=RecipeAgentReply,
-        state_schema=RecipeAgentState,
     )
 
 

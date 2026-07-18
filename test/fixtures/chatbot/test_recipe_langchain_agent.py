@@ -19,7 +19,6 @@ def test_recipe_tools_have_pydantic_schemas() -> None:
         "recommend_by_ingredient",
         "recommend_from_fridge",
         "search_external",
-        "suggest_pairing",
     }
     assert tools["search_recipes"].args_schema.__name__ == "SearchRecipesInput"
     assert tools["search_external"].args_schema.__name__ == "SearchExternalInput"
@@ -33,21 +32,40 @@ def test_recommend_by_ingredient_handles_empty_input() -> None:
     assert payload.actions == []
 
 
-def test_external_tool_preserves_original_query(monkeypatch) -> None:
-    called = {"query": ""}
+def test_fridge_tool_requires_login() -> None:
+    payload = RecipeToolPayload.model_validate_json(_tools()["recommend_from_fridge"].invoke({}))
+    assert payload.status == "error"
+    assert "로그인" in payload.message
 
-    def fake_external(keyword: str, query_text: str | None = None):
-        called["query"] = query_text or ""
-        return f"{keyword} 웹 검색", []
 
-    monkeypatch.setattr(recipe_tools, "reply_external_recipe", fake_external)
+def test_external_tool_returns_raw_results(monkeypatch) -> None:
+    class FakeTavilyClient:
+        def __init__(self, api_key: str):
+            assert api_key == "test-key"
+
+        def search(self, **kwargs):
+            assert kwargs["query"] == "감자튀김 에어프라이기 시간"
+            return {
+                "results": [
+                    {
+                        "title": "감자튀김 에어프라이어 조리법",
+                        "url": "https://example.com/fries",
+                        "content": "감자튀김은 180도에서 조리합니다.",
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(recipe_tools.app_settings, "TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr(recipe_tools, "TavilyClient", FakeTavilyClient)
     payload = RecipeToolPayload.model_validate_json(
         _tools()["search_external"].invoke(
             {"keyword": "감자튀김", "query_text": "감자튀김 에어프라이기 시간"}
         )
     )
-    assert called["query"] == "감자튀김 에어프라이기 시간"
-    assert payload.message == "감자튀김 웹 검색"
+    assert payload.status == "success"
+    assert payload.data["query_text"] == "감자튀김 에어프라이기 시간"
+    assert payload.data["results"][0]["content"] == "감자튀김은 180도에서 조리합니다."
+    assert payload.sources[0].url == "https://example.com/fries"
 
 
 def test_parser_uses_tool_actions_instead_of_model_actions() -> None:
@@ -92,7 +110,7 @@ def test_run_recipe_agent_keeps_supervisor_contract(monkeypatch) -> None:
 
     class FakeAgent:
         def invoke(self, state, config):
-            assert state["intent"] == "recipe.search"
+            assert "intent" not in state
             assert config["recursion_limit"] == 8
             return {
                 "messages": [ToolMessage(content=payload.model_dump_json(), tool_call_id="call-1")],

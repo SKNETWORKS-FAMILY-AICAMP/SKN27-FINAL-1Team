@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from langchain.agents import AgentState
 from pydantic import BaseModel, Field
 
 
@@ -18,10 +17,6 @@ class RecommendByIngredientInput(BaseModel):
 class SearchExternalInput(BaseModel):
     keyword: str = Field(description="웹에서 찾을 요리 또는 재료 키워드")
     query_text: str = Field(description="조리 시간, 온도 등 사용자의 원문 질문")
-
-
-class SuggestPairingInput(BaseModel):
-    text: str = Field(description="함께 먹을 음식이나 곁들임을 묻는 사용자 원문")
 
 
 class RecipeAction(BaseModel):
@@ -58,12 +53,6 @@ class RecipeToolPayload(BaseModel):
     actions: list[RecipeAction] = Field(default_factory=list)
     sources: list[RecipeSource] = Field(default_factory=list)
     data: dict[str, Any] = Field(default_factory=dict)
-
-
-class RecipeAgentState(AgentState):
-    """LangChain agent loop에서 사용하는 메시지 기반 상태."""
-
-    intent: str
 
 
 @dataclass

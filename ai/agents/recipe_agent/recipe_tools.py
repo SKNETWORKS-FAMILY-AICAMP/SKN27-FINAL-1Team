@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -14,18 +12,11 @@ try:
 except ImportError:
     TavilyClient = None
 
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-
 from .recipe_config import (
     CONSTRAINT_EASY_30,
     CONSTRAINT_INGREDIENT_ONLY,
-    ENABLE_LLM_PAIRING,
+    LOGIN_REQUIRED_REPLY,
     MAX_DISPLAY_RECIPES,
-    PAIRING_MENU,
-    RECIPE_PAIRING_PROMPT,
 )
 from .recipe_state import (
     RecipeToolPayload,
@@ -33,11 +24,8 @@ from .recipe_state import (
     RecipeToolContext,
     SearchExternalInput,
     SearchRecipesInput,
-    SuggestPairingInput,
 )
 from .recipe_utils import (
-    LOGIN_REQUIRED_REPLY,
-    _apply_josa,
     _exclude_previous_items,
     _is_relevant_search_result,
     _rank_recipe_items,
@@ -57,101 +45,38 @@ class ToolResult:
 
 # =============================================================================
 # search_external 지역 함수
-# - reply_external_recipe: Tavily 검색 및 검색 결과 요약
+# - search_external_recipe: Tavily 검색 결과와 실제 출처 조회
 # =============================================================================
-def reply_external_recipe(keyword: str, query_text: str | None = None) -> tuple[str, list[dict[str, str]]]:
-    """내부 레시피가 없을 때 Tavily 검색 결과로 짧게 안내합니다."""
+def search_external_recipe(keyword: str, query_text: str | None = None) -> ToolResult:
+    """필터링된 Tavily 결과를 main Agent가 요약할 수 있도록 반환한다."""
     if not app_settings.TAVILY_API_KEY or TavilyClient is None:
-        return f"{keyword} 관련 레시피는 아직 우리 DB에 없어요. 웹 검색 답변은 Tavily 설정 후 사용할 수 있어요.", []
+        return ToolResult(ok=False, error="웹 검색은 Tavily 설정 후 사용할 수 있어요.", source="tavily")
 
     client = TavilyClient(api_key=app_settings.TAVILY_API_KEY)
     try:
         result = client.search(query=query_text or f"{keyword} 레시피", search_depth="basic", max_results=3)
     except Exception:
-        return f"{keyword} 레시피는 웹 검색을 시도했지만 지금은 연결이 불안정해요. 잠시 후 다시 시도해주세요.", []
-    results = [item for item in result.get("results", []) if _is_relevant_search_result(keyword, item)][:3]
+        return ToolResult(ok=False, error="웹 검색 연결이 불안정해요. 잠시 후 다시 시도해주세요.", source="tavily")
+
+    results = [
+        {
+            "title": item.get("title") or "",
+            "url": item.get("url") or "",
+            "content": (item.get("content") or "")[:600],
+        }
+        for item in result.get("results", [])
+        if _is_relevant_search_result(keyword, item)
+    ][:3]
     sources = [
         {"title": item.get("title") or item.get("url", "출처"), "url": item.get("url", "")}
         for item in results
         if item.get("url")
     ]
-    content = "\n".join(item.get("content", "") for item in results if item.get("content"))[:1200]
-    if not content:
-        return f"{keyword} 레시피를 웹에서도 찾지 못했어요.", sources
-
-    if app_settings.OPENAI_API_KEY and OpenAI is not None:
-        try:
-            client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
-            response = client_ai.chat.completions.create(
-                model=app_settings.OPENAI_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "당신은 요리와 냉장고 관리를 도와주는 친절한 비서 챗봇 '밥벌이'입니다. "
-                            "검색 결과를 바탕으로 사용자의 질문에 다정하게 대답하세요. "
-                            "특정 요리의 레시피를 묻는다면 핵심 조리 흐름을 3문장 이내로 요약해주고, "
-                            "메뉴 추천을 원한다면 상황에 어울리는 요리 2~3가지를 다정하게 추천해주세요."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": f"질문/키워드: {query_text or keyword}\n검색 결과:\n{content}\n\n위 내용을 바탕으로 친절하게 답변해줘.",
-                    },
-                ],
-                temperature=0.2,
-            )
-            summary = response.choices[0].message.content.strip()
-        except Exception:
-            summary = content.split(".")[0].strip() + "."
-    else:
-        summary = content.split(".")[0].strip() + "."
-
-    return summary, sources
-
-
-# =============================================================================
-# suggest_pairing 지역 함수
-# - handle_recipe_pairing: 정적 메뉴 → LLM → 기본 메뉴 순서로 곁들임 선택
-# - _pairing_with_llm: 정적 메뉴에 없는 주요리의 LLM 곁들임 조회
-# =============================================================================
-def handle_recipe_pairing(text: str) -> tuple[str, list[dict[str, Any]]]:
-    """특정 음식과 함께 먹기 좋은 간단한 곁들임 메뉴를 안내합니다."""
-    keyword = re.split(r"이랑|랑|와|과|하고|에", text, maxsplit=1)[0].strip()
-    keyword = re.sub(r"^(남은|먹다남은)\s*", "", keyword) or "그 메뉴"
-    normalized = keyword.replace(" ", "")
-    items = PAIRING_MENU.get(normalized)
-    if not items:
-        items = _pairing_with_llm(keyword)
-    if not items:
-        items = ["맑은 국", "상큼한 무침", "피클류", "간단한 구이"]
-    reply = f"{keyword}에는 " + ", ".join(items) + "같은 메뉴가 잘 어울려요."
-    return reply, []
-
-
-def _pairing_with_llm(keyword: str) -> list[str]:
-    if not ENABLE_LLM_PAIRING or not app_settings.OPENAI_API_KEY or OpenAI is None:
-        return []
-    try:
-        client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
-        response = client_ai.chat.completions.create(
-            model=app_settings.OPENAI_MODEL,
-            temperature=0.2,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": RECIPE_PAIRING_PROMPT},
-                {"role": "user", "content": json.dumps({"main_dish": keyword}, ensure_ascii=False)},
-            ],
-        )
-        content = response.choices[0].message.content if response.choices else ""
-        data = json.loads(content or "{}")
-        raw_items = data.get("items") or []
-        if not isinstance(raw_items, list):
-            return []
-        items = [str(item).strip() for item in raw_items if str(item).strip()]
-        return items[:4]
-    except Exception:
-        return []
+    return ToolResult(
+        ok=True,
+        data={"keyword": keyword, "query_text": query_text or keyword, "results": results, "sources": sources},
+        source="tavily",
+    )
 
 
 # =============================================================================
@@ -241,7 +166,6 @@ def search_ingredient_relax_tool(db: Any, ingredient: str) -> ToolResult:
 # =============================================================================
 # 모든 recipe tool 공용 지역 함수
 # - _payload: ToolResult를 모델이 읽는 RecipeToolPayload JSON으로 변환
-# - _numbered_list: 추천 레시피 제목을 번호 목록으로 변환
 # =============================================================================
 def _payload(
     *,
@@ -262,17 +186,13 @@ def _payload(
     ).model_dump_json()
 
 
-def _numbered_list(items: list[dict[str, Any]]) -> str:
-    return "\n".join(f"{index + 1}. {item.get('title') or ''}" for index, item in enumerate(items))
-
-
 def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     """실행 의존성을 감춘 LangChain recipe tools를 생성한다."""
 
     # =========================================================================
     # Tool: search_recipes
     # 지역 함수: search_recipe_tool, _rank_recipe_items, _recipe_actions
-    # 공용 함수: _payload, _numbered_list
+    # 공용 함수: _payload
     # =========================================================================
     @tool("search_recipes", args_schema=SearchRecipesInput)
     def search_recipes(keyword: str) -> str:
@@ -295,16 +215,15 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
         return _payload(
             tool_name="search_recipes",
             status="success",
-            message=f"{keyword} 관련 레시피예요.\n{_numbered_list(items)}",
+            message="내부 DB에서 레시피를 찾았어요.",
             actions=_recipe_actions(items),
-            data={"keyword": keyword, "total": len(items)},
+            data={"keyword": keyword, "items": items, "total": len(items)},
         )
 
     # =========================================================================
     # Tool: recommend_by_ingredient
-    # 지역 함수: search_ingredient_relax_tool, _exclude_previous_items,
-    #            _apply_josa, _recipe_actions
-    # 공용 함수: _payload, _numbered_list
+    # 지역 함수: search_ingredient_relax_tool, _exclude_previous_items, _recipe_actions
+    # 공용 함수: _payload
     # =========================================================================
     @tool("recommend_by_ingredient", args_schema=RecommendByIngredientInput)
     def recommend_by_ingredient(ingredient: str) -> str:
@@ -333,11 +252,6 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                 data={"ingredient": ingredient},
             )
         constraints = data.get("constraints") or {}
-        prefix = (
-            f"{_apply_josa(ingredient, '이가')} 주재료인 30분 이내 초급 레시피예요.\n"
-            if constraints == CONSTRAINT_EASY_30
-            else f"{_apply_josa(ingredient, '이가')} 주재료인 레시피예요.\n"
-        )
         actions = _recipe_actions(items)
         actions.append(
             {
@@ -349,16 +263,16 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
         return _payload(
             tool_name="recommend_by_ingredient",
             status="success",
-            message=prefix + _numbered_list(items),
+            message="재료 기반 레시피를 찾았어요.",
             actions=actions,
-            data={"ingredient": ingredient, "total": len(items), "constraints": constraints},
+            data={"ingredient": ingredient, "items": items, "total": len(items), "constraints": constraints},
         )
 
     # =========================================================================
     # Tool: recommend_from_fridge
     # 지역 함수: _build_recommend_config, recommend_recipe_tool,
     #            is_inventory_empty, _sort_fridge_candidates, _recipe_actions
-    # 공용 함수: _payload, _numbered_list
+    # 공용 함수: _payload
     # =========================================================================
     @tool("recommend_from_fridge")
     def recommend_from_fridge() -> str:
@@ -390,7 +304,7 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
         perfect = [item for item in ranked if item.get("missing_ingredient_count", 0) == 0]
         if perfect:
             items = perfect[:MAX_DISPLAY_RECIPES]
-            prefix = "현재 냉장고 재료만으로 완벽하게 만들 수 있는 레시피예요.\n"
+            match_type = "perfect"
         else:
             items = ranked[:MAX_DISPLAY_RECIPES]
             if not items or items[0].get("owned_ingredient_count", 0) == 0:
@@ -399,52 +313,38 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                     status="empty",
                     message="현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.",
                 )
-            prefix = "부족한 재료가 약간 있지만, 냉장고 재료를 최대한 활용할 수 있는 레시피예요.\n"
+            match_type = "partial"
         return _payload(
             tool_name="recommend_from_fridge",
             status="success",
-            message=prefix + _numbered_list(items),
+            message="냉장고 재료 기반 레시피를 찾았어요.",
             actions=_recipe_actions(items),
-            data={"total": len(items)},
+            data={"items": items, "total": len(items), "match_type": match_type},
         )
 
     # =========================================================================
     # Tool: search_external
-    # 지역 함수: reply_external_recipe
+    # 지역 함수: search_external_recipe
     # 공용 함수: _payload
     # =========================================================================
     @tool("search_external", args_schema=SearchExternalInput)
     def search_external(keyword: str, query_text: str) -> str:
         """조리 시간·온도를 찾거나 내부 DB 결과가 없을 때 웹에서 레시피를 검색합니다."""
-        try:
-            summary, sources = reply_external_recipe(keyword, query_text=query_text)
-        except Exception as exc:
-            return _payload(tool_name="search_external", status="error", message=str(exc))
+        result = search_external_recipe(keyword, query_text=query_text)
+        if not result.ok:
+            return _payload(
+                tool_name="search_external",
+                status="error",
+                message=result.error or "웹 검색에 실패했어요.",
+            )
+        data = result.data or {}
+        results = data.get("results") or []
         return _payload(
             tool_name="search_external",
-            status="success" if summary.strip() else "empty",
-            message=summary or f"{keyword} 관련 레시피를 웹에서 찾지 못했어요.",
-            sources=sources,
-            data={"keyword": keyword},
-        )
-
-    # =========================================================================
-    # Tool: suggest_pairing
-    # 지역 함수: handle_recipe_pairing, _pairing_with_llm
-    # 공용 함수: _payload
-    # =========================================================================
-    @tool("suggest_pairing", args_schema=SuggestPairingInput)
-    def suggest_pairing(text: str) -> str:
-        """주요리와 함께 먹기 좋은 곁들임 메뉴를 추천합니다."""
-        try:
-            message, actions = handle_recipe_pairing(text)
-        except Exception as exc:
-            return _payload(tool_name="suggest_pairing", status="error", message=str(exc))
-        return _payload(
-            tool_name="suggest_pairing",
-            status="success" if message.strip() else "empty",
-            message=message or "어울리는 곁들임을 찾지 못했어요.",
-            actions=actions,
+            status="success" if results else "empty",
+            message="웹 검색 결과를 찾았어요." if results else f"{keyword} 관련 레시피를 웹에서 찾지 못했어요.",
+            sources=data.get("sources") or [],
+            data=data,
         )
 
     # =========================================================================
@@ -455,5 +355,4 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
         recommend_by_ingredient,
         recommend_from_fridge,
         search_external,
-        suggest_pairing,
     ]

@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from .recipe_graph import build_recipe_agent, parse_recipe_agent_result
 from .recipe_state import RecipeAgentReply, RecipeToolContext
-from .recipe_utils import LOGIN_REQUIRED_REPLY, _requires_login, extract_shown_recipe_ids
+from .recipe_utils import extract_shown_recipe_ids
 
 __all__ = ["run_recipe_agent", "to_supervisor_state"]
 
@@ -56,9 +56,6 @@ def run_recipe_agent(
     """Supervisor 계약을 LangChain recipe agent 호출로 연결한다."""
     history = history or []
     route_intent = intent or "recipe"
-    if not user_id and _requires_login(route_intent, text):
-        return to_supervisor_state(RecipeAgentReply(message=LOGIN_REQUIRED_REPLY))
-
     context = RecipeToolContext(
         db=db,
         user_id=user_id,
@@ -72,7 +69,7 @@ def run_recipe_agent(
     )
     messages = [*_history_messages(history), HumanMessage(content=text)]
     state = agent.invoke(
-        {"messages": messages, "intent": route_intent},
+        {"messages": messages},
         config={"recursion_limit": 8},
     )
     return to_supervisor_state(parse_recipe_agent_result(state))
