@@ -1,7 +1,16 @@
 import json
 import logging
 import re
+from datetime import datetime, timedelta, timezone
+from threading import Lock
 from typing import Any
+from uuid import uuid4
+
+from pydantic import ValidationError
+from jose import JWTError, jwt
+
+from app.backend.core.config import settings
+from app.backend.schemas.chat import AgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -11,9 +20,22 @@ GENERAL_REPLY = "음식과 관련된 대화만 지원하고 있어요! 요리 �
 
 # 확인/취소 액션 키워드
 CONFIRM_PREFIX = "확인:"
+SIGNED_CONFIRM_PREFIX = "확인토큰:"
 CANCEL_WORDS = ("취소", "아니", "아니요", "아니다", "아니야", "취소할게", "안넣어", "넣지마", "추가하지마")
 
+# 확인 토큰은 짧게 유지하고 한 프로세스 안에서 재사용을 차단합니다.
+_CONFIRM_TOKEN_TTL_MINUTES = 10
+_consumed_confirm_tokens: dict[str, float] = {}
+_confirm_token_lock = Lock()
+
 # 규칙 기반 라우터는 의도가 명확한 표현만 처리하고, 애매한 표현은 LLM에 맡깁니다.
+_CONTEXT_TOKEN_TTL_MINUTES = 120
+_TRUSTED_CONTEXT_SLOT_KEYS = {
+    "inventory_pending", "inventory_last_action", "ingredient", "keyword",
+    "guide_type", "shopping_product", "date", "quantity", "storage", "use_inventory",
+}
+
+
 _CONTEXT_SLOT_KEYS = {
     "ingredient.guide": {"ingredient", "keyword", "guide_type"},
     "recipe.recommend": {"ingredient", "keyword", "use_inventory"},
@@ -517,9 +539,129 @@ def _extract_pending_action(final_state: dict[str, Any], actions: list[dict[str,
         return {"action": str(pending)}
     for action in actions:
         command = (action.get("data") or {}).get("message")
-        if isinstance(command, str) and command.startswith("확인:"):
+        if isinstance(command, str) and command.startswith((CONFIRM_PREFIX, SIGNED_CONFIRM_PREFIX)):
             return {"command": command}
     return None
+
+
+def _issue_confirm_token(command: str, user_id: int | None) -> str:
+    """서버 내부 쓰기 명령을 사용자 귀속 일회용 JWT로 서명합니다."""
+    if not user_id or not command.startswith(CONFIRM_PREFIX):
+        return command
+    now = datetime.now(timezone.utc)
+    token = jwt.encode(
+        {
+            "type": "chat_confirm",
+            "sub": str(user_id),
+            "command": command,
+            "jti": uuid4().hex,
+            "iat": now,
+            "exp": now + timedelta(minutes=_CONFIRM_TOKEN_TTL_MINUTES),
+        },
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+    return f"{SIGNED_CONFIRM_PREFIX}{token}"
+
+
+def _verify_and_claim_confirm_token(text: str, user_id: int | None) -> str | None:
+    """확인 JWT의 서명·사용자·만료·재사용 여부를 검증하고 내부 명령을 반환합니다."""
+    if not user_id or not text.startswith(SIGNED_CONFIRM_PREFIX):
+        return None
+    try:
+        payload = jwt.decode(
+            text[len(SIGNED_CONFIRM_PREFIX):],
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+    except JWTError:
+        return None
+
+    command = payload.get("command")
+    jti = payload.get("jti")
+    expires_at = payload.get("exp")
+    if (
+        payload.get("type") != "chat_confirm"
+        or payload.get("sub") != str(user_id)
+        or not isinstance(command, str)
+        or not command.startswith(CONFIRM_PREFIX)
+        or not isinstance(jti, str)
+        or not isinstance(expires_at, (int, float))
+    ):
+        return None
+
+    now = datetime.now(timezone.utc).timestamp()
+    with _confirm_token_lock:
+        expired = [token_id for token_id, expiry in _consumed_confirm_tokens.items() if expiry <= now]
+        for token_id in expired:
+            _consumed_confirm_tokens.pop(token_id, None)
+        if jti in _consumed_confirm_tokens:
+            return None
+        _consumed_confirm_tokens[jti] = float(expires_at)
+    return command
+
+
+def _secure_confirm_actions(actions: list[dict[str, Any]], user_id: int | None) -> list[dict[str, Any]]:
+    """응답 액션의 평문 확인 명령을 서명된 확인 토큰으로 교체합니다."""
+    secured = []
+    for action in actions:
+        copied = {**action, "data": dict(action.get("data") or {})}
+        command = copied["data"].get("message")
+        if isinstance(command, str) and command.startswith(CONFIRM_PREFIX):
+            copied["data"]["message"] = _issue_confirm_token(command, user_id)
+        secured.append(copied)
+    return secured
+
+
+def _issue_context_token(response: dict[str, Any], user_id: int | None, session_id: str | None) -> str | None:
+    """다음 요청에 사용할 최소 대화 문맥을 세션 귀속 JWT로 서명합니다."""
+    if not session_id:
+        return None
+    slots = {
+        key: value
+        for key, value in (response.get("slots") or {}).items()
+        if key in _TRUSTED_CONTEXT_SLOT_KEYS
+    }
+    safe_slots = json.loads(json.dumps(slots, ensure_ascii=False, default=str))
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "type": "chat_context",
+            "sub": str(user_id or "guest"),
+            "session_id": session_id,
+            "intent": response.get("intent") or "general",
+            "slots": safe_slots,
+            "iat": now,
+            "exp": now + timedelta(minutes=_CONTEXT_TOKEN_TTL_MINUTES),
+        },
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
+def _verify_context_token(token: str | None, user_id: int | None, session_id: str | None) -> dict[str, Any]:
+    """서명된 대화 문맥이 현재 사용자와 채팅 세션에 속하는지 검증합니다."""
+    if not token or not session_id:
+        return {}
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+    except JWTError:
+        return {}
+    if (
+        payload.get("type") != "chat_context"
+        or payload.get("sub") != str(user_id or "guest")
+        or payload.get("session_id") != session_id
+    ):
+        return {}
+    return {
+        "intent": payload.get("intent") or "general",
+        "slots": payload.get("slots") if isinstance(payload.get("slots"), dict) else {},
+    }
+
 
 
 def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str, Any]:
@@ -668,6 +810,7 @@ def _build_chat_state(
     history: list[Any] | None,
     user_settings: Any,
     service: Any,
+    trusted_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """LangGraph 실행에 필요한 초기 Supervisor 상태를 구성합니다."""
     return {
@@ -676,6 +819,8 @@ def _build_chat_state(
         "history": history or [],
         "settings_obj": user_settings,
         "db": db,
+        "context_enforced": True,
+        "trusted_context": trusted_context or {},
         "service": service,
         "intent": None,
         "intent_payload": {},
@@ -689,10 +834,10 @@ def _build_chat_state(
     }
 
 
-def _chat_response_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
+def _chat_response_from_state(final_state: dict[str, Any], session_id: str | None = None) -> dict[str, Any]:
     """LangGraph 최종 상태를 채팅 API 응답 형식으로 변환합니다."""
-    actions = final_state.get("actions") or []
-    return {
+    actions = _secure_confirm_actions(final_state.get("actions") or [], final_state.get("user_id"))
+    response = {
         "intent": final_state.get("intent", "general"),
         "reply": final_state.get("response_text", ""),
         "actions": actions,
@@ -701,6 +846,8 @@ def _chat_response_from_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "pending_action": _extract_pending_action(final_state, actions),
     }
 
+    response["context_token"] = _issue_context_token(response, final_state.get("user_id"), session_id)
+    return response
 
 def _chat_error_response() -> dict[str, Any]:
     """Supervisor 실행 실패 시 사용할 공통 채팅 응답을 반환합니다."""
@@ -846,6 +993,11 @@ def _normalize_agent_result(
     if not isinstance(agent_result, dict):
         return {"response_text": error_reply, "actions": [], "sources": [], "slots": inherited_slots or {}}
 
+    try:
+        agent_result = AgentResult.model_validate(agent_result).model_dump(exclude_none=True)
+    except ValidationError:
+        logger.exception("Agent 공통 응답 스키마 검증에 실패했습니다.")
+        return {"response_text": error_reply, "actions": [], "sources": [], "slots": inherited_slots or {}}
     ui = agent_result.get("ui") if isinstance(agent_result.get("ui"), dict) else {}
     status = agent_result.get("status")
     failed = agent_result.get("ok") is False or status == "error" or bool(agent_result.get("error"))

@@ -22,6 +22,7 @@ from ai.agents.recipe_agent import run_recipe_agent
 from ai.agents.supervisor_agent.supervisor_utils import (
     CANCEL_WORDS,
     CONFIRM_PREFIX,
+    SIGNED_CONFIRM_PREFIX,
     GENERAL_REPLY,
     LOGIN_REQUIRED_REPLY,
     _ALARM_CONFIRM_ACTIONS,
@@ -60,26 +61,130 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _rewrite_context_switch,
     _rewrite_guide_query,
     _strip_shopping_compare_suffix,
+    _verify_and_claim_confirm_token,
     _route_result,
 )
 from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS, analyze_shopping_intent
+def _route_write_request(
+    text: str,
+    previous_intent: str | None,
+    previous_slots: dict,
+    is_receipt_query: bool,
+) -> dict | None:
+    """데이터를 변경할 수 있는 요청만 LLM보다 먼저 규칙으로 분류합니다."""
+    normalized = _normalize_text(text)
+
+    if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
+        return _route_result("shopping.delete_item", slots=previous_slots)
+
+    has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
+    if previous_intent and has_write_word and _is_context_follow_up(text):
+        if previous_intent.startswith("shopping."):
+            return _route_result(analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
+        if previous_intent.startswith("alarm."):
+            return _route_result(previous_intent, slots=previous_slots)
+
+    if _is_alarm_write_query(text):
+        intent = "alarm.notification" if _is_alarm_notification_query(text) else "alarm.calendar"
+        return _route_result(intent)
+
+    shopping_intent = analyze_shopping_intent(text)
+    if shopping_intent in _SHOPPING_WRITE_INTENTS:
+        return _route_result(shopping_intent)
+    if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
+        return _route_result("inventory.delete")
+    if not is_receipt_query and not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
+        return _route_result("inventory.action")
+    if not is_receipt_query and not _is_guide_query(text) and any(word in normalized for word in ADD_WORDS):
+        return _route_result("inventory.action")
+    return None
+
+
+def _route_read_fallback(
+    text: str,
+    history: list,
+    previous_intent: str | None,
+    previous_slots: dict,
+    is_receipt_query: bool,
+) -> dict:
+    """LLM을 사용할 수 없거나 신뢰도가 낮을 때 읽기 요청을 최소 규칙으로 보완합니다."""
+    normalized = _normalize_text(text)
+    shopping_intent = analyze_shopping_intent(text)
+
+    if is_receipt_query:
+        return _route_result("receipt.guide")
+    if (
+        previous_intent == "shopping.compare"
+        and previous_slots.get("shopping_product")
+        and not _strip_shopping_compare_suffix(text)
+    ):
+        return _route_result("shopping.compare", slots=previous_slots)
+    if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
+        return _route_result("shopping.current", slots=previous_slots)
+    if _is_alarm_notification_query(text):
+        return _route_result("alarm.notification")
+    if _is_alarm_calendar_query(text):
+        return _route_result("alarm.calendar")
+    if _is_shopping_price_explanation(text):
+        return _route_result("shopping.price_help")
+    read_tasks = _build_read_tasks(text)
+    if len(read_tasks) >= 2:
+        return _route_result("multi_agent", tasks=read_tasks)
+    if _is_shopping_price_query(text):
+        return _route_result("shopping.compare")
+    if _is_guide_query(text):
+        return _route_result("ingredient.guide")
+    if "장본" in normalized:
+        return _route_result("shopping.current")
+    if shopping_intent:
+        return _route_result(shopping_intent)
+    if _is_recipe_pairing_query(text):
+        return _route_result("recipe.pairing")
+    if _is_expiring_question(text):
+        return _route_result("inventory.expiring")
+    if _is_cooking_time_question(text):
+        return _route_result("recipe.search")
+    if previous_intent and _is_context_follow_up(text):
+        return _route_result(previous_intent, slots=previous_slots)
+    if _is_recipe_recommend_query(text):
+        return _route_result("recipe.recommend")
+    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
+        return _route_result("inventory.list")
+    if _is_recipe_search_query(text):
+        return _route_result("recipe.search")
+    return _route_result("general")
+
+
+
 
 
 def router_node(state: GraphState) -> dict:
     """사용자 메시지를 분석하여 LangGraph 분기용 intent를 반환합니다."""
     original_text = state["text"]
     history = state.get("history", [])
-    previous_intent = _latest_bot_intent(history)
-    previous_slots = _latest_bot_slots(history)
-    inventory_pending = previous_slots.get("inventory_pending")
-    inventory_last_action = previous_slots.get("inventory_last_action")
+    trusted_context = state.get("trusted_context") or {}
+    context_enforced = bool(state.get("context_enforced"))
+    trusted_intent = trusted_context.get("intent")
+    trusted_slots = trusted_context.get("slots") or {}
+    previous_intent = trusted_intent or _latest_bot_intent(history)
+    previous_slots = trusted_slots or _latest_bot_slots(history)
+    write_previous_intent = trusted_intent if context_enforced else previous_intent
+    write_previous_slots = trusted_slots if context_enforced else previous_slots
+    inventory_pending = write_previous_slots.get("inventory_pending")
+    inventory_last_action = write_previous_slots.get("inventory_last_action")
+    legacy_pending_allowed = not context_enforced
     has_pending = bool(
         inventory_pending
-        or _pending_add_many_from_history(history)
-        or _pending_add_storage_from_history(history)
-        or _pending_add_from_history(history)
-        or _pending_consume_from_history(history)
-        or _latest_bot_pending_action(history)
+        or (
+            legacy_pending_allowed
+            and (
+                _pending_add_many_from_history(history)
+                or _pending_add_storage_from_history(history)
+                or _pending_add_from_history(history)
+                or _pending_consume_from_history(history)
+                or _latest_bot_pending_action(history)
+            )
+        )
     )
     text = _rewrite_context_switch(original_text, has_pending)
 
@@ -98,10 +203,17 @@ def router_node(state: GraphState) -> dict:
     normalized = _normalize_text(text)
     is_receipt_query = _is_receipt_query(text)
 
+    if text.startswith(SIGNED_CONFIRM_PREFIX):
+        command = _verify_and_claim_confirm_token(text, state.get("user_id"))
+        if not command:
+            return _route_result("action.invalid")
+        result = _route_result("action.confirm")
+        result["text"] = command
+        return result
     if normalized.startswith(CONFIRM_PREFIX):
-        return _route_result("action.confirm")
+        return _route_result("action.invalid")
     if normalized in CANCEL_WORDS:
-        return _route_result("action.cancel", slots=previous_slots)
+        return _route_result("action.cancel", slots=write_previous_slots)
 
     # 새 응답은 구조화된 pending 슬롯을 우선 사용하고, 기존 문장 분석은 하위 호환으로 남깁니다.
     if isinstance(inventory_pending, dict):
@@ -137,46 +249,21 @@ def router_node(state: GraphState) -> dict:
             intent = "inventory.pending_delete" if last_type == "delete_confirm" else "inventory.pending_consume"
             return _route_result(intent, slots=resumed_slots)
 
-    if _pending_add_many_from_history(history):
+    if legacy_pending_allowed and _pending_add_many_from_history(history):
         if len(_extract_add_items(text)) > 1:
             return _route_result("inventory.pending_add_many", slots=previous_slots)
         if _is_quantity_only_list(text):
             return _route_result("inventory.pending_add_many_retry", slots=previous_slots)
-    if _pending_add_storage_from_history(history) and _extract_storage(text):
+    if legacy_pending_allowed and _pending_add_storage_from_history(history) and _extract_storage(text):
         return _route_result("inventory.pending_add_storage", slots=previous_slots)
-    if _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
+    if legacy_pending_allowed and _pending_add_from_history(history) and (_extract_quantity(text) or _extract_storage(text)):
         return _route_result("inventory.pending_add", slots=previous_slots)
-    if _pending_consume_from_history(history) and _extract_quantity(text):
+    if legacy_pending_allowed and _pending_consume_from_history(history) and _extract_quantity(text):
         return _route_result("inventory.pending_consume", slots=previous_slots)
 
-    # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
-    if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
-        return _route_result("shopping.delete_item", slots=previous_slots)
-
-    has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
-    if previous_intent and has_write_word and _is_context_follow_up(text):
-        previous_slots = _latest_bot_slots(history)
-        if previous_intent.startswith("shopping."):
-            return _route_result(analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
-        if previous_intent.startswith("alarm."):
-            return _route_result(previous_intent, slots=previous_slots)
-
-    # 알림·일정과 장보기의 데이터 변경 요청은 LLM보다 먼저 고정합니다.
-    if _is_alarm_write_query(text):
-        intent = "alarm.notification" if _is_alarm_notification_query(text) else "alarm.calendar"
-        return _route_result(intent)
-
-    shopping_intent = analyze_shopping_intent(text)
-    if shopping_intent in _SHOPPING_WRITE_INTENTS:
-        return _route_result(shopping_intent)
-
-    # 냉장고 쓰기 작업은 LLM 의도 분류보다 먼저 고정해 할루시네이션을 막습니다.
-    if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
-        return _route_result("inventory.delete")
-    if not is_receipt_query and not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
-        return _route_result("inventory.action")
-    if not is_receipt_query and not _is_guide_query(text) and any(word in normalized for word in ADD_WORDS):
-        return _route_result("inventory.action")
+    write_route = _route_write_request(text, write_previous_intent, write_previous_slots, is_receipt_query)
+    if write_route:
+        return write_route
 
     # 읽기 요청은 LLM JSON 분류를 먼저 채택합니다.
     service = state.get("service")
@@ -207,49 +294,7 @@ def router_node(state: GraphState) -> dict:
                 route_payload.get("tasks", []),
             )
 
-    # LLM을 사용할 수 없거나 신뢰도가 낮을 때만 기존 읽기 규칙으로 보완합니다.
-    if is_receipt_query:
-        return _route_result("receipt.guide")
-    if (
-        previous_intent == "shopping.compare"
-        and previous_slots.get("shopping_product")
-        and not _strip_shopping_compare_suffix(text)
-    ):
-        return _route_result("shopping.compare", slots=previous_slots)
-    if previous_intent == "shopping.current" and _is_shopping_show_all_request(text):
-        return _route_result("shopping.current", slots=previous_slots)
-    if _is_alarm_notification_query(text):
-        return _route_result("alarm.notification")
-    if _is_alarm_calendar_query(text):
-        return _route_result("alarm.calendar")
-    if _is_shopping_price_explanation(text):
-        return _route_result("shopping.price_help")
-    read_tasks = _build_read_tasks(text)
-    if len(read_tasks) >= 2:
-        return _route_result("multi_agent", tasks=read_tasks)
-    if _is_shopping_price_query(text):
-        return _route_result("shopping.compare")
-    if _is_guide_query(text):
-        return _route_result("ingredient.guide")
-    if "장본" in normalized:
-        return _route_result("shopping.current")
-    if shopping_intent:
-        return _route_result(shopping_intent)
-    if _is_recipe_pairing_query(text):
-        return _route_result("recipe.pairing")
-    if _is_expiring_question(text):
-        return _route_result("inventory.expiring")
-    if _is_cooking_time_question(text):
-        return _route_result("recipe.search")
-    if previous_intent and _is_context_follow_up(text):
-        return _route_result(previous_intent, slots=_latest_bot_slots(history))
-    if _is_recipe_recommend_query(text):
-        return _route_result("recipe.recommend")
-    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
-        return _route_result("inventory.list")
-    if _is_recipe_search_query(text):
-        return _route_result("recipe.search")
-    return _route_result("general")
+    return _route_read_fallback(text, history, previous_intent, previous_slots, is_receipt_query)
 
 def inventory_agent_node(state: GraphState) -> dict:
     """재고 관리를 Inventory Agent로 위임합니다."""
@@ -387,7 +432,12 @@ def fallback_agent_node(state: GraphState) -> dict:
 
 def general_node(state: GraphState) -> dict:
     """지원 범위 밖 질문에는 고정 안내문만 반환합니다."""
-    return _normalize_agent_result({"response_text": GENERAL_REPLY}, inherited_slots=state.get("slots"))
+    reply = (
+        "확인 요청이 만료되었거나 이미 처리됐어요. 작업을 다시 요청해주세요."
+        if state.get("intent") == "action.invalid"
+        else GENERAL_REPLY
+    )
+    return _normalize_agent_result({"response_text": reply}, inherited_slots=state.get("slots"))
 
 def multi_agent_node(state: GraphState) -> dict:
     """작업 목록을 순차 실행하고 일부 Agent 실패가 전체 응답을 막지 않게 합니다."""
@@ -400,6 +450,7 @@ def multi_agent_node(state: GraphState) -> dict:
     }
     results = []
     completed_intents = []
+    task_results = {}
     failed_intents = []
 
     for task in state.get("tasks") or []:
@@ -410,9 +461,15 @@ def multi_agent_node(state: GraphState) -> dict:
             "text": task.get("text") or state["text"],
             "tasks": [],
         }
-        # 임박 재료 조회 뒤 레시피 추천은 같은 냉장고 기준으로 이어서 처리합니다.
+        # 임박 재료 조회 결과를 다음 레시피 추천 작업의 입력으로 전달합니다.
         if intent == "recipe.recommend" and "inventory.expiring" in completed_intents:
-            task_state["text"] = "냉장고 재료로 요리 추천해줘"
+            expiring_slots = (task_results.get("inventory.expiring") or {}).get("slots") or {}
+            expiring_names = expiring_slots.get("expiring_ingredients") or []
+            task_state["slots"] = {**(task_state.get("slots") or {}), "expiring_ingredients": expiring_names}
+            task_state["text"] = (
+                f"{', '.join(expiring_names)}를 우선 활용하는 레시피를 추천해줘"
+                if expiring_names else "냉장고 재료로 요리 추천해줘"
+            )
         handler = handlers.get(route_intent(task_state))
         if not handler:
             failed_intents.append(intent)
@@ -424,6 +481,7 @@ def multi_agent_node(state: GraphState) -> dict:
             else:
                 results.append(task_result)
                 completed_intents.append(intent)
+                task_results[intent] = task_result
         except Exception as exc:
             print(f"[Supervisor] {intent} task failed: {type(exc).__name__}: {exc}")
             failed_intents.append(intent)
@@ -452,6 +510,8 @@ def route_intent(state: GraphState) -> str:
     if intent.startswith("shopping."):
         return "shopping_agent_node"
     if intent.startswith("inventory.") or intent.startswith("action."):
+        if intent == "action.invalid":
+            return "general_node"
         if intent == "action.confirm":
             parts = state["text"].split(":")
             action = parts[1] if len(parts) >= 2 else ""

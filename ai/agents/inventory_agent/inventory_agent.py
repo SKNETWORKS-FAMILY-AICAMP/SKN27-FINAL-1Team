@@ -112,29 +112,43 @@ def get_inventory_list(db: Session, user_id: int) -> str:
     return f"현재 냉장고에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{_apply_josa(names[-1], '이가')} 있어요."
 
 
-def get_expiring_inventory(db: Session, user_id: int, text: str = "") -> str:
-    """소비기한이 가까운 재료 또는 특정 재료의 D-day를 안내합니다."""
+def _get_expiring_inventory_result(db: Session, user_id: int, text: str = "") -> dict:
+    """임박 재료 안내문과 다음 Agent에 전달할 재료명 목록을 함께 반환합니다."""
     items = inventory_service.get_ingredients(db=db, user_id=user_id)
     if not items:
-        return EMPTY_INVENTORY_REPLY
+        return {"response_text": EMPTY_INVENTORY_REPLY, "slots": {"expiring_ingredients": []}}
 
     keyword = _extract_expiry_keyword(text)
     if keyword:
         matched = [item for item in items if keyword in item.get("name", "")]
         if not matched:
-            return f"냉장고에 등록된 {keyword} 재료를 찾지 못했어요."
+            return {
+                "response_text": f"냉장고에 등록된 {keyword} 재료를 찾지 못했어요.",
+                "slots": {"expiring_ingredients": []},
+            }
         summary = [f"{item['name']} {_format_d_day(item['d_day'])}" for item in matched if item.get("d_day") is not None]
-        return f"{keyword} 소비기한은 " + ", ".join(summary) + "예요."
+        return {
+            "response_text": f"{keyword} 소비기한은 " + ", ".join(summary) + "예요.",
+            "slots": {"expiring_ingredients": [item["name"] for item in matched[:5]]},
+        }
 
     expiring = sorted(
         [item for item in items if item.get("d_day") is not None and item["d_day"] <= 3],
         key=lambda item: item["d_day"],
     )
     if not expiring:
-        return "D-3 이내로 임박한 재료는 없어요."
+        return {"response_text": "D-3 이내로 임박한 재료는 없어요.", "slots": {"expiring_ingredients": []}}
 
     summary = [f"{item['name']} {_format_d_day(item['d_day'])}" for item in expiring[:5]]
-    return "소비기한 확인이 필요한 재료예요.\n" + ", ".join(summary)
+    return {
+        "response_text": "소비기한 확인이 필요한 재료예요.\n" + ", ".join(summary),
+        "slots": {"expiring_ingredients": [item["name"] for item in expiring[:5]]},
+    }
+
+
+def get_expiring_inventory(db: Session, user_id: int, text: str = "") -> str:
+    """기존 호출부를 위해 소비기한 안내문만 반환합니다."""
+    return _get_expiring_inventory_result(db, user_id, text)["response_text"]
 
 
 def resolve_ingredient_name(db: Session, name: str) -> str | None:
@@ -259,7 +273,7 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         return {"response_text": get_inventory_list(db, user_id)}
     
     if intent == "inventory.expiring":
-        return {"response_text": get_expiring_inventory(db, user_id, text)}
+        return _get_expiring_inventory_result(db, user_id, text)
 
     if intent == "inventory.cancel" or intent == "action.cancel":
         last_action = None

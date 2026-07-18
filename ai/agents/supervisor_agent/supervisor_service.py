@@ -38,6 +38,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _is_llm_route_payload_valid,
     _parse_llm_route_payload,
     _route_payload,
+    _verify_context_token,
 )
 
 
@@ -52,6 +53,7 @@ class ChatService:
         history: list[Any] | None = None,
         user_settings: Any = None,
         session_id: str | None = None,
+        context_token: str | None = None,
     ) -> dict[str, Any]:
         """LangGraph를 활용하여 메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
@@ -60,6 +62,7 @@ class ChatService:
 
         from ai.agents.supervisor_agent.supervisor_agent import supervisor_agent
 
+        trusted_context = _verify_context_token(context_token, user_id, session_id)
         initial_state = _build_chat_state(
             db=db,
             user_id=user_id,
@@ -67,6 +70,7 @@ class ChatService:
             history=history,
             user_settings=user_settings,
             service=self,
+            trusted_context=trusted_context,
         )
 
         invoke_config = {
@@ -145,7 +149,7 @@ class ChatService:
                             raise
             else:
                 final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
-            response = _chat_response_from_state(final_state)
+            response = _chat_response_from_state(final_state, session_id=session_id)
         except Exception as exc:
             print(f"[ChatService] graph failed: {type(exc).__name__}: {exc}")
             response = _chat_error_response()
