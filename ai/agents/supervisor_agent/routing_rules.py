@@ -40,6 +40,20 @@ def _is_receipt_query(text: str) -> bool:
     return any(word in normalized for word in ("영수증", "ocr", "구매내역"))
 
 
+def _is_receipt_lookup_query(text: str) -> bool:
+    """최근 영수증 내역, 금액, 품목 조회 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    if not any(word in normalized for word in ("영수증", "구매내역")):
+        return False
+
+    lookup_words = (
+        "최근", "내역", "목록", "리스트", "조회", "확인", "보여", "알려",
+        "등록한", "지난", "이전", "금액", "총액", "합계", "얼마",
+        "품목", "상세", "자세히", "뭐샀", "뭘샀", "구매품목",
+    )
+    return any(word in normalized for word in lookup_words)
+
+
 def _is_alarm_notification_query(text: str) -> bool:
     """캘린더 일정이 아닌 알림 관리 요청인지 확인합니다."""
     normalized = _normalize_text(text)

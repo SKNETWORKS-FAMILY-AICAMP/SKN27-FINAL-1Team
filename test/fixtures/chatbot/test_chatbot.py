@@ -115,33 +115,11 @@ def test_intent_evaluator_reports_accuracy_and_failures(monkeypatch) -> None:
     assert report["correct"] == 1
     assert report["failures"][0]["predicted"] == "general"
 
-def test_extract_recipe_ingredient() -> None:
-    """특정 재료 레시피 질문에서 재료명만 추출되는지 확인합니다."""
-    assert recipe_utils._extract_recipe_ingredient("두부로 뭐 만들수있어?") == "두부"
-    assert recipe_utils._extract_recipe_ingredient("두부로 뭘 만들지?") == "두부"
-    assert recipe_utils._extract_recipe_ingredient("이걸로 만들수 있는 메뉴 뭐야") == ""
-    assert recipe_utils._extract_recipe_ingredient("냉장고에 있는 걸로 저녁 추천") == ""
-    assert recipe_utils._extract_recipe_ingredient("파 빨리 써야 하는데 뭐하지") == "대파"
-    assert recipe_utils._extract_recipe_ingredient("먹다남은 감자튀김 어디에 쓸수있을까") == "감자튀김"
-
-
-
 def test_login_status_question() -> None:
     """로그인 상태를 묻는 문장을 별도로 인식합니다."""
     assert routing_rules._is_login_status_question("지금 로그인 되어 있어?")
     assert routing_rules._is_login_status_question("나 로그인 상태야?")
     assert not routing_rules._is_login_status_question("로그인하려면 어디로 가?")
-
-def test_guest_chat_login_boundary() -> None:
-    """비회원은 개인 냉장고 기능만 막고 일반 레시피/보관법은 허용합니다."""
-    assert recipe_utils._requires_login("inventory.list", "내 냉장고 재료 뭐 있어?")
-    assert recipe_utils._requires_login("inventory.expiring", "소비기한 임박 재료 알려줘")
-    assert recipe_utils._requires_login("recipe.recommend", "냉장고 재료로 뭐 먹을까?")
-    assert recipe_utils._requires_login("recipe.recommend", "내 식재료로 레시피 추천해줘")
-    assert recipe_utils._extract_recipe_ingredient("내 식재료로 레시피 추천해줘") == ""
-    assert not recipe_utils._requires_login("recipe.recommend", "두부로 뭐 만들 수 있어?")
-    assert not recipe_utils._requires_login("recipe.search", "깐풍기 레시피")
-    assert not recipe_utils._requires_login("ingredient.guide", "양파 보관법")
 
 def test_format_guide_tip() -> None:
     """긴 보관법 문장을 번호 목록으로 줄여 보여주는지 확인합니다."""
@@ -150,33 +128,10 @@ def test_format_guide_tip() -> None:
     assert chat_response_mapper._format_guide_tip("제품 표시 기준에 따라 보관한다.") == "제품 표시 기준에 따라 보관한다."
 
 
-def test_cooking_time_question_uses_external_recipe() -> None:
-    """조리 시간 질문은 DB 레시피 목록 대신 웹 검색 안내로 보냅니다."""
-    original_external = recipe_tools.reply_external_recipe
-    called = {"external": False, "query": ""}
-
-    def fake_external(keyword: str, query_text: str | None = None):
-        called["external"] = True
-        called["query"] = query_text or ""
-        return f"{keyword} 웹 검색", []
-
-    recipe_tools.reply_external_recipe = fake_external
-    try:
-        result = run_recipe_agent("감자튀김 에어프라이기 시간", db=None, intent="recipe.search")
-        assert called["external"]
-        assert called["query"] == "감자튀김 에어프라이기 시간"
-        assert result["response_text"] == "감자튀김 웹 검색"
-        assert result["actions"] == []
-        assert result["sources"] == []
-    finally:
-        recipe_tools.reply_external_recipe = original_external
 if __name__ == "__main__":
     test_route_intent_examples()
-    test_extract_recipe_ingredient()
     test_login_status_question()
-    test_guest_chat_login_boundary()
     test_format_guide_tip()
-    test_cooking_time_question_uses_external_recipe()
     print("chat service tests ok")
 
 

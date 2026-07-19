@@ -24,7 +24,6 @@ _CONFIRM_TOKEN_TTL_MINUTES = 10
 _consumed_confirm_tokens: dict[str, float] = {}
 _confirm_token_lock = Lock()
 
-# 규칙 기반 라우터는 의도가 명확한 표현만 처리하고, 애매한 표현은 LLM에 맡깁니다.
 _CONTEXT_TOKEN_TTL_MINUTES = 120
 _TRUSTED_CONTEXT_SLOT_KEYS = {
     "inventory_pending", "inventory_last_action", "ingredient", "keyword",
@@ -40,6 +39,7 @@ _CONTEXT_SLOT_KEYS = {
     "alarm.notification": {"date", "keyword"},
     "alarm.calendar": {"date", "keyword"},
 }
+
 # Guide Agent action을 내부 가이드 유형과 화면 표시 이름으로 매핑합니다.
 _GUIDE_ACTION_TYPES = {
     "lookup_storage": ("storage", "보관법"),
@@ -52,17 +52,16 @@ _GUIDE_TYPE_LABELS = dict(_GUIDE_ACTION_TYPES.values())
 
 # LLM 읽기 분류기가 반환할 수 있는 intent입니다.
 _LLM_ROUTE_INTENTS = (
-    "receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search",
+    "receipt.lookup", "receipt.guide", "recipe.recommend", "recipe.pairing", "recipe.search",
     "ingredient.guide", "inventory.expiring", "inventory.list",
     "shopping.current", "shopping.history", "shopping.compare", "shopping.price_help",
     "alarm.notification", "alarm.calendar",
     "food.general", "multi_agent", "general",
 )
-# LLM 라우팅 결과를 채택할 최소 신뢰도와 허용 슬롯입니다.
 _LLM_ROUTE_CONFIDENCE = 0.5
 _LLM_SLOT_KEYS = {"ingredient", "keyword", "shopping_product", "date", "quantity", "storage", "use_inventory", "guide_type"}
-# 복합 요청에서 순차 실행을 허용하는 읽기 전용 intent입니다.
 _MULTI_AGENT_TASK_INTENTS = {
+    "receipt.lookup",
     "receipt.guide",
     "recipe.recommend",
     "recipe.pairing",
@@ -75,7 +74,6 @@ _MULTI_AGENT_TASK_INTENTS = {
     "shopping.compare",
 }
 
-# LLM 읽기 분류기는 아래 허용 intent만 JSON으로 반환하도록 제한합니다.
 _LLM_ROUTE_SYSTEM_PROMPT = """
 You are the Supervisor intent router for the Bobbeori food chatbot.
 Return exactly one JSON object. Do not include markdown, code fences, or explanations.
@@ -106,6 +104,7 @@ Rules:
 - ingredient.guide: a single ingredient's overview, storage, washing, prep, freshness, nutrition, calories, seasonal food, or ingredient category lists. Do not use it to compare two ingredient or product variants.
 - inventory.expiring: expiry, use-by date, expiring ingredients.
 - inventory.list: list current fridge ingredients.
+- receipt.lookup: recent receipt history, receipt amount, receipt item, or receipt detail lookup guidance.
 - receipt.guide: receipt OCR or purchase upload guide.
 - shopping.current/history: current shopping list or purchase history lookup.
 - shopping.compare: asks for a product price, lowest price, cheaper seller, or why a product is expensive. Put an explicitly named product in slots.shopping_product; leave it null for a context-only follow-up.
@@ -124,7 +123,6 @@ Safety:
 - If uncertain, lower confidence below 0.5.
 """.format(allowed_intents="\n".join(f"- {intent}" for intent in _LLM_ROUTE_INTENTS))
 
-# 알람 확인 요청 중 Inventory Agent가 소유한 액션입니다.
 _INVENTORY_CONFIRM_ACTIONS = {
     "consume_ingredient",
     "add_ingredient",
@@ -132,7 +130,7 @@ _INVENTORY_CONFIRM_ACTIONS = {
     "add_ingredients",
     "delete_ingredient",
 }
-# Supervisor가 Alarm Agent로 전달할 수 있는 확인 명령입니다.
+
 _ALARM_CONFIRM_ACTIONS = {
     "alarm",
     "add_calendar_event",
@@ -140,13 +138,13 @@ _ALARM_CONFIRM_ACTIONS = {
     "sync_daily_events",
 }
 
-# 데이터 변경 가능성이 있는 장보기 intent만 규칙 기반으로 고정합니다.
 _SHOPPING_WRITE_INTENTS = {
     "shopping.create",
     "shopping.purchase",
     "shopping.delete_item",
     "shopping.check_item",
 }
+
 
 def _issue_confirm_token(command: str, user_id: int | None) -> str:
     """서버 내부 쓰기 명령을 사용자 귀속 일회용 JWT로 서명합니다."""
@@ -167,8 +165,9 @@ def _issue_confirm_token(command: str, user_id: int | None) -> str:
     )
     return f"{SIGNED_CONFIRM_PREFIX}{token}"
 
+
 def _verify_and_claim_confirm_token(text: str, user_id: int | None) -> str | None:
-    """확인 JWT의 서명·사용자·만료·재사용 여부를 검증하고 내부 명령을 반환합니다."""
+    """확인 JWT의 서명, 사용자, 만료, 재사용 여부를 검증하고 내부 명령을 반환합니다."""
     if not user_id or not text.startswith(SIGNED_CONFIRM_PREFIX):
         return None
     try:
@@ -203,6 +202,7 @@ def _verify_and_claim_confirm_token(text: str, user_id: int | None) -> str | Non
         _consumed_confirm_tokens[jti] = float(expires_at)
     return command
 
+
 def _secure_confirm_actions(actions: list[dict[str, Any]], user_id: int | None) -> list[dict[str, Any]]:
     """응답 액션의 평문 확인 명령을 서명된 확인 토큰으로 교체합니다."""
     secured = []
@@ -213,6 +213,7 @@ def _secure_confirm_actions(actions: list[dict[str, Any]], user_id: int | None) 
             copied["data"]["message"] = _issue_confirm_token(command, user_id)
         secured.append(copied)
     return secured
+
 
 def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str, Any]:
     """LLM이 반환한 JSON 라우팅 결과를 안전한 dict로 변환합니다."""
@@ -225,12 +226,14 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
         return {}
     if not isinstance(payload, dict):
         return {}
+
     slots = payload.get("slots") if isinstance(payload.get("slots"), dict) else {}
     slots = {key: value for key, value in slots.items() if key in _LLM_SLOT_KEYS and value is not None}
     try:
         confidence = float(payload.get("confidence", 0))
     except (TypeError, ValueError):
         confidence = 0.0
+
     tasks = []
     for task in payload.get("tasks") or []:
         if not isinstance(task, dict):
@@ -241,6 +244,7 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
         task_text = str(task.get("text", "")).strip() or fallback_text
         if task_text:
             tasks.append({"intent": intent, "text": task_text})
+
     intent = str(payload.get("intent", "")).strip()
     if intent not in _LLM_ROUTE_INTENTS:
         intent = "general"
@@ -252,6 +256,7 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
         "slots": slots,
         "tasks": tasks,
     }
+
 
 def _is_llm_route_payload_valid(payload: dict[str, Any], text: str = "") -> bool:
     """LLM 라우팅 결과에 intent별 필수 정보가 있는지 후검증합니다."""
@@ -271,6 +276,7 @@ def _is_llm_route_payload_valid(payload: dict[str, Any], text: str = "") -> bool
         return any(word in normalized for word in ("조회", "목록", "알려", "있어", "확인", "읽지않은", "등록된"))
     return True
 
+
 def _route_payload(
     intent: str,
     confidence: float = 1.0,
@@ -287,6 +293,7 @@ def _route_payload(
         "tasks": tasks or [],
     }
 
+
 def _inherit_route_context(payload: dict[str, Any], previous_intent: str | None, previous_slots: dict) -> dict[str, Any]:
     """같은 의도의 후속 질문에서 허용된 직전 슬롯만 안전하게 이어받습니다."""
     intent = payload.get("intent")
@@ -297,9 +304,11 @@ def _inherit_route_context(payload: dict[str, Any], previous_intent: str | None,
     current = {key: value for key, value in (payload.get("slots") or {}).items() if value is not None}
     return {**payload, "slots": {**inherited, **current}}
 
+
 def _rewrite_guide_query(text: str) -> str:
     """정정 표현이 포함된 가이드 질문에서 마지막 식재료 질문만 남깁니다."""
     return re.sub(r"^.+?(?:말고|대신)\s+", "", text).strip()
+
 
 def _is_shopping_show_all_request(text: str) -> bool:
     """생략된 장보기 항목을 모두 보여 달라는 후속 요청인지 확인합니다."""
@@ -307,6 +316,7 @@ def _is_shopping_show_all_request(text: str) -> bool:
     return bool(re.search(r"^외\d+개", normalized)) or any(
         word in normalized for word in ("나머지", "전부", "다말해", "다알려", "다보여", "전체")
     )
+
 
 def _normalize_shopping_create_query(text: str) -> str:
     """장보기 위치 조사만 제거해 실제 상품명이 오염되지 않도록 정리합니다."""
@@ -316,6 +326,7 @@ def _normalize_shopping_create_query(text: str) -> str:
         text,
     ).strip()
 
+
 def _normalize_shopping_delete_query(text: str) -> str:
     """장보기 삭제 후속 문장에서 실제 재료명만 남깁니다."""
     cleaned = re.sub(r"\s*(?:빼\s*줘|빼|삭제\s*해줘|삭제|지워\s*줘|지워)\s*[?!.]*$", "", text).strip()
@@ -324,6 +335,8 @@ def _normalize_shopping_delete_query(text: str) -> str:
         "",
         cleaned,
     ).strip()
+
+
 def _strip_shopping_compare_suffix(text: str) -> str:
     """가격 비교 후속 표현을 제거하고 실제 상품명만 반환합니다."""
     cleaned = re.sub(
@@ -332,6 +345,7 @@ def _strip_shopping_compare_suffix(text: str) -> str:
         text,
     )
     return re.sub(r"\s*왜\s*(?:이렇게\s*)?비싸(?:요)?\s*\??$", "", cleaned).strip()
+
 
 def _parse_alarm_request(text: str, intent: str) -> dict[str, Any]:
     """Supervisor 확인 문자열을 Alarm Agent 실행 인자로 변환합니다."""

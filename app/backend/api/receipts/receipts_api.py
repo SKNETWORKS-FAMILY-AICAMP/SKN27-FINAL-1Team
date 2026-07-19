@@ -1,10 +1,11 @@
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path as FsPath
 
 import httpx
 
-from fastapi import APIRouter, Depends, File, Path, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Form, Path, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -14,6 +15,8 @@ from app.backend.api.calendar.calendar_api import (
     _get_google_integration,
 )
 from app.backend.api.deps import get_current_user_required
+from app.backend.core.config import settings
+from app.backend.db.models import Receipt
 from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
 from app.backend.schemas.receipts import (
@@ -32,6 +35,7 @@ from app.backend.services.receipt_ocr_service import (
 
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
 KST = timezone(timedelta(hours=9))
+PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
 
 
 def _format_sse_event(payload: dict) -> str:
@@ -99,21 +103,23 @@ def delete_receipt(
 @router.post("/upload", response_model=ReceiptUploadResponse)
 async def upload_receipt(
     file: UploadFile = File(...),
+    crop_mode: str = Form("auto"),
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """영수증 이미지를 OCR 분석하고, 사용자가 확인할 품목 후보를 반환한다."""
-    return await receipt_ocr_service.analyze_upload(db=db, file=file, user_id=current_user_id)
+    return await receipt_ocr_service.analyze_upload(db=db, file=file, user_id=current_user_id, crop_mode=crop_mode)
 
 
 @router.post("/upload/stream")
 async def upload_receipt_stream(
     file: UploadFile = File(...),
+    crop_mode: str = Form("auto"),
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """Stream receipt OCR LangGraph stages and final upload result as SSE."""
-    event_stream = await receipt_ocr_service.create_upload_event_stream(db=db, file=file, user_id=current_user_id)
+    event_stream = await receipt_ocr_service.create_upload_event_stream(db=db, file=file, user_id=current_user_id, crop_mode=crop_mode)
 
     async def sse_stream():
         async for payload in event_stream:
@@ -127,6 +133,40 @@ async def upload_receipt_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/{receipt_id}/image")
+def get_receipt_image(
+    receipt_id: int = Path(..., ge=1),
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Return the final receipt image used for OCR preview."""
+    receipt = (
+        db.query(Receipt)
+        .filter(
+            Receipt.id == receipt_id,
+            Receipt.user_id == current_user_id,
+        )
+        .first()
+    )
+    if not receipt or not receipt.original_file_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image not found.")
+
+    upload_root = (PROJECT_ROOT / settings.OCR_UPLOAD_DIR).resolve()
+    image_path = (PROJECT_ROOT / receipt.original_file_path).resolve()
+    if upload_root not in image_path.parents:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid receipt image path.")
+    if not image_path.exists() or not image_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image file not found.")
+
+    media_type = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(image_path.suffix.lower(), "application/octet-stream")
+    return FileResponse(image_path, media_type=media_type)
 
 
 @router.post("/confirm", response_model=MessageResponse)
