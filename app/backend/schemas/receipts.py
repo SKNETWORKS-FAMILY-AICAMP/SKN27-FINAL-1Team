@@ -31,6 +31,8 @@ class ReceiptUploadResponse(BaseModel):
     receipt_validation_issues: List[str] = Field(default_factory=list, description="Receipt document validation issue codes")
     needs_reupload: bool = Field(default=False, description="Whether the user should upload a clearer receipt image")
     reupload_message: Optional[str] = Field(default=None, description="User-facing reupload guidance")
+    manual_crop_required: bool = Field(default=False, description="Whether the user should manually crop the same image")
+    manual_crop_message: Optional[str] = Field(default=None, description="User-facing manual crop guidance")
 
 
 class ReceiptConfirmItem(BaseModel):

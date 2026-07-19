@@ -8,20 +8,31 @@ from ai.agents.shopping_agent.shopping_handlers import (
     handle_create_confirm,
     handle_create_request,
     handle_current,
+    handle_current_follow_up,
     handle_delete_item_confirm,
     handle_delete_item_request,
     handle_history,
+    handle_owned,
     handle_purchase_confirm,
     handle_purchase_request,
+    handle_recipe_current,
 )
 from ai.agents.shopping_agent.shopping_utils import (
     build_shopping_response,
+    extract_recipe_title_for_shopping,
+    is_remaining_request,
+    latest_shopping_slots,
     to_supervisor_state,
 )
 
 
-def _success(message: str, intent: str, actions: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    return to_supervisor_state(build_shopping_response(message=message, intent=intent, actions=actions))
+def _success(
+    message: str,
+    intent: str,
+    actions: list[dict[str, Any]] | None = None,
+    slots: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return to_supervisor_state(build_shopping_response(message=message, intent=intent, actions=actions, slots=slots))
 
 
 def _failure(message: str, intent: str = "shopping.error") -> dict[str, Any]:
@@ -69,9 +80,11 @@ def run_shopping_agent(
     user_id: int | None = None,
     history: list | None = None,
     intent: str | None = None,
+    slots: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Shopping Agent 단일 진입점. Supervisor GraphState subset과 boundary 호환."""
-    del history
+    history = history or []
+    slots = slots or latest_shopping_slots(history)
     resolved_intent = intent or "shopping.current"
 
     if not user_id:
@@ -90,21 +103,37 @@ def run_shopping_agent(
 
     try:
         if resolved_intent == "shopping.current":
-            message, actions = handle_current(db, user_id)
+            recipe_title = extract_recipe_title_for_shopping(text)
+            if recipe_title:
+                message, actions, next_slots = handle_recipe_current(db, user_id, recipe_title)
+            elif is_remaining_request(text) and slots:
+                message, actions, next_slots = handle_current_follow_up(db, user_id, text, slots)
+            else:
+                message, actions, next_slots = handle_current(db, user_id)
+        elif resolved_intent == "shopping.owned":
+            message, actions = handle_owned(db, user_id, slots)
+            next_slots = slots
         elif resolved_intent == "shopping.history":
             message, actions = handle_history(db, user_id)
+            next_slots = slots
         elif resolved_intent == "shopping.compare":
             message, actions = handle_compare(text)
+            next_slots = slots
         elif resolved_intent == "shopping.create":
             message, actions = handle_create_request(text)
+            next_slots = slots
         elif resolved_intent == "shopping.purchase":
             message, actions = handle_purchase_request(db, user_id)
+            next_slots = slots
         elif resolved_intent == "shopping.delete_item":
             message, actions = handle_delete_item_request(db, user_id, text)
+            next_slots = slots
         elif resolved_intent == "shopping.check_item":
             message, actions = handle_check_item(db, user_id, text)
+            next_slots = slots
         else:
             message, actions = "장보기 요청을 이해하지 못했어요. 목록 조회, 가격 비교, 구매 완료를 요청할 수 있어요.", []
+            next_slots = slots
     except Exception:
         if db is not None:
             try:
@@ -113,7 +142,7 @@ def run_shopping_agent(
                 pass
         return _failure("장보기 요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.", resolved_intent)
 
-    return _success(message, resolved_intent, actions)
+    return _success(message, resolved_intent, actions, next_slots)
 
 
 if __name__ == "__main__":
@@ -123,7 +152,7 @@ if __name__ == "__main__":
         actions=[{"label": "장보기 목록 보기", "url": "/shopping-list"}],
     )
     supervisor = to_supervisor_state(internal)
-    assert set(supervisor) == {"response_text", "actions", "sources"}
+    assert set(supervisor) == {"response_text", "actions", "sources", "slots"}
     assert supervisor["response_text"] == "테스트"
     assert supervisor["actions"][0]["url"] == "/shopping-list"
     print("shopping_agent ok")

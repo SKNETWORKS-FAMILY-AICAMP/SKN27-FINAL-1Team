@@ -5,21 +5,162 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.backend.schemas.shopping import ShoppingIngredientInput
+from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
+from app.backend.services.recommendation_service.recipe_search_service import recipe_search_service
 from app.backend.services.shopping_service import shopping_service
 from ai.agents.shopping_agent.shopping_utils import (
+    active_shopping_items,
     confirm_action,
+    extract_requested_count,
     extract_ingredient_names,
     find_item_by_name,
     format_price,
+    is_remaining_request,
     shopping_list_action,
+    shopping_list_slots,
+    summarize_owned_ingredients,
     summarize_shopping_list,
 )
 
 
-def handle_current(db: Session, user_id: int) -> tuple[str, list[dict[str, Any]]]:
+def _normalize_title(value: str | None) -> str:
+    return (value or "").replace(" ", "").lower()
+
+
+def _title_matches(query: str, title: str | None) -> bool:
+    normalized_query = _normalize_title(query)
+    normalized_title = _normalize_title(title)
+    return bool(normalized_query and normalized_title and (normalized_query in normalized_title or normalized_title in normalized_query))
+
+
+def _find_existing_recipe_list(db: Session, user_id: int, recipe_title: str) -> dict[str, Any] | None:
+    history = shopping_service.get_history(db=db, user_id=user_id, limit=50)
+    active_matches = [
+        item
+        for item in history
+        if item.get("status") == "active" and _title_matches(recipe_title, item.get("recipe_title"))
+    ]
+    return active_matches[0] if active_matches else None
+
+
+def _find_recipe_by_title(db: Session, recipe_title: str) -> dict[str, Any] | None:
+    result = recipe_search_service.search_recipes(db=db, query=recipe_title, page=1, page_size=10)
+    items = result.get("items") or []
+    if not items:
+        return None
+    normalized_query = _normalize_title(recipe_title)
+    exact = [item for item in items if _normalize_title(item.get("title")) == normalized_query]
+    contains = [item for item in items if _title_matches(recipe_title, item.get("title"))]
+    return (exact or contains or items)[0]
+
+
+def _missing_to_inputs(items: list[dict[str, Any]]) -> list[ShoppingIngredientInput]:
+    return [
+        ShoppingIngredientInput(
+            name=item["name"],
+            ingredient_id=item.get("ingredient_id"),
+            amount=item.get("amount"),
+        )
+        for item in items
+        if item.get("name")
+    ]
+
+
+def handle_recipe_current(
+    db: Session,
+    user_id: int,
+    recipe_title: str,
+    *,
+    start: int = 0,
+    max_items: int = 15,
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    existing = _find_existing_recipe_list(db, user_id, recipe_title)
+    if existing:
+        resolved_title = existing.get("recipe_title") or recipe_title
+        message = summarize_shopping_list(
+            existing,
+            max_items=max_items,
+            start=start,
+            title=f"{resolved_title} 장보기 목록이에요.",
+        )
+        actions = [shopping_list_action(existing.get("id"))]
+        shown_count = min(max_items, max(0, len(active_shopping_items(existing)) - start))
+        return message, actions, shopping_list_slots(existing, start=start, shown_count=shown_count)
+
+    recipe = _find_recipe_by_title(db, recipe_title)
+    if not recipe:
+        return f"{recipe_title} 레시피를 찾지 못해서 장보기 목록을 만들 수 없어요.", [], {}
+
+    recipe_id = recipe.get("recipe_id")
+    detail = recipe_detail_service.get_recipe_detail(db, recipe_id, user_id)
+    missing_inputs = _missing_to_inputs(detail.get("missing_ingredients") or [])
+    if not missing_inputs:
+        title = detail.get("title") or recipe_title
+        return f"{title}은 현재 부족한 재료가 없어요.", [{"label": "레시피 보기", "url": f"/recipes/{recipe_id}"}], {
+            "shopping_recipe_id": recipe_id,
+            "shopping_recipe_title": title,
+            "shopping_total_count": 0,
+            "shopping_next_offset": 0,
+            "shopping_has_more": False,
+        }
+
+    shopping_list = shopping_service.create_list(
+        db=db,
+        user_id=user_id,
+        recipe_id=recipe_id,
+        source="recipe",
+        missing_ingredients=missing_inputs,
+    )
+    title = shopping_list.get("recipe_title") or detail.get("title") or recipe_title
+    message = summarize_shopping_list(
+        shopping_list,
+        max_items=max_items,
+        start=start,
+        title=f"{title} 장보기 목록이에요.",
+    )
+    actions = [shopping_list_action(shopping_list.get("id"))]
+    shown_count = min(max_items, max(0, len(active_shopping_items(shopping_list)) - start))
+    return message, actions, shopping_list_slots(shopping_list, start=start, shown_count=shown_count)
+
+
+def handle_current(
+    db: Session,
+    user_id: int,
+    *,
+    start: int = 0,
+    max_items: int = 15,
+    title: str = "현재 장보기 목록이에요.",
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     shopping_list = shopping_service.get_current(db=db, user_id=user_id)
     actions = [shopping_list_action(shopping_list.get("id") if shopping_list else None)]
-    return summarize_shopping_list(shopping_list), actions
+    message = summarize_shopping_list(shopping_list, max_items=max_items, start=start, title=title)
+    shown_count = min(max_items, max(0, len(active_shopping_items(shopping_list)) - start)) if shopping_list else 0
+    return message, actions, shopping_list_slots(shopping_list, start=start, shown_count=shown_count)
+
+
+def handle_current_follow_up(
+    db: Session,
+    user_id: int,
+    text: str,
+    slots: dict[str, Any] | None = None,
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    slots = slots or {}
+    start = int(slots.get("shopping_next_offset") or 0)
+    max_items = extract_requested_count(text) or 5
+    title = "나머지 장보기 재료예요." if is_remaining_request(text) else "현재 장보기 목록이에요."
+    return handle_current(db, user_id, start=start, max_items=max_items, title=title)
+
+
+def handle_owned(db: Session, user_id: int, slots: dict[str, Any] | None = None) -> tuple[str, list[dict[str, Any]]]:
+    slots = slots or {}
+    shopping_list_id = slots.get("shopping_list_id")
+    shopping_list = (
+        shopping_service.get_list(db=db, user_id=user_id, shopping_list_id=int(shopping_list_id))
+        if shopping_list_id
+        else shopping_service.get_current(db=db, user_id=user_id)
+    )
+    actions = [shopping_list_action(shopping_list.get("id") if shopping_list else None)]
+    return summarize_owned_ingredients(shopping_list), actions
 
 
 def handle_history(db: Session, user_id: int, limit: int = 5) -> tuple[str, list[dict[str, Any]]]:

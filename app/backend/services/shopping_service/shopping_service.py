@@ -90,7 +90,7 @@ class ShoppingService:
         shopping_lists = (
             db.query(ShoppingList)
             .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
-            .filter(ShoppingList.user_id == user_id)
+            .filter(ShoppingList.user_id == user_id, ShoppingList.status != "completed")
             .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
             .limit(normalized_limit)
             .all()
@@ -162,8 +162,18 @@ class ShoppingService:
             stocked_count += 1
 
         self._sync_list_status(shopping_list)
-        db.commit()
 
+        # 모든 재료 입고로 목록이 완료되면 DB에 남기지 않고 삭제한다.
+        if shopping_list.status == "completed":
+            db.delete(shopping_list)
+            db.commit()
+            return {
+                "message": f"{stocked_count}개 재료를 냉장고에 입고하고 장보기를 완료했어요.",
+                "stocked_count": stocked_count,
+                "shopping_list": None,
+            }
+
+        db.commit()
         return {
             "message": f"{stocked_count}개 재료가 냉장고에 입고되었습니다.",
             "stocked_count": stocked_count,

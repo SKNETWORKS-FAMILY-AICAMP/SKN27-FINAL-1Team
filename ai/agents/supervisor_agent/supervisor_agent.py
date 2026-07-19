@@ -41,6 +41,7 @@ from ai.agents.supervisor_agent.routing_rules import (
     _is_alarm_notification_query,
     _is_alarm_write_query,
     _is_guide_query,
+    _is_receipt_lookup_query,
     _is_receipt_query,
     _is_recipe_pairing_query,
     _is_recipe_recommend_query,
@@ -89,6 +90,7 @@ def _route_write_request(
     if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
         return _route_result("shopping.delete_item", slots=previous_slots)
 
+    # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
     if previous_intent and has_write_word and _is_context_follow_up(text):
         if previous_intent.startswith("shopping."):
@@ -123,6 +125,8 @@ def _route_read_fallback(
     normalized = _normalize_text(text)
     shopping_intent = analyze_shopping_intent(text)
 
+    if _is_receipt_lookup_query(text):
+        return _route_result("receipt.lookup")
     if is_receipt_query:
         return _route_result("receipt.guide")
     if (
@@ -359,6 +363,17 @@ def receipt_guide_node(state: GraphState) -> dict:
     }
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
+def receipt_lookup_node(state: GraphState) -> dict:
+    """영수증 내역/금액/품목 조회 화면 이동 액션을 안내합니다."""
+    result = {
+        "response_text": (
+            "최근 영수증 내역과 금액, 품목은 영수증 화면에서 확인할 수 있어요. "
+            "아래 버튼을 눌러 영수증 등록 화면으로 이동해주세요."
+        ),
+        "actions": [{"label": "영수증 내역 보기", "url": "/receipt-ocr"}],
+    }
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
+
 def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
@@ -399,6 +414,7 @@ def shopping_agent_node(state: GraphState) -> dict:
             text=compare_text or text,
             intent=state.get("intent", ""),
             history=state.get("history", []),
+            slots=state.get("slots", {}),
             db=state["db"],
             user_id=state.get("user_id"),
         ),
@@ -540,6 +556,7 @@ def route_intent(state: GraphState) -> str:
         "recipe.recommend": "recipe_agent_node",
         "recipe.search": "recipe_agent_node",
         "recipe.pairing": "recipe_agent_node",
+        "receipt.lookup": "receipt_lookup_node",
         "receipt.guide": "receipt_guide_node",
         "food.general": "fallback_agent_node",
     }
@@ -553,6 +570,7 @@ workflow.add_node("alarm_agent_node", alarm_agent_node)
 workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
+workflow.add_node("receipt_lookup_node", receipt_lookup_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
 workflow.add_node("fallback_agent_node", fallback_agent_node)
 workflow.add_node("general_node", general_node)
@@ -566,6 +584,7 @@ for node_name in (
     "shopping_agent_node",
     "guide_agent_node",
     "recipe_agent_node",
+    "receipt_lookup_node",
     "receipt_guide_node",
     "fallback_agent_node",
     "general_node",

@@ -16,6 +16,13 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+try:
+    import cv2
+    import numpy as np
+except ImportError:  # pragma: no cover - optional runtime dependency
+    cv2 = None
+    np = None
+
 from app.backend.core.config import settings
 from app.backend.db.models import Receipt
 from app.backend.services.ingredient_match_service import ingredient_name_matcher
@@ -40,6 +47,9 @@ CANONICAL_EXTENSION_BY_IMAGE_TYPE = {
 ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
 OCR_MIN_QUALITY_SCORE = 0.75
 OCR_MAX_RETRIES = 1
+AUTO_CROP_MIN_IMAGE_SIDE = 320
+AUTO_CROP_MIN_CROP_SHORT_SIDE = 140
+AUTO_CROP_MIN_CROP_LONG_SIDE = 320
 
 
 class ReceiptOcrGraphState(TypedDict, total=False):
@@ -49,6 +59,7 @@ class ReceiptOcrGraphState(TypedDict, total=False):
     image_id: str
     original_file_name: str
     original_file_path: str
+    ocr_file_name: str
     ocr_result: Dict[str, Any]
     normalized: Dict[str, Any]
     receipt_id: int
@@ -70,8 +81,11 @@ class ReceiptOcrService:
         self._upload_attempts_by_user: dict[int, List[datetime]] = defaultdict(list)
         self._upload_rate_limit_lock = Lock()
 
-    async def analyze_upload(self, *, db: Session, file: UploadFile, user_id: int) -> Dict[str, Any]:
-        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id)
+    async def analyze_upload(self, *, db: Session, file: UploadFile, user_id: int, crop_mode: str = "auto") -> Dict[str, Any]:
+        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id, crop_mode=crop_mode)
+        if initial_state.get("response"):
+            return initial_state["response"]
+
         original_file_path = initial_state["original_file_path"]
 
         try:
@@ -86,13 +100,34 @@ class ReceiptOcrService:
 
         return final_state["response"]
 
-    async def _prepare_upload_state(self, *, db: Session, file: UploadFile, user_id: int) -> ReceiptOcrGraphState:
+    async def _prepare_upload_state(
+        self,
+        *,
+        db: Session,
+        file: UploadFile,
+        user_id: int,
+        crop_mode: str = "auto",
+    ) -> ReceiptOcrGraphState:
         self._enforce_upload_rate_limit(user_id)
         image_bytes = await file.read()
         storage_extension = self._validate_upload(file, image_bytes)
         sanitized_image_bytes = self._sanitize_image(image_bytes, storage_extension=storage_extension)
+        original_file_name = mask_sensitive_text(file.filename)
 
-        original_file_path = self._save_original_image(
+        if crop_mode != "manual":
+            cropped_image_bytes = self._auto_crop_receipt_image(sanitized_image_bytes)
+            if not cropped_image_bytes:
+                issue_code = "auto_crop_dependency_missing" if cv2 is None or np is None else "auto_crop_low_confidence"
+                return {
+                    "user_id": user_id,
+                    "original_file_name": original_file_name,
+                    "stage": "manual_crop_required",
+                    "response": self._build_manual_crop_required_response(original_file_name, issue_code=issue_code),
+                }
+            sanitized_image_bytes = cropped_image_bytes
+            storage_extension = ".jpg"
+
+        original_file_path = self._save_receipt_image(
             user_id=user_id,
             image_bytes=sanitized_image_bytes,
             storage_extension=storage_extension,
@@ -104,15 +139,28 @@ class ReceiptOcrService:
             "user_id": user_id,
             "image_bytes": sanitized_image_bytes,
             "image_id": image_id,
-            "original_file_name": mask_sensitive_text(file.filename),
+            "original_file_name": original_file_name,
             "original_file_path": original_file_path,
+            "ocr_file_name": f"{image_id}{storage_extension}",
             "retry_count": 0,
             "max_retries": OCR_MAX_RETRIES,
             "stage": "image_uploaded",
         }
 
-    async def create_upload_event_stream(self, *, db: Session, file: UploadFile, user_id: int):
-        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id)
+    async def create_upload_event_stream(self, *, db: Session, file: UploadFile, user_id: int, crop_mode: str = "auto"):
+        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id, crop_mode=crop_mode)
+        if initial_state.get("response"):
+            async def manual_crop_event_stream():
+                yield {
+                    "type": "stage",
+                    "stage": "manual_crop_required",
+                    "retry_count": 0,
+                    "max_retries": OCR_MAX_RETRIES,
+                }
+                yield {"type": "result", "data": initial_state["response"]}
+
+            return manual_crop_event_stream()
+
         original_file_path = initial_state["original_file_path"]
 
         async def event_stream():
@@ -192,7 +240,7 @@ class ReceiptOcrService:
         ocr_result = await run_in_threadpool(
             self._call_openai_vision,
             image_bytes=state["image_bytes"],
-            filename=state.get("original_file_name") or "receipt.jpg",
+            filename=state.get("ocr_file_name") or state.get("original_file_name") or "receipt.jpg",
             image_id=state["image_id"],
             retry_note=retry_note,
         )
@@ -331,6 +379,40 @@ class ReceiptOcrService:
         )
         return {"response": response, "stage": "reupload_required"}
 
+    def _build_manual_crop_required_response(
+        self,
+        original_file_name: Optional[str],
+        *,
+        issue_code: str = "auto_crop_low_confidence",
+    ) -> Dict[str, Any]:
+        message = (
+            "자동 크롭 라이브러리가 아직 설치되지 않았어요. 백엔드 의존성 설치 또는 Docker 재빌드가 필요해요."
+            if issue_code == "auto_crop_dependency_missing"
+            else "영수증 영역을 자동으로 찾지 못했어요. 직접 영역을 맞춘 뒤 분석해주세요."
+        )
+        return {
+            "receipt_id": None,
+            "original_file_name": original_file_name,
+            "original_file_path": None,
+            "store_name": None,
+            "purchase_datetime": None,
+            "items": [],
+            "total_item_count": None,
+            "total_amount": None,
+            "currency": "KRW",
+            "confidence_note": "Automatic receipt area detection was not confident enough.",
+            "document_type": None,
+            "is_receipt_like": None,
+            "quality_score": None,
+            "quality_issues": [issue_code],
+            "ocr_status": "manual_crop_required",
+            "ocr_error_message": issue_code,
+            "receipt_validation_issues": [],
+            "needs_reupload": False,
+            "manual_crop_required": True,
+            "manual_crop_message": message,
+        }
+
     def _validate_upload(self, file: UploadFile, image_bytes: bytes) -> str:
         if not image_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
@@ -396,6 +478,203 @@ class ReceiptOcrService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Uploaded image could not be sanitized.",
             ) from exc
+
+    def _auto_crop_receipt_image(self, image_bytes: bytes) -> Optional[bytes]:
+        if cv2 is None or np is None:
+            return None
+
+        source = np.frombuffer(image_bytes, dtype=np.uint8)
+        image = cv2.imdecode(source, cv2.IMREAD_COLOR)
+        if image is None:
+            return None
+
+        height, width = image.shape[:2]
+        if min(height, width) < AUTO_CROP_MIN_IMAGE_SIDE:
+            return None
+
+        scale = min(1.0, 1200.0 / max(width, height))
+        working = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else image.copy()
+        crop_box = self._detect_receipt_crop_box(working)
+        if crop_box is None:
+            crop_box = self._build_safe_fallback_crop_box(working)
+        if crop_box is None:
+            return None
+
+        x, y, w, h = crop_box
+        inverse_scale = 1 / scale
+        pad_x = max(10, int(w * inverse_scale * 0.035))
+        pad_y = max(10, int(h * inverse_scale * 0.035))
+        left = max(0, int(x * inverse_scale) - pad_x)
+        top = max(0, int(y * inverse_scale) - pad_y)
+        right = min(width, int((x + w) * inverse_scale) + pad_x)
+        bottom = min(height, int((y + h) * inverse_scale) + pad_y)
+
+        crop_width = right - left
+        crop_height = bottom - top
+        crop_area_ratio = (crop_width * crop_height) / (width * height)
+        if min(crop_width, crop_height) < AUTO_CROP_MIN_CROP_SHORT_SIDE:
+            return None
+        if max(crop_width, crop_height) < AUTO_CROP_MIN_CROP_LONG_SIDE:
+            return None
+        if crop_area_ratio >= 0.995:
+            fallback_box = self._build_safe_fallback_crop_box(working)
+            if fallback_box is None:
+                return None
+            x, y, w, h = fallback_box
+            left = max(0, int(x * inverse_scale))
+            top = max(0, int(y * inverse_scale))
+            right = min(width, int((x + w) * inverse_scale))
+            bottom = min(height, int((y + h) * inverse_scale))
+
+        cropped = image[top:bottom, left:right]
+        enhanced = self._enhance_receipt_crop_for_ocr(cropped)
+        return self._encode_jpeg(enhanced)
+
+    def _detect_receipt_crop_box(self, image) -> Optional[tuple[int, int, int, int]]:
+        candidates = []
+        image_area = image.shape[0] * image.shape[1]
+
+        for mask in self._build_receipt_candidate_masks(image):
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                area_ratio = area / image_area if image_area else 0
+                if not (0.04 <= area_ratio <= 0.98):
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                if w < image.shape[1] * 0.18 or h < image.shape[0] * 0.18:
+                    continue
+
+                rectangularity = area / (w * h) if w * h else 0
+                aspect_ratio = h / w if w else 0
+                score = area_ratio * 1.7 + rectangularity * 0.45
+                if 1.15 <= aspect_ratio <= 8.5:
+                    score += 0.25
+                if self._touches_all_edges(x, y, w, h, image.shape[1], image.shape[0]):
+                    score -= 0.75
+
+                candidates.append((score, x, y, w, h))
+
+        if not candidates:
+            return self._detect_text_content_box(image)
+
+        _, x, y, w, h = max(candidates, key=lambda item: item[0])
+        area_ratio = (w * h) / image_area if image_area else 0
+        if area_ratio >= 0.92 or self._touches_all_edges(x, y, w, h, image.shape[1], image.shape[0]):
+            text_box = self._detect_text_content_box(image)
+            if text_box is not None:
+                return text_box
+        return x, y, w, h
+
+    def _build_receipt_candidate_masks(self, image) -> List[Any]:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        edge_mask = cv2.Canny(blurred, 35, 130)
+        edge_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        edge_mask = cv2.dilate(edge_mask, edge_kernel, iterations=2)
+        edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, edge_kernel, iterations=2)
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        paper_mask = cv2.inRange(hsv, (0, 0, 115), (180, 95, 255))
+        paper_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 13))
+        paper_mask = cv2.morphologyEx(paper_mask, cv2.MORPH_CLOSE, paper_kernel, iterations=2)
+        paper_mask = cv2.morphologyEx(paper_mask, cv2.MORPH_OPEN, paper_kernel, iterations=1)
+
+        adaptive_mask = cv2.adaptiveThreshold(
+            blurred,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            35,
+            13,
+        )
+        text_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 9))
+        adaptive_mask = cv2.dilate(adaptive_mask, text_kernel, iterations=3)
+        adaptive_mask = cv2.morphologyEx(adaptive_mask, cv2.MORPH_CLOSE, text_kernel, iterations=2)
+
+        return [paper_mask, edge_mask, adaptive_mask]
+
+    def _detect_text_content_box(self, image) -> Optional[tuple[int, int, int, int]]:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        text_mask = cv2.adaptiveThreshold(
+            blurred,
+            255,
+            cv2.ADAPTIVE_THRESH_MEAN_C,
+            cv2.THRESH_BINARY_INV,
+            31,
+            12,
+        )
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 7))
+        text_mask = cv2.dilate(text_mask, kernel, iterations=2)
+        contours, _ = cv2.findContours(text_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        boxes = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            if w * h < image.shape[0] * image.shape[1] * 0.001:
+                continue
+            boxes.append((x, y, x + w, y + h))
+
+        if not boxes:
+            return None
+
+        left = min(box[0] for box in boxes)
+        top = min(box[1] for box in boxes)
+        right = max(box[2] for box in boxes)
+        bottom = max(box[3] for box in boxes)
+        margin_x = max(18, int((right - left) * 0.14))
+        margin_y = max(24, int((bottom - top) * 0.18))
+        left = max(0, left - margin_x)
+        top = max(0, top - margin_y)
+        right = min(image.shape[1], right + margin_x)
+        bottom = min(image.shape[0], bottom + margin_y)
+        w = right - left
+        h = bottom - top
+        area_ratio = (w * h) / (image.shape[0] * image.shape[1])
+        if area_ratio < 0.025 or area_ratio >= 0.995:
+            return None
+        return left, top, w, h
+
+    def _build_safe_fallback_crop_box(self, image) -> Optional[tuple[int, int, int, int]]:
+        height, width = image.shape[:2]
+        margin_x = max(8, int(width * 0.035))
+        margin_y = max(8, int(height * 0.035))
+        crop_width = width - margin_x * 2
+        crop_height = height - margin_y * 2
+        if min(crop_width, crop_height) < AUTO_CROP_MIN_CROP_SHORT_SIDE:
+            return None
+        return margin_x, margin_y, crop_width, crop_height
+
+    def _touches_all_edges(self, x: int, y: int, w: int, h: int, width: int, height: int) -> bool:
+        return (
+            x <= width * 0.01
+            and y <= height * 0.01
+            and x + w >= width * 0.99
+            and y + h >= height * 0.99
+        )
+
+    def _encode_jpeg(self, image) -> Optional[bytes]:
+        if image is None or image.size == 0:
+            return None
+        success, encoded = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+        if not success:
+            return None
+        return encoded.tobytes()
+
+    def _enhance_receipt_crop_for_ocr(self, image):
+        if image is None or image.size == 0:
+            return image
+
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        lightness, channel_a, channel_b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced_lightness = clahe.apply(lightness)
+        enhanced = cv2.merge((enhanced_lightness, channel_a, channel_b))
+        enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+        blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
+        return cv2.addWeighted(enhanced, 1.35, blurred, -0.35, 0)
 
     def _enforce_upload_rate_limit(self, user_id: int) -> None:
         now = datetime.now(timezone.utc)
@@ -515,7 +794,7 @@ class ReceiptOcrService:
 
         raise ValueError("Unsupported WebP chunk.")
 
-    def _save_original_image(self, *, user_id: int, image_bytes: bytes, storage_extension: str) -> str:
+    def _save_receipt_image(self, *, user_id: int, image_bytes: bytes, storage_extension: str) -> str:
         today = datetime.now(KST).strftime("%Y%m%d")
         stored_name = f"{today}_{uuid4().hex}{storage_extension}"
 
