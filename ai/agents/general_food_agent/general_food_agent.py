@@ -10,7 +10,7 @@ except ImportError:
     OpenAI = None
 
 
-_FOOD_FALLBACK_SYSTEM_PROMPT = """
+_GENERAL_FOOD_SYSTEM_PROMPT = """
 당신은 밥벌이 서비스의 일반 요리 지식 보조 Agent입니다.
 요리, 식재료, 계량 환산, 재료 대체, 조리 팁에 관한 질문만 답하세요.
 냉장고 보유 재료, 장보기 목록, 일정처럼 사용자의 실제 데이터는 추측하지 마세요.
@@ -22,7 +22,7 @@ _FOOD_FALLBACK_SYSTEM_PROMPT = """
 
 
 def _history_messages(history: list[Any] | None) -> list[dict[str, str]]:
-    """최근 대화에서 fallback 답변에 필요한 일반 텍스트 문맥만 추출합니다."""
+    """최근 대화에서 일반 음식 답변에 필요한 텍스트 문맥만 추출합니다."""
     messages = []
     for item in (history or [])[-4:]:
         role = item.get("role") if isinstance(item, dict) else getattr(item, "role", "")
@@ -32,12 +32,12 @@ def _history_messages(history: list[Any] | None) -> list[dict[str, str]]:
     return messages
 
 
-def run_food_fallback(text: str, history: list[Any] | None = None) -> dict[str, Any]:
-    """기존 Agent가 담당하지 않는 일반 요리 질문에 제한된 LLM 답변을 생성합니다."""
+def run_general_food(text: str, history: list[Any] | None = None) -> dict[str, Any]:
+    """일반 요리와 식재료 지식 질문에 제한된 LLM 답변을 생성합니다."""
     if OpenAI is None or not settings.OPENAI_API_KEY:
         return {"response_text": "일반 요리 답변 기능을 현재 사용할 수 없어요. 잠시 후 다시 시도해주세요."}
 
-    messages = [{"role": "system", "content": _FOOD_FALLBACK_SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": _GENERAL_FOOD_SYSTEM_PROMPT}]
     messages.extend(_history_messages(history))
     messages.append({"role": "user", "content": text})
     try:

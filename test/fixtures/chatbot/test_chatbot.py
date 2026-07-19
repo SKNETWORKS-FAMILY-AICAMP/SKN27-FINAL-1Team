@@ -1835,12 +1835,12 @@ def test_food_general_prompt_separates_comparison_and_reheating() -> None:
     assert '남은 치킨 데우는 방법은?' in prompt
     assert 'must be food.general' in prompt
 
-def test_food_fallback_routes_without_receiving_db_actions(monkeypatch) -> None:
-    """일반 요리 지식은 fallback으로 보내고 DB 변경 intent와 분리합니다."""
+def test_general_food_agent_routes_without_receiving_db_actions(monkeypatch) -> None:
+    """일반 요리 지식은 General Food Agent로 보내고 DB 변경 intent와 분리합니다."""
     import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent
 
     monkeypatch.setattr(
-        "ai.agents.fallback_agent.run_food_fallback",
+        "ai.agents.general_food_agent.run_general_food",
         lambda text, history=None: {"response_text": "설탕 5g은 일반적으로 약 1작은술이에요."},
     )
     routed = router_node({
@@ -1848,7 +1848,7 @@ def test_food_fallback_routes_without_receiving_db_actions(monkeypatch) -> None:
         "service": FakeService("food.general"),
         "history": [],
     })
-    result = supervisor_agent.fallback_agent_node({
+    result = supervisor_agent.general_food_agent_node({
         **routed,
         "text": "설탕 5g은 몇 티스푼이야?",
         "history": [],
@@ -1861,8 +1861,8 @@ def test_food_fallback_routes_without_receiving_db_actions(monkeypatch) -> None:
     assert "inventory" not in routed["intent"]
 
 
-def test_non_food_request_stays_out_of_fallback() -> None:
-    """음식과 관계없는 질문은 fallback Agent로 보내지 않습니다."""
+def test_non_food_request_stays_out_of_general_food_agent() -> None:
+    """음식과 관계없는 질문은 General Food Agent로 보내지 않습니다."""
     routed = router_node({
         "text": "파이썬으로 구구단 코드 짜줘",
         "service": FakeService("general"),

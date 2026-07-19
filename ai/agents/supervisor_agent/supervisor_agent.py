@@ -433,12 +433,12 @@ def alarm_agent_node(state: GraphState) -> dict:
     result = _alarm_result_to_state(agent_result)
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
-def fallback_agent_node(state: GraphState) -> dict:
-    """기존 Agent가 담당하지 않는 일반 요리 질문을 제한된 fallback Agent에 전달합니다."""
-    from ai.agents.fallback_agent import run_food_fallback
+def general_food_agent_node(state: GraphState) -> dict:
+    """일반 요리와 식재료 지식 질문을 General Food Agent에 전달합니다."""
+    from ai.agents.general_food_agent import run_general_food
 
     result = _run_agent_with_retry(
-        lambda: run_food_fallback(state["text"], history=state.get("history", []))
+        lambda: run_general_food(state["text"], history=state.get("history", []))
     )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
@@ -541,7 +541,7 @@ def route_intent(state: GraphState) -> str:
         "recipe.search": "recipe_agent_node",
         "recipe.pairing": "recipe_agent_node",
         "receipt.guide": "receipt_guide_node",
-        "food.general": "fallback_agent_node",
+        "food.general": "general_food_agent_node",
     }
     return routes.get(intent, "general_node")
 
@@ -554,7 +554,7 @@ workflow.add_node("shopping_agent_node", shopping_agent_node)
 workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
-workflow.add_node("fallback_agent_node", fallback_agent_node)
+workflow.add_node("general_food_agent_node", general_food_agent_node)
 workflow.add_node("general_node", general_node)
 
 workflow.set_entry_point("router")
@@ -567,7 +567,7 @@ for node_name in (
     "guide_agent_node",
     "recipe_agent_node",
     "receipt_guide_node",
-    "fallback_agent_node",
+    "general_food_agent_node",
     "general_node",
 ):
     workflow.add_edge(node_name, END)
