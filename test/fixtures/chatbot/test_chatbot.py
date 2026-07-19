@@ -24,6 +24,23 @@ def _route_intent(message: str) -> str:
     return router_node({"text": message, "history": [], "service": supervisor_service})["intent"]
 
 
+def test_build_chat_state_limits_agent_history() -> None:
+    """Agent에 전달하는 대화 이력은 최근 항목만 유지합니다."""
+    history = [MagicMock(text=str(index)) for index in range(20)]
+
+    state = chat_context._build_chat_state(
+        db=MagicMock(),
+        user_id=1,
+        text="질문",
+        history=history,
+        user_settings=None,
+        service=MagicMock(),
+    )
+
+    assert len(state["history"]) == 12
+    assert state["history"][0].text == "8"
+    assert state["history"][-1].text == "19"
+
 def test_route_intent_examples() -> None:
     """챗봇 대표 문장이 기대 intent로 분류되는지 확인합니다."""
     cases = {
@@ -386,10 +403,45 @@ def test_multi_agent_node_runs_tasks_in_order(monkeypatch) -> None:
 
     assert routed["intent"] == "multi_agent"
     assert [task["intent"] for task in routed["tasks"]] == ["inventory.expiring", "recipe.recommend"]
-    assert calls == ["inventory.expiring", ("recipe.recommend", "두부를 우선 활용하는 레시피를 추천해줘")]
+    assert calls == ["inventory.expiring", ("recipe.recommend", "임박 재료(두부)를 우선 활용하고 현재 냉장고 재료를 고려한 레시피를 추천해줘")]
     assert "두부 D-1" in result["response_text"]
     assert "두부로 만들 수 있는 레시피" in result["response_text"]
     assert result["actions"][0]["label"] == "두부조림"
+
+def test_multi_agent_node_orders_expiring_before_recipe(monkeypatch) -> None:
+    """LLM 작업 순서와 무관하게 임박 재료 조회를 레시피 추천보다 먼저 실행합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    calls = []
+
+    def fake_inventory(state):
+        """임박 재료 조회 결과를 반환합니다."""
+        calls.append(state["intent"])
+        return {
+            "response_text": "호박 D-2",
+            "slots": {"expiring_ingredients": ["호박"]},
+        }
+
+    def fake_recipe(state):
+        """전달받은 임박 재료를 기록하고 추천 응답을 반환합니다."""
+        calls.append((state["intent"], state["slots"].get("expiring_ingredients")))
+        return {"response_text": "호박 레시피예요."}
+
+    monkeypatch.setattr(supervisor_agent_module, "inventory_agent_node", fake_inventory)
+    monkeypatch.setattr(supervisor_agent_module, "recipe_agent_node", fake_recipe)
+    result = supervisor_agent_module.multi_agent_node({
+        "text": "임박 재료와 활용 레시피 알려줘",
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+        "tasks": [
+            {"intent": "recipe.recommend", "text": "활용 레시피 알려줘"},
+            {"intent": "inventory.expiring", "text": "임박 재료 알려줘"},
+        ],
+    })
+
+    assert calls == ["inventory.expiring", ("recipe.recommend", ["호박"])]
+    assert result["slots"]["completed_intents"] == ["inventory.expiring", "recipe.recommend"]
 
 def test_multi_agent_node_keeps_success_when_one_task_fails(monkeypatch) -> None:
     """복합 요청 중 한 Agent가 실패해도 성공한 응답은 사용자에게 반환합니다."""
@@ -423,6 +475,40 @@ def test_multi_agent_node_keeps_success_when_one_task_fails(monkeypatch) -> None
     assert result["slots"]["failed_intents"] == ["ingredient.guide"]
 
 
+def test_multi_agent_node_runs_receipt_lookup(monkeypatch) -> None:
+    """복합 요청에 포함된 영수증 조회도 누락 없이 실행합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    calls = []
+
+    def fake_receipt_lookup(state):
+        """영수증 조회 실행을 기록하는 테스트 대역입니다."""
+        calls.append(state["intent"])
+        return {"response_text": "최근 영수증 내역이에요."}
+
+    def fake_shopping(state):
+        """장보기 조회 실행을 기록하는 테스트 대역입니다."""
+        calls.append(state["intent"])
+        return {"response_text": "현재 장보기 목록이에요."}
+
+    monkeypatch.setattr(supervisor_agent_module, "receipt_lookup_node", fake_receipt_lookup)
+    monkeypatch.setattr(supervisor_agent_module, "shopping_agent_node", fake_shopping)
+    result = supervisor_agent_module.multi_agent_node({
+        "text": "영수증 내역과 장보기 목록 알려줘",
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+        "tasks": [
+            {"intent": "receipt.lookup", "text": "영수증 내역 알려줘"},
+            {"intent": "shopping.current", "text": "장보기 목록 알려줘"},
+        ],
+    })
+
+    assert calls == ["receipt.lookup", "shopping.current"]
+    assert result["slots"]["failed_intents"] == []
+    assert "최근 영수증 내역이에요." in result["response_text"]
+    assert "현재 장보기 목록이에요." in result["response_text"]
+
 def test_merge_agent_results_removes_duplicate_ui_data() -> None:
     """복합 Agent 응답의 중복 버튼과 출처를 한 번만 반환합니다."""
     action = {"label": "감자 레시피", "url": "/recipes?ingredient=감자"}
@@ -435,6 +521,19 @@ def test_merge_agent_results_removes_duplicate_ui_data() -> None:
     assert result["actions"] == [action]
     assert result["sources"] == [source]
 
+
+def test_merge_agent_results_keeps_first_conflicting_slot() -> None:
+    """복합 응답의 같은 슬롯은 먼저 실행된 Agent 값을 유지합니다."""
+    result = agent_execution._merge_agent_results(
+        {"response_text": "감자 가이드", "slots": {"ingredient": "감자", "guide_type": "storage"}},
+        {"response_text": "양파 레시피", "slots": {"ingredient": "양파", "use_inventory": True}},
+    )
+
+    assert result["slots"] == {
+        "ingredient": "감자",
+        "guide_type": "storage",
+        "use_inventory": True,
+    }
 
 def test_guide_and_price_request_builds_multi_agent_tasks() -> None:
     """보관법과 가격을 함께 물으면 두 조회 작업으로 분해합니다."""
@@ -1691,6 +1790,20 @@ def test_llm_multi_agent_payload_filters_write_tasks() -> None:
         "recipe.recommend",
     ]
 
+def test_llm_multi_agent_payload_removes_duplicate_intents() -> None:
+    """LLM이 같은 Agent 작업을 중복 반환해도 한 번만 실행 대상으로 남깁니다."""
+    payload = supervisor_utils._parse_llm_route_payload(
+        '{"intent":"multi_agent","confidence":0.9,"slots":{},"tasks":['
+        '{"intent":"recipe.search","text":"감자 레시피"},'
+        '{"intent":"recipe.search","text":"감자 요리법"},'
+        '{"intent":"ingredient.guide","text":"감자 보관법"}]}'
+    )
+
+    assert payload["tasks"] == [
+        {"intent": "recipe.search", "text": "감자 레시피"},
+        {"intent": "ingredient.guide", "text": "감자 보관법"},
+    ]
+
 def test_llm_route_payload_rejects_unknown_values() -> None:
     """LLM 응답에서 허용되지 않은 intent와 슬롯을 제거하고 빈 작업 문장을 보완합니다."""
     payload = supervisor_utils._parse_llm_route_payload(
@@ -1708,6 +1821,21 @@ def test_llm_route_payload_rejects_unknown_values() -> None:
         "tasks": [{"intent": "recipe.search", "text": "감자 레시피"}],
     }
 
+
+def test_short_answer_skips_action_responses() -> None:
+    """확인 버튼이나 대기 작업이 있는 응답은 짧은 답변으로 요약하지 않습니다."""
+    from types import SimpleNamespace
+    from ai.agents.supervisor_agent.supervisor_service import _should_shorten_response
+
+    settings = SimpleNamespace(shortAnswer=True)
+    response = {
+        "reply": "두부를 냉장에 추가할까요? 실행 전 내용을 확인한 뒤 버튼을 선택해주세요.",
+        "actions": [{"label": "확인"}],
+        "pending_action": {"command": "확인토큰:test"},
+    }
+
+    assert _should_shorten_response(response, settings) is False
+    assert _should_shorten_response({"reply": "가" * 51, "actions": [], "pending_action": None}, settings) is True
 
 def test_follow_up_inherits_only_same_intent_context() -> None:
     """후속 질문은 같은 Agent intent의 허용 슬롯만 이어받습니다."""
@@ -1739,6 +1867,109 @@ def test_follow_up_inherits_only_same_intent_context() -> None:
     assert result["intent"] == "ingredient.guide"
     assert result["slots"] == {"ingredient": "감자", "guide_type": "washing"}
 
+
+def test_storage_confirmation_follow_up_stays_in_guide() -> None:
+    """보관 가능 여부를 묻는 후속 질문은 재료 추가가 아니라 가이드로 유지합니다."""
+    class UnexpectedService:
+        """규칙 분기가 실패하면 호출되어 테스트를 실패시키는 서비스입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """이 경로에서는 LLM 분류가 호출되면 안 됩니다."""
+            raise AssertionError("보관 후속 질문이 LLM 분류까지 전달되었습니다.")
+
+    result = router_node({
+        "text": "체다 치즈 냉장고에 넣으면 되나?",
+        "service": UnexpectedService(),
+        "history": [],
+        "trusted_context": {
+            "intent": "ingredient.guide",
+            "slots": {"ingredient": "체더치즈", "guide_type": "storage"},
+        },
+        "context_enforced": True,
+    })
+
+    assert result["intent"] == "ingredient.guide"
+    assert result["slots"] == {"ingredient": "체더치즈", "guide_type": "storage"}
+
+def test_guide_node_restores_ingredient_for_clarification(monkeypatch) -> None:
+    """가이드 정정 문장은 직전 식재료명과 가이드 유형을 복원해 전달합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    received = []
+
+    class GuideService:
+        """전달된 가이드 질의를 기록하는 테스트용 서비스입니다."""
+
+        def _reply_guide(self, text):
+            """가이드 질의를 기록하고 테스트 응답을 반환합니다."""
+            received.append(text)
+            return {"response_text": "체더치즈 보관법이에요."}
+
+    result = supervisor_agent_module.guide_agent_node({
+        "text": "보관법을 물어보는 거야",
+        "service": GuideService(),
+        "slots": {"ingredient": "체더치즈", "guide_type": "storage"},
+    })
+
+    assert received == ["체더치즈 보관법"]
+    assert result["response_text"] == "체더치즈 보관법이에요."
+
+def test_expiring_follow_up_keeps_ingredient_context() -> None:
+    """임박 재료 조회 뒤의 레시피 요청은 조회된 재료 목록을 이어받습니다."""
+    class FollowUpService:
+        """레시피 후속 질문으로 분류하는 테스트용 서비스입니다."""
+
+        def _route_intent_payload_with_llm(self, text, history):
+            """후속 레시피 추천 분류 결과를 반환합니다."""
+            return {
+                "intent": "recipe.recommend",
+                "confidence": 0.9,
+                "is_follow_up": True,
+                "slots": {"use_inventory": True},
+                "tasks": [],
+            }
+
+    result = router_node({
+        "text": "남은 걸로 뭐 만들 수 있어?",
+        "service": FollowUpService(),
+        "history": [],
+        "trusted_context": {
+            "intent": "inventory.expiring",
+            "slots": {"expiring_ingredients": ["치즈", "새우", "호박"]},
+        },
+        "context_enforced": True,
+    })
+
+    assert result["intent"] == "recipe.recommend"
+    assert result["slots"] == {
+        "use_inventory": True,
+        "expiring_ingredients": ["치즈", "새우", "호박"],
+    }
+
+
+def test_recipe_agent_node_uses_expiring_ingredients(monkeypatch) -> None:
+    """레시피 Agent 호출문에 직전 임박 재료를 추천 조건으로 전달합니다."""
+    import ai.agents.supervisor_agent.supervisor_agent as supervisor_agent_module
+
+    received = {}
+
+    def fake_recipe_agent(text, **kwargs):
+        """전달된 레시피 질의를 기록하는 테스트 대역입니다."""
+        received["text"] = text
+        return {"response_text": "임박 재료 활용 레시피예요."}
+
+    monkeypatch.setattr(supervisor_agent_module, "run_recipe_agent", fake_recipe_agent)
+    result = supervisor_agent_module.recipe_agent_node({
+        "text": "남은 걸로 뭐 만들 수 있어?",
+        "intent": "recipe.recommend",
+        "slots": {"expiring_ingredients": ["치즈", "새우", "호박"]},
+        "history": [],
+        "db": MagicMock(),
+        "user_id": 1,
+    })
+
+    assert received["text"] == "임박 재료(치즈, 새우, 호박)를 우선 활용하고 현재 냉장고 재료를 고려한 레시피를 추천해줘"
+    assert result["response_text"] == "임박 재료 활용 레시피예요."
 
 def test_agent_result_contract_normalizes_status_and_ui() -> None:
     """Agent의 message·ui·status 응답을 Supervisor 공통 계약으로 변환합니다."""
@@ -1931,6 +2162,22 @@ def test_unknown_confirm_action_routes_to_general() -> None:
     """소유 Agent가 없는 확인 명령은 Alarm Agent로 추측하지 않습니다."""
     assert route_intent({"intent": "action.confirm", "text": "확인:unknown_action"}) == "general_node"
 
+
+def test_agent_retry_retries_generic_failure_message() -> None:
+    """Agent가 공통 실패 문구를 정상 응답처럼 반환하면 한 번 다시 호출합니다."""
+    responses = [
+        {"response_text": "실행할 도구가 연결되지 않았어요."},
+        {"response_text": "정상적으로 조회했어요."},
+    ]
+
+    def unstable_agent():
+        """첫 호출은 저품질 응답, 두 번째 호출은 정상 응답을 반환합니다."""
+        return responses.pop(0)
+
+    result = agent_execution._run_agent_with_retry(unstable_agent)
+
+    assert result["response_text"] == "정상적으로 조회했어요."
+    assert result["slots"]["agent_retry_count"] == 1
 
 def test_agent_retry_converts_second_exception_to_error() -> None:
     """Agent가 두 번 모두 예외를 내면 챗봇 공통 오류 응답으로 변환합니다."""

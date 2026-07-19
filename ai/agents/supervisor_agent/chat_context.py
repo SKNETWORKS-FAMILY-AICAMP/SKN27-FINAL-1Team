@@ -14,6 +14,10 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _TRUSTED_CONTEXT_SLOT_KEYS,
 )
 
+# Agent에 전달하는 대화 이력을 제한해 토큰 사용량이 계속 증가하지 않게 합니다.
+_CHAT_HISTORY_LIMIT = 12
+
+
 def _message_value(message: Any, key: str, default: Any = None) -> Any:
     """딕셔너리와 메시지 객체에서 같은 방식으로 값을 읽습니다."""
     return message.get(key, default) if isinstance(message, dict) else getattr(message, key, default)
@@ -150,7 +154,7 @@ def _build_chat_state(
     return {
         "user_id": user_id,
         "text": text,
-        "history": history or [],
+        "history": (history or [])[-_CHAT_HISTORY_LIMIT:],
         "settings_obj": user_settings,
         "db": db,
         "context_enforced": True,

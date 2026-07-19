@@ -8,6 +8,12 @@ from app.backend.schemas.chat import AgentResult
 
 logger = logging.getLogger(__name__)
 
+_LOW_QUALITY_RESPONSE_MARKERS = (
+    "실행할 도구가 연결되지 않았어요",
+    "챗봇 연결 중 문제가 생겼어요",
+    "요청을 처리하는 중 문제가 생겼어요",
+)
+
 def _agent_result_needs_retry(agent_result: Any) -> bool:
     """Agent 응답이 비어 있거나 명시적으로 실패했는지 확인합니다."""
     if not isinstance(agent_result, dict):
@@ -19,7 +25,9 @@ def _agent_result_needs_retry(agent_result: Any) -> bool:
         return True
 
     response_text = agent_result.get("response_text") or agent_result.get("message")
-    return not isinstance(response_text, str) or not response_text.strip()
+    if not isinstance(response_text, str) or not response_text.strip():
+        return True
+    return any(marker in response_text for marker in _LOW_QUALITY_RESPONSE_MARKERS)
 
 
 def _agent_result_failed(agent_result: Any) -> bool:
@@ -130,7 +138,9 @@ def _merge_agent_results(*results: dict[str, Any]) -> dict[str, Any]:
     }.values())
     slots = {}
     for result in results:
-        slots.update(result.get("slots") or {})
+        for key, value in (result.get("slots") or {}).items():
+            # 먼저 실행된 Agent의 문맥 슬롯을 뒤 작업이 덮어쓰지 않게 합니다.
+            slots.setdefault(key, value)
 
     merged = {"response_text": response_text}
     if actions:

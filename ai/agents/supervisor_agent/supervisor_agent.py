@@ -87,6 +87,13 @@ def _route_write_request(
     """데이터를 변경할 수 있는 요청만 LLM보다 먼저 규칙으로 분류합니다."""
     normalized = _normalize_text(text)
 
+    if (
+        previous_intent == "ingredient.guide"
+        and any(phrase in normalized for phrase in ("넣으면되", "넣어도되", "둬도되", "두면되", "보관해도되"))
+    ):
+        # 보관 가능 여부를 묻는 후속 질문은 냉장고 추가 명령으로 처리하지 않습니다.
+        return _route_result("ingredient.guide", slots=previous_slots)
+
     if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
         return _route_result("shopping.delete_item", slots=previous_slots)
 
@@ -338,14 +345,37 @@ def guide_agent_node(state: GraphState) -> dict:
     """식재료 가이드 요청을 Guide Agent에 전달합니다."""
     # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
     query = _rewrite_guide_query(state["text"])
+    slots = state.get("slots") or {}
+    ingredient = slots.get("ingredient") or slots.get("keyword")
+    guide_type = slots.get("guide_type")
+    guide_labels = {
+        "storage": "보관법",
+        "washing": "세척법",
+        "prep": "손질법",
+        "freshness": "신선도 확인법",
+    }
+    normalized = _normalize_text(query)
+    if ingredient and guide_type in guide_labels and (
+        "물어보" in normalized
+        or (guide_type == "storage" and any(phrase in normalized for phrase in ("넣으면되", "넣어도되", "둬도되", "두면되", "보관해도되")))
+    ):
+        # 직전 가이드 질문을 설명하는 문장은 저장된 식재료와 유형으로 복원합니다.
+        query = f"{ingredient} {guide_labels[guide_type]}"
     result = _run_agent_with_retry(lambda: state["service"]._reply_guide(query))
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def recipe_agent_node(state: GraphState) -> dict:
     """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
+    query = state["text"]
+    expiring_ingredients = (state.get("slots") or {}).get("expiring_ingredients") or []
+    if state.get("intent") == "recipe.recommend" and expiring_ingredients:
+        # 직전 임박 재료 조회 결과를 추천 조건으로 명시해 후속 질문의 문맥을 보존합니다.
+        ingredient_names = ", ".join(expiring_ingredients)
+        query = f"임박 재료({ingredient_names})를 우선 활용하고 현재 냉장고 재료를 고려한 레시피를 추천해줘"
+
     result = _run_agent_with_retry(
         lambda: run_recipe_agent(
-            state["text"],
+            query,
             db=state["db"],
             user_id=state.get("user_id"),
             history=state.get("history", []),
@@ -474,6 +504,7 @@ def multi_agent_node(state: GraphState) -> dict:
         "guide_agent_node": guide_agent_node,
         "recipe_agent_node": recipe_agent_node,
         "receipt_guide_node": receipt_guide_node,
+        "receipt_lookup_node": receipt_lookup_node,
         "shopping_agent_node": shopping_agent_node,
     }
     results = []
@@ -481,7 +512,16 @@ def multi_agent_node(state: GraphState) -> dict:
     task_results = {}
     failed_intents = []
 
-    for task in state.get("tasks") or []:
+    tasks = list(state.get("tasks") or [])
+    task_intents = [task.get("intent") for task in tasks]
+    if "inventory.expiring" in task_intents and "recipe.recommend" in task_intents:
+        expiring_index = task_intents.index("inventory.expiring")
+        recipe_index = task_intents.index("recipe.recommend")
+        if expiring_index > recipe_index:
+            # 임박 재료 조회 결과가 필요한 레시피 추천보다 먼저 실행되도록 순서만 보정합니다.
+            tasks.insert(recipe_index, tasks.pop(expiring_index))
+
+    for task in tasks:
         intent = task.get("intent", "")
         task_state = {
             **state,
