@@ -36,6 +36,29 @@ def test_object_particle_matches_final_consonant() -> None:
     assert _object_particle("귤") == "을"
     assert _object_particle("egg") == "를"
 
+
+def test_inventory_reads_do_not_commit(monkeypatch) -> None:
+    """냉장고 목록과 요약 조회는 DB 트랜잭션을 커밋하지 않습니다."""
+    item = SimpleNamespace(purchased_date=date.today(), storage_location="냉장")
+    ingredient = SimpleNamespace()
+    db = MagicMock()
+    db.query.return_value.join.return_value.filter.return_value.all.return_value = [(item, ingredient)]
+    monkeypatch.setattr(
+        inventory_service,
+        "_map_to_response",
+        lambda fridge_item, master: {
+            "status": "expired",
+            "is_expired": True,
+            "is_expiring_soon": False,
+        },
+    )
+
+    inventory_service.get_ingredients(db, 1)
+    inventory_service.get_inventory_summary(db, 1)
+
+    db.commit.assert_not_called()
+
+
 if __name__ == "__main__":
     test_map_to_response_defaults_empty_category_to_etc()
     test_object_particle_matches_final_consonant()
@@ -70,7 +93,8 @@ def test_chat_consume_uses_multiple_matching_inventory_rows() -> None:
     second = SimpleNamespace(display_name="두부", quantity=Decimal("2"), status="normal", expiry_date=date(2026, 7, 20))
     ingredient = SimpleNamespace(name="두부", normalized_name="두부")
     db = MagicMock()
-    db.query.return_value.join.return_value.filter.return_value.all.return_value = [
+    query = db.query.return_value.join.return_value.filter.return_value.order_by.return_value
+    query.with_for_update.return_value.all.return_value = [
         (first, ingredient),
         (second, ingredient),
     ]
@@ -82,6 +106,32 @@ def test_chat_consume_uses_multiple_matching_inventory_rows() -> None:
     assert "3개 소비 처리했어요" in reply
     assert "남은 총수량: 1" in reply
     db.commit.assert_called_once()
+    query.with_for_update.assert_called_once()
+
+def test_chat_discard_reuses_quantity_decrease(monkeypatch) -> None:
+    """폐기는 소비와 같은 수량 차감 로직을 사용하고 안내 문구만 구분합니다."""
+    consume = MagicMock(return_value="호박을 1개 소비 처리했어요. (남은 총수량: 1)")
+    monkeypatch.setattr(inventory_service, "consume_ingredient_by_name", consume)
+
+    reply = inventory_service.discard_ingredient_by_name(None, 1, "호박", 1)
+
+    assert reply == "호박을 1개 폐기 처리했어요. (남은 총수량: 1)"
+
+def test_chat_inventory_total_quantity_sums_matching_rows() -> None:
+    """동일 식재료로 등록된 여러 입고 건의 활성 수량을 합산합니다."""
+    first = SimpleNamespace(display_name="호박", quantity=Decimal("1"))
+    second = SimpleNamespace(display_name="호박", quantity=Decimal("2"))
+    ingredient = SimpleNamespace(name="호박", normalized_name="호박")
+    db = MagicMock()
+    db.query.return_value.join.return_value.filter.return_value.all.return_value = [
+        (first, ingredient),
+        (second, ingredient),
+    ]
+
+    total = inventory_service.get_total_quantity_by_name(db, 1, "호박")
+
+    assert total == 3
+
 
 if __name__ == "__main__":
     test_chat_inventory_name_match_uses_display_name()
@@ -176,3 +226,82 @@ def test_chat_add_rejects_unknown_ingredient_name(monkeypatch) -> None:
     result = inventory_service.add_ingredient_by_name(EmptyIngredientDb(), 1, "일이삼사오", 3, "냉장")
 
     assert "올바른 식재료명을 입력해주세요" in result
+
+def test_destructive_name_match_rejects_partial_name() -> None:
+    """소비·폐기 작업은 짧은 부분 일치로 다른 식재료를 선택하지 않습니다."""
+    fridge_item = SimpleNamespace(display_name="계란", quantity=Decimal("1"), status="normal")
+    ingredient = SimpleNamespace(name="계란", normalized_name="계란")
+
+    assert inventory_service._find_items_by_name([(fridge_item, ingredient)], "계") == []
+
+
+def test_multi_add_uses_single_transaction(monkeypatch) -> None:
+    """여러 재료 추가는 모두 준비된 뒤 한 번만 커밋합니다."""
+    from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+
+    calls = []
+    db = MagicMock()
+
+    def fake_add(db, user_id, name, quantity, storage, *, commit):
+        """각 재료가 자동 커밋 없이 호출되는지 기록합니다."""
+        calls.append((name, commit))
+        return f"{name} 추가"
+
+    monkeypatch.setattr(inventory_service, "add_ingredient_by_name", fake_add)
+
+    result = execute_inventory_action(
+        "add_ingredients",
+        ["확인", "add_ingredients", "양파,1,냉장|감자,2,실온"],
+        db,
+        1,
+    )
+
+    assert calls == [("양파", False), ("감자", False)]
+    db.commit.assert_called_once()
+    db.rollback.assert_not_called()
+    assert "양파 추가" in result["response_text"]
+
+
+def test_multi_add_rolls_back_when_one_item_fails(monkeypatch) -> None:
+    """여러 재료 중 하나라도 실패하면 전체 작업을 롤백합니다."""
+    from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+
+    db = MagicMock()
+
+    def fake_add(db, user_id, name, quantity, storage, *, commit):
+        """두 번째 재료에서 저장 실패를 재현합니다."""
+        if name == "감자":
+            raise RuntimeError("저장 실패")
+        return f"{name} 추가"
+
+    monkeypatch.setattr(inventory_service, "add_ingredient_by_name", fake_add)
+
+    result = execute_inventory_action(
+        "add_ingredients",
+        ["확인", "add_ingredients", "양파,1,냉장|감자,2,실온"],
+        db,
+        1,
+    )
+
+    db.commit.assert_not_called()
+    db.rollback.assert_called_once()
+    assert "문제가 생겼어요" in result["response_text"]
+
+
+def test_inventory_action_rejects_unsafe_quantity(monkeypatch) -> None:
+    """직접 조작된 확인 명령의 무한대·음수 수량을 저장 전에 차단합니다."""
+    from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+
+    add_mock = MagicMock()
+    monkeypatch.setattr(inventory_service, "add_ingredient_by_name", add_mock)
+
+    for quantity in ("-1", "nan", "inf"):
+        result = execute_inventory_action(
+            "add_ingredient",
+            ["확인", "add_ingredient", "양파", quantity, "냉장"],
+            MagicMock(),
+            1,
+        )
+        assert "올바른" in result["response_text"]
+
+    add_mock.assert_not_called()

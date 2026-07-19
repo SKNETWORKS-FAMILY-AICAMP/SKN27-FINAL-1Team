@@ -6,6 +6,7 @@ from app.backend.services.auth_service.oauth import oauth_client
 from app.backend.services.auth_service.auth_service import auth_service
 from app.backend.api.deps import get_current_user_required
 from app.backend.db.models import User
+from app.backend.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["Auth (실제 인증)"])
 
@@ -70,6 +71,10 @@ def dev_cheat_login(db: Session = Depends(get_db)):
     서버를 껐다 켜거나 DB가 날아갔을 때, 매번 카카오 로그인을 하기 번거로우므로 만든 치트키입니다.
     이 API를 호출하면 가짜 유저(개발자)를 무조건 DB에 생성하거나 불러와서 즉시 사용할 수 있는 진짜 Access Token을 발급해 줍니다.
     """
+    # 운영 환경에서는 개발용 토큰 발급을 차단합니다.
+    if not settings.DEV_MODE:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
     # 1. 개발자용 가짜 카카오 유저 정보를 강제로 세팅
     access_token = auth_service.authenticate_social_user(
         db=db,

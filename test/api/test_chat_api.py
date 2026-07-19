@@ -46,6 +46,7 @@ def test_chat_api_returns_legacy_chat_contract(monkeypatch):
         "sources": [],
         "slots": {},
         "pending_action": None,
+        "context_token": None,
     }
 
 
@@ -195,7 +196,7 @@ def test_chat_api_confirms_and_executes_inventory_add(monkeypatch):
 
     assert pending_response.status_code == 200
     assert pending_response.json()["intent"] == "inventory.action"
-    assert command == "확인:add_ingredient:양파:2.0:냉장"
+    assert command.startswith("확인토큰:")
     assert confirmed_response.status_code == 200
     assert confirmed_response.json()["intent"] == "action.confirm"
     assert confirmed_response.json()["reply"] == "양파를 2개 냉장에 추가했어요."
