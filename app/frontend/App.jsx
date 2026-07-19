@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
-import { API_URL } from './utils/api.js'
+import {
+  API_NOTICE_EVENT,
+  API_URL,
+  SESSION_EXPIRED_KEY,
+  authenticatedFetch,
+  isSessionExpiredError,
+} from './utils/api.js'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
@@ -23,8 +29,6 @@ import RecipeList from './pages/recipe_list/RecipeList.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
 import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
-const SESSION_EXPIRED_EVENT = 'bobbeori-session-expired'
-const SESSION_EXPIRED_KEY = 'bobbeori-session-expired-alerted'
 
 function AppLayout() {
   const { pathname } = useLocation()
@@ -33,19 +37,21 @@ function AppLayout() {
   
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingSeenKey, setOnboardingSeenKey] = useState('hasSeenOnboarding_v4')
-  const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false)
+  const [apiNotice, setApiNotice] = useState(null)
 
 
   useEffect(() => {
-    // 세션 만료 이벤트를 서비스 디자인 모달로 한 번만 안내합니다
-    const handleSessionExpired = () => {
-      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) return
-      sessionStorage.setItem(SESSION_EXPIRED_KEY, 'true')
-      setIsSessionExpiredOpen(true)
+    // API 오류를 서비스 디자인 모달로 안내하고 세션 만료는 한 번만 표시합니다.
+    const handleApiNotice = (event) => {
+      if (event.detail?.type === 'sessionExpired') {
+        if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) return
+        sessionStorage.setItem(SESSION_EXPIRED_KEY, 'true')
+      }
+      setApiNotice(event.detail)
     }
 
-    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
-    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
+    window.addEventListener(API_NOTICE_EVENT, handleApiNotice)
+    return () => window.removeEventListener(API_NOTICE_EVENT, handleApiNotice)
   }, [])
 
   useEffect(() => {
@@ -56,24 +62,13 @@ function AppLayout() {
     const token = localStorage.getItem('bobbeori-token')
 
     // 인증 페이지 및 비로그인은 온보딩 자동 노출 대상에서 제외합니다.
-    if (isAuthPage || !token) return
+    if (isAuthPage || pathname === '/mypage' || !token) return
 
     let isCancelled = false
 
     // 현재 로그인한 사용자 기준으로 온보딩 완료 여부를 확인합니다.
-    fetch(`${API_URL}/api/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authenticatedFetch(`${API_URL}/api/v1/auth/me`)
       .then((res) => {
-        if (res.status === 401) {
-          // 만료된 토큰은 즉시 제거해 게스트 로그인처럼 보이지 않게 합니다.
-          localStorage.removeItem('bobbeori-token')
-          localStorage.removeItem('bobbeori-auth-mode')
-          window.dispatchEvent(new Event('bobbeori-auth-change'))
-          window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
-          navigate('/login')
-          return null
-        }
         return res.ok ? res.json() : null
       })
       .then((user) => {
@@ -84,7 +79,9 @@ function AppLayout() {
           setShowOnboarding(true)
         }
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (isSessionExpiredError(error)) navigate('/login')
+      })
 
     return () => {
       isCancelled = true
@@ -96,14 +93,13 @@ function AppLayout() {
       {showOnboarding && <OnboardingModal seenKey={onboardingSeenKey} onClose={() => setShowOnboarding(false)} />}
 
       <ConfirmModal
-        isOpen={isSessionExpiredOpen}
-        title="로그인 만료"
-        message={`로그인 세션이 만료되었습니다.
-다시 로그인한 뒤 이용해주세요.`}
+        isOpen={Boolean(apiNotice)}
+        title={apiNotice?.title || '알림'}
+        message={apiNotice?.message || ''}
         confirmText="확인"
         showCancel={false}
-        onConfirm={() => setIsSessionExpiredOpen(false)}
-        onClose={() => setIsSessionExpiredOpen(false)}
+        onConfirm={() => setApiNotice(null)}
+        onClose={() => setApiNotice(null)}
       />
       {!isAuthPage && <Header />}
       <main className={isAuthPage ? 'app-main app-main--auth' : 'app-main'}>
