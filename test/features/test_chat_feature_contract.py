@@ -7,7 +7,7 @@ pytest.importorskip("langchain_openai")
 
 import ai.agents.alarm_agent.alarm_agent as alarm_agent_module
 from ai.agents.supervisor_agent import supervisor_agent
-from ai.agents.supervisor_agent import supervisor_utils
+from ai.agents.supervisor_agent import chat_context, supervisor_utils
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 
 
@@ -113,8 +113,8 @@ def test_supervisor_service_invokes_shopping_agent_from_chat():
 
     assert result["intent"] == "shopping.create"
     assert "장보기 목록을 만들까요" in result["reply"]
-    assert result["actions"][0]["data"]["message"] == "확인:shopping_create:두부|양파"
-    assert result["pending_action"] == {"command": "확인:shopping_create:두부|양파"}
+    assert result["actions"][0]["data"]["message"].startswith("확인토큰:")
+    assert result["pending_action"]["command"].startswith("확인토큰:")
 
 
 
@@ -195,7 +195,7 @@ def test_alarm_confirm_payload_returns_to_alarm_agent(monkeypatch):
 def test_context_switch_replaces_pending_inventory_request():
     """번복 뒤 새 재료 요청은 이전 pending 식재료를 이어받지 않습니다."""
     history = [SimpleNamespace(role="bot", text="두부를 몇 개 추가하시겠어요?", intent="inventory.action")]
-    assert supervisor_utils._rewrite_context_switch("소금 대신 뭐 넣어?") == "소금 대신 뭐 넣어?"
+    assert chat_context._rewrite_context_switch("소금 대신 뭐 넣어?") == "소금 대신 뭐 넣어?"
 
     for message in ("아니다 치즈 넣어줘", "두부말고 치즈 넣어줘", "두부 대신 치즈 넣어줘"):
         result = supervisor_agent.router_node({"text": message, "history": history})

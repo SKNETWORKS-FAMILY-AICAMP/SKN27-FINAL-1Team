@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any
 
@@ -6,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings as app_settings
 from ai.agents.guide_agent import answer_guide_query
+
+logger = logging.getLogger(__name__)
 
 
 try:
@@ -21,17 +24,23 @@ except ImportError:
     propagate_attributes = None
     LangfuseCallbackHandler = None
 
+from ai.agents.supervisor_agent.chat_context import (
+    _build_chat_state,
+    _build_llm_route_history,
+    _verify_context_token,
+)
+from ai.agents.supervisor_agent.routing_rules import _is_login_status_question
+from ai.agents.supervisor_agent.chat_response_mapper import (
+    _auth_status_response,
+    _chat_error_response,
+    _chat_response_from_state,
+    _guide_result_to_state,
+)
 from ai.agents.supervisor_agent.supervisor_utils import (
     _LLM_ROUTE_CONFIDENCE,
     _LLM_ROUTE_INTENTS,
     _LLM_ROUTE_SYSTEM_PROMPT,
-    _auth_status_response,
-    _build_chat_state,
-    _build_llm_route_history,
-    _chat_error_response,
-    _chat_response_from_state,
-    _guide_result_to_state,
-    _is_login_status_question,
+    _is_llm_route_payload_valid,
     _parse_llm_route_payload,
     _route_payload,
 )
@@ -48,6 +57,7 @@ class ChatService:
         history: list[Any] | None = None,
         user_settings: Any = None,
         session_id: str | None = None,
+        context_token: str | None = None,
     ) -> dict[str, Any]:
         """LangGraph를 활용하여 메시지를 처리하고 챗봇 응답 딕셔너리를 반환합니다."""
         text = message.strip()
@@ -56,6 +66,7 @@ class ChatService:
 
         from ai.agents.supervisor_agent.supervisor_agent import supervisor_agent
 
+        trusted_context = _verify_context_token(context_token, user_id, session_id)
         initial_state = _build_chat_state(
             db=db,
             user_id=user_id,
@@ -63,6 +74,7 @@ class ChatService:
             history=history,
             user_settings=user_settings,
             service=self,
+            trusted_context=trusted_context,
         )
 
         invoke_config = {
@@ -123,7 +135,7 @@ class ChatService:
                                     data_type="BOOLEAN",
                                 )
                             except Exception as trace_exc:
-                                print(f"[ChatService] Langfuse result recording failed: {trace_exc}")
+                                logger.warning("Langfuse result recording failed: %s", trace_exc)
                         except Exception as exc:
                             try:
                                 observation.update(
@@ -137,13 +149,13 @@ class ChatService:
                                     data_type="BOOLEAN",
                                 )
                             except Exception as trace_exc:
-                                print(f"[ChatService] Langfuse error recording failed: {trace_exc}")
+                                logger.warning("Langfuse error recording failed: %s", trace_exc)
                             raise
             else:
                 final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
-            response = _chat_response_from_state(final_state)
+            response = _chat_response_from_state(final_state, session_id=session_id)
         except Exception as exc:
-            print(f"[ChatService] graph failed: {type(exc).__name__}: {exc}")
+            logger.exception("Supervisor graph failed: user_id=%s session_id=%s", user_id, session_id)
             response = _chat_error_response()
 
         reply = response["reply"]
@@ -205,6 +217,9 @@ class ChatService:
 
             response = llm.invoke(messages)
             payload = _parse_llm_route_payload(response.content, fallback_text=text)
+            if not _is_llm_route_payload_valid(payload, text):
+                return _route_payload("general", confidence=0.0)
+
             intent = payload.get("intent", "")
             if intent == "multi_agent":
                 if payload.get("confidence", 0) >= _LLM_ROUTE_CONFIDENCE and len(payload.get("tasks") or []) >= 2:
@@ -214,6 +229,7 @@ class ChatService:
                 return payload
             return _route_payload("general", confidence=payload.get("confidence", 0), slots=payload.get("slots", {}))
         except Exception:
+            logger.exception("LLM intent 분류에 실패했습니다.")
             return _route_payload("general", confidence=0.0)
 
 

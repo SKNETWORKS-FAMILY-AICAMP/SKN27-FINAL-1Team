@@ -28,10 +28,20 @@ class Settings:
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     # JWT Settings
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "YOUR_JWT_SECRET_KEY_HERE")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 30)) # 개발 기간 편의를 위해 30일로 연장
     REFRESH_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", 60 * 24 * 30)) # 개발 기간 편의를 위해 30일로 연장
+
+    # 허용할 프론트엔드 출처를 쉼표로 구분해 설정합니다.
+    CORS_ALLOWED_ORIGINS: list[str] = [
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ALLOWED_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173" if DEV_MODE else "",
+        ).split(",")
+        if origin.strip()
+    ]
     
     # Kakao OAuth Settings
     KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
@@ -85,5 +95,10 @@ class Settings:
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 10))
     RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE", 5))
     RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY", 50))
+
+    def validate_security(self) -> None:
+        """운영 서버 시작 전에 필수 보안 설정을 검증합니다."""
+        if not self.DEV_MODE and len(self.JWT_SECRET_KEY) < 32:
+            raise RuntimeError("JWT_SECRET_KEY는 32자 이상의 임의 문자열로 설정해야 합니다.")
 
 settings = Settings()

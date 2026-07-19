@@ -54,7 +54,7 @@
 
 - 위치: `ai/agents/supervisor_agent/supervisor_utils.py`
 - intent 판별, 응답 formatting, history 상속, LLM payload parsing, alarm parsing, retry와 결과 병합이 약 850줄에 함께 있다.
-- `routing_rules.py`, `conversation_context.py`, `response_mapper.py`, `agent_execution.py`로 점진적으로 나눈다.
+- `routing_rules.py`, `chat_context.py`, `chat_response_mapper.py`, `agent_execution.py`로 점진적으로 나눈다.
 
 ### P2. 운영 관측성이 낮음
 
@@ -74,13 +74,13 @@ Supervisor를 분리할 때는 각 모듈 상단에 입력·출력 계약과 con
 
 ## 권장 작업 순서
 
-- [ ] 운영에서 `/dev-login` route 제외
-- [ ] JWT secret 기본값 제거와 startup validation
-- [ ] CORS 환경별 allowlist 적용
+- [x] 운영에서 `/dev-login` route 제외
+- [x] JWT secret 기본값 제거와 startup validation
+- [x] CORS 환경별 allowlist 적용
 - [ ] inventory transaction 정책 정리
-- [ ] 장보기 부분 실패 rollback test 공동 작성
-- [ ] Supervisor utility를 네 역할로 점진 분리
-- [ ] `print`를 구조화 logger로 교체
+- [ ] 장보기 부분 실패 rollback test 공동 작성 (장보기 담당 영역)
+- [x] Supervisor utility를 네 역할로 점진 분리
+- [x] `print`를 구조화 logger로 교체
 
 ## 완료 기준
 

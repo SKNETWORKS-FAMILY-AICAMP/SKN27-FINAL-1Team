@@ -6,7 +6,6 @@ import imageMypage from '../../assets/extracted/images/image_mypage.png'
 import imageRecommendation from '../../assets/extracted/images/image_recommendation.png'
 import OnboardingModal from '../../components/OnboardingModal.jsx'
 import ConfirmModal from '../../components/modals/ConfirmModal'
-import { userProfile } from '../../mock/userService.js'
 import { readStoredRecipes, removeStoredRecipe, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import { API_URL } from '../../utils/api.js'
 
@@ -169,8 +168,8 @@ function Mypage() {
       ? true
       : window.localStorage.getItem('bobbeori-calendar-cost-enabled') !== 'false',
   )
-  const [profileName, setProfileName] = useState(userProfile.name)
-  const [profileEmail, setProfileEmail] = useState('babbeori@example.com')
+  const [profileName, setProfileName] = useState('')
+  const [profileEmail, setProfileEmail] = useState('')
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [userData, setUserData] = useState(null)
   const [inventorySummary, setInventorySummary] = useState({
@@ -308,8 +307,8 @@ function Mypage() {
           setCalendarEnabled(calendarData.connected)
         }
 
-        setProfileName(data.nickname ? `${data.nickname}님` : userProfile.name)
-        setProfileEmail(data.email || 'babbeori@example.com')
+        setProfileName(data.nickname ? `${data.nickname}님` : '')
+        setProfileEmail(data.email || '')
       } catch (err) {
         console.error(err)
         window.localStorage.removeItem('bobbeori-token')
@@ -430,7 +429,7 @@ function Mypage() {
   const profileDisplayEmail = profileEmail
   const profileCreatedAt = userData?.created_at
     ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}`
-    : '가입일 2024. 05. 22'
+    : ''
   const provider = userData?.provider
   const providerLabel = {
     kakao: '카카오',

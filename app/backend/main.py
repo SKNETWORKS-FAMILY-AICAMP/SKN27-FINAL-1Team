@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 import asyncio
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.backend.core.config import settings
@@ -17,7 +18,9 @@ from app.backend.api.chat import chat_api
 from app.backend.services.calendar_job import daily_calendar_loop
 from app.backend.services.inventory_service.inventory_seed import seed_common_inventory_standards
 
+logger = logging.getLogger(__name__)
 
+settings.validate_security()
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="밥벌이(Bobbeori) 백엔드 API 서버입니다.",
@@ -26,10 +29,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# 프론트엔드 로컬 개발 환경에서 API를 호출할 수 있도록 CORS를 허용합니다.
+# 설정에 등록된 프론트엔드에서만 API를 호출할 수 있도록 허용합니다.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,12 +58,9 @@ def seed_inventory_standards():
     """서버 시작 시 자주 쓰는 식재료 보관 기준을 준비합니다."""
     try:
         created_ingredients, created_standards = seed_common_inventory_standards()
-        print(
-            "[InventorySeed] "
-            f"식재료 {created_ingredients}개, 보관 기준 {created_standards}개 확인/생성 완료"
-        )
-    except Exception as exc:
-        print(f"[InventorySeed] 자주 쓰는 식재료 보관 기준 생성 실패: {exc}")
+        logger.info("Inventory seed ready: ingredients=%s standards=%s", created_ingredients, created_standards)
+    except Exception:
+        logger.exception("Inventory seed failed")
 
 
 @app.on_event("startup")

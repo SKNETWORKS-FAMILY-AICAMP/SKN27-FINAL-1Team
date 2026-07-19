@@ -78,6 +78,7 @@ function FloatingChatbot() {
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef(null)
   const sessionIdRef = useRef(createChatSessionId())
+  const contextTokenRef = useRef(null)
 
   // 새 메시지나 로딩 말풍선이 추가되면 마지막 응답으로 이동합니다.
   useEffect(() => {
@@ -108,6 +109,7 @@ function FloatingChatbot() {
         body: JSON.stringify({
           message: trimmed,
           session_id: sessionIdRef.current,
+          context_token: contextTokenRef.current,
           history: messages.map((item) => ({
             role: item.role,
             text: item.text,
@@ -123,6 +125,8 @@ function FloatingChatbot() {
       if (!response.ok) throw new Error('chat request failed')
 
       const data = await response.json()
+      // 다음 요청은 서버가 서명한 직전 대화 문맥만 신뢰하도록 토큰을 보관합니다.
+      contextTokenRef.current = data.context_token || null
       // 냉장고 쓰기 작업이 끝난 응답이면 현재 화면의 목록을 새로고침합니다.
       if ((data.actions || []).some((action) => action.data?.refreshInventory)) {
         window.dispatchEvent(new CustomEvent('bobbeori:inventory-updated'))
@@ -192,6 +196,7 @@ function FloatingChatbot() {
                 onClick={() => {
                   setMessages(initialMessages)
                   sessionIdRef.current = createChatSessionId()
+                  contextTokenRef.current = null
                 }}
                 style={{ 
                   width: 'auto',
