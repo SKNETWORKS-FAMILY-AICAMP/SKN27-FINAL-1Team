@@ -26,14 +26,5 @@ langchain-openai>=1.0,<2.0  # ChatOpenAI 모델 연동
 langgraph>=1.0,<2.0         # 슈퍼바이저 LangGraph 워크플로 실행
 openai>=1.0.0               # OpenAI API 연동
 
-# Data Analysis & Machine Learning (김경수 담당)
-pandas>=2.0.0
-numpy>=1.24.0
-scikit-learn
-lightgbm>=4.3.0
-matplotlib
-seaborn
-tqdm>=4.67.0
-
 # postgresql
 psycopg[binary]==3.3.3

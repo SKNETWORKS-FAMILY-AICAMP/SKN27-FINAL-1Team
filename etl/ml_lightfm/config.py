@@ -37,7 +37,7 @@ class ExperimentConfig:
 def require_docker_runtime() -> None:
     if os.environ.get("LIGHTFM_RUNTIME", "local") != "linux-docker":
         raise RuntimeError(
-            "공식 실행 환경이 아닙니다. ai/experiments 에서 "
+            "공식 실행 환경이 아닙니다. etl/ml_lightfm 에서 "
             "'docker compose up' 후 JupyterLab에서 실행하세요."
         )
 

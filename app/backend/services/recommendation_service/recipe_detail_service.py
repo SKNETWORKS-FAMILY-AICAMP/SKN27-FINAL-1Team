@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models import Recipe, RecipeIngredient
 from app.backend.services.recommendation_service.fridge import classify_fridge_match, fetch_fridge_snapshots
+from app.backend.services.recommendation_service.recipe_image_urls import (
+    build_main_image_url,
+    build_step_image_url,
+)
 
 
 class RecipeDetailService:
@@ -29,13 +33,13 @@ class RecipeDetailService:
             "difficulty": recipe.difficulty,
             "cooking_time_min": recipe.cooking_time,
             "serving_count": recipe.serving_size,
-            "main_image_url": recipe.image_url,
+            "main_image_url": build_main_image_url(recipe.id),
             "owned_ingredients": ownership.owned,
             "maybe_owned_ingredients": ownership.maybe_owned,
             "missing_ingredients": ownership.missing,
             "match_rate": ownership.match_rate,
             "display_match_rate": ownership.display_match_rate,
-            "steps": self._to_steps(recipe.recipe_steps),
+            "steps": self._to_steps(recipe.id, recipe.recipe_steps),
             "source_url": recipe.source_url,
         }
 
@@ -82,7 +86,11 @@ class RecipeDetailService:
             return f"{normalized}{unit}"
         return normalized
 
-    def _to_steps(self, recipe_steps: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    def _to_steps(
+        self,
+        recipe_id: int,
+        recipe_steps: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
         if not recipe_steps:
             return []
 
@@ -95,7 +103,7 @@ class RecipeDetailService:
                 {
                     "title": step.get("title") or f"{step.get('step_no', len(steps) + 1)}단계",
                     "text": str(text),
-                    "image_url": step.get("image_url"),
+                    "image_url": build_step_image_url(recipe_id, len(steps) + 1),
                 }
             )
         return steps
