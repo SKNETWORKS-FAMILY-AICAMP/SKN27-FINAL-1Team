@@ -332,7 +332,7 @@ def inventory_agent_node(state: GraphState) -> dict:
             intent=intent,
             text=state["text"],
             history=state.get("history", []),
-            db=state["db"],
+            db=state.get("db"),
             user_id=state.get("user_id"),
             slots=state.get("slots"),
         ),
@@ -376,7 +376,7 @@ def recipe_agent_node(state: GraphState) -> dict:
     result = _run_agent_with_retry(
         lambda: run_recipe_agent(
             query,
-            db=state["db"],
+            db=state.get("db"),
             user_id=state.get("user_id"),
             history=state.get("history", []),
             settings_obj=state.get("settings_obj"),
@@ -427,7 +427,7 @@ def shopping_agent_node(state: GraphState) -> dict:
             intent=state.get("intent", ""),
             history=state.get("history", []),
             slots=state.get("slots", {}),
-            db=state["db"],
+            db=state.get("db"),
             user_id=state.get("user_id"),
         ),
         enabled=state.get("intent") not in _SHOPPING_WRITE_INTENTS,
@@ -454,7 +454,7 @@ def alarm_agent_node(state: GraphState) -> dict:
             action=request["action"],
             confirmed=request["confirmed"],
             tools=ALARM_AGENT_TOOLS,
-            context={"user_id": state.get("user_id"), "db": state["db"]},
+            context={"user_id": state.get("user_id"), "db": state.get("db")},
         ),
         enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
