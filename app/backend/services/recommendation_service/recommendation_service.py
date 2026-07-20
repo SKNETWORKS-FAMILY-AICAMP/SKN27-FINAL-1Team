@@ -28,6 +28,7 @@ from app.backend.services.recommendation_service.recipe_query import (
 )
 from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
 from app.backend.services.recommendation_service.recommend_model import score_recipes
+from app.backend.services.recommendation_service.recipe_image_urls import build_main_image_url
 
 __all__ = [
     "RecipeRecommendConfig",
@@ -195,7 +196,7 @@ class RecommendationService:
                 "category": row.recipe.category,
                 "cooking_time_min": row.recipe.cooking_time,
                 "difficulty": row.recipe.difficulty,
-                "image_url": row.recipe.image_url,
+                "image_url": build_main_image_url(row.recipe.id),
                 "recommendation_type": row.recommendation_type or self.MANUAL_SAVE_TYPE,
                 "created_at": row.created_at,
             }
