@@ -24,12 +24,12 @@ def main() -> None:
     args = _parse_args()
     result = load_recipe_graph_to_neo4j(clear=args.clear)
     logger.info(
-        "Loaded Recipe=%d Reviewer=%d WROTE_REVIEW=%d WROTE_COMMENT=%d USES_ALIAS=%d",
+        "Loaded Recipe=%d ColdStartUser=%d REQUIRES_INGREDIENT=%d REVIEWED=%d unresolved=%d",
         result.get("Recipe", 0),
-        result.get("Reviewer", 0),
-        result.get("WROTE_REVIEW", 0),
-        result.get("WROTE_COMMENT", 0),
-        result.get("USES_ALIAS", 0),
+        result.get("ColdStartUser", 0),
+        result.get("REQUIRES_INGREDIENT", 0),
+        result.get("REVIEWED", 0),
+        result.get("UnlinkedIngredientOccurrences", 0),
     )
 
 

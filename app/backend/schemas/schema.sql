@@ -348,6 +348,8 @@ CREATE TABLE shopping_list_items (
     mall_name VARCHAR(255),
     is_checked BOOLEAN NOT NULL DEFAULT TRUE,
     is_purchased BOOLEAN NOT NULL DEFAULT FALSE,
+    source_type VARCHAR(30) NOT NULL DEFAULT 'recipe',
+    source_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -367,6 +369,8 @@ COMMENT ON COLUMN shopping_list_items.price IS '가격스냅샷';
 COMMENT ON COLUMN shopping_list_items.mall_name IS '판매몰명';
 COMMENT ON COLUMN shopping_list_items.is_checked IS '구매링크열기선택여부';
 COMMENT ON COLUMN shopping_list_items.is_purchased IS '구매/입고완료여부';
+COMMENT ON COLUMN shopping_list_items.source_type IS '장보기 재료 추가 출처(recipe/manual/chatbot)';
+COMMENT ON COLUMN shopping_list_items.source_refs IS '재료를 추가한 레시피 등 출처 참조 목록';
 COMMENT ON COLUMN shopping_list_items.created_at IS '생성일시';
 
 CREATE TABLE recommendation_results (

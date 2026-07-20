@@ -1,5 +1,5 @@
 /**
- * 레시피 목록 필터 옵션 (recipe_fix.csv CKG_* 컬럼 unique 기준 하드코딩).
+ * 레시피 목록 필터 옵션 (recipe_175.csv 기준).
  * 이후 app/frontend/config/ 등으로 파일만 이동해도 import 경로만 바꾸면 됨.
  *
  * @typedef {{ value: string, label: string }} FilterOption
@@ -8,29 +8,23 @@
 export class RecipeFilterConfig {
   static FILTER_ALL = '전체'
 
-  /** CKG_KND_ACTO_NM — 가나다순 */
+  /** menu_category — 가나다순 */
   static recipeTypes = [
-    '김치/젓갈/장류',
-    '과자',
-    '국/탕',
-    '기타',
-    '디저트',
-    '메인반찬',
-    '면/만두',
-    '밑반찬',
-    '밥/죽/떡',
-    '빵',
+    '간식·야식',
+    '국·탕',
+    '메인요리',
+    '면',
+    '반찬',
+    '밥·덮밥',
+    '볶음밥',
+    '샌드위치·토스트',
     '샐러드',
-    '스프',
-    '양념/소스/잼',
-    '양식',
+    '죽',
     '찌개',
-    '차/음료/술',
-    '퓨전',
   ]
 
-  /** CKG_DODF_NM */
-  static difficulties = ['초급', '중급', '고급']
+  /** difficulty */
+  static difficulties = ['매우 쉬움', '쉬움', '보통']
 
   static labels = {
     recipeType: '요리타입',

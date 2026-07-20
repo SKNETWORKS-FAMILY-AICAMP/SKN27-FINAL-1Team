@@ -5,7 +5,7 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.backend.db.models import Ingredient, ShoppingList, ShoppingListItem
+from app.backend.db.models import Ingredient, Recipe, ShoppingList, ShoppingListItem
 from app.backend.schemas.inventory import IngredientCreate
 from app.backend.schemas.shopping import ShoppingIngredientInput
 from app.backend.services.inventory_service.inventory_service import inventory_service
@@ -32,32 +32,9 @@ class ShoppingService:
         if not missing_ingredients:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="장보기 재료가 비어 있습니다.")
 
-        shopping_list = ShoppingList(user_id=user_id, recipe_id=recipe_id, source=source, status="active")
-        db.add(shopping_list)
-        db.flush()
-
-        for raw_item in missing_ingredients:
-            ingredient = self._resolve_ingredient(db, raw_item.ingredient_id, raw_item.name)
-            quantity, unit = self._resolve_quantity_and_unit(raw_item, ingredient)
-            product = self.provider.search_best_product(raw_item.name)
-
-            db.add(
-                ShoppingListItem(
-                    shopping_list_id=shopping_list.id,
-                    ingredient_id=ingredient.id if ingredient else raw_item.ingredient_id,
-                    name=raw_item.name.strip(),
-                    required_quantity=quantity,
-                    unit=unit,
-                    provider=product.provider if product else self.provider.provider_name,
-                    product_id=product.product_id if product else None,
-                    product_name=product.product_name if product else None,
-                    product_link=self.provider.build_product_link(product) if product else None,
-                    product_image=product.product_image if product else None,
-                    price=product.price if product else None,
-                    mall_name=product.mall_name if product else None,
-                    is_checked=True,
-                )
-            )
+        shopping_list = self._get_or_create_active_list(db, user_id=user_id, recipe_id=recipe_id, source=source)
+        source_ref = self._build_source_ref(db, source=source, recipe_id=recipe_id)
+        self._merge_items_into_list(db, shopping_list, missing_ingredients, source=source, source_ref=source_ref)
 
         db.commit()
         return self.get_list(db, user_id=user_id, shopping_list_id=shopping_list.id)
@@ -90,7 +67,7 @@ class ShoppingService:
         shopping_lists = (
             db.query(ShoppingList)
             .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
-            .filter(ShoppingList.user_id == user_id, ShoppingList.status != "completed")
+            .filter(ShoppingList.user_id == user_id)
             .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
             .limit(normalized_limit)
             .all()
@@ -163,9 +140,8 @@ class ShoppingService:
 
         self._sync_list_status(shopping_list)
 
-        # 모든 재료 입고로 목록이 완료되면 DB에 남기지 않고 삭제한다.
+        # 모든 재료가 입고되면 현재 장보기에서는 빠지고, 지난 내역에는 완료 세션으로 남긴다.
         if shopping_list.status == "completed":
-            db.delete(shopping_list)
             db.commit()
             return {
                 "message": f"{stocked_count}개 재료를 냉장고에 입고하고 장보기를 완료했어요.",
@@ -210,6 +186,254 @@ class ShoppingService:
             "market_prices": rows,
             "recommended_market": "네이버 쇼핑",
         }
+
+    def search_products(self, keyword: str, display: int = 5) -> dict:
+        query = (keyword or "").strip()
+        if not query:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="검색어가 비어 있습니다.")
+
+        products = self.provider.search_products(query, display=display)
+        return {
+            "keyword": query,
+            "items": [self._map_product_candidate(query, product) for product in products],
+        }
+
+    def _get_or_create_active_list(
+        self,
+        db: Session,
+        user_id: int,
+        recipe_id: int | None,
+        source: str,
+    ) -> ShoppingList:
+        shopping_list = (
+            db.query(ShoppingList)
+            .options(joinedload(ShoppingList.items), joinedload(ShoppingList.recipe))
+            .filter(ShoppingList.user_id == user_id, ShoppingList.status == "active")
+            .order_by(ShoppingList.created_at.desc(), ShoppingList.id.desc())
+            .first()
+        )
+        if shopping_list:
+            if recipe_id and not shopping_list.recipe_id:
+                shopping_list.recipe_id = recipe_id
+            if source == "recipe" and shopping_list.source != "recipe":
+                shopping_list.source = "recipe"
+            return shopping_list
+
+        shopping_list = ShoppingList(user_id=user_id, recipe_id=recipe_id, source=source, status="active")
+        db.add(shopping_list)
+        db.flush()
+        return shopping_list
+
+    def _merge_items_into_list(
+        self,
+        db: Session,
+        shopping_list: ShoppingList,
+        raw_items: list[ShoppingIngredientInput],
+        source: str,
+        source_ref: dict | None,
+    ) -> bool:
+        active_by_key = {
+            self._ingredient_key(item.ingredient_id, item.name): item
+            for item in shopping_list.items
+            if not item.is_purchased
+        }
+        active_by_key = {key: item for key, item in active_by_key.items() if key}
+        changed = False
+
+        for raw_item in raw_items:
+            ingredient = self._resolve_ingredient(db, raw_item.ingredient_id, raw_item.name)
+            ingredient_id = ingredient.id if ingredient else raw_item.ingredient_id
+            key = self._ingredient_key(ingredient_id, raw_item.name)
+            if not key:
+                continue
+
+            quantity, unit = self._resolve_quantity_and_unit(raw_item, ingredient)
+            existing_item = active_by_key.get(key)
+            if existing_item:
+                current_refs = self._normalize_source_refs(getattr(existing_item, "source_refs", None))
+                next_refs = self._merge_source_ref(existing_item, source_ref)
+                if next_refs != current_refs:
+                    existing_item.source_refs = next_refs
+                    changed = True
+                if getattr(existing_item, "source_type", None) != source and source == "recipe":
+                    existing_item.source_type = source
+                    changed = True
+
+                next_quantity, next_unit = self._merge_quantity(existing_item.required_quantity, existing_item.unit, quantity, unit)
+                if existing_item.required_quantity != next_quantity or existing_item.unit != next_unit:
+                    existing_item.required_quantity = next_quantity
+                    existing_item.unit = next_unit
+                    changed = True
+                if self._apply_product_snapshot(existing_item, raw_item):
+                    changed = True
+                continue
+
+            product_snapshot = self._product_snapshot_from_input(raw_item)
+            product = None if product_snapshot else self.provider.search_best_product(raw_item.name)
+            item = ShoppingListItem(
+                shopping_list_id=shopping_list.id,
+                ingredient_id=ingredient_id,
+                name=raw_item.name.strip(),
+                required_quantity=quantity,
+                unit=unit,
+                provider=(product_snapshot or {}).get("provider") or (product.provider if product else self.provider.provider_name),
+                product_id=(product_snapshot or {}).get("product_id") or (product.product_id if product else None),
+                product_name=(product_snapshot or {}).get("product_name") or (product.product_name if product else None),
+                product_link=(product_snapshot or {}).get("product_link") or (self.provider.build_product_link(product) if product else None),
+                product_image=(product_snapshot or {}).get("product_image") or (product.product_image if product else None),
+                price=(product_snapshot or {}).get("price") if product_snapshot else (product.price if product else None),
+                mall_name=(product_snapshot or {}).get("mall_name") or (product.mall_name if product else None),
+                is_checked=True,
+                source_type=source,
+                source_refs=[source_ref] if source_ref else [{"type": source}],
+            )
+            db.add(item)
+            shopping_list.items.append(item)
+            active_by_key[key] = item
+            changed = True
+
+        return changed
+
+    def _map_product_candidate(self, name: str, product) -> dict:
+        return {
+            "name": name,
+            "provider": product.provider,
+            "coupang": None,
+            "kurly": None,
+            "best_market": product.mall_name,
+            "product_id": product.product_id,
+            "product_name": product.product_name,
+            "product_link": product.product_link,
+            "product_image": product.product_image,
+            "price": product.price,
+            "mall_name": product.mall_name,
+        }
+
+    def _product_snapshot_from_input(self, raw_item: ShoppingIngredientInput) -> dict | None:
+        if not any([
+            raw_item.product_id,
+            raw_item.product_name,
+            raw_item.product_link,
+            raw_item.product_image,
+            raw_item.price,
+            raw_item.mall_name,
+        ]):
+            return None
+        return {
+            "provider": raw_item.provider or self.provider.provider_name,
+            "product_id": raw_item.product_id,
+            "product_name": raw_item.product_name,
+            "product_link": raw_item.product_link,
+            "product_image": raw_item.product_image,
+            "price": raw_item.price,
+            "mall_name": raw_item.mall_name,
+        }
+
+    def _apply_product_snapshot(self, item: ShoppingListItem, raw_item: ShoppingIngredientInput) -> bool:
+        snapshot = self._product_snapshot_from_input(raw_item)
+        if not snapshot:
+            return False
+
+        changed = False
+        for attr, value in snapshot.items():
+            if value is not None and getattr(item, attr) != value:
+                setattr(item, attr, value)
+                changed = True
+        return changed
+
+    def _build_source_ref(self, db: Session, source: str, recipe_id: int | None = None) -> dict:
+        if source == "recipe" and recipe_id:
+            recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+            return {
+                "type": "recipe",
+                "recipe_id": recipe_id,
+                "recipe_title": recipe.title if recipe else None,
+            }
+        return {"type": source}
+
+    def _normalize_source_refs(self, refs) -> list[dict]:
+        if isinstance(refs, list):
+            return [dict(ref) for ref in refs if isinstance(ref, dict)]
+        if isinstance(refs, dict):
+            return [dict(refs)]
+        return []
+
+    def _merge_source_ref(self, item: ShoppingListItem, source_ref: dict | None) -> list[dict]:
+        refs = self._normalize_source_refs(getattr(item, "source_refs", None))
+        if not source_ref:
+            return refs
+
+        ref_type = source_ref.get("type")
+        recipe_id = source_ref.get("recipe_id")
+        for index, ref in enumerate(refs):
+            if ref.get("type") == ref_type and ref.get("recipe_id") == recipe_id:
+                if source_ref.get("recipe_title") and not ref.get("recipe_title"):
+                    refs[index] = {**ref, "recipe_title": source_ref["recipe_title"]}
+                return refs
+
+        return [*refs, source_ref]
+
+    def _merge_quantity(
+        self,
+        current_quantity: Decimal | None,
+        current_unit: str | None,
+        next_quantity: Decimal | None,
+        next_unit: str | None,
+    ) -> tuple[Decimal | None, str | None]:
+        if current_quantity is None:
+            return next_quantity, next_unit or current_unit
+        if next_quantity is None:
+            return current_quantity, current_unit or next_unit
+        if (current_unit or "") != (next_unit or ""):
+            return current_quantity, current_unit
+        return max(current_quantity, next_quantity), current_unit or next_unit
+
+    def _recipe_ids_for_list(self, shopping_list: ShoppingList) -> list[int]:
+        recipe_ids: list[int] = []
+        if shopping_list.recipe_id:
+            recipe_ids.append(int(shopping_list.recipe_id))
+
+        for item in shopping_list.items:
+            for ref in self._normalize_source_refs(getattr(item, "source_refs", None)):
+                recipe_id = ref.get("recipe_id")
+                if ref.get("type") == "recipe" and recipe_id:
+                    recipe_ids.append(int(recipe_id))
+
+        return list(dict.fromkeys(recipe_ids))
+
+    def _has_recipe_source(self, item: ShoppingListItem, recipe_id: int) -> bool:
+        refs = self._normalize_source_refs(getattr(item, "source_refs", None))
+        if not refs:
+            return False
+        return any(ref.get("type") == "recipe" and int(ref.get("recipe_id") or 0) == int(recipe_id) for ref in refs)
+
+    def _remove_recipe_source(self, item: ShoppingListItem, recipe_id: int) -> list[dict]:
+        return [
+            ref
+            for ref in self._normalize_source_refs(getattr(item, "source_refs", None))
+            if not (ref.get("type") == "recipe" and int(ref.get("recipe_id") or 0) == int(recipe_id))
+        ]
+
+    def _list_source_recipes(self, shopping_list: ShoppingList) -> list[dict]:
+        recipes: dict[int, dict] = {}
+        if shopping_list.recipe_id:
+            recipes[int(shopping_list.recipe_id)] = {
+                "type": "recipe",
+                "recipe_id": int(shopping_list.recipe_id),
+                "recipe_title": shopping_list.recipe.title if shopping_list.recipe else None,
+            }
+
+        for item in shopping_list.items:
+            for ref in self._normalize_source_refs(getattr(item, "source_refs", None)):
+                recipe_id = ref.get("recipe_id")
+                if ref.get("type") == "recipe" and recipe_id:
+                    recipes[int(recipe_id)] = {
+                        "type": "recipe",
+                        "recipe_id": int(recipe_id),
+                        "recipe_title": ref.get("recipe_title"),
+                    }
+
+        return list(recipes.values())
 
     def _get_user_list(self, db: Session, user_id: int, shopping_list_id: int) -> ShoppingList:
         shopping_list = (
@@ -287,97 +511,80 @@ class ShoppingService:
         return deduped
 
     def _sync_recipe_list(self, db: Session, user_id: int, shopping_list: ShoppingList) -> dict:
-        if shopping_list.source != "recipe" or not shopping_list.recipe_id or shopping_list.status != "active":
+        if shopping_list.status != "active":
             return {"changed": False, "owned_ingredients": []}
 
-        recipe_detail = recipe_detail_service.get_recipe_detail(db, shopping_list.recipe_id, user_id)
-        owned_ingredients = self._dedupe_owned_ingredients(
-            [
-                *recipe_detail.get("owned_ingredients", []),
-                *recipe_detail.get("maybe_owned_ingredients", []),
-            ]
-        )
-        missing_ingredients = recipe_detail.get("missing_ingredients", [])
-
-        desired_by_key = {
-            self._ingredient_key(item.get("ingredient_id"), item.get("name")): item
-            for item in missing_ingredients
-            if item.get("name")
-        }
-        desired_by_key = {key: item for key, item in desired_by_key.items() if key}
-
-        active_items = [item for item in shopping_list.items if not item.is_purchased]
-        active_by_key = {
-            self._ingredient_key(item.ingredient_id, item.name): item
-            for item in active_items
-        }
-        active_by_key = {key: item for key, item in active_by_key.items() if key}
+        recipe_ids = self._recipe_ids_for_list(shopping_list)
+        if not recipe_ids:
+            return {"changed": False, "owned_ingredients": []}
 
         changed = False
+        owned_ingredients: list[dict] = []
 
-        for key, item in list(active_by_key.items()):
-            if key not in desired_by_key:
-                db.delete(item)
+        for recipe_id in recipe_ids:
+            recipe_detail = recipe_detail_service.get_recipe_detail(db, recipe_id, user_id)
+            owned_ingredients.extend(recipe_detail.get("owned_ingredients", []))
+            owned_ingredients.extend(recipe_detail.get("maybe_owned_ingredients", []))
+            missing_ingredients = recipe_detail.get("missing_ingredients", [])
+
+            desired_by_key = {
+                self._ingredient_key(item.get("ingredient_id"), item.get("name")): item
+                for item in missing_ingredients
+                if item.get("name")
+            }
+            desired_by_key = {key: item for key, item in desired_by_key.items() if key}
+
+            for item in list(shopping_list.items):
+                item_refs = self._normalize_source_refs(getattr(item, "source_refs", None))
+                is_legacy_recipe_item = (
+                    not item_refs
+                    and shopping_list.source == "recipe"
+                    and shopping_list.recipe_id
+                    and int(shopping_list.recipe_id) == int(recipe_id)
+                )
+                if item.is_purchased or not (self._has_recipe_source(item, recipe_id) or is_legacy_recipe_item):
+                    continue
+
+                key = self._ingredient_key(item.ingredient_id, item.name)
+                if key in desired_by_key:
+                    continue
+
+                next_refs = self._remove_recipe_source(item, recipe_id)
+                if next_refs:
+                    item.source_refs = next_refs
+                else:
+                    db.delete(item)
+                    if item in shopping_list.items:
+                        shopping_list.items.remove(item)
                 changed = True
 
-        for key, raw_item in desired_by_key.items():
-            item = active_by_key.get(key)
-            shopping_input = ShoppingIngredientInput(
-                ingredient_id=raw_item.get("ingredient_id"),
-                name=raw_item["name"],
-                amount=raw_item.get("amount"),
-            )
-            ingredient = self._resolve_ingredient(db, shopping_input.ingredient_id, shopping_input.name)
-            quantity, unit = self._resolve_quantity_and_unit(shopping_input, ingredient)
-
-            if item:
-                next_ingredient_id = ingredient.id if ingredient else shopping_input.ingredient_id
-                if (
-                    item.ingredient_id != next_ingredient_id
-                    or item.name != shopping_input.name.strip()
-                    or item.required_quantity != quantity
-                    or item.unit != unit
-                ):
-                    item.ingredient_id = next_ingredient_id
-                    item.name = shopping_input.name.strip()
-                    item.required_quantity = quantity
-                    item.unit = unit
-                    changed = True
-                continue
-
-            product = self.provider.search_best_product(shopping_input.name)
-            db.add(
-                ShoppingListItem(
-                    shopping_list_id=shopping_list.id,
-                    ingredient_id=ingredient.id if ingredient else shopping_input.ingredient_id,
-                    name=shopping_input.name.strip(),
-                    required_quantity=quantity,
-                    unit=unit,
-                    provider=product.provider if product else self.provider.provider_name,
-                    product_id=product.product_id if product else None,
-                    product_name=product.product_name if product else None,
-                    product_link=self.provider.build_product_link(product) if product else None,
-                    product_image=product.product_image if product else None,
-                    price=product.price if product else None,
-                    mall_name=product.mall_name if product else None,
-                    is_checked=True,
+            shopping_inputs = [
+                ShoppingIngredientInput(
+                    ingredient_id=raw_item.get("ingredient_id"),
+                    name=raw_item["name"],
+                    amount=raw_item.get("amount"),
                 )
-            )
-            changed = True
+                for raw_item in desired_by_key.values()
+            ]
+            source_ref = self._build_source_ref(db, source="recipe", recipe_id=recipe_id)
+            if self._merge_items_into_list(db, shopping_list, shopping_inputs, source="recipe", source_ref=source_ref):
+                changed = True
 
         if changed:
             db.commit()
 
-        return {"changed": changed, "owned_ingredients": owned_ingredients}
+        return {"changed": changed, "owned_ingredients": self._dedupe_owned_ingredients(owned_ingredients)}
 
     def _map_list(self, shopping_list: ShoppingList, owned_ingredients: list[dict] | None = None) -> dict:
         items = sorted(shopping_list.items, key=lambda item: item.id)
         total_price = sum((item.price or 0) for item in items if item.is_checked and not item.is_purchased)
+        source_recipes = self._list_source_recipes(shopping_list)
         return {
             "id": shopping_list.id,
             "user_id": shopping_list.user_id,
             "recipe_id": shopping_list.recipe_id,
             "recipe_title": shopping_list.recipe.title if shopping_list.recipe else None,
+            "source_recipes": source_recipes,
             "source": shopping_list.source,
             "status": shopping_list.status,
             "total_price": total_price,
@@ -401,6 +608,8 @@ class ShoppingService:
                     "mall_name": item.mall_name,
                     "is_checked": item.is_checked,
                     "is_purchased": item.is_purchased,
+                    "source_type": getattr(item, "source_type", None) or shopping_list.source,
+                    "source_refs": self._normalize_source_refs(getattr(item, "source_refs", None)),
                     "created_at": item.created_at,
                 }
                 for item in items

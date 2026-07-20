@@ -111,13 +111,39 @@ def test_provider_config_normalizes_display_and_sort():
     assert low_display.sort == "date"
 
 
-def test_provider_falls_back_to_first_item_when_all_candidates_are_filtered():
+def test_provider_returns_none_when_all_candidates_are_filtered():
     provider = NaverShoppingProvider(client_id="id", client_secret="secret")
     items = [
-        product_item(title="강아지 사료 두부맛", productId="fallback"),
+        product_item(title="강아지 사료 두부맛", productId="filtered"),
         product_item(title="고양이 두부 모래", productId="also-bad"),
     ]
 
     selected = provider._select_best_item("두부", items)
 
-    assert selected["productId"] == "fallback"
+    assert selected is None
+
+
+def test_provider_selects_highest_title_match_score():
+    provider = NaverShoppingProvider(client_id="id", client_secret="secret")
+    items = [
+        product_item(title="국산 콩 식품", productId="weak", lprice="3900"),
+        product_item(title="국산 두부 1모", productId="strong", lprice="4200"),
+    ]
+
+    selected = provider._select_best_item("두부", items)
+
+    assert selected["productId"] == "strong"
+
+
+def test_provider_removes_extreme_price_outliers_before_scoring():
+    provider = NaverShoppingProvider(client_id="id", client_secret="secret")
+    items = [
+        product_item(title="두부 옵션 상품", productId="too-cheap", lprice="100"),
+        product_item(title="국산 두부 1모", productId="normal-1", lprice="3800"),
+        product_item(title="국산 두부 찌개용", productId="normal-2", lprice="4200"),
+        product_item(title="두부 선물세트", productId="too-expensive", lprice="99000"),
+    ]
+
+    selected = provider._select_best_item("두부", items)
+
+    assert selected["productId"] in {"normal-1", "normal-2"}

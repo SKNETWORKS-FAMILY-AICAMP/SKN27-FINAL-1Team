@@ -428,6 +428,8 @@ class ShoppingListItem(Base):
     mall_name = Column(String(255), nullable=True)
     is_checked = Column(Boolean, nullable=False, server_default=true())
     is_purchased = Column(Boolean, nullable=False, server_default=false())
+    source_type = Column(String(30), nullable=False, server_default="recipe")
+    source_refs = Column(JSON, nullable=False, server_default="[]")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     shopping_list = relationship("ShoppingList", back_populates="items")

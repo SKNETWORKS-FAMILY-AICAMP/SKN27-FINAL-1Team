@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import UploadFile
+from PIL import Image
 from sqlalchemy import BigInteger, create_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -41,7 +42,6 @@ from app.backend.services.receipt_ocr_service.privacy_masking import (
     MASK_PHONE_NUMBER,
 )
 from app.backend.services.receipt_ocr_service.receipt_history_service import receipt_history_service
-from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import KST, ReceiptOcrService
 
 
@@ -53,6 +53,7 @@ def _compile_bigint_sqlite(type_, compiler, **kw):
 EA = "\uac1c"
 BANANA = "\ubc14\ub098\ub098"
 BANANA_IMPORTED = "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)"
+BANANA_JEJU = "\uc81c\uc8fc\ubc14\ub098\ub098"
 UNKNOWN_PRODUCT = "\ucc98\uc74c\ubcf4\ub294\uc0c1\ud488ABC"
 COLD_STORAGE = "\ub0c9\uc7a5"
 STORE_NAME = "\ud14c\uc2a4\ud2b8\ub9c8\ud2b8"
@@ -151,16 +152,25 @@ def mock_cold_storage_rule(monkeypatch):
 
 # Neo4j 기준 표준명 매칭에서 괄호/원산지 제거 규칙이 깨지면 이 테스트가 알려준다.
 def test_ingredient_matcher_strips_parentheses_and_returns_neo4j_standard_name(neo4j_banana_candidates):
-    matched = ingredient_name_matcher.find_best_name(BANANA_IMPORTED)
+    match = ingredient_name_matcher.find_best_match(BANANA_IMPORTED)
 
-    assert matched == BANANA
+    assert match.standard_name == BANANA
+    assert match.match_type == "exact"
+
+
+def test_ingredient_matcher_marks_substring_matches_for_manual_review(neo4j_banana_candidates):
+    match = ingredient_name_matcher.find_best_match(BANANA_JEJU)
+
+    assert match.standard_name == BANANA
+    assert match.match_type == "partial"
 
 
 # Neo4j 후보에 없는 품목을 억지로 표준명 매칭하지 않도록 유지되는지 이 테스트가 알려준다.
 def test_ingredient_matcher_returns_none_when_no_neo4j_standard_name_matches(neo4j_banana_candidates):
-    matched = ingredient_name_matcher.find_best_name(UNKNOWN_PRODUCT)
+    match = ingredient_name_matcher.find_best_match(UNKNOWN_PRODUCT)
 
-    assert matched is None
+    assert match.standard_name is None
+    assert match.match_type == "none"
 
 
 # OCR 초안 정규화가 Neo4j 표준명을 우선 쓰고, 매칭 실패 시 원문으로 fallback 되는지 이 테스트가 알려준다.
@@ -180,8 +190,10 @@ def test_ocr_normalize_result_uses_neo4j_standard_name_or_raw_name_fallback(db_s
 
     assert normalized["items"][0]["raw_name"] == BANANA_IMPORTED
     assert normalized["items"][0]["normalized_name"] == BANANA
+    assert normalized["items"][0]["normalization_match_type"] == "exact"
     assert normalized["items"][1]["raw_name"] == UNKNOWN_PRODUCT
     assert normalized["items"][1]["normalized_name"] == UNKNOWN_PRODUCT
+    assert normalized["items"][1]["normalization_match_type"] == "none"
 
 
 # LangGraph OCR 품질 기준 미달 시 재분석을 1회 수행하고 개선된 결과를 저장하는지 이 테스트가 알려준다.
@@ -297,6 +309,45 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     assert saved_receipt.ocr_error_message is None
 
 
+def test_analyze_upload_auto_mode_analyzes_original_image_without_pre_crop(
+    db_session,
+    monkeypatch,
+    workspace_tmp_dir,
+    neo4j_banana_candidates,
+):
+    user = seed_user(db_session, email="receipt-no-precrop@example.com", nickname="receipt no precrop tester")
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
+
+    service = ReceiptOcrService()
+
+    def fail_if_auto_crop_is_called(_image_bytes):
+        raise AssertionError("first-pass upload should analyze the original image before manual crop fallback")
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        return {
+            "image_id": image_id,
+            "document_type": "receipt",
+            "is_receipt_like": True,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-06-29 12:30:00",
+            "items": [{"raw_name": BANANA_IMPORTED, "quantity": 1, "unit": EA, "item_amount": 2000}],
+            "total_item_count": 1,
+            "total_amount": 2000,
+            "currency": "KRW",
+            "confidence_note": None,
+        }
+
+    monkeypatch.setattr(service, "_auto_crop_receipt_image", fail_if_auto_crop_is_called)
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = make_upload()
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="auto"))
+
+    assert result["receipt_id"] is not None
+    assert result["items"][0]["normalized_name"] == BANANA
+    assert result["ocr_status"] == "completed"
+
+
 def test_validate_upload_rejects_pdf_extension():
     service = ReceiptOcrService()
     upload = make_upload(filename="receipt.pdf")
@@ -347,7 +398,123 @@ def test_validate_upload_rejects_oversized_file(monkeypatch):
     assert "1MB" in exc_info.value.detail
 
 
-def test_save_original_image_uses_uuid_name_and_private_user_path(monkeypatch, workspace_tmp_dir):
+# 한 영수증은 상단부터 최대 5장까지만 받는 업로드 정책을 고정한다.
+def test_collect_upload_files_rejects_more_than_five_images():
+    service = ReceiptOcrService()
+
+    with pytest.raises(Exception) as exc_info:
+        service._collect_upload_files(files=[make_upload(f"receipt-{index}.png") for index in range(6)])
+
+    assert exc_info.value.status_code == 400
+    assert "5" in exc_info.value.detail
+
+
+# 같은 사진 안에서 동일 상품을 두 번 산 경우는 정상 구매 행이므로 제거하지 않는다.
+def test_deduplicate_overlapping_items_keeps_repeated_rows_in_the_same_image():
+    service = ReceiptOcrService()
+    items = [
+        {"raw_name": BANANA, "quantity": 1, "unit": EA, "item_amount": 2000, "_source_image_index": 1},
+        {"raw_name": BANANA, "quantity": 1, "unit": EA, "item_amount": 2000, "_source_image_index": 1},
+    ]
+
+    assert service._deduplicate_overlapping_items(items) == items
+
+
+# 연속 사진의 경계에 겹쳐 촬영된 동일 행만 한 번 제거한다.
+def test_deduplicate_overlapping_items_removes_adjacent_boundary_overlap():
+    service = ReceiptOcrService()
+    items = [
+        {"raw_name": BANANA, "quantity": 1, "unit": EA, "item_amount": 2000, "_source_image_index": 1},
+        {"raw_name": "두부", "quantity": 1, "unit": EA, "item_amount": 1800, "_source_image_index": 1},
+        {"raw_name": "두부", "quantity": 1, "unit": EA, "item_amount": 1800, "_source_image_index": 2},
+        {"raw_name": "양파", "quantity": 2, "unit": EA, "item_amount": 3000, "_source_image_index": 2},
+    ]
+
+    deduplicated = service._deduplicate_overlapping_items(items)
+
+    assert [item["raw_name"] for item in deduplicated] == [BANANA, "두부", "양파"]
+
+
+# 여러 장을 한 번에 OCR로 보내고, 사용자가 다시 볼 파일은 하나의 세로 결합 이미지로 저장한다.
+def test_analyze_upload_accepts_ordered_images_and_saves_one_stitched_preview(
+    db_session,
+    monkeypatch,
+    workspace_tmp_dir,
+    neo4j_banana_candidates,
+):
+    user = seed_user(db_session, email="receipt-multi@example.com", nickname="receipt multi tester")
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
+
+    service = ReceiptOcrService()
+    received_image_counts = []
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        received_image_counts.append(len(image_bytes))
+        return {
+            "image_id": image_id,
+            "document_type": "receipt",
+            "is_receipt_like": True,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-07-19 12:30:00",
+            "items": [
+                {
+                    "raw_name": BANANA_IMPORTED,
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 2000,
+                    "source_image_index": 1,
+                },
+                {
+                    "raw_name": "두부",
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 1800,
+                    "source_image_index": 1,
+                },
+                {
+                    "raw_name": "두부",
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 1800,
+                    "source_image_index": 2,
+                },
+                {
+                    "raw_name": "양파",
+                    "quantity": 2,
+                    "unit": EA,
+                    "item_amount": 3000,
+                    "source_image_index": 2,
+                },
+            ],
+            "total_item_count": 5,
+            "total_amount": 6800,
+            "currency": "KRW",
+            "confidence_note": None,
+        }
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    result = asyncio.run(
+        service.analyze_upload(
+            db=db_session,
+            files=[make_upload("top.png"), make_upload("bottom.png")],
+            user_id=user.id,
+            crop_mode="manual",
+        )
+    )
+
+    assert received_image_counts == [2]
+    assert [item["raw_name"] for item in result["items"]] == [BANANA_IMPORTED, "두부", "양파"]
+    assert result["total_item_count"] == 4
+    assert result["original_file_name"] == "top.png 외 1장"
+    assert Path(result["original_file_path"]).suffix == ".jpg"
+    saved_files = list((workspace_tmp_dir / "raw").rglob("*.jpg"))
+    assert len(saved_files) == 1
+    with Image.open(saved_files[0]) as stitched:
+        assert stitched.height == stitched.width * 2
+
+
+def test_save_receipt_image_uses_uuid_name_and_private_user_path(monkeypatch, workspace_tmp_dir):
     service = ReceiptOcrService()
     monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
 

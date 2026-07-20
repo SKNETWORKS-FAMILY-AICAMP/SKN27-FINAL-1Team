@@ -408,26 +408,8 @@ def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
 
-    if state.get("intent") == "shopping.price_help":
-        result = {
-            "response_text": "가격 정보 없음은 상품 검색 결과에서 판매가를 확인하지 못했다는 뜻이에요. 상품명이나 용량을 더 구체적으로 입력하면 검색 정확도가 좋아질 수 있어요."
-        }
-        return _normalize_agent_result(result, inherited_slots=state.get("slots"))
-    if not state.get("user_id"):
+    if state.get("intent") != "shopping.price_help" and not state.get("user_id"):
         return _normalize_agent_result({"response_text": LOGIN_REQUIRED_REPLY}, inherited_slots=state.get("slots"))
-
-    # 나머지/전체 조회 후속 요청은 기존 Shopping 조회 결과를 모두 펼쳐 보여줍니다.
-    if state.get("intent") == "shopping.current" and _is_shopping_show_all_request(state["text"]):
-        from app.backend.services.shopping_service import shopping_service
-        from ai.agents.shopping_agent.shopping_utils import shopping_list_action, summarize_shopping_list
-
-        shopping_list = shopping_service.get_current(db=state["db"], user_id=state["user_id"])
-        max_items = len((shopping_list or {}).get("items", [])) or 5
-        result = {
-            "response_text": summarize_shopping_list(shopping_list, max_items=max_items),
-            "actions": [shopping_list_action(shopping_list.get("id") if shopping_list else None)],
-        }
-        return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
     # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
     text = state["text"]

@@ -11,6 +11,8 @@ from app.backend.schemas.shopping import (
     ShoppingHistoryResponse,
     ShoppingListCreateRequest,
     ShoppingListItemUpdateRequest,
+    ShoppingProductSearchRequest,
+    ShoppingProductSearchResponse,
     ShoppingListResponse,
     ShoppingPurchaseRequest,
     ShoppingPurchaseResponse,
@@ -143,6 +145,16 @@ def compare_shopping_prices(
 ):
     """하위 호환용: 부족 재료명 기준 네이버 쇼핑 상품 후보를 조회합니다."""
     return shopping_service.compare_products(request_data.missing_ingredients)
+
+
+@router.post("/search-products", response_model=ShoppingProductSearchResponse)
+def search_shopping_products(
+    request_data: ShoppingProductSearchRequest,
+    current_user_id: int = Depends(get_current_user_required),
+):
+    """직접 장보기 추가를 위해 상품 후보를 검색합니다."""
+    _ = current_user_id
+    return shopping_service.search_products(request_data.keyword, display=request_data.display)
 
 
 @router.post("/purchase/mock", response_model=MessageResponse)

@@ -143,6 +143,6 @@ alias.csv ──────────┘                                     
 | 환경 | 경로 |
 |------|------|
 | Docker (공식) | `/workspace/project/data/` |
-| 로컬 (참조용) | `ai/recommendation/data/` |
+| 로컬 (참조용) | `etl/ml_lightfm/data/` |
 
 `config.py`의 `PROJECT_ROOT` 환경 변수가 기준 경로를 결정합니다.
