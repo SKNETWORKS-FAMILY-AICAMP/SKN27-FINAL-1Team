@@ -19,7 +19,7 @@ def create_test_client():
 
 
 def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
-    async def fake_analyze_upload(*, db, file, user_id):
+    async def fake_analyze_upload(*, db, file, user_id, **kwargs):
         assert user_id == 7
         assert file.filename == "receipt.png"
         return {
@@ -66,7 +66,7 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
 
 
 def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
-    async def fake_create_upload_event_stream(*, db, file, user_id):
+    async def fake_create_upload_event_stream(*, db, file, user_id, **kwargs):
         assert user_id == 7
         assert file.filename == "receipt.png"
 

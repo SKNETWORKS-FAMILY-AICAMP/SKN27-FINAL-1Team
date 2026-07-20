@@ -271,7 +271,7 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload(filename="receipt_010-1234-5678.png")
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 2
     assert "010-1234-5678" not in image_ids[0]
@@ -351,7 +351,7 @@ def test_save_original_image_uses_uuid_name_and_private_user_path(monkeypatch, w
     service = ReceiptOcrService()
     monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
 
-    stored_path = service._save_original_image(user_id=7, image_bytes=TEST_PNG_BYTES, storage_extension=".png")
+    stored_path = service._save_receipt_image(user_id=7, image_bytes=TEST_PNG_BYTES, storage_extension=".png")
     path = Path(stored_path)
 
     assert path.parts[-3:] == ("raw", "7", path.name)
@@ -418,7 +418,7 @@ def test_analyze_upload_does_not_retry_when_only_total_amount_is_visible(
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload()
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 1
     assert result["items"] == []
@@ -450,7 +450,7 @@ def test_analyze_upload_requests_reupload_when_retry_stays_low_quality(db_sessio
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload()
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 2
     assert result["needs_reupload"] is True
@@ -488,7 +488,7 @@ def test_analyze_upload_requests_reupload_for_non_receipt_document(db_session, m
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload(filename="table.png")
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 1
     assert result["needs_reupload"] is True
@@ -514,7 +514,7 @@ def test_analyze_upload_deletes_saved_file_when_ocr_raises(db_session, monkeypat
 
     upload = make_upload()
     with pytest.raises(RuntimeError):
-        asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+        asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert db_session.query(Receipt).count() == 0
     assert list((workspace_tmp_dir / "raw").rglob("*.png")) == []
