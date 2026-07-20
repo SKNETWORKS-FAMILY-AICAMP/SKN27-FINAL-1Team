@@ -14,6 +14,8 @@ WORD_RE = re.compile(r"[가-힣a-zA-Z0-9]+")
 
 SORT_OPTIONS = {"sim", "date", "asc", "dsc"}
 FOOD_CATEGORY_ROOTS = {"식품"}
+MIN_PRICE_OUTLIER_RATIO = 0.2
+MAX_PRICE_OUTLIER_RATIO = 5.0
 BLOCKED_TITLE_TERMS = (
     "강아지",
     "고양이",
@@ -106,6 +108,9 @@ class NaverShoppingProvider:
             return None
 
         item = self._select_best_item(query, items)
+        if not item:
+            return None
+
         return ProductSearchResult(
             provider=self.provider_name,
             product_id=self._clean(item.get("productId")),
@@ -148,12 +153,17 @@ class NaverShoppingProvider:
         except (TypeError, ValueError):
             return None
 
-    def _select_best_item(self, query: str, items: list[dict]) -> dict:
+    def _select_best_item(self, query: str, items: list[dict]) -> dict | None:
         candidates = [item for item in items if self._is_recommendable(query, item)]
+        candidates = self._remove_price_outliers(candidates)
         if not candidates:
-            logger.info("네이버 쇼핑 추천 후보 필터 통과 상품이 없어 첫 번째 결과를 사용합니다(query=%s).", query)
-            return items[0]
-        return candidates[0]
+            logger.info("네이버 쇼핑 추천 후보 필터 통과 상품이 없어 링크를 제공하지 않습니다(query=%s).", query)
+            return None
+
+        return max(
+            enumerate(candidates),
+            key=lambda indexed_item: (self._match_score(query, self._clean(indexed_item[1].get("title")) or ""), -indexed_item[0]),
+        )[1]
 
     def _is_recommendable(self, query: str, item: dict) -> bool:
         title = self._clean(item.get("title")) or ""
@@ -172,26 +182,53 @@ class NaverShoppingProvider:
             return False
 
         category1 = category_values[0]
-        if category1 and category1 not in FOOD_CATEGORY_ROOTS:
+        if category1 not in FOOD_CATEGORY_ROOTS:
             return False
 
         price = self._parse_price(item.get("lprice"))
-        if price is not None and price <= 0:
+        if price is None or price <= 0:
             return False
 
-        return self._matches_query_tokens(query, title)
+        return self._match_score(query, title) > 0
 
-    def _matches_query_tokens(self, query: str, title: str) -> bool:
+    def _match_score(self, query: str, title: str) -> int:
         query_tokens = self._tokens(query)
         if not query_tokens:
-            return True
+            return 1
 
         normalized_title = self._normalize(title)
         essential_tokens = [token for token in query_tokens if len(token) >= 2]
         if not essential_tokens:
-            return True
+            return 1
 
-        return any(token in normalized_title for token in essential_tokens)
+        score = 0
+        normalized_query = self._normalize(query)
+        if normalized_query and normalized_query in normalized_title:
+            score += 3
+        score += sum(2 for token in essential_tokens if token in normalized_title)
+        score += sum(1 for token in query_tokens if token and len(token) < 2 and token in normalized_title)
+        return score
+
+    def _remove_price_outliers(self, items: list[dict]) -> list[dict]:
+        if len(items) < 4:
+            return items
+
+        prices = sorted(price for item in items if (price := self._parse_price(item.get("lprice"))) is not None and price > 0)
+        if len(prices) < 4:
+            return items
+
+        median = prices[len(prices) // 2] if len(prices) % 2 else (prices[len(prices) // 2 - 1] + prices[len(prices) // 2]) / 2
+        min_price = median * MIN_PRICE_OUTLIER_RATIO
+        max_price = median * MAX_PRICE_OUTLIER_RATIO
+        filtered = [
+            item
+            for item in items
+            if (price := self._parse_price(item.get("lprice"))) is not None and min_price <= price <= max_price
+        ]
+        return filtered or items
+
+    def _matches_query_tokens(self, query: str, title: str) -> bool:
+        return self._match_score(query, title) > 0
 
     def _has_blocked_term(self, text: str, blocked_terms: tuple[str, ...]) -> bool:
         normalized_text = self._normalize(text)

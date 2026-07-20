@@ -19,9 +19,11 @@ def create_test_client():
 
 
 def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
-    async def fake_analyze_upload(*, db, file, user_id):
+    async def fake_analyze_upload(*, db, files, file, user_id, crop_mode):
         assert user_id == 7
+        assert files is None
         assert file.filename == "receipt.png"
+        assert crop_mode == "auto"
         return {
             "receipt_id": 10,
             "original_file_name": "receipt.png",
@@ -65,10 +67,43 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
     assert body["ocr_status"] == "completed"
 
 
-def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
-    async def fake_create_upload_event_stream(*, db, file, user_id):
+def test_upload_receipt_api_accepts_ordered_image_array(monkeypatch):
+    async def fake_analyze_upload(*, db, files, file, user_id, crop_mode):
         assert user_id == 7
+        assert file is None
+        assert [upload.filename for upload in files] == ["top.png", "bottom.png"]
+        assert crop_mode == "manual"
+        return {
+            "receipt_id": 11,
+            "original_file_name": "top.png 외 1장",
+            "original_file_path": "storage/raw/receipts/7/combined.jpg",
+            "items": [],
+            "currency": "KRW",
+            "needs_reupload": False,
+        }
+
+    monkeypatch.setattr(receipts_api.receipt_ocr_service, "analyze_upload", fake_analyze_upload)
+
+    client = create_test_client()
+    response = client.post(
+        "/api/v1/receipts/upload",
+        files=[
+            ("files", ("top.png", b"top-image", "image/png")),
+            ("files", ("bottom.png", b"bottom-image", "image/png")),
+        ],
+        data={"crop_mode": "manual"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["receipt_id"] == 11
+
+
+def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
+    async def fake_create_upload_event_stream(*, db, files, file, user_id, crop_mode):
+        assert user_id == 7
+        assert files is None
         assert file.filename == "receipt.png"
+        assert crop_mode == "auto"
 
         async def events():
             yield {"type": "stage", "stage": "image_uploaded"}

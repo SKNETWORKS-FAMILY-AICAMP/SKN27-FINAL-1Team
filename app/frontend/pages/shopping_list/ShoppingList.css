@@ -366,6 +366,19 @@
   text-overflow: ellipsis;
 }
 
+.shopping-item-row__sources {
+  color: #a56a3f;
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.4;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shopping-item-row__meta {
   flex: 0 0 auto;
   min-width: 78px;
