@@ -114,16 +114,58 @@ class InventoryService:
             logger.warning("권장 보관 기간 계산 실패, 기본값을 사용합니다: %s", exc)
             return 7
 
-    def _get_or_create_storage_rule(
+    def _predict_storage_rule(
+        self,
+        ingredient_name: str,
+        category: Optional[str],
+        storage_method: Optional[str],
+    ) -> tuple[str, int]:
+        """DB 작업 없이 외부 서비스에서 보관 위치와 기간을 예측합니다."""
+        requested_storage = storage_method if storage_method in STORAGE_KEYS else None
+        try:
+            from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
+
+            predicted_storage, predicted_days = expiration_ai_service.predict_storage_and_lifespan(
+                ingredient_name,
+                category or DEFAULT_CATEGORY,
+                requested_storage,
+            )
+            return requested_storage or self._normalize_storage(predicted_storage), max(int(predicted_days), 1)
+        except Exception as exc:
+            logger.warning("AI 보관 기간 예측 실패, 기본값을 사용합니다: %s", exc)
+            return requested_storage or DEFAULT_STORAGE, 7
+
+    def prepare_storage_rule(
+        self,
+        db: Session,
+        ingredient_name: str,
+        category: Optional[str],
+        storage_method: Optional[str],
+    ) -> tuple[str, int]:
+        """별도 읽기 세션에서 캐시를 조회한 뒤 외부 보관 기준을 예측합니다."""
+        normalized = self._normalize_ingredient_name(ingredient_name)
+        master_category = category
+
+        # 호출자의 쓰기 트랜잭션을 건드리지 않도록 캐시 조회 세션을 분리합니다.
+        with Session(bind=db.get_bind()) as cache_db:
+            ingredient = cache_db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
+            if ingredient:
+                master_category = ingredient.category
+                cached_rule = self._find_cached_storage_rule(cache_db, ingredient, storage_method)
+                if cached_rule:
+                    return cached_rule.storage_location, cached_rule.lifespan_days
+
+        return self._predict_storage_rule(ingredient_name, master_category, storage_method)
+
+    def _find_cached_storage_rule(
         self,
         db: Session,
         ingredient: Ingredient,
         storage_method: Optional[str],
-    ) -> tuple[str, int]:
-        """식재료와 보관 위치 기준 보관 기간 캐시를 조회하거나 새로 생성합니다."""
+    ) -> Optional[IngredientStorageStandard]:
+        """식재료와 요청 보관 위치에 맞는 저장 기준 캐시를 조회합니다."""
         requested_storage = storage_method if storage_method in STORAGE_KEYS else None
         preferred_storage = requested_storage
-        cached_rule = None
 
         if not preferred_storage:
             try:
@@ -135,21 +177,23 @@ class InventoryService:
             except Exception as exc:
                 logger.warning("권장 보관 위치 확인 실패: %s", exc)
 
+        query = db.query(IngredientStorageStandard).filter(
+            IngredientStorageStandard.ingredient_id == ingredient.id
+        )
         if preferred_storage:
-            cached_rule = (
-                db.query(IngredientStorageStandard)
-                .filter(
-                    IngredientStorageStandard.ingredient_id == ingredient.id,
-                    IngredientStorageStandard.storage_location == preferred_storage,
-                )
-                .first()
-            )
-        else:
-            cached_rule = (
-                db.query(IngredientStorageStandard)
-                .filter(IngredientStorageStandard.ingredient_id == ingredient.id)
-                .first()
-            )
+            query = query.filter(IngredientStorageStandard.storage_location == preferred_storage)
+        return query.first()
+
+    def _get_or_create_storage_rule(
+        self,
+        db: Session,
+        ingredient: Ingredient,
+        storage_method: Optional[str],
+        prepared_rule: Optional[tuple[str, int]] = None,
+    ) -> tuple[str, int]:
+        """식재료와 보관 위치 기준 보관 기간 캐시를 조회하거나 새로 생성합니다."""
+        requested_storage = storage_method if storage_method in STORAGE_KEYS else None
+        cached_rule = self._find_cached_storage_rule(db, ingredient, storage_method)
 
         if cached_rule:
             try:
@@ -167,20 +211,9 @@ class InventoryService:
                 logger.warning("보관 기간 캐시 보정 실패: %s", exc)
             return cached_rule.storage_location, cached_rule.lifespan_days
 
-        try:
-            from app.backend.services.inventory_service.expiration_ai_service import expiration_ai_service
-
-            predicted_storage, predicted_days = expiration_ai_service.predict_storage_and_lifespan(
-                ingredient.name,
-                ingredient.category or "기타",
-                requested_storage,
-            )
-            final_storage = requested_storage or self._normalize_storage(predicted_storage)
-            lifespan_days = max(int(predicted_days), 1)
-        except Exception as exc:
-            logger.warning("AI 보관 기간 예측 실패, 기본값을 사용합니다: %s", exc)
-            final_storage = requested_storage or DEFAULT_STORAGE
-            lifespan_days = 7
+        final_storage, lifespan_days = prepared_rule or self._predict_storage_rule(
+            ingredient.name, ingredient.category, requested_storage
+        )
 
         try:
             with db.begin_nested():
@@ -272,17 +305,15 @@ class InventoryService:
             "is_ai_recommended": bool(ai_flag),
         }
 
-    def _get_or_create_ingredient(self, db: Session, data: IngredientCreate) -> Ingredient:
+    def _get_or_create_ingredient(self, db: Session, data: IngredientCreate, *, validate: bool = True) -> Ingredient:
         """식재료 마스터를 조회하고 없으면 새로 생성합니다."""
-        self._validate_ingredient_name(data.name)
+        if validate:
+            self._validate_ingredient_name(data.name)
         normalized = self._normalize_ingredient_name(data.name)
         ingredient = db.query(Ingredient).filter(Ingredient.normalized_name == normalized).first()
         incoming_category = data.category if data.category and data.category != DEFAULT_CATEGORY else None
         if ingredient:
-            # 기본값 기타는 식재료 마스터의 기존 카테고리를 덮어쓰지 않습니다.
-            if incoming_category and ingredient.category != incoming_category:
-                ingredient.category = incoming_category
-                db.flush()
+            # 사용자 냉장고 입력으로 공용 식재료 마스터를 변경하지 않습니다.
             return ingredient
 
         try:
@@ -302,7 +333,13 @@ class InventoryService:
                 return ingredient
             raise
 
-    def _resolve_item_dates_and_storage(self, db: Session, ingredient: Ingredient, data: IngredientCreate) -> tuple[str, date, bool]:
+    def _resolve_item_dates_and_storage(
+        self,
+        db: Session,
+        ingredient: Ingredient,
+        data: IngredientCreate,
+        prepared_rule: Optional[tuple[str, int]] = None,
+    ) -> tuple[str, date, bool]:
         """요청값과 AI/캐시 기준으로 보관 위치와 소비기한을 확정합니다.
         반환값: (storage_location, expiration_date, is_ai_recommended)
         """
@@ -310,16 +347,35 @@ class InventoryService:
         expiration_date = self._parse_date(data.expiration_date)
 
         if expiration_date:
-            storage_location, _ = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
+            storage_location, _ = self._get_or_create_storage_rule(db, ingredient, data.storage_method, prepared_rule)
             return storage_location, expiration_date, False
 
-        storage_location, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method)
+        storage_location, lifespan_days = self._get_or_create_storage_rule(db, ingredient, data.storage_method, prepared_rule)
         return storage_location, purchase_date + timedelta(days=lifespan_days), True
 
-    def add_ingredient(self, db: Session, user_id: int, data: IngredientCreate, *, commit: bool = True):
+    def add_ingredient(
+        self,
+        db: Session,
+        user_id: int,
+        data: IngredientCreate,
+        *,
+        commit: bool = True,
+        prepared_rule: Optional[tuple[str, int]] = None,
+        validate_name: bool = True,
+    ):
         """사용자 냉장고에 식재료를 추가합니다."""
-        ingredient = self._get_or_create_ingredient(db, data)
-        storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(db, ingredient, data)
+        if validate_name:
+            self._validate_ingredient_name(data.name)
+        rule = prepared_rule or self.prepare_storage_rule(
+            db,
+            data.name,
+            data.category,
+            data.storage_method,
+        )
+        ingredient = self._get_or_create_ingredient(db, data, validate=False)
+        storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(
+            db, ingredient, data, rule
+        )
         purchase_date = self._parse_date(data.purchase_date) or date.today()
         d_day = (expiration_date - date.today()).days
 
@@ -386,6 +442,8 @@ class InventoryService:
 
     def update_ingredient(self, db: Session, user_id: int, ingredient_id: int, data: IngredientCreate):
         """사용자 냉장고 식재료 정보를 수정합니다."""
+        self._validate_ingredient_name(data.name)
+        prepared_rule = self.prepare_storage_rule(db, data.name, data.category, data.storage_method)
         fridge_item = (
             db.query(FridgeItem)
             .filter(FridgeItem.id == ingredient_id, FridgeItem.user_id == user_id)
@@ -399,8 +457,10 @@ class InventoryService:
             data.expiration_date = None
 
         # 수정된 재료명 기준으로 식재료 마스터를 다시 매핑합니다.
-        ingredient = self._get_or_create_ingredient(db, data)
-        storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(db, ingredient, data)
+        ingredient = self._get_or_create_ingredient(db, data, validate=False)
+        storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(
+            db, ingredient, data, prepared_rule
+        )
         purchase_date = self._parse_date(data.purchase_date) or date.today()
         d_day = (expiration_date - date.today()).days
 
@@ -452,7 +512,17 @@ class InventoryService:
 
         return summary
         
-    def add_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str, quantity: float, storage_method: Optional[str] = None, *, commit: bool = True) -> str:
+    def add_ingredient_by_name(
+        self,
+        db: Session,
+        user_id: int,
+        ingredient_name: str,
+        quantity: float,
+        storage_method: Optional[str] = None,
+        *,
+        commit: bool = True,
+        prepared_rule: Optional[tuple[str, int]] = None,
+    ) -> str:
         """챗봇 Tool에서 받은 식재료 이름과 수량으로 실제 냉장고에 재료를 추가합니다."""
         resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
         if not resolved_name:
@@ -465,7 +535,14 @@ class InventoryService:
             unit="개",
             storage_method=storage_method,
         )
-        item = self.add_ingredient(db, user_id, data, commit=commit)
+        item = self.add_ingredient(
+            db,
+            user_id,
+            data,
+            commit=commit,
+            prepared_rule=prepared_rule,
+            validate_name=False,
+        )
         display_quantity = int(item["quantity"]) if float(item["quantity"]).is_integer() else item["quantity"]
         return f"{item['name']}{_object_particle(item['name'])} {display_quantity}{item['unit']} {item['storage_method']}에 추가했어요."
 

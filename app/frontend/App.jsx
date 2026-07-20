@@ -88,6 +88,13 @@ function AppLayout() {
     }
   }, [pathname, isAuthPage, navigate])
 
+  // 세션 만료 안내를 닫으면 로그인 화면으로 이동합니다.
+  const closeApiNotice = () => {
+    const shouldRedirectToLogin = apiNotice?.type === 'sessionExpired'
+    setApiNotice(null)
+    if (shouldRedirectToLogin) navigate('/login')
+  }
+
   return (
     <div className={isAuthPage ? 'app-shell app-shell--auth' : 'app-shell'}>
       {showOnboarding && <OnboardingModal seenKey={onboardingSeenKey} onClose={() => setShowOnboarding(false)} />}
@@ -98,8 +105,8 @@ function AppLayout() {
         message={apiNotice?.message || ''}
         confirmText="확인"
         showCancel={false}
-        onConfirm={() => setApiNotice(null)}
-        onClose={() => setApiNotice(null)}
+        onConfirm={closeApiNotice}
+        onClose={closeApiNotice}
       />
       {!isAuthPage && <Header />}
       <main className={isAuthPage ? 'app-main app-main--auth' : 'app-main'}>
