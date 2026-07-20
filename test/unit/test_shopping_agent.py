@@ -176,6 +176,61 @@ def test_run_shopping_agent_create_uses_confirmation_first():
     assert result["actions"][0]["data"]["message"] == "확인:shopping_create:두부|양파"
 
 
+def test_run_shopping_agent_compare_returns_product_candidates(monkeypatch):
+    def fake_search_products(keyword, display=5):
+        return {
+            "keyword": keyword,
+            "items": [
+                {
+                    "name": keyword,
+                    "product_name": f"{keyword} 추천 상품",
+                    "product_link": "https://shopping.example/item",
+                    "price": 3900,
+                    "mall_name": "네이버쇼핑",
+                },
+                {
+                    "name": keyword,
+                    "product_name": f"{keyword} 다른 상품",
+                    "product_link": "https://shopping.example/other",
+                    "price": 4200,
+                    "mall_name": "이마트몰",
+                },
+            ],
+        }
+
+    monkeypatch.setattr(shopping_handlers.shopping_service, "search_products", fake_search_products)
+
+    result = run_shopping_agent(
+        "두부 가격 비교해줘",
+        db=object(),
+        user_id=7,
+        intent="shopping.compare",
+    )
+
+    assert "네이버 쇼핑 기준 상품 후보" in result["response_text"]
+    assert "두부 추천 상품" in result["response_text"]
+    assert "두부 다른 상품" in result["response_text"]
+    assert result["actions"][0]["url"] == "https://shopping.example/item"
+
+
+def test_run_shopping_agent_compare_guides_when_no_candidate(monkeypatch):
+    monkeypatch.setattr(
+        shopping_handlers.shopping_service,
+        "search_products",
+        lambda keyword, display=5: {"keyword": keyword, "items": []},
+    )
+
+    result = run_shopping_agent(
+        "두부 가격 비교해줘",
+        db=object(),
+        user_id=7,
+        intent="shopping.compare",
+    )
+
+    assert "적절한 상품 후보를 찾지 못했어요" in result["response_text"]
+    assert result["actions"] == []
+
+
 def test_run_shopping_agent_confirm_create_calls_service(monkeypatch):
     calls = {}
 
@@ -222,3 +277,41 @@ def test_run_shopping_agent_remaining_uses_previous_offset(monkeypatch):
     assert "1. 재료1" not in result["response_text"]
     assert result["slots"]["shopping_next_offset"] == 17
     assert result["slots"]["shopping_has_more"] is False
+
+
+def test_run_shopping_agent_show_all_follow_up_uses_shopping_handler(monkeypatch):
+    items = [
+        {"id": index, "name": f"재료{index}", "price": index * 1000, "is_purchased": False}
+        for index in range(1, 18)
+    ]
+    monkeypatch.setattr(
+        shopping_handlers.shopping_service,
+        "get_current",
+        lambda *, db, user_id: shopping_list_response(items=items, total_price=28000),
+    )
+
+    result = run_shopping_agent(
+        "전부 보여줘",
+        db=object(),
+        user_id=7,
+        intent="shopping.current",
+        slots={"shopping_next_offset": 15, "shopping_total_count": 17, "shopping_has_more": True},
+    )
+
+    assert "전체 장보기 목록" in result["response_text"]
+    assert "1. 재료1" in result["response_text"]
+    assert "17. 재료17" in result["response_text"]
+    assert result["slots"]["shopping_next_offset"] == 17
+    assert result["slots"]["shopping_has_more"] is False
+
+
+def test_run_shopping_agent_price_help_does_not_require_login():
+    result = run_shopping_agent(
+        "가격 정보 없음은 왜 나와?",
+        db=object(),
+        user_id=None,
+        intent="shopping.price_help",
+    )
+
+    assert "가격 정보 없음" in result["response_text"]
+    assert "로그인" not in result["response_text"]

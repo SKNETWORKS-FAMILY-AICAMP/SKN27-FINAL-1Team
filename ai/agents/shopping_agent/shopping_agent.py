@@ -13,6 +13,7 @@ from ai.agents.shopping_agent.shopping_handlers import (
     handle_delete_item_request,
     handle_history,
     handle_owned,
+    handle_price_help,
     handle_purchase_confirm,
     handle_purchase_request,
     handle_recipe_current,
@@ -86,6 +87,10 @@ def run_shopping_agent(
     history = history or []
     slots = slots or latest_shopping_slots(history)
     resolved_intent = intent or "shopping.current"
+
+    if resolved_intent == "shopping.price_help":
+        message, actions = handle_price_help()
+        return _success(message, resolved_intent, actions, slots)
 
     if not user_id:
         return _failure("로그인이 필요한 질문이에요. 로그인 후 장보기 기능을 이용할 수 있어요.", resolved_intent)

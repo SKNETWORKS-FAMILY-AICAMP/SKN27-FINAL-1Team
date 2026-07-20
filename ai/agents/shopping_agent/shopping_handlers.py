@@ -16,6 +16,7 @@ from ai.agents.shopping_agent.shopping_utils import (
     find_item_by_name,
     format_price,
     is_remaining_request,
+    is_show_all_request,
     shopping_list_action,
     shopping_list_slots,
     summarize_owned_ingredients,
@@ -145,10 +146,22 @@ def handle_current_follow_up(
     slots: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     slots = slots or {}
-    start = int(slots.get("shopping_next_offset") or 0)
-    max_items = extract_requested_count(text) or 5
-    title = "나머지 장보기 재료예요." if is_remaining_request(text) else "현재 장보기 목록이에요."
+    if is_show_all_request(text):
+        start = 0
+        max_items = int(slots.get("shopping_total_count") or 50)
+        title = "전체 장보기 목록이에요."
+    else:
+        start = int(slots.get("shopping_next_offset") or 0)
+        max_items = extract_requested_count(text) or 5
+        title = "나머지 장보기 재료예요." if is_remaining_request(text) else "현재 장보기 목록이에요."
     return handle_current(db, user_id, start=start, max_items=max_items, title=title)
+
+
+def handle_price_help() -> tuple[str, list[dict[str, Any]]]:
+    return (
+        "가격 정보 없음은 조건에 맞는 상품 후보를 찾지 못했거나 판매가를 확인하지 못했다는 뜻이에요. 상품명이나 용량을 더 구체적으로 입력하면 검색 정확도가 좋아질 수 있어요.",
+        [],
+    )
 
 
 def handle_owned(db: Session, user_id: int, slots: dict[str, Any] | None = None) -> tuple[str, list[dict[str, Any]]]:
@@ -182,18 +195,27 @@ def handle_compare(text: str) -> tuple[str, list[dict[str, Any]]]:
     if not names:
         return "가격을 비교할 재료를 알려주세요. 예: 두부랑 양파 가격 비교해줘", []
 
-    result = shopping_service.compare_products(names)
-    rows = result.get("market_prices") or []
-    if not rows:
-        return "비교할 상품 정보를 찾지 못했어요.", []
+    display = 5 if len(names) == 1 else 3
+    rows: list[dict[str, Any]] = []
+    missing_names: list[str] = []
+    for name in names:
+        result = shopping_service.search_products(name, display=display)
+        items = result.get("items") or []
+        if not items:
+            missing_names.append(name)
+            continue
+        rows.extend(items)
 
-    lines = ["장보기 가격 비교 결과예요."]
+    if not rows:
+        return "적절한 상품 후보를 찾지 못했어요. 상품명이나 용량을 더 구체적으로 입력해 주세요.", []
+
+    lines = ["네이버 쇼핑 기준 상품 후보예요."]
     for index, row in enumerate(rows[:5], start=1):
         market = row.get("mall_name") or row.get("best_market") or row.get("provider") or "마켓 정보 없음"
-        lines.append(f"{index}. {row.get('name')} - {format_price(row.get('price'))} ({market})")
-    total_price = result.get("total_price") or 0
-    if total_price:
-        lines.append(f"예상 합계는 {format_price(total_price)}이에요.")
+        product_name = row.get("product_name") or row.get("name") or "상품명 없음"
+        lines.append(f"{index}. {product_name} - {format_price(row.get('price'))} ({market})")
+    if missing_names:
+        lines.append(f"{', '.join(missing_names)}은 적절한 상품 후보를 찾지 못했어요.")
 
     actions = [
         {
