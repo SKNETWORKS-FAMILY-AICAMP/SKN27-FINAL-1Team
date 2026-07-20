@@ -1,0 +1,482 @@
+{
+  "mode": "rule",
+  "total": 200,
+  "correct": 133,
+  "accuracy": 0.665,
+  "average_latency_seconds": 0.0001,
+  "wall_time_seconds": 0.0278,
+  "per_intent": {
+    "alarm.calendar": {
+      "total": 10,
+      "correct": 9
+    },
+    "alarm.notification": {
+      "total": 10,
+      "correct": 10
+    },
+    "food.general": {
+      "total": 15,
+      "correct": 0
+    },
+    "general": {
+      "total": 7,
+      "correct": 7
+    },
+    "ingredient.guide": {
+      "total": 20,
+      "correct": 14
+    },
+    "inventory.expiring": {
+      "total": 15,
+      "correct": 11
+    },
+    "inventory.list": {
+      "total": 12,
+      "correct": 3
+    },
+    "multi_agent": {
+      "total": 8,
+      "correct": 5
+    },
+    "receipt.guide": {
+      "total": 10,
+      "correct": 8
+    },
+    "receipt.lookup": {
+      "total": 10,
+      "correct": 9
+    },
+    "recipe.pairing": {
+      "total": 10,
+      "correct": 7
+    },
+    "recipe.recommend": {
+      "total": 15,
+      "correct": 8
+    },
+    "recipe.search": {
+      "total": 15,
+      "correct": 10
+    },
+    "shopping.compare": {
+      "total": 15,
+      "correct": 13
+    },
+    "shopping.current": {
+      "total": 10,
+      "correct": 9
+    },
+    "shopping.history": {
+      "total": 10,
+      "correct": 6
+    },
+    "shopping.price_help": {
+      "total": 8,
+      "correct": 4
+    }
+  },
+  "failures": [
+    {
+      "text": "OCR로 구매 내역 올리는 방법 알려줘",
+      "expected": "receipt.guide",
+      "predicted": "receipt.lookup",
+      "confidence": 1.0
+    },
+    {
+      "text": "남은 감자튀김 어디에 활용할까?",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "보유 식재료로 저녁 추천해줘",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "바베큐 만드는 법",
+      "expected": "recipe.search",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "세척은?",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉장고에서 곧 상할 재료 찾아줘",
+      "expected": "inventory.expiring",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉동실에 들어 있는 재료 알려줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "설탕 8g은 몇 티스푼이야?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "버터 대신 식용유를 써도 돼?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "동물성 휘핑크림과 식물성은 뭐가 달라?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "남은 치킨 데우는 방법은?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "국이 너무 짠데 어떻게 해야 해?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉장고 재료 목록이랑 가능한 메뉴 추천해줘",
+      "expected": "multi_agent",
+      "predicted": "recipe.recommend",
+      "confidence": 1.0
+    },
+    {
+      "text": "어제 영수증에서 우유 가격 찾아줘",
+      "expected": "receipt.lookup",
+      "predicted": "receipt.guide",
+      "confidence": 1.0
+    },
+    {
+      "text": "구매내역 업로드 절차가 궁금해",
+      "expected": "receipt.guide",
+      "predicted": "receipt.lookup",
+      "confidence": 1.0
+    },
+    {
+      "text": "집에 있는 계란이랑 양파로 저녁 메뉴 골라줘",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "남은 두부 활용할 음식 추천",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "감자랑 베이컨 남았는데 머해먹지",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "있는 재료 기준으로 간단한 아침 추천해 줘",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "우유를 빨리 써야 하는데 만들 음식 있을까?",
+      "expected": "recipe.recommend",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "와인에 어울리는 안주 추천",
+      "expected": "recipe.pairing",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "삼겹살과 궁합 좋은 음식은?",
+      "expected": "recipe.pairing",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "샌드위치랑 같이 먹을 수프 추천해줘",
+      "expected": "recipe.pairing",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "잡채 만드는 순서 알려줘",
+      "expected": "recipe.search",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "김치찌개 끓이는 방법",
+      "expected": "recipe.search",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "소고기 미역국 어떻게 끓여",
+      "expected": "recipe.search",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "오므라이스 만들 때 재료와 순서 알려줘",
+      "expected": "recipe.search",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "대파 오래 보관하는 요령",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "브로콜리 손질하는 방법 알려줘",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "생선 비린내 없이 세척하는 방법",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "우유 냉장 보관 온도는 몇 도야?",
+      "expected": "ingredient.guide",
+      "predicted": "shopping.current",
+      "confidence": 1.0
+    },
+    {
+      "text": "그럼 냉동 보관은?",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "뭐부터 먹어 치워야 돼?",
+      "expected": "inventory.expiring",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "상하기 직전인 음식 찾아줘",
+      "expected": "inventory.expiring",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "가장 급하게 써야 할 식재료 뭐야",
+      "expected": "inventory.expiring",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "우리 집 냉장고 재고 확인해줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉장실 목록 보여 줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "지금 보유한 채소만 알려줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉장고 안에 고기 있는지 확인해줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "내 식재료 재고 리스트",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "실온에 보관 중인 재료 보여줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "현재 냉장고에 두부 있어?",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "내가 가진 재료 전부 조회해줘",
+      "expected": "inventory.list",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "아직 안 산 품목 보여줘",
+      "expected": "shopping.current",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "전에 장본 식재료 목록 보여줘",
+      "expected": "shopping.history",
+      "predicted": "shopping.current",
+      "confidence": 1.0
+    },
+    {
+      "text": "과거 장보기 기록 확인해줘",
+      "expected": "shopping.history",
+      "predicted": "shopping.current",
+      "confidence": 1.0
+    },
+    {
+      "text": "이번 달에 장본 기록 보여 줘",
+      "expected": "shopping.history",
+      "predicted": "shopping.current",
+      "confidence": 1.0
+    },
+    {
+      "text": "예전에 산 장보기 리스트 찾아줘",
+      "expected": "shopping.history",
+      "predicted": "shopping.current",
+      "confidence": 1.0
+    },
+    {
+      "text": "닭가슴살이 왜 이렇게 비싼 거야?",
+      "expected": "shopping.compare",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "대파 얼마에 살 수 있어",
+      "expected": "shopping.compare",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "왜 최저가가 표시되지 않아?",
+      "expected": "shopping.price_help",
+      "predicted": "shopping.compare",
+      "confidence": 1.0
+    },
+    {
+      "text": "쇼핑 검색했는데 가격이 안 보여",
+      "expected": "shopping.price_help",
+      "predicted": "shopping.compare",
+      "confidence": 1.0
+    },
+    {
+      "text": "판매 가격을 못 가져오는 건 왜 그래?",
+      "expected": "shopping.price_help",
+      "predicted": "shopping.compare",
+      "confidence": 1.0
+    },
+    {
+      "text": "가격 조회 결과가 비어 있는 이유 알려줘",
+      "expected": "shopping.price_help",
+      "predicted": "shopping.compare",
+      "confidence": 1.0
+    },
+    {
+      "text": "7월 25일 스케줄 알려줘",
+      "expected": "alarm.calendar",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "밀가루 100g은 종이컵으로 얼마야?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "올리고당 대신 꿀로 대체 가능해?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "진간장과 국간장은 어떻게 달라?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "식은 피자를 바삭하게 데우는 방법",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "찌개가 너무 매울 때 어떻게 줄여?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "베이킹소다와 베이킹파우더 차이",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉동밥 촉촉하게 다시 데우는 법",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "큰술 하나는 몇 ml야?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "생크림 없으면 우유로 대체 가능해?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "백설탕이랑 흑설탕 맛 차이가 뭐야?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 1.0
+    },
+    {
+      "text": "냉장고 목록 확인하고 남은 재료로 메뉴도 추천해줘",
+      "expected": "multi_agent",
+      "predicted": "recipe.recommend",
+      "confidence": 1.0
+    },
+    {
+      "text": "파스타 레시피하고 어울리는 사이드 메뉴도 알려줘",
+      "expected": "multi_agent",
+      "predicted": "recipe.pairing",
+      "confidence": 1.0
+    }
+  ]
+}

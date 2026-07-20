@@ -95,7 +95,7 @@ def test_intent_evaluation_dataset_contract() -> None:
     texts = [case.get("text") for case in cases]
     allowed_intents = set(supervisor_utils._LLM_ROUTE_INTENTS)
 
-    assert len(cases) == 50
+    assert len(cases) == 200
     assert len(texts) == len(set(texts))
     assert all(case.get("expected_intent") in allowed_intents for case in cases)
     assert all(case.get("expected_intent") not in {"inventory.action", "inventory.delete"} for case in cases)
