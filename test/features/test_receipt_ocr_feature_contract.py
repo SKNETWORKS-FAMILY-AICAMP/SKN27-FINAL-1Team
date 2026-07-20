@@ -69,5 +69,6 @@ def test_receipt_ocr_feature_status_requires_reupload_for_low_quality():
     service = ReceiptOcrService()
 
     assert service._build_ocr_status(quality_score=0.2, quality_issues=["text_uncertain"]) == "reupload_required"
+    assert service._build_ocr_status(quality_score=0.8, quality_issues=[]) == "needs_review"
     assert service._build_ocr_status(quality_score=0.9, quality_issues=["text_uncertain"]) == "needs_review"
     assert service._build_ocr_status(quality_score=1.0, quality_issues=[]) == "completed"

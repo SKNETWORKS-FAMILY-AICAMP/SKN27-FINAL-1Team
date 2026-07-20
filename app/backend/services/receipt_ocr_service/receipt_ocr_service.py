@@ -46,6 +46,7 @@ CANONICAL_EXTENSION_BY_IMAGE_TYPE = {
 }
 ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
 OCR_MIN_QUALITY_SCORE = 0.75
+OCR_REVIEW_QUALITY_SCORE = 0.85
 OCR_MAX_RETRIES = 1
 MAX_RECEIPT_IMAGES = 5
 MAX_TOTAL_UPLOAD_SIZE_MB = 25
@@ -134,7 +135,7 @@ class ReceiptOcrService:
             storage_extension = self._validate_upload(upload, image_bytes)
             sanitized_image_bytes = self._sanitize_image(image_bytes, storage_extension=storage_extension)
 
-            if crop_mode != "manual":
+            if crop_mode == "auto_crop":
                 cropped_image_bytes = self._auto_crop_receipt_image(sanitized_image_bytes)
                 if not cropped_image_bytes:
                     original_file_name = self._build_original_file_name(files)
@@ -1162,6 +1163,8 @@ class ReceiptOcrService:
             return "unknown"
         if quality_score < OCR_MIN_QUALITY_SCORE:
             return "reupload_required"
+        if quality_score < OCR_REVIEW_QUALITY_SCORE:
+            return "needs_review"
         if quality_issues:
             return "needs_review"
         return "completed"

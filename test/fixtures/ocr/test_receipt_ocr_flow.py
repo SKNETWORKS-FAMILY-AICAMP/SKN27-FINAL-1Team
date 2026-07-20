@@ -297,6 +297,45 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     assert saved_receipt.ocr_error_message is None
 
 
+def test_analyze_upload_auto_mode_analyzes_original_image_without_pre_crop(
+    db_session,
+    monkeypatch,
+    workspace_tmp_dir,
+    neo4j_banana_candidates,
+):
+    user = seed_user(db_session, email="receipt-no-precrop@example.com", nickname="receipt no precrop tester")
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
+
+    service = ReceiptOcrService()
+
+    def fail_if_auto_crop_is_called(_image_bytes):
+        raise AssertionError("first-pass upload should analyze the original image before manual crop fallback")
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        return {
+            "image_id": image_id,
+            "document_type": "receipt",
+            "is_receipt_like": True,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-06-29 12:30:00",
+            "items": [{"raw_name": BANANA_IMPORTED, "quantity": 1, "unit": EA, "item_amount": 2000}],
+            "total_item_count": 1,
+            "total_amount": 2000,
+            "currency": "KRW",
+            "confidence_note": None,
+        }
+
+    monkeypatch.setattr(service, "_auto_crop_receipt_image", fail_if_auto_crop_is_called)
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    upload = make_upload()
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="auto"))
+
+    assert result["receipt_id"] is not None
+    assert result["items"][0]["normalized_name"] == BANANA
+    assert result["ocr_status"] == "completed"
+
+
 def test_validate_upload_rejects_pdf_extension():
     service = ReceiptOcrService()
     upload = make_upload(filename="receipt.pdf")

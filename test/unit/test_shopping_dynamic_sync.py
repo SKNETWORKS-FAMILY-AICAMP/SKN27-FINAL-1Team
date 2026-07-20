@@ -88,3 +88,35 @@ def test_shopping_service_syncs_recipe_list_with_current_fridge(monkeypatch):
     assert db.added[0].name == "대파"
     assert db.added[0].product_link == "https://shopping.example/대파"
     assert db.committed is True
+
+
+def test_shopping_service_merges_duplicate_ingredients_with_recipe_sources():
+    existing_item = SimpleNamespace(
+        id=21,
+        ingredient_id=1,
+        name="대파",
+        required_quantity=Decimal("1"),
+        unit="대",
+        is_purchased=False,
+        source_type="recipe",
+        source_refs=[{"type": "recipe", "recipe_id": 3, "recipe_title": "마파두부"}],
+    )
+    shopping_list = SimpleNamespace(id=11, items=[existing_item])
+    db = FakeDb()
+    service = ShoppingService(provider=FakeProvider())
+
+    changed = service._merge_items_into_list(
+        db,
+        shopping_list,
+        [shopping_module.ShoppingIngredientInput(ingredient_id=1, name="대파", required_quantity=2, unit="대")],
+        source="recipe",
+        source_ref={"type": "recipe", "recipe_id": 9, "recipe_title": "라면팟타이"},
+    )
+
+    assert changed is True
+    assert db.added == []
+    assert existing_item.required_quantity == Decimal("2")
+    assert existing_item.source_refs == [
+        {"type": "recipe", "recipe_id": 3, "recipe_title": "마파두부"},
+        {"type": "recipe", "recipe_id": 9, "recipe_title": "라면팟타이"},
+    ]

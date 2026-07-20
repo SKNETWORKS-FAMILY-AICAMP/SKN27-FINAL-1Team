@@ -31,6 +31,8 @@ const maxUploadSizeMb = 10
 const maxReceiptImages = 5
 const maxTotalUploadSizeMb = 25
 const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
+const ocrManualCropSuggestionMinScore = 0.75
+const ocrWeakReviewScore = 0.85
 // Main stepper indices (must match the order of receiptSteps).
 const STEP = { UPLOAD: 0, ANALYZE: 1, CONFIRM: 2, STOCK: 3 }
 
@@ -609,6 +611,28 @@ function toNumber(value, fallback = null) {
   return Number.isFinite(numericValue) ? numericValue : fallback
 }
 
+function getOcrReviewPolicy(qualityScore) {
+  const score = Number(qualityScore)
+
+  if (
+    Number.isFinite(score) &&
+    score >= ocrManualCropSuggestionMinScore &&
+    score < ocrWeakReviewScore
+  ) {
+    return {
+      tone: 'caution',
+      message: '분석을 완료했어요. 일부 항목의 인식 정확도가 낮을 수 있어요. 영수증 영역을 직접 지정하면 더 정확해질 수 있습니다.',
+      suggestManualCrop: true,
+    }
+  }
+
+  return {
+    tone: 'info',
+    message: '분석을 완료했어요. 항목을 확인해주세요.',
+    suggestManualCrop: false,
+  }
+}
+
 function normalizeOcrUnit(unit) {
   return quantityUnitOptions.includes(unit) ? unit : '개'
 }
@@ -866,7 +890,6 @@ function ReceiptOcr() {
     uploadRunIdRef.current += 1
     clearFlowTimers()
     setUploadedPreview(null)
-    beginCropFlow(files, source)
     setLastReceiptSourceFiles(files)
     setReceiptMeta(null)
     setDetectedRows([])
@@ -877,6 +900,7 @@ function ReceiptOcr() {
     setIsAddRowOpen(false)
     setRowSelectionMode(false)
     setSelectedRowIds([])
+    await uploadReceiptImages(files, source || '업로드 이미지')
   }
 
   const uploadReceiptImages = async (selectedFiles, source, options = {}) => {
@@ -1002,6 +1026,7 @@ function ReceiptOcr() {
       }
 
       const nextRows = mapOcrItemsToRows(data.items)
+      const reviewPolicy = getOcrReviewPolicy(data.quality_score)
       setDetectedRows(nextRows)
       setEditingRows(getInitialEditingRows(nextRows))
       setReceiptMeta({
@@ -1012,6 +1037,12 @@ function ReceiptOcr() {
         purchaseDatetime: data.purchase_datetime,
         totalAmount: data.total_amount,
         confidenceNote: data.confidence_note,
+        qualityScore: data.quality_score,
+        qualityIssues: data.quality_issues || [],
+        ocrStatus: data.ocr_status,
+        reviewTone: reviewPolicy.tone,
+        reviewMessage: reviewPolicy.message,
+        suggestManualCrop: reviewPolicy.suggestManualCrop,
       })
       await loadSavedReceiptPreview(data.receipt_id, token)
       setActiveStep(STEP.CONFIRM)
@@ -1735,6 +1766,21 @@ function ReceiptOcr() {
                   {areAllRowsConfirmed ? '전체 확인 취소' : '전체 확인'}
                 </button>
               </div>
+
+              {receiptMeta?.reviewMessage ? (
+                <div className={`receipt-ocr-review receipt-ocr-review--${receiptMeta.reviewTone || 'info'}`}>
+                  <p>{receiptMeta.reviewMessage}</p>
+                  {receiptMeta.suggestManualCrop ? (
+                    <button
+                      type="button"
+                      disabled={isProcessing || !lastReceiptSourceFiles.length}
+                      onClick={openManualCropEditor}
+                    >
+                      영수증 영역 지정하기
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="receipt-mapping-table" role="table" aria-label="분석된 식재료">
                 {detectedRows.map((row) => {

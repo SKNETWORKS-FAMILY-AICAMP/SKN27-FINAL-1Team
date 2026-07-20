@@ -57,6 +57,8 @@ class ShoppingProductItem(BaseModel):
     mall_name: str | None = None
     is_checked: bool = True
     is_purchased: bool = False
+    source_type: str | None = None
+    source_refs: List[dict] = Field(default_factory=list)
     created_at: datetime | None = None
 
     class Config:
@@ -82,6 +84,7 @@ class ShoppingListResponse(BaseModel):
     user_id: int
     recipe_id: int | None = None
     recipe_title: str | None = None
+    source_recipes: List[dict] = Field(default_factory=list)
     source: ShoppingSource
     status: ShoppingStatus
     total_price: int = 0
