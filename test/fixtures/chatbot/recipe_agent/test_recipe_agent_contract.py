@@ -15,10 +15,16 @@ def test_recipe_tools_preserve_llm_contract(build_tools) -> None:
         "search_recipes",
         "recommend_by_ingredient",
         "recommend_from_fridge",
+        "search_recipes_by_ingredients",
+        "search_recipes_by_food_knowledge",
+        "find_similar_recipes",
         "search_external",
     }
     assert tools["search_recipes"].args_schema.__name__ == "SearchRecipesInput"
     assert tools["search_external"].args_schema.__name__ == "SearchExternalInput"
+    assert tools["search_recipes_by_ingredients"].args_schema.__name__ == "IngredientGraphSearchInput"
+    assert tools["search_recipes_by_food_knowledge"].args_schema.__name__ == "FoodKnowledgeGraphSearchInput"
+    assert tools["find_similar_recipes"].args_schema.__name__ == "SimilarRecipeGraphSearchInput"
 
 
 def test_recipe_agent_preserves_supervisor_contract(monkeypatch) -> None:

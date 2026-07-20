@@ -42,6 +42,9 @@ Supervisor가 전달한 의도는 {intent}입니다. 이 값은 라우팅 힌트
 도구 사용 규칙:
 - 요리명이나 레시피 검색은 search_recipes를 먼저 사용하세요.
 - 특정 재료로 만들 메뉴 추천은 recommend_by_ingredient를 사용하세요.
+- 여러 보유 재료의 활용도나 부족 재료를 비교할 때는 search_recipes_by_ingredients를 사용하세요.
+- 제철·보관/손질/세척·식품 분류·영양 조건은 search_recipes_by_food_knowledge를 사용하세요.
+- 특정 레시피와 재료 또는 그래프 구조가 비슷한 메뉴는 find_similar_recipes를 사용하세요.
 - 특정 재료 없이 냉장고/보유 재료 기반 추천을 원하면 recommend_from_fridge를 사용하세요.
 - 조리 시간·온도 질문은 search_external을 사용하세요.
 - DB 검색이나 재료 추천 결과가 비어 있을 때만 search_external을 한 번 사용하세요.

@@ -20,10 +20,13 @@ from .recipe_config import (
     MAX_DISPLAY_RECIPES,
 )
 from .recipe_state import (
+    FoodKnowledgeGraphSearchInput,
+    IngredientGraphSearchInput,
     RecommendByIngredientInput,
     RecipeToolContext,
     SearchExternalInput,
     SearchRecipesInput,
+    SimilarRecipeGraphSearchInput,
 )
 from .recipe_utils import (
     build_recipe_actions,
@@ -143,12 +146,118 @@ def search_recipes_by_ingredient_with_fallback(db: Any, ingredient: str) -> Tool
         return ToolResult(ok=False, error="재료 기반 추천에 실패했어요. 잠시 후 다시 시도해주세요.", source="ingredient_relax")
 
 
+def _load_recipe_items_by_ids(db: Any, recipe_ids: list[int]) -> list[dict[str, Any]]:
+    """GraphDB 순위를 유지하면서 PostgreSQL 표시 데이터를 조회한다."""
+    if not recipe_ids:
+        return []
+    from app.backend.db.models import Recipe
+    from app.backend.services.recommendation_service.recipe_query import recipe_to_list_item
+
+    recipes = db.query(Recipe).filter(Recipe.id.in_(recipe_ids)).all()
+    by_id = {int(recipe.id): recipe for recipe in recipes}
+    return [recipe_to_list_item(by_id[recipe_id]) for recipe_id in recipe_ids if recipe_id in by_id]
+
+
+def search_recipe_graph(query_name: str, parameters: dict[str, Any]) -> ToolResult:
+    """화이트리스트 Cypher를 실행하고 숫자형 recipe_id를 반환한다."""
+    try:
+        from app.backend.db.neo4j_session import graph_session
+        from app.backend.services.recommendation_service.recipe_graph_queries import run_recipe_graph_query
+
+        with graph_session() as session:
+            recipe_ids = run_recipe_graph_query(session, query_name, parameters)
+        return ToolResult(ok=True, data={"recipe_ids": recipe_ids}, source="neo4j")
+    except Exception:
+        logger.exception("레시피 GraphDB 검색에 실패했습니다: %s", query_name)
+        return ToolResult(ok=False, error="그래프 레시피 검색에 실패했어요. 잠시 후 다시 시도해주세요.", source="neo4j")
+
+
 def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
     """실행 의존성을 감춘 LangChain recipe tools를 생성한다."""
 
     # 같은 Agent 실행에서 확보한 내부 결과 수를 Tool들이 공유한다.
     # 충분한 내부 결과가 있으면 불필요한 외부 검색을 실행하지 않는다.
     internal_result_count = 0
+
+    def graph_payload(tool_name: str, result: ToolResult, message: str) -> str:
+        nonlocal internal_result_count
+        if not result.ok:
+            return build_tool_payload_json(tool_name=tool_name, status="error", message=result.error or message)
+        recipe_ids = list((result.data or {}).get("recipe_ids") or [])
+        items = exclude_previously_shown_recipes(
+            _load_recipe_items_by_ids(context.db, recipe_ids), context.history
+        )[:MAX_DISPLAY_RECIPES]
+        if not items:
+            return build_tool_payload_json(
+                tool_name=tool_name,
+                status="empty",
+                message="조건에 맞는 그래프 레시피를 찾지 못했어요.",
+                data={"recipe_ids": recipe_ids},
+            )
+        selected_ids = [int(item["recipe_id"]) for item in items]
+        internal_result_count = max(internal_result_count, len(items))
+        return build_tool_payload_json(
+            tool_name=tool_name,
+            status="success",
+            metadata_policy="actions",
+            message=message,
+            actions=build_recipe_actions(items),
+            data={"recipe_ids": selected_ids, "items": items, "total": len(items)},
+        )
+
+    @tool("search_recipes_by_ingredients", args_schema=IngredientGraphSearchInput)
+    def search_recipes_by_ingredients(ingredient_names: list[str], limit: int = 10) -> str:
+        """여러 보유 식재료의 별칭과 필요 재료 관계를 따라 충족률이 높은 레시피를 찾습니다."""
+        names = list(dict.fromkeys(name.strip() for name in ingredient_names if name.strip()))
+        if not names:
+            return build_tool_payload_json(
+                tool_name="search_recipes_by_ingredients", status="empty", message="식재료명을 확인하지 못했어요."
+            )
+        result = search_recipe_graph("ingredient_coverage", {"ingredientNames": names, "limit": limit})
+        return graph_payload("search_recipes_by_ingredients", result, "보유 재료 활용도가 높은 레시피를 찾았어요.")
+
+    @tool("search_recipes_by_food_knowledge", args_schema=FoodKnowledgeGraphSearchInput)
+    def search_recipes_by_food_knowledge(
+        search_type: str,
+        month: int | None = None,
+        guide_type: str | None = None,
+        keyword: str | None = None,
+        category_names: list[str] | None = None,
+        minimum_category_count: int = 1,
+        minimum_covered_ingredients: int = 3,
+        limit: int = 10,
+    ) -> str:
+        """제철·식재료 가이드·식품 분류·영양 연결을 이용해 레시피를 찾습니다."""
+        if search_type == "seasonal":
+            query_name, parameters = "seasonal", {"month": month, "limit": limit}
+        elif search_type == "guide":
+            query_name, parameters = "guide", {"guideType": guide_type, "keyword": keyword, "limit": limit}
+        elif search_type == "taxonomy":
+            query_name, parameters = "taxonomy", {
+                "categoryNames": category_names,
+                "minimumCategoryCount": minimum_category_count,
+                "limit": limit,
+            }
+        else:
+            query_name, parameters = "nutrition", {
+                "minimumCoveredIngredients": minimum_covered_ingredients,
+                "limit": limit,
+            }
+        result = search_recipe_graph(query_name, parameters)
+        return graph_payload("search_recipes_by_food_knowledge", result, "식재료 지식 조건에 맞는 레시피를 찾았어요.")
+
+    @tool("find_similar_recipes", args_schema=SimilarRecipeGraphSearchInput)
+    def find_similar_recipes(
+        recipe_id: int,
+        method: str = "ingredient_jaccard",
+        limit: int = 10,
+    ) -> str:
+        """기준 레시피와 재료 구성이 비슷하거나 그래프 구조가 가까운 레시피를 찾습니다."""
+        parameters = {"recipeId": recipe_id, "limit": limit}
+        if method == "graph_embedding":
+            parameters["candidateCount"] = min(175, max(limit + 1, limit * 3))
+        result = search_recipe_graph(method, parameters)
+        return graph_payload("find_similar_recipes", result, "기준 레시피와 유사한 레시피를 찾았어요.")
 
     # =========================================================================
     # Tool: search_recipes
@@ -337,5 +446,8 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
         search_recipes,
         recommend_by_ingredient,
         recommend_from_fridge,
+        search_recipes_by_ingredients,
+        search_recipes_by_food_knowledge,
+        find_similar_recipes,
         search_external,
     ]
