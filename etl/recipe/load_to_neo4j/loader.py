@@ -172,6 +172,23 @@ def build_recipe_rows(recipe_df: pd.DataFrame, review_df: pd.DataFrame | None = 
             item[target] = _number(row[source]) if source.endswith(("_score", "_count", "_size", "_minutes")) else _text(row[source])
         for source, target in array_properties.items():
             item[target] = _json_list(row[source])
+        item["embeddingText"] = "\n".join(
+            filter(
+                None,
+                [
+                    item.get("name"),
+                    item.get("menuCategory"),
+                    item.get("subCategory"),
+                    "주재료: " + ", ".join(item["mainIngredients"]),
+                    "전체 재료: " + ", ".join(item["ingredientNames"]),
+                    "조리법: " + ", ".join(item["cookingMethods"]),
+                    "상황: " + ", ".join(item["occasionTags"]),
+                    "식사: " + ", ".join(item["mealTypes"]),
+                    item.get("beginnerTip"),
+                    item.get("failurePreventionTip"),
+                ],
+            )
+        )
         item.update(review_stats.get(legacy_id, {"coldStartReviewCount": 0}))
         rows.append(item)
     return rows
