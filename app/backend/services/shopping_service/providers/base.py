@@ -31,6 +31,10 @@ class ShoppingProvider(Protocol):
         """검색어 기준 대표 상품 하나를 반환합니다."""
         ...
 
+    def search_products(self, keyword: str, display: int | None = None) -> list[ProductSearchResult]:
+        """검색어 기준 상품 후보 목록을 반환합니다."""
+        ...
+
     def build_product_link(self, product: ProductSearchResult) -> str | None:
         """상품 링크를 반환합니다. 쿠팡 도입 시 제휴 딥링크 생성 지점입니다."""
         ...

@@ -37,6 +37,7 @@ from app.backend.services.receipt_ocr_service import (
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
 KST = timezone(timedelta(hours=9))
 PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
+OLD_RECEIPT_WARNING_DAYS = 30
 
 
 def _format_sse_event(payload: dict) -> str:
@@ -61,6 +62,20 @@ def _parse_receipt_calendar_datetime(value: str | None) -> datetime | None:
         return None
 
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=KST)
+
+
+def _get_receipt_age_in_days(value: str | None, *, now: datetime | None = None) -> int | None:
+    purchase_datetime = _parse_receipt_calendar_datetime(value)
+    if purchase_datetime is None:
+        return None
+
+    current_datetime = now or datetime.now(KST)
+    if current_datetime.tzinfo is None:
+        current_datetime = current_datetime.replace(tzinfo=KST)
+
+    purchase_date = purchase_datetime.astimezone(KST).date()
+    current_date = current_datetime.astimezone(KST).date()
+    return (current_date - purchase_date).days
 
 
 @router.get("/history", response_model=ReceiptHistoryResponse)
@@ -181,7 +196,15 @@ def get_receipt_image(
         ".png": "image/png",
         ".webp": "image/webp",
     }.get(image_path.suffix.lower(), "application/octet-stream")
-    return FileResponse(image_path, media_type=media_type)
+    return FileResponse(
+        image_path,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post("/confirm", response_model=MessageResponse)
@@ -191,6 +214,17 @@ async def confirm_receipt_items(
     db: Session = Depends(get_db),
 ):
     """사용자가 확정한 OCR 품목을 냉장고에 입고하고, 사용비용 캘린더 이벤트를 선택 등록한다."""
+    receipt_age_in_days = _get_receipt_age_in_days(request_data.purchase_datetime)
+    if (
+        receipt_age_in_days is not None
+        and receipt_age_in_days > OLD_RECEIPT_WARNING_DAYS
+        and not request_data.old_receipt_confirmed
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="구매일로부터 30일이 지난 영수증입니다. 소비기한 경고를 확인한 뒤 다시 입고해주세요.",
+        )
+
     saved_item_count = receipt_confirm_service.save_confirmed_items(
         db=db,
         user_id=current_user_id,

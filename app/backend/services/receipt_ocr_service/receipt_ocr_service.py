@@ -975,11 +975,12 @@ class ReceiptOcrService:
                 continue
 
             unit = self._nullable_str(item.get("unit"))
-            standard_name = ingredient_name_matcher.find_best_name(raw_name)
+            name_match = ingredient_name_matcher.find_best_match(raw_name)
             items.append(
                 {
                     "raw_name": raw_name,
-                    "normalized_name": standard_name or raw_name,
+                    "normalized_name": name_match.standard_name or raw_name,
+                    "normalization_match_type": name_match.match_type,
                     "quantity": self._nullable_number(item.get("quantity")),
                     "unit": unit if unit in ALLOWED_UNITS else DEFAULT_UNIT,
                     "item_amount": self._nullable_int(item.get("item_amount")),
