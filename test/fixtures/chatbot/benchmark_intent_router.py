@@ -17,6 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 load_dotenv(PROJECT_ROOT / ".env")
 
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
+from ai.agents.supervisor_agent.supervisor_agent import router_node
 from app.backend.core.config import settings
 
 
@@ -34,26 +35,38 @@ def load_cases(path: Path) -> list[dict[str, Any]]:
     return cases
 
 
-def _evaluate_case(case: dict[str, Any]) -> dict[str, Any]:
-    """평가 문장 하나를 실제 Supervisor LLM 분류기로 실행합니다."""
+def _route_case(case: dict[str, Any], mode: str) -> dict[str, Any]:
+    """선택한 라우팅 방식으로 평가 문장 하나를 분류합니다."""
+    text = case["text"]
+    history = case.get("history") or []
+    if mode == "llm":
+        return supervisor_service._route_intent_payload_with_llm(text, history)
+    if mode == "rule":
+        return router_node({"text": text, "history": history})
+    if mode == "hybrid":
+        return router_node({"text": text, "history": history, "service": supervisor_service})
+    raise ValueError(f"지원하지 않는 라우팅 방식입니다: {mode}")
+
+
+def _evaluate_case(case: dict[str, Any], mode: str = "llm") -> dict[str, Any]:
+    """평가 문장 하나의 예측 intent와 처리 시간을 측정합니다."""
     started_at = time.perf_counter()
-    result = supervisor_service._route_intent_payload_with_llm(
-        case["text"],
-        case.get("history") or [],
-    )
+    result = _route_case(case, mode)
+    intent_payload = result.get("intent_payload") or {}
     return {
         "text": case["text"],
         "expected": case["expected_intent"],
         "predicted": result.get("intent", "general"),
-        "confidence": result.get("confidence", 0.0),
+        "confidence": result.get("confidence", intent_payload.get("confidence", 0.0)),
         "latency": time.perf_counter() - started_at,
     }
 
 
-def evaluate_cases(cases: list[dict[str, Any]], workers: int = 5) -> dict[str, Any]:
-    """실제 Supervisor LLM 분류기로 정확도와 intent별 실패 사례를 계산합니다."""
+def evaluate_cases(cases: list[dict[str, Any]], workers: int = 5, mode: str = "llm") -> dict[str, Any]:
+    """선택한 라우팅 방식의 정확도와 intent별 실패 사례를 계산합니다."""
+    wall_started_at = time.perf_counter()
     with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
-        evaluated = list(executor.map(_evaluate_case, cases))
+        evaluated = list(executor.map(lambda case: _evaluate_case(case, mode), cases))
 
     correct = 0
     intent_stats = defaultdict(lambda: {"total": 0, "correct": 0})
@@ -75,29 +88,48 @@ def evaluate_cases(cases: list[dict[str, Any]], workers: int = 5) -> dict[str, A
 
     total = len(cases)
     return {
+        "mode": mode,
         "total": total,
         "correct": correct,
         "accuracy": round(correct / total, 4),
         "average_latency_seconds": round(sum(item["latency"] for item in evaluated) / total, 4),
+        "wall_time_seconds": round(time.perf_counter() - wall_started_at, 4),
         "per_intent": dict(sorted(intent_stats.items())),
         "failures": failures,
     }
 
 
+def evaluate_benchmark(cases: list[dict[str, Any]], workers: int = 5) -> dict[str, Any]:
+    """동일한 데이터셋으로 Rule, LLM, Hybrid 라우팅을 차례로 비교합니다."""
+    return {
+        "dataset_size": len(cases),
+        "results": {
+            mode: evaluate_cases(cases, workers=workers, mode=mode)
+            for mode in ("rule", "llm", "hybrid")
+        },
+    }
+
+
 def main() -> int:
     """명령행 인자를 받아 intent 평가를 실행하고 기준 미달 여부를 반환합니다."""
-    parser = argparse.ArgumentParser(description="Supervisor LLM intent 분류 정확도를 평가합니다.")
+    parser = argparse.ArgumentParser(description="Supervisor intent 라우팅 방식을 비교 평가합니다.")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--min-accuracy", type=float, default=0.8)
     parser.add_argument("--workers", type=int, default=5)
+    parser.add_argument("--mode", choices=("all", "rule", "llm", "hybrid"), default="all")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
-    if not settings.OPENAI_API_KEY:
+    if args.mode in {"all", "llm", "hybrid"} and not settings.OPENAI_API_KEY:
         print("OPENAI_API_KEY가 없어 실모델 평가를 실행할 수 없습니다.", file=sys.stderr)
         return 2
 
-    report = evaluate_cases(load_cases(args.dataset), workers=args.workers)
+    cases = load_cases(args.dataset)
+    report = (
+        evaluate_benchmark(cases, workers=args.workers)
+        if args.mode == "all"
+        else evaluate_cases(cases, workers=args.workers, mode=args.mode)
+    )
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     print(rendered)
 
@@ -105,7 +137,8 @@ def main() -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered + "\n", encoding="utf-8")
 
-    return 0 if report["accuracy"] >= args.min_accuracy else 1
+    target = report["results"]["hybrid"] if args.mode == "all" else report
+    return 0 if target["accuracy"] >= args.min_accuracy else 1
 
 
 if __name__ == "__main__":

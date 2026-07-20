@@ -46,6 +46,16 @@ from ai.agents.supervisor_agent.supervisor_utils import (
 )
 
 
+def _should_shorten_response(response: dict[str, Any], user_settings: Any) -> bool:
+    """실행 버튼이나 대기 작업이 없는 일반 읽기 응답만 짧게 요약합니다."""
+    return bool(
+        user_settings
+        and getattr(user_settings, "shortAnswer", False)
+        and len(response.get("reply", "")) > 50
+        and not response.get("actions")
+        and not response.get("pending_action")
+    )
+
 class ChatService:
     """사용자 자연어 메시지를 intent로 분류하고 기존 서비스를 호출합니다."""
 
@@ -159,7 +169,7 @@ class ChatService:
             response = _chat_error_response()
 
         reply = response["reply"]
-        if user_settings and getattr(user_settings, "shortAnswer", False) and len(reply) > 50:
+        if _should_shorten_response(response, user_settings):
             if OpenAI is not None and app_settings.OPENAI_API_KEY:
                 client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
                 try:

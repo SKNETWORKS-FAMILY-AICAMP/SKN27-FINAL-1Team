@@ -1,0 +1,218 @@
+{
+  "mode": "hybrid",
+  "total": 200,
+  "correct": 177,
+  "accuracy": 0.885,
+  "average_latency_seconds": 1.538,
+  "wall_time_seconds": 63.357,
+  "per_intent": {
+    "alarm.calendar": {
+      "total": 10,
+      "correct": 9
+    },
+    "alarm.notification": {
+      "total": 10,
+      "correct": 8
+    },
+    "food.general": {
+      "total": 15,
+      "correct": 11
+    },
+    "general": {
+      "total": 7,
+      "correct": 7
+    },
+    "ingredient.guide": {
+      "total": 20,
+      "correct": 17
+    },
+    "inventory.expiring": {
+      "total": 15,
+      "correct": 13
+    },
+    "inventory.list": {
+      "total": 12,
+      "correct": 12
+    },
+    "multi_agent": {
+      "total": 8,
+      "correct": 3
+    },
+    "receipt.guide": {
+      "total": 10,
+      "correct": 10
+    },
+    "receipt.lookup": {
+      "total": 10,
+      "correct": 7
+    },
+    "recipe.pairing": {
+      "total": 10,
+      "correct": 10
+    },
+    "recipe.recommend": {
+      "total": 15,
+      "correct": 15
+    },
+    "recipe.search": {
+      "total": 15,
+      "correct": 15
+    },
+    "shopping.compare": {
+      "total": 15,
+      "correct": 13
+    },
+    "shopping.current": {
+      "total": 10,
+      "correct": 10
+    },
+    "shopping.history": {
+      "total": 10,
+      "correct": 10
+    },
+    "shopping.price_help": {
+      "total": 8,
+      "correct": 7
+    }
+  },
+  "failures": [
+    {
+      "text": "고추가 물러졌는데 먹어도 돼?",
+      "expected": "ingredient.guide",
+      "predicted": "food.general",
+      "confidence": 0.0
+    },
+    {
+      "text": "세척은?",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "내일 알림 조회해줘",
+      "expected": "alarm.notification",
+      "predicted": "alarm.calendar",
+      "confidence": 0.0
+    },
+    {
+      "text": "설탕 8g은 몇 티스푼이야?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "국이 너무 짠데 어떻게 해야 해?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "소비기한 임박 재료와 그걸로 만들 레시피 알려줘",
+      "expected": "multi_agent",
+      "predicted": "inventory.expiring",
+      "confidence": 0.0
+    },
+    {
+      "text": "냉장고 재료 목록이랑 가능한 메뉴 추천해줘",
+      "expected": "multi_agent",
+      "predicted": "recipe.recommend",
+      "confidence": 0.0
+    },
+    {
+      "text": "내가 등록한 구매 영수증 목록",
+      "expected": "receipt.lookup",
+      "predicted": "shopping.history",
+      "confidence": 0.0
+    },
+    {
+      "text": "이전 구매내역 상세하게 보여 줘",
+      "expected": "receipt.lookup",
+      "predicted": "shopping.history",
+      "confidence": 0.0
+    },
+    {
+      "text": "구매 내역에서 가장 최근 기록 보여줘",
+      "expected": "receipt.lookup",
+      "predicted": "shopping.history",
+      "confidence": 0.0
+    },
+    {
+      "text": "그럼 냉동 보관은?",
+      "expected": "ingredient.guide",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "뭐부터 먹어 치워야 돼?",
+      "expected": "inventory.expiring",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "가장 급하게 써야 할 식재료 뭐야",
+      "expected": "inventory.expiring",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "닭가슴살이 왜 이렇게 비싼 거야?",
+      "expected": "shopping.compare",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "대파 얼마에 살 수 있어",
+      "expected": "shopping.compare",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "왜 최저가가 표시되지 않아?",
+      "expected": "shopping.price_help",
+      "predicted": "shopping.compare",
+      "confidence": 0.0
+    },
+    {
+      "text": "소비기한 알림 온 거 있어?",
+      "expected": "alarm.notification",
+      "predicted": "inventory.expiring",
+      "confidence": 0.0
+    },
+    {
+      "text": "7월 25일 스케줄 알려줘",
+      "expected": "alarm.calendar",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "올리고당 대신 꿀로 대체 가능해?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "찌개가 너무 매울 때 어떻게 줄여?",
+      "expected": "food.general",
+      "predicted": "general",
+      "confidence": 0.0
+    },
+    {
+      "text": "냉장고 목록 확인하고 남은 재료로 메뉴도 추천해줘",
+      "expected": "multi_agent",
+      "predicted": "recipe.recommend",
+      "confidence": 0.0
+    },
+    {
+      "text": "기한 임박한 재료를 찾아서 활용 레시피 추천해줘",
+      "expected": "multi_agent",
+      "predicted": "inventory.expiring",
+      "confidence": 0.0
+    },
+    {
+      "text": "파스타 레시피하고 어울리는 사이드 메뉴도 알려줘",
+      "expected": "multi_agent",
+      "predicted": "recipe.pairing",
+      "confidence": 0.0
+    }
+  ]
+}
