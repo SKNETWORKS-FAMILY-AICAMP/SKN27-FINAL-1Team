@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SearchRecipesInput(BaseModel):
@@ -17,6 +17,38 @@ class RecommendByIngredientInput(BaseModel):
 class SearchExternalInput(BaseModel):
     keyword: str = Field(description="웹에서 찾을 요리 또는 재료 키워드")
     query_text: str = Field(description="조리 시간, 온도 등 사용자의 원문 질문")
+
+
+class IngredientGraphSearchInput(BaseModel):
+    ingredient_names: list[str] = Field(min_length=1, max_length=30, description="보유하거나 활용할 식재료명 목록")
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class FoodKnowledgeGraphSearchInput(BaseModel):
+    search_type: Literal["seasonal", "guide", "taxonomy", "nutrition"]
+    month: int | None = Field(default=None, ge=1, le=12)
+    guide_type: Literal["보관", "손질", "세척", "신선도체크"] | None = None
+    keyword: str | None = None
+    category_names: list[str] | None = None
+    minimum_category_count: int = Field(default=1, ge=1, le=10)
+    minimum_covered_ingredients: int = Field(default=3, ge=1, le=30)
+    limit: int = Field(default=10, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def validate_search_parameters(self):
+        if self.search_type == "seasonal" and self.month is None:
+            raise ValueError("seasonal search requires month")
+        if self.search_type == "guide" and (not self.guide_type or not (self.keyword or "").strip()):
+            raise ValueError("guide search requires guide_type and keyword")
+        if self.search_type == "taxonomy" and not self.category_names:
+            raise ValueError("taxonomy search requires category_names")
+        return self
+
+
+class SimilarRecipeGraphSearchInput(BaseModel):
+    recipe_id: int = Field(gt=0, description="유사 레시피 탐색의 기준 recipe_id")
+    method: Literal["ingredient_jaccard", "graph_embedding"] = "ingredient_jaccard"
+    limit: int = Field(default=10, ge=1, le=20)
 
 
 class RecipeAction(BaseModel):
