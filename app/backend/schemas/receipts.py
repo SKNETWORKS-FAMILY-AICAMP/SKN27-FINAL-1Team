@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 class ReceiptOcrItem(BaseModel):
     raw_name: str = Field(..., description="Item name read from the receipt")
     normalized_name: Optional[str] = Field(default=None, description="User-confirmed standard item name")
+    normalization_match_type: Literal["exact", "partial", "none"] = Field(
+        default="none",
+        description="Transient Neo4j standard-name match type; not persisted",
+    )
     quantity: float = Field(default=1, description="Item quantity; decimal values are allowed")
     unit: str = Field(default="개", description="Display unit. Use either '개' or 'kg'")
     item_amount: Optional[int] = Field(default=None, description="Line item amount")
@@ -52,6 +56,10 @@ class ReceiptConfirmRequest(BaseModel):
     total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
     items: List[ReceiptConfirmItem] = Field(default_factory=list, description="User-confirmed item list")
     calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar cost event")
+    old_receipt_confirmed: bool = Field(
+        default=False,
+        description="Whether the user acknowledged the warning for a receipt older than 30 days",
+    )
 
 
 class ReceiptUpdateRequest(BaseModel):

@@ -64,6 +64,39 @@ export async function createRecipeShoppingList({ recipeId, missingIngredients })
   })
 }
 
+export async function createManualShoppingList({ ingredients }) {
+  return requestJson(`${API_URL}/api/v1/shopping-list`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      source: 'manual',
+      missing_ingredients: ingredients,
+    }),
+  })
+}
+
+export async function searchShoppingProducts(keyword, display = 5) {
+  return requestJson(`${API_URL}/api/v1/shopping-list/search-products`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      keyword,
+      display,
+    }),
+  })
+}
+
+export async function searchIngredientSuggestions(keyword) {
+  const query = String(keyword || '').trim()
+  if (!query) {
+    return []
+  }
+
+  return requestJson(`${API_URL}/api/v1/inventory/suggestions?q=${encodeURIComponent(query)}`, {
+    headers: buildHeaders(),
+  })
+}
+
 export async function getCurrentShoppingList() {
   return requestJson(`${API_URL}/api/v1/shopping-list/current`, {
     headers: buildHeaders(),
@@ -72,12 +105,6 @@ export async function getCurrentShoppingList() {
 
 export async function getShoppingList(shoppingListId) {
   return requestJson(`${API_URL}/api/v1/shopping-list/${shoppingListId}`, {
-    headers: buildHeaders(),
-  })
-}
-
-export async function getShoppingHistory(limit = 20) {
-  return requestJson(`${API_URL}/api/v1/shopping-list/history?limit=${encodeURIComponent(limit)}`, {
     headers: buildHeaders(),
   })
 }

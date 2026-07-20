@@ -174,7 +174,7 @@ def handle_history(db: Session, user_id: int, limit: int = 5) -> tuple[str, list
         count = len(shopping_list.get("items") or [])
         title = shopping_list.get("recipe_title") or "직접 만든 목록"
         lines.append(f"{index}. {title} - {status}, {count}개")
-    return "\n".join(lines), [shopping_list_action(label="장보기 내역 보기")]
+    return "\n".join(lines), [shopping_list_action(label="장보기 화면 열기")]
 
 
 def handle_compare(text: str) -> tuple[str, list[dict[str, Any]]]:

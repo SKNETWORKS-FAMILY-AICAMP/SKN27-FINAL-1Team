@@ -75,15 +75,42 @@ class NaverShoppingProvider:
         if not query:
             return None
 
+        items = self._request_items(query, self.display)
+        if not items:
+            return None
+
+        item = self._select_best_item(query, items)
+        if not item:
+            return None
+
+        return self._to_result(item)
+
+    def search_products(self, keyword: str, display: int | None = None) -> list[ProductSearchResult]:
+        query = (keyword or "").strip()
+        if not query:
+            return []
+
+        requested_display = min(max(int(display or self.display), 1), 100)
+        items = self._request_items(query, requested_display)
+        candidates = [item for item in items if self._is_recommendable(query, item)]
+        candidates = self._remove_price_outliers(candidates)
+        ranked_items = sorted(
+            enumerate(candidates),
+            key=lambda indexed_item: (self._match_score(query, self._clean(indexed_item[1].get("title")) or ""), -indexed_item[0]),
+            reverse=True,
+        )
+        return [self._to_result(item) for _, item in ranked_items[:requested_display]]
+
+    def _request_items(self, query: str, display: int) -> list[dict]:
         if not self.is_configured:
             logger.info("네이버 쇼핑 API 키가 없어 상품 검색을 건너뜁니다.")
-            return None
+            return []
 
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 params = {
                     "query": query,
-                    "display": self.display,
+                    "display": min(max(int(display or self.display), 1), 100),
                     "start": 1,
                     "sort": self.sort,
                 }
@@ -101,16 +128,11 @@ class NaverShoppingProvider:
                 response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("네이버 쇼핑 검색 실패(query=%s): %s", query, exc)
-            return None
+            return []
 
-        items = response.json().get("items") or []
-        if not items:
-            return None
+        return response.json().get("items") or []
 
-        item = self._select_best_item(query, items)
-        if not item:
-            return None
-
+    def _to_result(self, item: dict) -> ProductSearchResult:
         return ProductSearchResult(
             provider=self.provider_name,
             product_id=self._clean(item.get("productId")),

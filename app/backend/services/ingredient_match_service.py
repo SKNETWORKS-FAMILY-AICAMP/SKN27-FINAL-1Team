@@ -1,11 +1,18 @@
 import re
 from contextlib import contextmanager
-from typing import Any, Iterator, Optional
+from dataclasses import dataclass
+from typing import Any, Iterator, Literal, Optional
 
 from neo4j import GraphDatabase
 from neo4j.exceptions import Neo4jError
 
 from app.backend.core.config import settings
+
+
+@dataclass(frozen=True)
+class IngredientNameMatch:
+    standard_name: Optional[str]
+    match_type: Literal["exact", "partial", "none"]
 
 
 class IngredientNameMatcher:
@@ -30,22 +37,36 @@ class IngredientNameMatcher:
             session.close()
 
     def find_best_name(self, raw_name: Optional[str]) -> Optional[str]:
+        return self.find_best_match(raw_name).standard_name
+
+    def find_best_match(self, raw_name: Optional[str]) -> IngredientNameMatch:
         raw_key = self._match_key(raw_name)
         if not raw_key:
-            return None
+            return IngredientNameMatch(standard_name=None, match_type="none")
 
         candidates = self._load_neo4j_candidates()
-        for key, standard_name in candidates:
-            if key == raw_key:
-                return standard_name
+        exact_names = {standard_name for key, standard_name in candidates if key == raw_key}
+        if len(exact_names) == 1:
+            return IngredientNameMatch(standard_name=exact_names.pop(), match_type="exact")
+        if len(exact_names) > 1:
+            return IngredientNameMatch(standard_name=None, match_type="none")
 
-        for key, standard_name in sorted(candidates, key=lambda item: len(item[0]), reverse=True):
-            if len(key) < 2:
-                continue
-            if key in raw_key or raw_key in key:
-                return standard_name
+        partial_candidates = [
+            (key, standard_name)
+            for key, standard_name in candidates
+            if len(key) >= 2 and (key in raw_key or raw_key in key)
+        ]
+        if partial_candidates:
+            longest_key_length = max(len(key) for key, _ in partial_candidates)
+            best_names = {
+                standard_name
+                for key, standard_name in partial_candidates
+                if len(key) == longest_key_length
+            }
+            if len(best_names) == 1:
+                return IngredientNameMatch(standard_name=best_names.pop(), match_type="partial")
 
-        return None
+        return IngredientNameMatch(standard_name=None, match_type="none")
 
     def _load_neo4j_candidates(self) -> list[tuple[str, str]]:
         query = """

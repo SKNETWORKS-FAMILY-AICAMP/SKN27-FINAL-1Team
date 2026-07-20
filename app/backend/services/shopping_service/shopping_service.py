@@ -187,6 +187,17 @@ class ShoppingService:
             "recommended_market": "네이버 쇼핑",
         }
 
+    def search_products(self, keyword: str, display: int = 5) -> dict:
+        query = (keyword or "").strip()
+        if not query:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="검색어가 비어 있습니다.")
+
+        products = self.provider.search_products(query, display=display)
+        return {
+            "keyword": query,
+            "items": [self._map_product_candidate(query, product) for product in products],
+        }
+
     def _get_or_create_active_list(
         self,
         db: Session,
@@ -253,22 +264,25 @@ class ShoppingService:
                     existing_item.required_quantity = next_quantity
                     existing_item.unit = next_unit
                     changed = True
+                if self._apply_product_snapshot(existing_item, raw_item):
+                    changed = True
                 continue
 
-            product = self.provider.search_best_product(raw_item.name)
+            product_snapshot = self._product_snapshot_from_input(raw_item)
+            product = None if product_snapshot else self.provider.search_best_product(raw_item.name)
             item = ShoppingListItem(
                 shopping_list_id=shopping_list.id,
                 ingredient_id=ingredient_id,
                 name=raw_item.name.strip(),
                 required_quantity=quantity,
                 unit=unit,
-                provider=product.provider if product else self.provider.provider_name,
-                product_id=product.product_id if product else None,
-                product_name=product.product_name if product else None,
-                product_link=self.provider.build_product_link(product) if product else None,
-                product_image=product.product_image if product else None,
-                price=product.price if product else None,
-                mall_name=product.mall_name if product else None,
+                provider=(product_snapshot or {}).get("provider") or (product.provider if product else self.provider.provider_name),
+                product_id=(product_snapshot or {}).get("product_id") or (product.product_id if product else None),
+                product_name=(product_snapshot or {}).get("product_name") or (product.product_name if product else None),
+                product_link=(product_snapshot or {}).get("product_link") or (self.provider.build_product_link(product) if product else None),
+                product_image=(product_snapshot or {}).get("product_image") or (product.product_image if product else None),
+                price=(product_snapshot or {}).get("price") if product_snapshot else (product.price if product else None),
+                mall_name=(product_snapshot or {}).get("mall_name") or (product.mall_name if product else None),
                 is_checked=True,
                 source_type=source,
                 source_refs=[source_ref] if source_ref else [{"type": source}],
@@ -278,6 +292,53 @@ class ShoppingService:
             active_by_key[key] = item
             changed = True
 
+        return changed
+
+    def _map_product_candidate(self, name: str, product) -> dict:
+        return {
+            "name": name,
+            "provider": product.provider,
+            "coupang": None,
+            "kurly": None,
+            "best_market": product.mall_name,
+            "product_id": product.product_id,
+            "product_name": product.product_name,
+            "product_link": product.product_link,
+            "product_image": product.product_image,
+            "price": product.price,
+            "mall_name": product.mall_name,
+        }
+
+    def _product_snapshot_from_input(self, raw_item: ShoppingIngredientInput) -> dict | None:
+        if not any([
+            raw_item.product_id,
+            raw_item.product_name,
+            raw_item.product_link,
+            raw_item.product_image,
+            raw_item.price,
+            raw_item.mall_name,
+        ]):
+            return None
+        return {
+            "provider": raw_item.provider or self.provider.provider_name,
+            "product_id": raw_item.product_id,
+            "product_name": raw_item.product_name,
+            "product_link": raw_item.product_link,
+            "product_image": raw_item.product_image,
+            "price": raw_item.price,
+            "mall_name": raw_item.mall_name,
+        }
+
+    def _apply_product_snapshot(self, item: ShoppingListItem, raw_item: ShoppingIngredientInput) -> bool:
+        snapshot = self._product_snapshot_from_input(raw_item)
+        if not snapshot:
+            return False
+
+        changed = False
+        for attr, value in snapshot.items():
+            if value is not None and getattr(item, attr) != value:
+                setattr(item, attr, value)
+                changed = True
         return changed
 
     def _build_source_ref(self, db: Session, source: str, recipe_id: int | None = None) -> dict:
