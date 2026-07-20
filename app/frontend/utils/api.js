@@ -12,6 +12,10 @@ const API_NOTICES = {
     title: '로그인 만료',
     message: '로그인 세션이 만료되었습니다.\n다시 로그인한 뒤 이용해주세요.',
   },
+  permissionDenied: {
+    title: '권한 부족',
+    message: '이 작업을 수행할 권한이 없습니다.',
+  },
   serverError: {
     title: '서비스 오류',
     message: '사용자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.',
@@ -35,14 +39,18 @@ const clearAuthToken = () => {
   window.dispatchEvent(new Event('bobbeori-auth-change'))
 }
 
-// 인증 헤더를 추가하고 401/403 응답만 세션 만료로 공통 처리합니다.
+// 인증 헤더를 추가하고 401 세션 만료와 403 권한 부족을 구분합니다.
 export const authenticatedFetch = async (url, options = {}) => {
   const headers = new Headers(options.headers)
   const token = window.localStorage.getItem('bobbeori-token')
   if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(url, { ...options, headers })
-  if (response.status !== 401 && response.status !== 403) return response
+  if (response.status === 403) {
+    showApiNotice('permissionDenied')
+    return response
+  }
+  if (response.status !== 401) return response
 
   clearAuthToken()
   showApiNotice('sessionExpired')
