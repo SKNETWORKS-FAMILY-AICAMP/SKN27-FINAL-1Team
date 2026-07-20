@@ -2413,7 +2413,7 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 **삭제한 산출물:** `figures/`, `samples/` (수치는 §13~16 표·본 문서에 유지)  
 **유지·갱신:** `evaluation.py`, `scoring.py`, `outputs/recipe_lightfm.csv` (본 run으로 재생성)
 
-**폴더 분리 (실험 17 후속):** 코드·데이터·노트북·산출물 → `ai/recommendation/` (`data/`, `outputs/`). Docker 실행 환경 → `ai/experiments/`.
+**현재 위치:** 코드·데이터·노트북·산출물과 Docker 실행 환경을 `etl/ml_lightfm/`으로 통합했다.
 
 **노트북 변경:** Unit 6/8/10 제거, `TARGET_MODE` default = `product_02_row`, export = `outputs/recipe_lightfm.csv`.
 
@@ -2430,7 +2430,7 @@ B1′ (optional): Spearman(ŷ, log1p(view)+log1p(scrap)) on cold — 진단, Go 
 | loss / epochs | WARP 30                                                                                                                    |
 | catalog user  | `__catalog__`                                                                                                              |
 | bar           | `mean(star_02 × sentiment_02)` per recipe                                                                                  |
-| 실행            | `cd ai/experiments` → `docker compose run --rm jupyter jupyter nbconvert --execute /workspace/project/LightFM_Model.ipynb` |
+| 실행            | `cd etl/ml_lightfm` → `docker compose run --rm jupyter jupyter nbconvert --execute /workspace/project/LightFM_Model.ipynb` |
 
 
 

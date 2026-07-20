@@ -345,7 +345,7 @@ positive prevalence가 달라지면 raw Recall@K는 직접 비교할 수 없다.
 ## 재실행
 
 ```powershell
-cd ai\experiments
+cd etl\ml_lightfm
 docker compose run --rm jupyter python user_recipe_analysis.py
 ```
 

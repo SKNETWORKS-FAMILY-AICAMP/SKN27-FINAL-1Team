@@ -24,8 +24,7 @@ const cookingTimeOptions = [
   { value: RecipeFilterConfig.FILTER_ALL, label: "전체" },
   { value: "15분이내", label: "15분" },
   { value: "30분이내", label: "30분" },
-  { value: "60분이내", label: "60분" },
-  { value: "60분이상", label: "60분 이상" },
+  { value: "30분이상", label: "60분" },
 ];
 
 const difficultyOptions = [RecipeFilterConfig.FILTER_ALL, ...RecipeFilterConfig.difficulties];

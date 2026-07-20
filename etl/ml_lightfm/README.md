@@ -1,6 +1,8 @@
-# LightFM 추천 모델 — `ai/recommendation`
+# LightFM 추천 모델 — `etl/ml_lightfm`
 
 콜드스타트(히스토리 없는 유저)를 위한 **catalog 기본 추천 엔진**. LightFM hybrid 모델로 전체 3171 레시피에 대한 선호 점수를 생성하고, 점수 순으로 추천합니다.
+
+실험 코드·데이터·문서와 Linux 기반 Docker/Jupyter 실행 환경을 한 폴더에서 관리합니다.
 
 ---
 
@@ -9,7 +11,8 @@
 ### 학습 + 모델 저장 + 검증 (Docker)
 
 ```powershell
-cd ai\experiments
+cd etl\ml_lightfm
+copy .env.example .env   # 최초 1회
 docker compose run --rm jupyter python train.py
 ```
 
@@ -19,7 +22,7 @@ docker compose run --rm jupyter python train.py
 ### 평가만 별도 실행 (선택)
 
 ```powershell
-cd ai\experiments
+cd etl\ml_lightfm
 docker compose run --rm jupyter python evaluation.py
 ```
 
@@ -29,7 +32,7 @@ docker compose run --rm jupyter python evaluation.py
 ### 노트북 실행 (대화형)
 
 ```powershell
-cd ai\experiments
+cd etl\ml_lightfm
 docker compose up --build
 # http://localhost:8888 → LightFM_Model.ipynb
 ```
@@ -39,7 +42,10 @@ docker compose up --build
 ## 폴더 구조
 
 ```
-ai/recommendation/
+etl/ml_lightfm/
+├── Dockerfile            # Linux LightFM/Jupyter 실행 이미지
+├── docker-compose.yml    # 로컬 실험 실행 환경
+├── requirements.txt      # 재현 가능한 실험 의존성
 ├── train.py               # 학습→모델저장→export→검증 오케스트레이션
 ├── config.py              # 설정, data I/O, 모델 persistence
 ├── pipeline.py            # 전처리, interactions, item features, scoring
@@ -138,6 +144,6 @@ catalog `y_hat`은 fallback으로 유지.
 
 ## 주의사항
 
-- **공식 실행 = Docker only** (`ai/experiments/docker-compose.yml`). WARP는 Linux에서만 안정.
+- **공식 실행 = Docker only** (`etl/ml_lightfm/docker-compose.yml`). WARP는 Linux에서만 안정.
 - 모델 재실행 시 seed별 미세 변동 가능 (WARP drift) — 비교는 동일 seed fresh run 기준.
 - `prefer_hat=1` on cold 레시피는 모델 추정이며 y* 검증된 값이 아님.
