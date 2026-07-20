@@ -149,7 +149,55 @@ function dedupeIngredientsForDisplay(items) {
   })
 }
 
+function getSourceRecipeTitles(list) {
+  const titles = []
+  ;(list?.source_recipes || []).forEach((recipe) => {
+    const title = String(recipe?.recipe_title || '').trim()
+    if (title && !titles.includes(title)) {
+      titles.push(title)
+    }
+  })
+
+  ;(list?.items || []).forEach((item) => {
+    ;(item.source_refs || []).forEach((ref) => {
+      const title = String(ref?.recipe_title || '').trim()
+      if (ref?.type === 'recipe' && title && !titles.includes(title)) {
+        titles.push(title)
+      }
+    })
+  })
+
+  return titles
+}
+
+function getItemSourceLabel(item) {
+  const recipeTitles = []
+  ;(item?.source_refs || []).forEach((ref) => {
+    const title = String(ref?.recipe_title || '').trim()
+    if (ref?.type === 'recipe' && title && !recipeTitles.includes(title)) {
+      recipeTitles.push(title)
+    }
+  })
+
+  if (recipeTitles.length > 0) {
+    return `출처: ${recipeTitles.join(', ')}`
+  }
+
+  if (item?.source_type === 'manual') {
+    return '출처: 직접 추가'
+  }
+
+  return ''
+}
+
 function getRecipeTitle(shoppingList, context) {
+  const sourceRecipeTitles = getSourceRecipeTitles(shoppingList)
+  if (sourceRecipeTitles.length > 1) {
+    return `${sourceRecipeTitles[0]} 외 ${sourceRecipeTitles.length - 1}개 레시피`
+  }
+  if (sourceRecipeTitles.length === 1) {
+    return sourceRecipeTitles[0]
+  }
   if (context?.recipeId && Number(context.recipeId) === Number(shoppingList?.recipe_id)) {
     return context.recipeTitle
   }
@@ -159,10 +207,16 @@ function getRecipeTitle(shoppingList, context) {
   if (shoppingList?.recipe_id) {
     return '레시피 장보기'
   }
-  return '최근 장보기'
+  return '오늘 장보기'
 }
 
 function getShoppingListTitle(list) {
+  const sourceRecipeTitles = getSourceRecipeTitles(list)
+  if (sourceRecipeTitles.length > 0) {
+    const titlePreview = sourceRecipeTitles.slice(0, 2).join(', ')
+    const suffix = sourceRecipeTitles.length > 2 ? ` 외 ${sourceRecipeTitles.length - 2}개` : ''
+    return `${titlePreview}${suffix} 장보기`
+  }
   if (list.recipe_title) {
     return `${list.recipe_title} 장보기`
   }
@@ -182,6 +236,7 @@ function buildFallbackShoppingList(context) {
     recipe_id: context.recipeId,
     source: 'recipe',
     status: 'active',
+    source_recipes: [{ type: 'recipe', recipe_id: context.recipeId, recipe_title: context.recipeTitle }],
     total_price: 0,
     created_at: context.createdAt,
     isFallback: true,
@@ -199,6 +254,8 @@ function buildFallbackShoppingList(context) {
       mall_name: null,
       is_checked: true,
       is_purchased: false,
+      source_type: 'recipe',
+      source_refs: [{ type: 'recipe', recipe_id: context.recipeId, recipe_title: context.recipeTitle }],
       created_at: context.createdAt,
     })),
   }
@@ -209,14 +266,6 @@ function getRemainingItemCount(list) {
 }
 
 function getShoppingHistoryGroupKey(list) {
-  if (list?.recipe_id != null) {
-    return `recipe:${list.recipe_id}`
-  }
-
-  if (list?.source === 'recipe' && list?.recipe_title) {
-    return `recipe-title:${list.recipe_title.trim()}`
-  }
-
   return `list:${list?.id ?? list?.created_at ?? 'unknown'}`
 }
 
@@ -457,7 +506,7 @@ function ShoppingList() {
   const isLoggedIn = hasShoppingAuth()
   const shoppingListId = searchParams.get('shoppingListId')
   const isHistoryView = searchParams.get('view') === 'history'
-  const recipeTitle = getRecipeTitle(shoppingList, storedContext)
+  const sourceRecipeTitles = getSourceRecipeTitles(shoppingList)
   const items = shoppingList?.items ?? []
   const isFallbackList = Boolean(shoppingList?.isFallback)
   const selectedItems = items.filter((item) => item.is_checked && !item.is_purchased)
@@ -799,10 +848,9 @@ function ShoppingList() {
       })
 
       if (!result.shopping_list) {
-        // 모든 재료가 입고되어 백엔드에서 완료된 목록을 자동 삭제한 경우
+        // 모든 재료가 입고되어 현재 장보기에서 빠지고 지난 내역에 완료 세션으로 남는 경우
         setShoppingList(null)
         setRecentList((prev) => (Number(prev?.id) === Number(shoppingList.id) ? null : prev))
-        setHistoryLists((prev) => prev.filter((list) => Number(list.id) !== Number(shoppingList.id)))
         navigate('/shopping-list')
         await showAlert(result.message || '구매한 재료를 냉장고에 입고하고 장보기를 완료했어요.', {
           title: '냉장고 입고 완료',
@@ -882,8 +930,8 @@ function ShoppingList() {
     <section className="shopping-page" aria-labelledby="shopping-title">
       <div className="shopping-hero">
         <div className="shopping-hero__copy">
-          <span className="shopping-eyebrow">레시피 기준 장보기</span>
-          <h1 id="shopping-title">{recipeTitle} 만들기,<br />이 재료가 없어요</h1>
+          <span className="shopping-eyebrow">장보기</span>
+          <h1 id="shopping-title">지금 사야 할 재료</h1>
           <p>
             냉장고에 있는 재료와 부족한 재료를 함께 보고, 필요한 재료는 구매 링크로 바로 확인해요.
           </p>
@@ -936,7 +984,9 @@ function ShoppingList() {
                 </button>
               </div>
             ) : (
-              activeItems.map((item) => (
+              activeItems.map((item) => {
+                const sourceLabel = getItemSourceLabel(item)
+                return (
                 <div className="shopping-item-row" key={item.id}>
                   <button
                     className={`shopping-check ${item.is_checked ? 'is-checked' : ''}`}
@@ -949,6 +999,7 @@ function ShoppingList() {
                   <div className="shopping-item-row__info">
                     <strong>{item.name}<span>· {formatQuantity(item)}</span></strong>
                     <small>{item.product_name || '상품 검색 결과 없음'}</small>
+                    {sourceLabel ? <em className="shopping-item-row__sources">{sourceLabel}</em> : null}
                   </div>
                   <div className="shopping-item-row__meta">
                     <span>{item.mall_name || item.provider || 'provider'}</span>
@@ -967,7 +1018,8 @@ function ShoppingList() {
                     <span className="shopping-item-row__link is-disabled">링크 없음</span>
                   )}
                 </div>
-              ))
+                )
+              })
             )}
 
             {ownedShoppingItems.map((item, index) => (
@@ -1047,7 +1099,7 @@ function ShoppingList() {
           <button
             className="shopping-sidebar__back"
             type="button"
-            onClick={() => navigate(shoppingList.recipe_id ? `/recipes/${shoppingList.recipe_id}` : '/recipes')}
+            onClick={() => navigate(shoppingList.recipe_id && sourceRecipeTitles.length <= 1 ? `/recipes/${shoppingList.recipe_id}` : '/recipes')}
           >
             ← 레시피 상세로 돌아가기
           </button>
