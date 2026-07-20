@@ -47,6 +47,8 @@ CANONICAL_EXTENSION_BY_IMAGE_TYPE = {
 ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
 OCR_MIN_QUALITY_SCORE = 0.75
 OCR_MAX_RETRIES = 1
+MAX_RECEIPT_IMAGES = 5
+MAX_TOTAL_UPLOAD_SIZE_MB = 25
 AUTO_CROP_MIN_IMAGE_SIDE = 320
 AUTO_CROP_MIN_CROP_SHORT_SIDE = 140
 AUTO_CROP_MIN_CROP_LONG_SIDE = 320
@@ -55,7 +57,7 @@ AUTO_CROP_MIN_CROP_LONG_SIDE = 320
 class ReceiptOcrGraphState(TypedDict, total=False):
     db: Session
     user_id: int
-    image_bytes: bytes
+    image_bytes: Any
     image_id: str
     original_file_name: str
     original_file_path: str
@@ -81,8 +83,21 @@ class ReceiptOcrService:
         self._upload_attempts_by_user: dict[int, List[datetime]] = defaultdict(list)
         self._upload_rate_limit_lock = Lock()
 
-    async def analyze_upload(self, *, db: Session, file: UploadFile, user_id: int, crop_mode: str = "auto") -> Dict[str, Any]:
-        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id, crop_mode=crop_mode)
+    async def analyze_upload(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        files: Optional[List[UploadFile]] = None,
+        file: Optional[UploadFile] = None,
+        crop_mode: str = "auto",
+    ) -> Dict[str, Any]:
+        initial_state = await self._prepare_upload_state(
+            db=db,
+            files=self._collect_upload_files(files=files, file=file),
+            user_id=user_id,
+            crop_mode=crop_mode,
+        )
         if initial_state.get("response"):
             return initial_state["response"]
 
@@ -104,51 +119,89 @@ class ReceiptOcrService:
         self,
         *,
         db: Session,
-        file: UploadFile,
+        files: List[UploadFile],
         user_id: int,
         crop_mode: str = "auto",
     ) -> ReceiptOcrGraphState:
         self._enforce_upload_rate_limit(user_id)
-        image_bytes = await file.read()
-        storage_extension = self._validate_upload(file, image_bytes)
-        sanitized_image_bytes = self._sanitize_image(image_bytes, storage_extension=storage_extension)
-        original_file_name = mask_sensitive_text(file.filename)
+        sanitized_images: List[bytes] = []
+        storage_extensions: List[str] = []
+        total_upload_bytes = 0
 
-        if crop_mode != "manual":
-            cropped_image_bytes = self._auto_crop_receipt_image(sanitized_image_bytes)
-            if not cropped_image_bytes:
-                issue_code = "auto_crop_dependency_missing" if cv2 is None or np is None else "auto_crop_low_confidence"
-                return {
-                    "user_id": user_id,
-                    "original_file_name": original_file_name,
-                    "stage": "manual_crop_required",
-                    "response": self._build_manual_crop_required_response(original_file_name, issue_code=issue_code),
-                }
-            sanitized_image_bytes = cropped_image_bytes
-            storage_extension = ".jpg"
+        for upload in files:
+            image_bytes = await upload.read()
+            total_upload_bytes += len(image_bytes)
+            storage_extension = self._validate_upload(upload, image_bytes)
+            sanitized_image_bytes = self._sanitize_image(image_bytes, storage_extension=storage_extension)
+
+            if crop_mode != "manual":
+                cropped_image_bytes = self._auto_crop_receipt_image(sanitized_image_bytes)
+                if not cropped_image_bytes:
+                    original_file_name = self._build_original_file_name(files)
+                    issue_code = "auto_crop_dependency_missing" if cv2 is None or np is None else "auto_crop_low_confidence"
+                    return {
+                        "user_id": user_id,
+                        "original_file_name": original_file_name,
+                        "stage": "manual_crop_required",
+                        "response": self._build_manual_crop_required_response(original_file_name, issue_code=issue_code),
+                    }
+                sanitized_image_bytes = cropped_image_bytes
+                storage_extension = ".jpg"
+
+            sanitized_images.append(sanitized_image_bytes)
+            storage_extensions.append(storage_extension)
+
+        if total_upload_bytes > MAX_TOTAL_UPLOAD_SIZE_MB * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Total upload size must be {MAX_TOTAL_UPLOAD_SIZE_MB}MB or less.",
+            )
+
+        original_file_name = self._build_original_file_name(files)
+        if len(sanitized_images) == 1:
+            stored_image_bytes = sanitized_images[0]
+            stored_extension = storage_extensions[0]
+            ocr_image_bytes: Any = sanitized_images[0]
+        else:
+            stored_image_bytes = self._stitch_receipt_images(sanitized_images)
+            stored_extension = ".jpg"
+            ocr_image_bytes = sanitized_images
 
         original_file_path = self._save_receipt_image(
             user_id=user_id,
-            image_bytes=sanitized_image_bytes,
-            storage_extension=storage_extension,
+            image_bytes=stored_image_bytes,
+            storage_extension=stored_extension,
         )
 
         image_id = Path(original_file_path).stem
         return {
             "db": db,
             "user_id": user_id,
-            "image_bytes": sanitized_image_bytes,
+            "image_bytes": ocr_image_bytes,
             "image_id": image_id,
             "original_file_name": original_file_name,
             "original_file_path": original_file_path,
-            "ocr_file_name": f"{image_id}{storage_extension}",
+            "ocr_file_name": f"{image_id}{stored_extension}",
             "retry_count": 0,
             "max_retries": OCR_MAX_RETRIES,
             "stage": "image_uploaded",
         }
 
-    async def create_upload_event_stream(self, *, db: Session, file: UploadFile, user_id: int, crop_mode: str = "auto"):
-        initial_state = await self._prepare_upload_state(db=db, file=file, user_id=user_id, crop_mode=crop_mode)
+    async def create_upload_event_stream(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        files: Optional[List[UploadFile]] = None,
+        file: Optional[UploadFile] = None,
+        crop_mode: str = "auto",
+    ):
+        initial_state = await self._prepare_upload_state(
+            db=db,
+            files=self._collect_upload_files(files=files, file=file),
+            user_id=user_id,
+            crop_mode=crop_mode,
+        )
         if initial_state.get("response"):
             async def manual_crop_event_stream():
                 yield {
@@ -412,6 +465,68 @@ class ReceiptOcrService:
             "manual_crop_required": True,
             "manual_crop_message": message,
         }
+
+    def _collect_upload_files(
+        self,
+        *,
+        files: Optional[List[UploadFile]] = None,
+        file: Optional[UploadFile] = None,
+    ) -> List[UploadFile]:
+        uploads = list(files or [])
+        if file is not None:
+            uploads.insert(0, file)
+
+        if not uploads:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one receipt image.")
+        if len(uploads) > MAX_RECEIPT_IMAGES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Upload no more than {MAX_RECEIPT_IMAGES} receipt images.",
+            )
+        return uploads
+
+    def _build_original_file_name(self, files: List[UploadFile]) -> Optional[str]:
+        first_name = mask_sensitive_text(files[0].filename)
+        if len(files) == 1:
+            return first_name
+        return f"{first_name or 'receipt'} 외 {len(files) - 1}장"
+
+    def _stitch_receipt_images(self, image_bytes_list: List[bytes]) -> bytes:
+        images: List[Image.Image] = []
+        try:
+            for image_bytes in image_bytes_list:
+                with Image.open(io.BytesIO(image_bytes)) as source:
+                    image = ImageOps.exif_transpose(source).convert("RGB")
+                    images.append(image.copy())
+
+            target_width = min(max(image.width for image in images), 2200)
+            resized_images: List[Image.Image] = []
+            for image in images:
+                scale = target_width / image.width
+                target_height = max(1, round(image.height * scale))
+                resized_images.append(
+                    image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                    if image.width != target_width
+                    else image
+                )
+
+            canvas = Image.new("RGB", (target_width, sum(image.height for image in resized_images)), "white")
+            offset_y = 0
+            for image in resized_images:
+                canvas.paste(image, (0, offset_y))
+                offset_y += image.height
+
+            output = io.BytesIO()
+            canvas.save(output, format="JPEG", quality=92, optimize=True)
+            return output.getvalue()
+        except (OSError, UnidentifiedImageError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Receipt images could not be combined.",
+            ) from exc
+        finally:
+            for image in images:
+                image.close()
 
     def _validate_upload(self, file: UploadFile, image_bytes: bytes) -> str:
         if not image_bytes:
@@ -809,7 +924,7 @@ class ReceiptOcrService:
     def _call_openai_vision(
         self,
         *,
-        image_bytes: bytes,
+        image_bytes: Any,
         filename: str,
         image_id: str,
         retry_note: Optional[str] = None,
@@ -819,9 +934,14 @@ class ReceiptOcrService:
         if not self.client:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="OPENAI_API_KEY is not set.")
 
-        mime_type = self._guess_mime_type(filename)
-        data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
-        prompt = self._build_prompt(image_id, retry_note=retry_note)
+        images = list(image_bytes) if isinstance(image_bytes, (list, tuple)) else [image_bytes]
+        prompt = self._build_prompt(image_id, image_count=len(images), retry_note=retry_note)
+        content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for current_image_bytes in images:
+            detected_type = self._detect_image_type(current_image_bytes)
+            mime_type = "image/jpeg" if detected_type == "jpeg" else f"image/{detected_type}"
+            data_url = f"data:{mime_type};base64,{base64.b64encode(current_image_bytes).decode('ascii')}"
+            content.append({"type": "image_url", "image_url": {"url": data_url, "detail": "high"}})
 
         try:
             response = self.client.chat.completions.create(
@@ -830,10 +950,7 @@ class ReceiptOcrService:
                 messages=[
                     {
                         "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": data_url}},
-                        ],
+                        "content": content,
                     }
                 ],
             )
@@ -865,7 +982,21 @@ class ReceiptOcrService:
                     "quantity": self._nullable_number(item.get("quantity")),
                     "unit": unit if unit in ALLOWED_UNITS else DEFAULT_UNIT,
                     "item_amount": self._nullable_int(item.get("item_amount")),
+                    "_source_image_index": self._nullable_int(item.get("source_image_index")),
                 }
+            )
+
+        original_item_count = len(items)
+        items = self._deduplicate_overlapping_items(items)
+        removed_overlap_count = original_item_count - len(items)
+        for item in items:
+            item.pop("_source_image_index", None)
+
+        total_item_count = self._nullable_number(result.get("total_item_count"))
+        if removed_overlap_count:
+            total_item_count = sum(
+                item.get("quantity") if item.get("quantity") is not None else 1
+                for item in items
             )
 
         return {
@@ -875,11 +1006,54 @@ class ReceiptOcrService:
             "store_name": mask_sensitive_text(self._nullable_str(result.get("store_name"))),
             "purchase_datetime": self._nullable_str(result.get("purchase_datetime")),
             "items": items,
-            "total_item_count": self._nullable_number(result.get("total_item_count")),
+            "total_item_count": total_item_count,
             "total_amount": self._nullable_int(result.get("total_amount")),
             "currency": "KRW",
             "confidence_note": mask_sensitive_text(self._nullable_str(result.get("confidence_note"))),
         }
+
+    def _deduplicate_overlapping_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if len(items) < 2:
+            return items
+
+        grouped_pages: List[tuple[Optional[int], List[Dict[str, Any]]]] = []
+        for item in items:
+            source_index = item.get("_source_image_index")
+            if grouped_pages and grouped_pages[-1][0] == source_index:
+                grouped_pages[-1][1].append(item)
+            else:
+                grouped_pages.append((source_index, [item]))
+
+        merged: List[Dict[str, Any]] = []
+        previous_source_index: Optional[int] = None
+        for source_index, page_items in grouped_pages:
+            overlap_size = 0
+            if (
+                previous_source_index is not None
+                and source_index is not None
+                and source_index == previous_source_index + 1
+            ):
+                max_overlap = min(8, len(merged), len(page_items))
+                for size in range(max_overlap, 0, -1):
+                    previous_signatures = [self._item_overlap_signature(item) for item in merged[-size:]]
+                    current_signatures = [self._item_overlap_signature(item) for item in page_items[:size]]
+                    if previous_signatures == current_signatures:
+                        overlap_size = size
+                        break
+
+            merged.extend(page_items[overlap_size:])
+            previous_source_index = source_index
+
+        return merged
+
+    def _item_overlap_signature(self, item: Dict[str, Any]) -> tuple[Any, ...]:
+        raw_name = re.sub(r"[^0-9a-zA-Z\uac00-\ud7a3]", "", str(item.get("raw_name") or "").lower())
+        return (
+            raw_name,
+            item.get("quantity"),
+            item.get("unit"),
+            item.get("item_amount"),
+        )
 
     def _validate_receipt_document(self, normalized: Dict[str, Any]) -> List[str]:
         issues: List[str] = []
@@ -1008,11 +1182,18 @@ class ReceiptOcrService:
             return None
         return ", ".join(quality_issues)
 
-    def _build_prompt(self, image_id: str, *, retry_note: Optional[str] = None) -> str:
+    def _build_prompt(
+        self,
+        image_id: str,
+        *,
+        image_count: int = 1,
+        retry_note: Optional[str] = None,
+    ) -> str:
         prompt = f"""
 You are an OCR and structured data extraction assistant for Korean receipts.
 
-Extract only the following information from the receipt image:
+The input contains {image_count} image(s) of one receipt, ordered from top to bottom.
+Extract only the following information from the receipt images:
 - document_type
 - is_receipt_like
 - store_name
@@ -1038,7 +1219,8 @@ Output schema:
       "raw_name": "string",
       "quantity": "number|null",
       "unit": "\uac1c|kg|null",
-      "item_amount": "number|null"
+      "item_amount": "number|null",
+      "source_image_index": "integer"
     }}
   ],
   "total_item_count": "number|null",
@@ -1064,6 +1246,9 @@ Rules:
 14. item_amount is the line amount for that item, not the unit price unless only unit price is visible.
 15. total_amount is a reference value. Use null if uncertain.
 16. Write uncertainty about hard-to-read text, inferred values, omitted lines, or non-receipt classification in confidence_note without copying sensitive values.
+17. Read images strictly in the supplied top-to-bottom order. source_image_index is 1 for the first image, 2 for the second, and so on.
+18. Adjacent images may overlap by one or more item rows. Output an overlapping purchased item only once. When the same row appears in two images, keep the clearer reading and use the earlier source_image_index.
+19. Do not merge separate legitimate purchases merely because their names match. Deduplicate only repeated rows at adjacent image boundaries with matching name, quantity, and amount.
 """.strip()
         if retry_note:
             prompt += "\n\n" + f"""Retry guidance:

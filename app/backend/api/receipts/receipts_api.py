@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path as FsPath
+from typing import List, Optional
 
 import httpx
 
@@ -102,24 +103,38 @@ def delete_receipt(
 
 @router.post("/upload", response_model=ReceiptUploadResponse)
 async def upload_receipt(
-    file: UploadFile = File(...),
+    files: Optional[List[UploadFile]] = File(None),
+    file: Optional[UploadFile] = File(None),
     crop_mode: str = Form("auto"),
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """영수증 이미지를 OCR 분석하고, 사용자가 확인할 품목 후보를 반환한다."""
-    return await receipt_ocr_service.analyze_upload(db=db, file=file, user_id=current_user_id, crop_mode=crop_mode)
+    return await receipt_ocr_service.analyze_upload(
+        db=db,
+        files=files,
+        file=file,
+        user_id=current_user_id,
+        crop_mode=crop_mode,
+    )
 
 
 @router.post("/upload/stream")
 async def upload_receipt_stream(
-    file: UploadFile = File(...),
+    files: Optional[List[UploadFile]] = File(None),
+    file: Optional[UploadFile] = File(None),
     crop_mode: str = Form("auto"),
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """Stream receipt OCR LangGraph stages and final upload result as SSE."""
-    event_stream = await receipt_ocr_service.create_upload_event_stream(db=db, file=file, user_id=current_user_id, crop_mode=crop_mode)
+    event_stream = await receipt_ocr_service.create_upload_event_stream(
+        db=db,
+        files=files,
+        file=file,
+        user_id=current_user_id,
+        crop_mode=crop_mode,
+    )
 
     async def sse_stream():
         async for payload in event_stream:

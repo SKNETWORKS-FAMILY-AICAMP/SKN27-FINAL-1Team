@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import UploadFile
+from PIL import Image
 from sqlalchemy import BigInteger, create_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -41,7 +42,6 @@ from app.backend.services.receipt_ocr_service.privacy_masking import (
     MASK_PHONE_NUMBER,
 )
 from app.backend.services.receipt_ocr_service.receipt_history_service import receipt_history_service
-from app.backend.services.receipt_ocr_service.receipt_ocr_service import ReceiptOcrService
 from app.backend.services.receipt_ocr_service.receipt_ocr_service import KST, ReceiptOcrService
 
 
@@ -271,7 +271,7 @@ def test_analyze_upload_retries_low_quality_ocr_result(
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload(filename="receipt_010-1234-5678.png")
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 2
     assert "010-1234-5678" not in image_ids[0]
@@ -347,11 +347,127 @@ def test_validate_upload_rejects_oversized_file(monkeypatch):
     assert "1MB" in exc_info.value.detail
 
 
-def test_save_original_image_uses_uuid_name_and_private_user_path(monkeypatch, workspace_tmp_dir):
+# 한 영수증은 상단부터 최대 5장까지만 받는 업로드 정책을 고정한다.
+def test_collect_upload_files_rejects_more_than_five_images():
+    service = ReceiptOcrService()
+
+    with pytest.raises(Exception) as exc_info:
+        service._collect_upload_files(files=[make_upload(f"receipt-{index}.png") for index in range(6)])
+
+    assert exc_info.value.status_code == 400
+    assert "5" in exc_info.value.detail
+
+
+# 같은 사진 안에서 동일 상품을 두 번 산 경우는 정상 구매 행이므로 제거하지 않는다.
+def test_deduplicate_overlapping_items_keeps_repeated_rows_in_the_same_image():
+    service = ReceiptOcrService()
+    items = [
+        {"raw_name": BANANA, "quantity": 1, "unit": EA, "item_amount": 2000, "_source_image_index": 1},
+        {"raw_name": BANANA, "quantity": 1, "unit": EA, "item_amount": 2000, "_source_image_index": 1},
+    ]
+
+    assert service._deduplicate_overlapping_items(items) == items
+
+
+# 연속 사진의 경계에 겹쳐 촬영된 동일 행만 한 번 제거한다.
+def test_deduplicate_overlapping_items_removes_adjacent_boundary_overlap():
+    service = ReceiptOcrService()
+    items = [
+        {"raw_name": BANANA, "quantity": 1, "unit": EA, "item_amount": 2000, "_source_image_index": 1},
+        {"raw_name": "두부", "quantity": 1, "unit": EA, "item_amount": 1800, "_source_image_index": 1},
+        {"raw_name": "두부", "quantity": 1, "unit": EA, "item_amount": 1800, "_source_image_index": 2},
+        {"raw_name": "양파", "quantity": 2, "unit": EA, "item_amount": 3000, "_source_image_index": 2},
+    ]
+
+    deduplicated = service._deduplicate_overlapping_items(items)
+
+    assert [item["raw_name"] for item in deduplicated] == [BANANA, "두부", "양파"]
+
+
+# 여러 장을 한 번에 OCR로 보내고, 사용자가 다시 볼 파일은 하나의 세로 결합 이미지로 저장한다.
+def test_analyze_upload_accepts_ordered_images_and_saves_one_stitched_preview(
+    db_session,
+    monkeypatch,
+    workspace_tmp_dir,
+    neo4j_banana_candidates,
+):
+    user = seed_user(db_session, email="receipt-multi@example.com", nickname="receipt multi tester")
+    monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
+
+    service = ReceiptOcrService()
+    received_image_counts = []
+
+    def fake_call_openai_vision(*, image_bytes, filename, image_id, retry_note=None):
+        received_image_counts.append(len(image_bytes))
+        return {
+            "image_id": image_id,
+            "document_type": "receipt",
+            "is_receipt_like": True,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-07-19 12:30:00",
+            "items": [
+                {
+                    "raw_name": BANANA_IMPORTED,
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 2000,
+                    "source_image_index": 1,
+                },
+                {
+                    "raw_name": "두부",
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 1800,
+                    "source_image_index": 1,
+                },
+                {
+                    "raw_name": "두부",
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 1800,
+                    "source_image_index": 2,
+                },
+                {
+                    "raw_name": "양파",
+                    "quantity": 2,
+                    "unit": EA,
+                    "item_amount": 3000,
+                    "source_image_index": 2,
+                },
+            ],
+            "total_item_count": 5,
+            "total_amount": 6800,
+            "currency": "KRW",
+            "confidence_note": None,
+        }
+
+    monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
+
+    result = asyncio.run(
+        service.analyze_upload(
+            db=db_session,
+            files=[make_upload("top.png"), make_upload("bottom.png")],
+            user_id=user.id,
+            crop_mode="manual",
+        )
+    )
+
+    assert received_image_counts == [2]
+    assert [item["raw_name"] for item in result["items"]] == [BANANA_IMPORTED, "두부", "양파"]
+    assert result["total_item_count"] == 4
+    assert result["original_file_name"] == "top.png 외 1장"
+    assert Path(result["original_file_path"]).suffix == ".jpg"
+    saved_files = list((workspace_tmp_dir / "raw").rglob("*.jpg"))
+    assert len(saved_files) == 1
+    with Image.open(saved_files[0]) as stitched:
+        assert stitched.height == stitched.width * 2
+
+
+def test_save_receipt_image_uses_uuid_name_and_private_user_path(monkeypatch, workspace_tmp_dir):
     service = ReceiptOcrService()
     monkeypatch.setattr(settings, "OCR_UPLOAD_DIR", str(workspace_tmp_dir / "raw"))
 
-    stored_path = service._save_original_image(user_id=7, image_bytes=TEST_PNG_BYTES, storage_extension=".png")
+    stored_path = service._save_receipt_image(user_id=7, image_bytes=TEST_PNG_BYTES, storage_extension=".png")
     path = Path(stored_path)
 
     assert path.parts[-3:] == ("raw", "7", path.name)
@@ -418,7 +534,7 @@ def test_analyze_upload_does_not_retry_when_only_total_amount_is_visible(
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload()
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 1
     assert result["items"] == []
@@ -450,7 +566,7 @@ def test_analyze_upload_requests_reupload_when_retry_stays_low_quality(db_sessio
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload()
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 2
     assert result["needs_reupload"] is True
@@ -488,7 +604,7 @@ def test_analyze_upload_requests_reupload_for_non_receipt_document(db_session, m
     monkeypatch.setattr(service, "_call_openai_vision", fake_call_openai_vision)
 
     upload = make_upload(filename="table.png")
-    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+    result = asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert len(calls) == 1
     assert result["needs_reupload"] is True
@@ -514,7 +630,7 @@ def test_analyze_upload_deletes_saved_file_when_ocr_raises(db_session, monkeypat
 
     upload = make_upload()
     with pytest.raises(RuntimeError):
-        asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id))
+        asyncio.run(service.analyze_upload(db=db_session, file=upload, user_id=user.id, crop_mode="manual"))
 
     assert db_session.query(Receipt).count() == 0
     assert list((workspace_tmp_dir / "raw").rglob("*.png")) == []
