@@ -9,7 +9,14 @@ SHOPPING_CONFIRM_ACTIONS = {
     "shopping_create",
     "shopping_purchase",
     "shopping_delete_item",
+    "shopping_select_product",
+    "shopping_keep_item",
+    "shopping_cancel_flow",
 }
+
+SHOPPING_FLOW_SLOT = "shopping_flow"
+SHOPPING_AWAITING_SELECTION = "awaiting_product_selection"
+SHOPPING_AWAITING_PURCHASE = "awaiting_purchase_confirmation"
 
 SHOPPING_CONTEXT_WORDS = (
     "장보기",
@@ -168,6 +175,39 @@ def analyze_shopping_intent(text: str) -> str | None:
     if any(word in normalized for word in SHOPPING_LIST_WORDS):
         return "shopping.current"
     return "shopping.current"
+
+
+def pending_shopping_flow_intent(text: str, slots: dict[str, Any] | None) -> str | None:
+    """진행 중인 장보기 멀티턴 입력만 Shopping Agent로 다시 연결합니다."""
+    flow = (slots or {}).get(SHOPPING_FLOW_SLOT)
+    if not isinstance(flow, dict):
+        return None
+
+    normalized = normalize_text(text).rstrip("?")
+    step = flow.get("step")
+    cancel_words = {"취소", "그만", "안할래", "아니", "아니요", "됐어", "나중에"}
+    if normalized in cancel_words:
+        return "shopping.cancel"
+
+    if step == SHOPPING_AWAITING_SELECTION:
+        selection_words = (
+            "첫번째", "두번째", "세번째", "네번째", "다섯번째",
+            "첫번", "두번", "세번", "네번", "다섯번",
+            "가장싼", "제일싼", "더싼", "싼걸", "최저가", "저렴한", "비싼", "마지막",
+        )
+        if re.fullmatch(r"\s*\d+\s*", text or "") or re.search(r"(?:^|\s)\d+\s*(?:번|번째)(?:\s|$)", text or ""):
+            return "shopping.compare"
+        if any(word in normalized for word in (*selection_words, "말고", "대신")):
+            return "shopping.compare"
+
+    if step == SHOPPING_AWAITING_PURCHASE:
+        purchase_words = (
+            "응", "네", "예", "맞아", "좋아", "구매", "샀", "결제", "완료", "입고",
+        )
+        if any(word in normalized for word in purchase_words):
+            return "shopping.purchase"
+
+    return None
 
 
 def build_shopping_response(

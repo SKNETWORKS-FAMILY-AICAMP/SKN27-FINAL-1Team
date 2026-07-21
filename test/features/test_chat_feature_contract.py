@@ -110,6 +110,73 @@ def test_chat_routes_shopping_confirm_action_to_shopping_agent():
     assert supervisor_agent.route_intent(state) == "shopping_agent_node"
 
 
+def test_chat_routes_pending_shopping_flow_follow_ups_to_shopping_agent():
+    selection_slots = {
+        "shopping_product": "두부",
+        "shopping_flow": {
+            "step": "awaiting_product_selection",
+            "query": "두부",
+            "candidates": [{"name": "두부", "product_id": "1", "product_name": "두부 상품"}],
+        },
+    }
+    purchase_slots = {
+        "shopping_flow": {
+            "step": "awaiting_purchase_confirmation",
+            "shopping_list_id": 11,
+            "shopping_item_id": 21,
+        },
+    }
+
+    selection = supervisor_agent.router_node({
+        "text": "2번",
+        "history": [],
+        "trusted_context": {"intent": "shopping.compare", "slots": selection_slots},
+        "context_enforced": True,
+    })
+    purchase = supervisor_agent.router_node({
+        "text": "응, 샀어",
+        "history": [],
+        "trusted_context": {"intent": "shopping.compare", "slots": purchase_slots},
+        "context_enforced": True,
+    })
+    cancel = supervisor_agent.router_node({
+        "text": "취소",
+        "history": [],
+        "trusted_context": {"intent": "shopping.compare", "slots": selection_slots},
+        "context_enforced": True,
+    })
+
+    assert selection["intent"] == "shopping.compare"
+    assert purchase["intent"] == "shopping.purchase"
+    assert cancel["intent"] == "shopping.cancel"
+    assert supervisor_agent.route_intent(cancel) == "shopping_agent_node"
+
+
+def test_pending_shopping_selection_passes_original_reply_to_subgraph(monkeypatch):
+    calls = []
+
+    def fake_run(**kwargs):
+        calls.append(kwargs)
+        return {"response_text": "선택했어요.", "actions": [], "sources": [], "slots": kwargs["slots"]}
+
+    monkeypatch.setattr("ai.agents.shopping_agent.shopping_agent.run_shopping_agent", fake_run)
+    slots = {
+        "shopping_product": "두부",
+        "shopping_flow": {"step": "awaiting_product_selection", "query": "두부", "candidates": []},
+    }
+
+    supervisor_agent.shopping_agent_node({
+        "text": "2번",
+        "intent": "shopping.compare",
+        "history": [],
+        "slots": slots,
+        "db": SimpleNamespace(),
+        "user_id": 7,
+    })
+
+    assert calls[0]["text"] == "2번"
+
+
 def test_supervisor_service_invokes_shopping_agent_from_chat():
     """ChatService로 들어온 장보기 생성 요청이 Shopping Agent 응답으로 변환되는지 확인합니다."""
     result = supervisor_service.handle_message(

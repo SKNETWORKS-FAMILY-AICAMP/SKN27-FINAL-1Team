@@ -314,6 +314,53 @@ def handle_compare(text: str) -> tuple[str, list[dict[str, Any]]]:
     return "\n".join(lines), actions
 
 
+def handle_selected_product(
+    db: Session,
+    user_id: int,
+    candidate: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """선택한 외부 상품 스냅샷을 장보기 목록에 반영합니다."""
+    ingredient_name = str(candidate.get("name") or "").strip()
+    if not ingredient_name:
+        raise ValueError("선택 상품의 재료명이 비어 있습니다.")
+
+    shopping_list = shopping_service.create_list(
+        db=db,
+        user_id=user_id,
+        recipe_id=None,
+        source="manual",
+        missing_ingredients=[
+            ShoppingIngredientInput(
+                name=ingredient_name,
+                provider=candidate.get("provider"),
+                product_id=candidate.get("product_id"),
+                product_name=candidate.get("product_name"),
+                product_link=candidate.get("product_link"),
+                product_image=candidate.get("product_image"),
+                price=candidate.get("price"),
+                mall_name=candidate.get("mall_name"),
+            )
+        ],
+    )
+
+    selected_item = next(
+        (
+            item
+            for item in shopping_list.get("items") or []
+            if candidate.get("product_id")
+            and str(item.get("product_id") or "") == str(candidate.get("product_id"))
+            and not item.get("is_purchased")
+        ),
+        None,
+    )
+    if selected_item is None:
+        selected_item = find_item_by_name(shopping_list, ingredient_name)
+    if selected_item is None:
+        raise ValueError("장보기 목록에 반영된 상품을 찾지 못했습니다.")
+
+    return shopping_list, selected_item
+
+
 def handle_create_request(text: str) -> tuple[str, list[dict[str, Any]]]:
     names = extract_ingredient_names(text)
     if not names:

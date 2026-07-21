@@ -314,8 +314,138 @@ def test_run_shopping_agent_compare_returns_product_candidates(monkeypatch):
     assert "네이버 쇼핑 기준 상품 후보" in result["response_text"]
     assert "두부 추천 상품" in result["response_text"]
     assert "두부 다른 상품" in result["response_text"]
-    assert result["actions"][0]["url"] == "https://shopping.example/item"
-    assert len(result["actions"]) == 5
+    assert result["actions"][0]["data"]["message"] == "확인:shopping_select_product:0"
+    assert result["sources"][0]["url"] == "https://shopping.example/item"
+    assert len(result["actions"]) == 6
+    assert result["slots"]["shopping_flow"]["step"] == "awaiting_product_selection"
+    assert len(result["slots"]["shopping_flow"]["candidates"]) == 5
+
+
+def test_run_shopping_agent_selects_candidate_then_stocks_purchase(monkeypatch):
+    calls = {}
+    slots = {
+        "shopping_product": "두부",
+        "shopping_flow": {
+            "step": "awaiting_product_selection",
+            "query": "두부",
+            "candidates": [
+                {
+                    "name": "두부",
+                    "provider": "naver",
+                    "product_id": "product-1",
+                    "product_name": "두부 첫 상품",
+                    "product_link": "https://shopping.example/first",
+                    "price": 3900,
+                    "mall_name": "첫 몰",
+                },
+                {
+                    "name": "두부",
+                    "provider": "naver",
+                    "product_id": "product-2",
+                    "product_name": "두부 두 번째 상품",
+                    "product_link": "https://shopping.example/second",
+                    "price": 4200,
+                    "mall_name": "둘째 몰",
+                },
+            ],
+        },
+    }
+
+    def fake_create_list(*, db, user_id, recipe_id, source, missing_ingredients):
+        selected = missing_ingredients[0]
+        calls["selected_product"] = selected.product_id
+        calls["selected_price"] = selected.price
+        return shopping_list_response(
+            recipe_id=None,
+            recipe_title=None,
+            items=[
+                {
+                    "id": 44,
+                    "name": "두부",
+                    "product_id": selected.product_id,
+                    "product_name": selected.product_name,
+                    "price": selected.price,
+                    "is_checked": True,
+                    "is_purchased": False,
+                }
+            ],
+        )
+
+    monkeypatch.setattr(shopping_handlers.shopping_service, "create_list", fake_create_list)
+
+    selected_result = run_shopping_agent(
+        "2번",
+        db=object(),
+        user_id=7,
+        intent="shopping.compare",
+        slots=slots,
+    )
+
+    assert calls == {"selected_product": "product-2", "selected_price": 4200}
+    assert "두부 두 번째 상품" in selected_result["response_text"]
+    assert selected_result["slots"]["shopping_flow"]["step"] == "awaiting_purchase_confirmation"
+    assert selected_result["slots"]["shopping_flow"]["shopping_item_id"] == 44
+
+    def fake_complete_purchase(*, db, user_id, shopping_list_id, item_ids):
+        calls["purchase"] = {"shopping_list_id": shopping_list_id, "item_ids": item_ids}
+        return {
+            "message": "1개 재료를 냉장고에 입고하고 장보기를 완료했어요.",
+            "shopping_list": None,
+        }
+
+    monkeypatch.setattr(shopping_handlers.shopping_service, "complete_purchase", fake_complete_purchase)
+    purchased_result = run_shopping_agent(
+        "샀어",
+        db=object(),
+        user_id=7,
+        intent="shopping.purchase",
+        slots=selected_result["slots"],
+    )
+
+    assert calls["purchase"] == {"shopping_list_id": 11, "item_ids": [44]}
+    assert "냉장고에 입고" in purchased_result["response_text"]
+    assert purchased_result["slots"]["shopping_flow"] is None
+
+
+def test_run_shopping_agent_researches_when_user_changes_candidate_query(monkeypatch):
+    calls = []
+
+    def fake_search_products(keyword, display=5):
+        calls.append(keyword)
+        return {
+            "keyword": keyword,
+            "items": [
+                {
+                    "name": keyword,
+                    "provider": "naver",
+                    "product_id": "soft-tofu-1",
+                    "product_name": "국산 순두부 2봉",
+                    "product_link": "https://shopping.example/soft-tofu",
+                    "price": 2900,
+                    "mall_name": "테스트몰",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(shopping_handlers.shopping_service, "search_products", fake_search_products)
+    result = run_shopping_agent(
+        "두부 말고 순두부",
+        db=object(),
+        user_id=7,
+        intent="shopping.compare",
+        slots={
+            "shopping_product": "두부",
+            "shopping_flow": {
+                "step": "awaiting_product_selection",
+                "query": "두부",
+                "candidates": [{"name": "두부", "product_id": "tofu-1", "product_name": "두부"}],
+            },
+        },
+    )
+
+    assert calls == ["순두부"]
+    assert "국산 순두부 2봉" in result["response_text"]
+    assert result["slots"]["shopping_flow"]["query"] == "순두부"
 
 
 def test_run_shopping_agent_recipe_filters_returns_source_recipes(monkeypatch):

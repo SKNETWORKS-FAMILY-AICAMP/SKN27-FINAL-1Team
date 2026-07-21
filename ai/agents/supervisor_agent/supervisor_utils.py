@@ -29,7 +29,7 @@ _CONTEXT_TOKEN_TTL_MINUTES = 120
 _TRUSTED_CONTEXT_SLOT_KEYS = {
     "inventory_pending", "inventory_last_action", "ingredient", "keyword",
     "guide_type", "shopping_product", "date", "quantity", "storage", "use_inventory",
-    "expiring_ingredients",
+    "expiring_ingredients", "shopping_flow",
 }
 
 _CONTEXT_SLOT_KEYS = {
@@ -37,7 +37,7 @@ _CONTEXT_SLOT_KEYS = {
     "recipe.recommend": {"ingredient", "keyword", "use_inventory", "expiring_ingredients"},
     "recipe.search": {"ingredient", "keyword"},
     "recipe.pairing": {"ingredient", "keyword"},
-    "shopping.compare": {"shopping_product"},
+    "shopping.compare": {"shopping_product", "shopping_flow"},
     "alarm.notification": {"date", "keyword"},
     "alarm.calendar": {"date", "keyword"},
 }
