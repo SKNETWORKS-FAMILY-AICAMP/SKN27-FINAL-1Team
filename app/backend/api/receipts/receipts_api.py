@@ -6,7 +6,7 @@ from typing import List, Optional
 import httpx
 
 from fastapi import APIRouter, Depends, File, Form, Path, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -16,7 +16,6 @@ from app.backend.api.calendar.calendar_api import (
     _get_google_integration,
 )
 from app.backend.api.deps import get_current_user_required
-from app.backend.core.config import settings
 from app.backend.db.models import Receipt
 from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
@@ -32,6 +31,7 @@ from app.backend.services.receipt_ocr_service import (
     receipt_history_service,
     receipt_ocr_service,
 )
+from app.backend.services.receipt_ocr_service.receipt_storage import receipt_storage
 
 
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
@@ -183,9 +183,14 @@ def get_receipt_image(
     if not receipt or not receipt.original_file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image not found.")
 
-    upload_root = (PROJECT_ROOT / settings.OCR_UPLOAD_DIR).resolve()
-    image_path = (PROJECT_ROOT / receipt.original_file_path).resolve()
-    if upload_root not in image_path.parents:
+    if receipt_storage.is_s3_uri(receipt.original_file_path):
+        return RedirectResponse(
+            receipt_storage.presigned_get_url(receipt.original_file_path),
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
+
+    image_path = receipt_storage.local_path(receipt.original_file_path)
+    if image_path is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid receipt image path.")
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image file not found.")

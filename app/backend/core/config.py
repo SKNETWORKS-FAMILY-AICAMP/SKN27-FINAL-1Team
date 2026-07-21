@@ -86,12 +86,69 @@ class Settings:
     RUNPOD_INTERNAL_TOKEN: str = os.getenv("RUNPOD_INTERNAL_TOKEN", "")
     RUNPOD_TIMEOUT_SECONDS: int = int(os.getenv("RUNPOD_TIMEOUT_SECONDS", 60))
 
+    # Public MCP resource server. Local development can reuse the existing app
+    # JWT, while production must validate OAuth access tokens from an issuer.
+    MCP_DEV_TOKEN_AUTH: bool = os.getenv(
+        "MCP_DEV_TOKEN_AUTH",
+        "true" if DEV_MODE else "false",
+    ).lower() == "true"
+    MCP_ISSUER_URL: str = os.getenv("MCP_ISSUER_URL", "").rstrip("/")
+    MCP_RESOURCE_URL: str = os.getenv("MCP_RESOURCE_URL", "").rstrip("/")
+    MCP_JWKS_URL: str = os.getenv("MCP_JWKS_URL", "")
+    MCP_JWT_AUDIENCE: str = os.getenv("MCP_JWT_AUDIENCE", "")
+    MCP_JWT_ALGORITHMS: list[str] = [
+        value.strip()
+        for value in os.getenv("MCP_JWT_ALGORITHMS", "RS256").split(",")
+        if value.strip()
+    ]
+    MCP_SCOPE_PREFIX: str = os.getenv("MCP_SCOPE_PREFIX", "bobbeori-mcp").strip().rstrip("/")
+    _MCP_DEFAULT_SCOPES: str = (
+        f"{MCP_SCOPE_PREFIX}/inventory.read,{MCP_SCOPE_PREFIX}/recipe.read,"
+        f"{MCP_SCOPE_PREFIX}/guide.read,{MCP_SCOPE_PREFIX}/receipt.write,"
+        f"{MCP_SCOPE_PREFIX}/shopping.write,{MCP_SCOPE_PREFIX}/calendar.write"
+    )
+    MCP_SUPPORTED_SCOPES: list[str] = [
+        value.strip()
+        for value in os.getenv(
+            "MCP_SUPPORTED_SCOPES",
+            _MCP_DEFAULT_SCOPES,
+        ).split(",")
+        if value.strip()
+    ]
+    MCP_REQUIRED_SCOPES: list[str] = [
+        value.strip()
+        for value in os.getenv(
+            "MCP_REQUIRED_SCOPES",
+            _MCP_DEFAULT_SCOPES,
+        ).split(",")
+        if value.strip()
+    ]
+    MCP_JWKS_CACHE_SECONDS: int = int(os.getenv("MCP_JWKS_CACHE_SECONDS", 300))
+    MCP_PREVIEW_TOKEN_SECRET: str = os.getenv("MCP_PREVIEW_TOKEN_SECRET", JWT_SECRET_KEY)
+    MCP_PREVIEW_TTL_SECONDS: int = int(os.getenv("MCP_PREVIEW_TTL_SECONDS", 600))
+    MCP_PORT: int = int(os.getenv("MCP_PORT", 8001))
+    MCP_ALLOWED_HOSTS: list[str] = [
+        value.strip()
+        for value in os.getenv("MCP_ALLOWED_HOSTS", "").split(",")
+        if value.strip()
+    ]
+    MCP_ALLOWED_ORIGINS: list[str] = [
+        value.strip()
+        for value in os.getenv("MCP_ALLOWED_ORIGINS", "").split(",")
+        if value.strip()
+    ]
+
     # Receipt OCR Settings
     OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai_vision")
     OCR_MODEL: str = os.getenv("OCR_MODEL", OPENAI_MODEL)
     OCR_FALLBACK_MODEL: str = os.getenv("OCR_FALLBACK_MODEL", "")
     OCR_UPLOAD_DIR: str = os.getenv("OCR_UPLOAD_DIR", "storage/raw/receipts")
     OCR_OUTPUT_DIR: str = os.getenv("OCR_OUTPUT_DIR", "storage/processed/receipts")
+    RECEIPT_STORAGE_BACKEND: str = os.getenv("RECEIPT_STORAGE_BACKEND", "local").lower()
+    AWS_REGION: str = os.getenv("AWS_REGION", "ap-northeast-2")
+    S3_RECEIPT_BUCKET: str = os.getenv("S3_RECEIPT_BUCKET", "")
+    S3_RECEIPT_PREFIX: str = os.getenv("S3_RECEIPT_PREFIX", "receipts")
+    S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL", "")
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 10))
     RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE", 5))
     RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_DAY", 50))
@@ -100,5 +157,10 @@ class Settings:
         """운영 서버 시작 전에 필수 보안 설정을 검증합니다."""
         if not self.DEV_MODE and len(self.JWT_SECRET_KEY) < 32:
             raise RuntimeError("JWT_SECRET_KEY는 32자 이상의 임의 문자열로 설정해야 합니다.")
+
+        if self.RECEIPT_STORAGE_BACKEND not in {"local", "s3"}:
+            raise RuntimeError("RECEIPT_STORAGE_BACKEND must be local or s3")
+        if self.RECEIPT_STORAGE_BACKEND == "s3" and not self.S3_RECEIPT_BUCKET:
+            raise RuntimeError("S3_RECEIPT_BUCKET is required when receipt storage uses S3")
 
 settings = Settings()

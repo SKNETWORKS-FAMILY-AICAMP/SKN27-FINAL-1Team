@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -8,11 +8,12 @@ from app.backend.api.calendar.calendar_api import _get_access_token, _sync_daily
 from app.backend.db.models import CalendarIntegration
 from app.backend.db.session import SessionLocal
 
+
 KST = ZoneInfo("Asia/Seoul")
 
 
-async def sync_daily_calendar_events():
-    """Google Calendar 연동 사용자의 오늘 알림 이벤트를 실제 캘린더에 동기화한다."""
+async def sync_daily_calendar_events() -> None:
+    """Synchronize one daily batch for every connected Google Calendar user."""
     db = SessionLocal()
     try:
         today = datetime.now(KST).date()
@@ -37,13 +38,10 @@ async def sync_daily_calendar_events():
         db.close()
 
 
-async def daily_calendar_loop():
-    """백엔드가 켜져 있는 동안 매일 오전 7시(KST)에 캘린더 동기화를 실행한다."""
-    while True:
-        now = datetime.now(KST)
-        next_run = now.replace(hour=7, minute=0, second=0, microsecond=0)
-        if now >= next_run:
-            next_run += timedelta(days=1)
+def main() -> None:
+    """Run one batch; EventBridge or another deployment scheduler owns timing."""
+    asyncio.run(sync_daily_calendar_events())
 
-        await asyncio.sleep((next_run - now).total_seconds())
-        await sync_daily_calendar_events()
+
+if __name__ == "__main__":
+    main()
