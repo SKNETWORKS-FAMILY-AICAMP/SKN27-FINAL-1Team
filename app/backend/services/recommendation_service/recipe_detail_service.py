@@ -78,10 +78,11 @@ class RecipeDetailService:
             return None
         if quantity is None:
             return unit
-        if isinstance(quantity, Decimal):
-            normalized = format(quantity.normalize(), "f").rstrip("0").rstrip(".")
-        else:
-            normalized = str(quantity)
+        # ponytail: strip trailing zeros only in the fractional part (200 must stay 200, not 2)
+        value = quantity if isinstance(quantity, Decimal) else Decimal(str(quantity))
+        normalized = format(value, "f")
+        if "." in normalized:
+            normalized = normalized.rstrip("0").rstrip(".")
         if unit:
             return f"{normalized}{unit}"
         return normalized
