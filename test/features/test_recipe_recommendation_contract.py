@@ -1,4 +1,8 @@
 from app.backend.schemas.recipes import RecipeDetailResponse, RecipeRecommendRequest
+from app.backend.services.recommendation_service.recommend_config import RecipeRecommendConfig
+from app.backend.services.recommendation_service.recommendation_service import (
+    _filter_by_owned_preference,
+)
 
 
 def test_recipe_detail_contract_splits_owned_maybe_owned_and_missing_ingredients():
@@ -45,3 +49,15 @@ def test_recipe_recommend_request_defaults_and_menu_custom_options():
     assert custom_request.mode == "menu_custom"
     assert custom_request.query == "tofu"
     assert custom_request.require_any_owned is True
+
+
+def test_require_any_owned_filters_zero_owned_before_rank():
+    rows = [
+        {"recipe_id": 1, "owned_ingredient_count": 0},
+        {"recipe_id": 2, "owned_ingredient_count": 1},
+        {"recipe_id": 3, "owned_ingredient_count": 0},
+    ]
+
+    kept = _filter_by_owned_preference(rows, RecipeRecommendConfig.fridge_consume_preset())
+    assert [row["recipe_id"] for row in kept] == [2]
+    assert _filter_by_owned_preference(rows, RecipeRecommendConfig()) == rows
