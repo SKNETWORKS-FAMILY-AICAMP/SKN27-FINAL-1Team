@@ -61,7 +61,7 @@ class IngredientNameMatcher:
         safe_limit = max(1, min(int(limit or 6), 20))
         return [
             name
-            for name, _ in sorted(scored_names.items(), key=lambda item: (item[1], item[0]))
+            for name, _ in sorted(scored_names.items(), key=lambda item: item[1])
         ][:safe_limit]
 
     def find_best_match(self, raw_name: Optional[str]) -> IngredientNameMatch:
