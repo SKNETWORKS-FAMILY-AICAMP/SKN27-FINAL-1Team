@@ -76,7 +76,6 @@ class ReceiptHistoryService:
             "total_amount": receipt.total_price,
             "item_count": len(receipt.items),
             "original_file_name": receipt.original_file_name,
-            "original_file_path": receipt.original_file_path,
             "items": [self._serialize_item(item) for item in receipt.items],
         }
 

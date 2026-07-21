@@ -18,7 +18,6 @@ class ReceiptOcrItem(BaseModel):
 class ReceiptUploadResponse(BaseModel):
     receipt_id: Optional[int] = Field(default=None, description="Created receipt ID")
     original_file_name: Optional[str] = Field(default=None, description="Uploaded file name")
-    original_file_path: Optional[str] = Field(default=None, description="Saved original image path")
     store_name: Optional[str] = Field(default=None, description="Store name read from the receipt")
     purchase_datetime: Optional[str] = Field(default=None, description="Purchase datetime: YYYY-MM-DD HH:mm:ss")
     items: List[ReceiptOcrItem] = Field(default_factory=list, description="OCR item candidates")
@@ -82,7 +81,6 @@ class ReceiptHistoryEntry(BaseModel):
     total_amount: Optional[int] = Field(default=None, description="Receipt total amount")
     item_count: int = Field(default=0, description="Number of registered items")
     original_file_name: Optional[str] = Field(default=None, description="Uploaded file name")
-    original_file_path: Optional[str] = Field(default=None, description="Saved original image path")
     items: List[ReceiptHistoryItem] = Field(default_factory=list, description="Registered items")
 
 

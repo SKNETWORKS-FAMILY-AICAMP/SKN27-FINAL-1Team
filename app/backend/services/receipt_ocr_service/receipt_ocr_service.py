@@ -47,8 +47,8 @@ ALLOWED_UNITS = {DEFAULT_UNIT, "kg"}
 OCR_MIN_QUALITY_SCORE = 0.75
 OCR_REVIEW_QUALITY_SCORE = 0.85
 OCR_MAX_RETRIES = 1
-MAX_RECEIPT_IMAGES = 5
-MAX_TOTAL_UPLOAD_SIZE_MB = 25
+MAX_RECEIPT_IMAGES = 1
+MAX_TOTAL_UPLOAD_SIZE_MB = settings.MAX_UPLOAD_SIZE_MB
 AUTO_CROP_MIN_IMAGE_SIDE = 320
 AUTO_CROP_MIN_CROP_SHORT_SIDE = 140
 AUTO_CROP_MIN_CROP_LONG_SIDE = 320
@@ -365,7 +365,6 @@ class ReceiptOcrService:
         response = {
             "receipt_id": state["receipt_id"],
             "original_file_name": state.get("original_file_name"),
-            "original_file_path": state["original_file_path"],
             "store_name": normalized.get("store_name"),
             "purchase_datetime": normalized.get("purchase_datetime"),
             "items": normalized.get("items", []),
@@ -402,7 +401,6 @@ class ReceiptOcrService:
         response = {
             "receipt_id": None,
             "original_file_name": state.get("original_file_name"),
-            "original_file_path": None,
             "store_name": None,
             "purchase_datetime": None,
             "items": [],
@@ -446,7 +444,6 @@ class ReceiptOcrService:
         return {
             "receipt_id": None,
             "original_file_name": original_file_name,
-            "original_file_path": None,
             "store_name": None,
             "purchase_datetime": None,
             "items": [],

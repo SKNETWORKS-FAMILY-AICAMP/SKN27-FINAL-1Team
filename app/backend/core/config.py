@@ -144,7 +144,7 @@ class Settings:
     OCR_FALLBACK_MODEL: str = os.getenv("OCR_FALLBACK_MODEL", "")
     OCR_UPLOAD_DIR: str = os.getenv("OCR_UPLOAD_DIR", "storage/raw/receipts")
     OCR_OUTPUT_DIR: str = os.getenv("OCR_OUTPUT_DIR", "storage/processed/receipts")
-    RECEIPT_STORAGE_BACKEND: str = os.getenv("RECEIPT_STORAGE_BACKEND", "local").lower()
+    RECEIPT_STORAGE_BACKEND: str = os.getenv("RECEIPT_STORAGE_BACKEND", "s3").lower()
     AWS_REGION: str = os.getenv("AWS_REGION", "ap-northeast-2")
     S3_RECEIPT_BUCKET: str = os.getenv("RECEIPT_S3_BUCKET") or os.getenv("S3_RECEIPT_BUCKET", "")
     S3_RECEIPT_PREFIX: str = os.getenv("RECEIPT_S3_PREFIX") or os.getenv("S3_RECEIPT_PREFIX", "receipts")
@@ -162,6 +162,6 @@ class Settings:
         if self.RECEIPT_STORAGE_BACKEND not in {"local", "s3"}:
             raise RuntimeError("RECEIPT_STORAGE_BACKEND must be local or s3")
         if self.RECEIPT_STORAGE_BACKEND == "s3" and not self.S3_RECEIPT_BUCKET:
-            raise RuntimeError("S3_RECEIPT_BUCKET is required when receipt storage uses S3")
+            raise RuntimeError("RECEIPT_S3_BUCKET is required when receipt storage uses S3")
 
 settings = Settings()

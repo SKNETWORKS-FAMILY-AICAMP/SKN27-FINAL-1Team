@@ -1,12 +1,11 @@
 import json
 from datetime import datetime, timedelta, timezone
-from pathlib import Path as FsPath
 from typing import List, Optional
 
 import httpx
 
 from fastapi import APIRouter, Depends, File, Form, Path, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -16,7 +15,6 @@ from app.backend.api.calendar.calendar_api import (
     _get_google_integration,
 )
 from app.backend.api.deps import get_current_user_required
-from app.backend.db.models import Receipt
 from app.backend.db.session import get_db
 from app.backend.schemas.common import MessageResponse
 from app.backend.schemas.receipts import (
@@ -31,12 +29,10 @@ from app.backend.services.receipt_ocr_service import (
     receipt_history_service,
     receipt_ocr_service,
 )
-from app.backend.services.receipt_ocr_service.receipt_storage import receipt_storage
 
 
 router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
 KST = timezone(timedelta(hours=9))
-PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
 OLD_RECEIPT_WARNING_DAYS = 30
 
 
@@ -161,53 +157,6 @@ async def upload_receipt_stream(
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@router.get("/{receipt_id}/image")
-def get_receipt_image(
-    receipt_id: int = Path(..., ge=1),
-    current_user_id: int = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-):
-    """Return the final receipt image used for OCR preview."""
-    receipt = (
-        db.query(Receipt)
-        .filter(
-            Receipt.id == receipt_id,
-            Receipt.user_id == current_user_id,
-        )
-        .first()
-    )
-    if not receipt or not receipt.original_file_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image not found.")
-
-    if receipt_storage.is_s3_uri(receipt.original_file_path):
-        return RedirectResponse(
-            receipt_storage.presigned_get_url(receipt.original_file_path),
-            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        )
-
-    image_path = receipt_storage.local_path(receipt.original_file_path)
-    if image_path is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid receipt image path.")
-    if not image_path.exists() or not image_path.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image file not found.")
-
-    media_type = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }.get(image_path.suffix.lower(), "application/octet-stream")
-    return FileResponse(
-        image_path,
-        media_type=media_type,
-        headers={
-            "Cache-Control": "private, no-store, max-age=0",
-            "Pragma": "no-cache",
-            "X-Content-Type-Options": "nosniff",
         },
     )
 

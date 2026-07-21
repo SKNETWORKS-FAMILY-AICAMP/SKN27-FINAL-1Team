@@ -30,8 +30,8 @@ const purchaseFlowWeekCount = 4
 const quantityUnitOptions = ['kg', '개']
 const storageOptions = ['냉동', '냉장', '실온']
 const maxUploadSizeMb = 10
-const maxReceiptImages = 5
-const maxTotalUploadSizeMb = 25
+const maxReceiptImages = 1
+const maxTotalUploadSizeMb = maxUploadSizeMb
 const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 const ocrManualCropSuggestionMinScore = 0.75
 const ocrWeakReviewScore = 0.85
@@ -777,16 +777,6 @@ function ReceiptOcr() {
     setUploadedPreviews(file ? [file] : [])
   }
 
-  const setUploadedPreviewBlob = (blob) => {
-    clearUploadedPreviewUrls()
-
-    const url = blob ? URL.createObjectURL(blob) : null
-    previewImageUrlRef.current = url
-    setPreviewImages(url ? [{ id: 'saved-preview', name: '저장된 영수증', url }] : [])
-    setPreviewImageIndex(0)
-    setPreviewImageUrl(url)
-  }
-
   const selectPreviewImage = (index) => {
     if (index < 0 || index >= previewImages.length) {
       return
@@ -912,25 +902,6 @@ function ReceiptOcr() {
   const clearOrderReview = () => {
     setOrderReviewEntries([])
     setOrderReviewSource('')
-  }
-
-  const loadSavedReceiptPreview = async (receiptId, token) => {
-    if (!receiptId || !token) {
-      return
-    }
-
-    const response = await fetch(`${API_URL}/api/v1/receipts/${receiptId}/image`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-
-    if (!response.ok) {
-      return
-    }
-
-    const blob = await response.blob()
-    setUploadedPreviewBlob(blob)
   }
 
   const requestLogin = async () => {
@@ -1113,7 +1084,6 @@ function ReceiptOcr() {
       setReceiptMeta({
         receiptId: data.receipt_id,
         originalFileName: data.original_file_name,
-        originalFilePath: data.original_file_path,
         storeName: data.store_name,
         purchaseDatetime: data.purchase_datetime,
         totalAmount: data.total_amount,
@@ -1125,9 +1095,6 @@ function ReceiptOcr() {
         reviewMessage: reviewPolicy.message,
         suggestManualCrop: reviewPolicy.suggestManualCrop,
       })
-      if (files.length === 1) {
-        await loadSavedReceiptPreview(data.receipt_id, token)
-      }
       setActiveStep(STEP.CONFIRM)
     } catch (error) {
       if (uploadRunIdRef.current !== uploadRunId) {
@@ -1847,7 +1814,6 @@ function ReceiptOcr() {
                   className="receipt-file-input"
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
-                  multiple
                   onChange={handleRetakeFileChange}
                 />
               </div>
@@ -3160,13 +3126,12 @@ function UploadPanel({ canUpload = true, onRequireLogin, onStartUpload, onNotify
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        <p>영수증 사진을 상단부터 최대 5장까지 선택하거나 여기로 드래그해주세요.</p>
+        <p>영수증 사진 1장을 선택하거나 여기로 드래그해주세요.</p>
         <input
           ref={uploadInputRef}
           className="receipt-file-input"
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          multiple
           onChange={(event) => handleFileChange(event, '업로드 이미지')}
         />
         {canUseCamera ? (
