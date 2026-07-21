@@ -34,6 +34,8 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
+            nutrition_load:
+                condition: service_completed_successfully
             recipe_load:
                 condition: service_completed_successfully
             neo4j_load:
@@ -130,6 +132,24 @@ services:
             - /app/node_modules
         depends_on:
             backend:
+                condition: service_healthy
+
+    nutrition_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_nutrition_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            DB_HOST: postgres
+        volumes:
+            - ./storage:/project/storage:ro
+            - ./app/backend/schemas:/project/app/backend/schemas:ro
+        command: ["python", "-m", "etl.nutrition.load_to_postgres"]
+        depends_on:
+            postgres:
                 condition: service_healthy
 
     recipe_load:
