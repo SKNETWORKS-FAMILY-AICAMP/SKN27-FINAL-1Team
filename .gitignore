@@ -176,7 +176,11 @@ Thumbs.db
 *.swp
 *.swo
 .cursor
-.agents
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/bobbeori-workflows/
+!.agents/skills/bobbeori-workflows/**
 
 # ────────────────────────────────────────
 # 14. 로컬 작업 아티팩트
@@ -194,3 +198,6 @@ tmp-*
 *.db
 *.sqlite
 *.sqlite3
+
+# AWS CDK synthesis output
+infra/cdk*.out/
