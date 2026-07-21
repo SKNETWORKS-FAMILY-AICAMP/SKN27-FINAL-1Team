@@ -1,0 +1,32 @@
+# Web
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+neo4j>=5.10.0
+boto3>=1.34.0,<2.0.0
+
+# Auth / validation
+pydantic[email]>=2.0.0
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Utilities
+python-multipart
+httpx
+python-dotenv>=1.0.0
+pytest>=8.0.0
+Pillow>=10.0.0
+numpy>=1.26.0
+opencv-python-headless>=4.9.0.80
+
+# AI
+openai>=1.0.0
+tavily-python
+langchain>=1.0,<2.0
+langchain-openai>=1.0,<2.0
+langgraph>=1.0,<2.0
+langfuse
+mcp>=1.27.0,<2.0.0

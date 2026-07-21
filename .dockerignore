@@ -1,0 +1,16 @@
+.venv
+infra/cdk*.out
+.git
+storage
+**/__pycache__
+**/*.pyc
+app/frontend/node_modules
+test
+ai/*
+!ai/tools
+!ai/tools/**
+!ai/calendar
+!ai/calendar/**
+!ai/agents
+!ai/agents/**
+docs
