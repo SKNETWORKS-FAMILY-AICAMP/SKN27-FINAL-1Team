@@ -41,6 +41,8 @@ def _month_range(value: date) -> tuple[date, date]:
 def _target_date(value: str | None) -> date:
     today = _today()
     compact = re.sub(r"\s+", "", value or "")
+    if compact in ("주말", "이번주말", "다음주말"):
+        return _target_range(compact)[0]
     if compact == "어제":
         return today - timedelta(days=1)
     if compact == "내일":
@@ -79,6 +81,10 @@ def _target_date(value: str | None) -> date:
 def _target_range(value: str | None) -> tuple[date, date]:
     today = _today()
     compact = re.sub(r"\s+", "", value or "")
+    if compact in ("주말", "이번주말", "다음주말"):
+        week_offset = 7 if compact == "다음주말" else 0
+        saturday = today - timedelta(days=today.weekday()) + timedelta(days=5 + week_offset)
+        return saturday, saturday + timedelta(days=2)
     if compact in WEEK_OFFSETS:
         week_offset = WEEK_OFFSETS[compact]
         start = today - timedelta(days=today.weekday()) + timedelta(days=week_offset)
@@ -130,6 +136,30 @@ def _calendar_delete_message(payload: dict[str, Any]) -> str:
     return f"{subject}을 삭제했어요." if subject else "캘린더 일정을 삭제했어요."
 
 
+def _calendar_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    start_at = _start_at(payload)
+    end_at = start_at + timedelta(minutes=int(payload.get("duration_minutes", 30)))
+    return {
+        "title": payload.get("title") or payload.get("summary") or "캘린더 일정",
+        "start_at": start_at.isoformat(),
+        "end_at": end_at.isoformat(),
+        "timezone": "Asia/Seoul",
+        "reminders": [
+            {
+                "method": payload.get("reminder_method") or "popup",
+                "minutes_before": int(payload.get("reminder_minutes_before", 0)),
+            }
+        ],
+    }
+
+
+def preview_calendar_event_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return {"ok": True, "message": "캘린더 일정 미리보기를 만들었어요.", "data": {"preview": _calendar_preview(payload)}}
+    except Exception as exc:
+        return {"ok": False, "error": {"code": "CALENDAR_PREVIEW_FAILED", "message": str(exc)}}
+
+
 async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     db = context.get("db")
     user_id = context.get("user_id")
@@ -154,7 +184,15 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
             "description": payload.get("description") or "밥벌이 알림 agent가 등록한 일정입니다.",
             "start": {"dateTime": start_at.isoformat()},
             "end": {"dateTime": end_at.isoformat()},
-            "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 0}]},
+            "reminders": {
+                "useDefault": False,
+                "overrides": [
+                    {
+                        "method": "popup",
+                        "minutes": int(payload.get("reminder_minutes_before", 0)),
+                    }
+                ],
+            },
             "colorId": payload.get("colorId") or "7",
             "extendedProperties": {"private": {"bobbeoriKey": event_key}},
         }
@@ -184,6 +222,15 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
             "start_at": start_at.isoformat(),
         },
     }
+
+
+async def update_calendar_event_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if not payload.get("event_key"):
+        return {"ok": False, "error": {"code": "CALENDAR_UPDATE_EVENT_KEY_REQUIRED", "message": "수정할 event_key가 필요해요."}}
+    result = await create_calendar_event_tool(payload, context)
+    if result.get("ok"):
+        result["message"] = "캘린더 일정을 수정했어요."
+    return result
 
 
 async def delete_calendar_event_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -253,6 +300,22 @@ async def list_calendar_events_tool(payload: dict[str, Any], context: dict[str, 
     return {"ok": True, "message": _calendar_list_message(payload), "data": result}
 
 
+async def check_calendar_availability_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    result = await list_calendar_events_tool(payload, context)
+    if result.get("ok") is False:
+        return result
+    events = (result.get("data") or {}).get("events") or []
+    return {
+        "ok": True,
+        "message": "가능한 시간을 확인했어요.",
+        "data": {
+            "has_conflict": bool(events),
+            "conflicting_events": events,
+            "date_text": payload.get("date_text") or payload.get("date"),
+        },
+    }
+
+
 async def sync_daily_events_tool(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     db = context.get("db")
     user_id = context.get("user_id")
@@ -308,9 +371,12 @@ def register_device_token_tool(payload: dict[str, Any], context: dict[str, Any])
 
 
 ALARM_AGENT_TOOLS = {
+    "preview_event": preview_calendar_event_tool,
     "create_event": create_calendar_event_tool,
+    "update_event": update_calendar_event_tool,
     "delete_event": delete_calendar_event_tool,
     "list_events": list_calendar_events_tool,
+    "check_availability": check_calendar_availability_tool,
     "sync_daily_events": sync_daily_events_tool,
     "list_notifications": list_notifications_tool,
     "mark_notification_read": mark_notification_read_tool,

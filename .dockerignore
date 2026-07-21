@@ -1,4 +1,5 @@
 .venv
+infra/cdk*.out
 .git
 storage
 **/__pycache__

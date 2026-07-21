@@ -54,6 +54,24 @@ class User(Base):
         """사용자 선호 설정 저장 여부로 온보딩 완료 상태를 반환합니다."""
         return self.preference is not None
 
+
+class ExternalIdentity(Base):
+    """Map a verified external OAuth subject to one Bobbeori user."""
+
+    __tablename__ = "external_identities"
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="uq_external_identities_issuer_subject"),
+        UniqueConstraint("user_id", "issuer", name="uq_external_identities_user_issuer"),
+        Index("idx_external_identities_user_id", "user_id"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    issuer = Column(String(500), nullable=False)
+    subject = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class UserPreference(Base):
     """사용자별 식재료 선호/알림 설정을 표현하는 ORM 모델입니다."""
 
@@ -457,6 +475,31 @@ class RecommendationResult(Base):
     # 추천 결과의 대상 사용자와 레시피를 연결합니다.
     user = relationship("User", back_populates="recommendation_results")
     recipe = relationship("Recipe", back_populates="recommendation_results")
+
+
+class McpMutation(Base):
+    """Idempotency record for a confirmed MCP write operation."""
+
+    __tablename__ = "mcp_mutations"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "action",
+            "idempotency_key",
+            name="uq_mcp_mutations_user_action_key",
+        ),
+        Index("idx_mcp_mutations_user_id", "user_id"),
+        Index("idx_mcp_mutations_status", "status"),
+    )
+
+    id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
+    user_id = Column(BigIntPrimaryKey, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    action = Column(String(80), nullable=False)
+    idempotency_key = Column(String(80), nullable=False)
+    status = Column(String(20), nullable=False, server_default="in_progress")
+    result_json = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Notification(Base):
