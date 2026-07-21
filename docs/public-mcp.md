@@ -14,15 +14,15 @@ The Streamable HTTP endpoint is `http://localhost:8001/mcp`. In local developmen
 
 | Tool | Scope | Effect |
 |---|---|---|
-| `inventory.list` | `inventory:read` | Read active refrigerator items |
-| `inventory.expiring` | `inventory:read` | Read items near or past expiry |
-| `recipe.recommend` | `recipe:read` | Recommend recipes from inventory |
-| `recipe.get` | `recipe:read` | Read recipe details and ingredient ownership |
-| `ingredient.guide` | `guide:read` | Read storage, preparation, freshness, and nutrition guidance |
-| `receipt.preview` / `receipt.commit` | `receipt:write` | Review, then stock confirmed receipt items |
-| `shopping.preview` / `shopping.save` | `shopping:write` | Review, then add or merge shopping-list items |
-| `calendar.preview` / `calendar.create` | `calendar:write` | Review, then create or update a Google Calendar event |
-| `reminder.preview` / `reminder.create` | `calendar:write` | Review, then create a food-use or shopping reminder |
+| `inventory.list` | `bobbeori-mcp/inventory.read` | Read active refrigerator items |
+| `inventory.expiring` | `bobbeori-mcp/inventory.read` | Read items near or past expiry |
+| `recipe.recommend` | `bobbeori-mcp/recipe.read` | Recommend recipes from inventory |
+| `recipe.get` | `bobbeori-mcp/recipe.read` | Read recipe details and ingredient ownership |
+| `ingredient.guide` | `bobbeori-mcp/guide.read` | Read storage, preparation, freshness, and nutrition guidance |
+| `receipt.preview` / `receipt.commit` | `bobbeori-mcp/receipt.write` | Review, then stock confirmed receipt items |
+| `shopping.preview` / `shopping.save` | `bobbeori-mcp/shopping.write` | Review, then add or merge shopping-list items |
+| `calendar.preview` / `calendar.create` | `bobbeori-mcp/calendar.write` | Review, then create or update a Google Calendar event |
+| `reminder.preview` / `reminder.create` | `bobbeori-mcp/calendar.write` | Review, then create a food-use or shopping reminder |
 
 Every response uses the same `success`, `data`, `warnings`, `requires_confirmation`, `next_actions`, and `trace_id` envelope. The tools never accept `user_id`; the server derives it from the validated token subject.
 
@@ -43,8 +43,9 @@ MCP_RESOURCE_URL=https://api.example.com/mcp
 MCP_JWKS_URL=https://auth.example.com/.well-known/jwks.json
 MCP_JWT_AUDIENCE=https://api.example.com/mcp
 MCP_JWT_ALGORITHMS=RS256
-MCP_SUPPORTED_SCOPES=inventory:read,recipe:read,guide:read,receipt:write,shopping:write,calendar:write
-MCP_REQUIRED_SCOPES=inventory:read,recipe:read,guide:read,receipt:write,shopping:write,calendar:write
+MCP_SCOPE_PREFIX=bobbeori-mcp
+MCP_SUPPORTED_SCOPES=bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write
+MCP_REQUIRED_SCOPES=bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write
 MCP_PREVIEW_TOKEN_SECRET=replace-with-a-separate-random-secret-at-least-32-chars
 MCP_PREVIEW_TTL_SECONDS=600
 # Only needed if the reverse proxy forwards a Host/Origin unlike MCP_RESOURCE_URL.
@@ -52,9 +53,22 @@ MCP_ALLOWED_HOSTS=api.example.com
 MCP_ALLOWED_ORIGINS=https://api.example.com
 ```
 
-The authorization server must support OAuth 2.1 authorization code flow with PKCE and expose authorization-server metadata. Its access token `sub` must identify the corresponding numeric Bobbeori user ID, and `scope` must contain the granted Bobbeori scopes. The MCP server validates signature, issuer, audience, expiry, and scopes and exposes protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`.
+The authorization server must support OAuth 2.1 authorization code flow with PKCE and expose authorization-server metadata. Its access token `sub` is the external OAuth subject, and the Bobbeori user maps to it through `POST /api/v1/auth/mcp/link` after the user is signed in to Bobbeori. The MCP server validates signature, issuer, audience, expiry, and scopes and exposes protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`.
 
 The initial MCP account link requests all six scopes so ChatGPT and Codex can use every advertised tool without a second OAuth flow. Each tool still declares and enforces only its own scope, and write execution additionally requires the signed preview token plus explicit confirmation.
+
+## Receipt storage
+
+Local development stores uploaded receipt images in `OCR_UPLOAD_DIR`. In AWS, set:
+
+```dotenv
+RECEIPT_STORAGE_BACKEND=s3
+AWS_REGION=ap-northeast-2
+S3_RECEIPT_BUCKET=<receipt-bucket-name>
+S3_RECEIPT_PREFIX=receipts
+```
+
+The API stores `s3://...` object URIs in the existing receipt row and serves receipt image downloads through short-lived S3 presigned redirects.
 
 ## Connect a client
 
@@ -62,7 +76,7 @@ After deploying to public HTTPS, Codex can register the server with:
 
 ```powershell
 codex mcp add bobbeori --url https://api.example.com/mcp
-codex mcp login bobbeori --scopes inventory:read,recipe:read,guide:read,receipt:write,shopping:write,calendar:write
+codex mcp login bobbeori --scopes bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write
 ```
 
 For ChatGPT, enable developer mode, create a connector using the same public `/mcp` URL, and complete the OAuth account-linking flow.

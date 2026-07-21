@@ -53,6 +53,7 @@ def _compile_bigint_sqlite(type_, compiler, **kw):
 EA = "\uac1c"
 BANANA = "\ubc14\ub098\ub098"
 BANANA_IMPORTED = "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)"
+BANANA_JEJU = "\uc81c\uc8fc\ubc14\ub098\ub098"
 UNKNOWN_PRODUCT = "\ucc98\uc74c\ubcf4\ub294\uc0c1\ud488ABC"
 COLD_STORAGE = "\ub0c9\uc7a5"
 STORE_NAME = "\ud14c\uc2a4\ud2b8\ub9c8\ud2b8"
@@ -151,16 +152,25 @@ def mock_cold_storage_rule(monkeypatch):
 
 # Neo4j 기준 표준명 매칭에서 괄호/원산지 제거 규칙이 깨지면 이 테스트가 알려준다.
 def test_ingredient_matcher_strips_parentheses_and_returns_neo4j_standard_name(neo4j_banana_candidates):
-    matched = ingredient_name_matcher.find_best_name(BANANA_IMPORTED)
+    match = ingredient_name_matcher.find_best_match(BANANA_IMPORTED)
 
-    assert matched == BANANA
+    assert match.standard_name == BANANA
+    assert match.match_type == "exact"
+
+
+def test_ingredient_matcher_marks_substring_matches_for_manual_review(neo4j_banana_candidates):
+    match = ingredient_name_matcher.find_best_match(BANANA_JEJU)
+
+    assert match.standard_name == BANANA
+    assert match.match_type == "partial"
 
 
 # Neo4j 후보에 없는 품목을 억지로 표준명 매칭하지 않도록 유지되는지 이 테스트가 알려준다.
 def test_ingredient_matcher_returns_none_when_no_neo4j_standard_name_matches(neo4j_banana_candidates):
-    matched = ingredient_name_matcher.find_best_name(UNKNOWN_PRODUCT)
+    match = ingredient_name_matcher.find_best_match(UNKNOWN_PRODUCT)
 
-    assert matched is None
+    assert match.standard_name is None
+    assert match.match_type == "none"
 
 
 # OCR 초안 정규화가 Neo4j 표준명을 우선 쓰고, 매칭 실패 시 원문으로 fallback 되는지 이 테스트가 알려준다.
@@ -180,8 +190,10 @@ def test_ocr_normalize_result_uses_neo4j_standard_name_or_raw_name_fallback(db_s
 
     assert normalized["items"][0]["raw_name"] == BANANA_IMPORTED
     assert normalized["items"][0]["normalized_name"] == BANANA
+    assert normalized["items"][0]["normalization_match_type"] == "exact"
     assert normalized["items"][1]["raw_name"] == UNKNOWN_PRODUCT
     assert normalized["items"][1]["normalized_name"] == UNKNOWN_PRODUCT
+    assert normalized["items"][1]["normalization_match_type"] == "none"
 
 
 # LangGraph OCR 품질 기준 미달 시 재분석을 1회 수행하고 개선된 결과를 저장하는지 이 테스트가 알려준다.

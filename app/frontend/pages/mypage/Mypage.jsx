@@ -7,7 +7,12 @@ import imageRecommendation from '../../assets/extracted/images/image_recommendat
 import OnboardingModal from '../../components/OnboardingModal.jsx'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { readStoredRecipes, removeStoredRecipe, saveStoredRecipe } from '../../utils/savedRecipes.js'
-import { API_URL } from '../../utils/api.js'
+import {
+  API_URL,
+  authenticatedFetch,
+  isSessionExpiredError,
+  showApiNotice,
+} from '../../utils/api.js'
 
 const alerts = [
   { label: '소비 임박 알림', checked: true },
@@ -211,9 +216,7 @@ function Mypage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/recommendations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await authenticatedFetch(`${API_URL}/api/v1/recommendations`)
       if (!response.ok) {
         setSavedRecipes(localRecipes)
         return
@@ -252,10 +255,8 @@ function Mypage() {
     const endDate = toLocalDateKey(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/v1/calendar/google/events?start_date=${startDate}&end_date=${endDate}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+      const response = await authenticatedFetch(
+        `${API_URL}/api/v1/calendar/google/events?start_date=${startDate}&end_date=${endDate}`)
       if (!response.ok) {
         setGoogleCalendarEvents([])
         return
@@ -271,7 +272,7 @@ function Mypage() {
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
     if (!token) {
-      window.alert('로그인이 필요한 서비스입니다.')
+      showApiNotice('loginRequired')
       navigate('/login')
       return
     }
@@ -279,19 +280,15 @@ function Mypage() {
     const fetchUser = async () => {
       try {
         const [userDataResponse, summaryResponse, calendarResponse] = await Promise.all([
-          fetch(`${API_URL}/api/v1/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/api/v1/inventory/summary`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/api/v1/calendar/google/status`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          authenticatedFetch(`${API_URL}/api/v1/auth/me`),
+          authenticatedFetch(`${API_URL}/api/v1/inventory/summary`),
+          authenticatedFetch(`${API_URL}/api/v1/calendar/google/status`),
         ])
 
+        if (userDataResponse.status === 403) return
         if (!userDataResponse.ok) {
-          throw new Error('인증 실패')
+          showApiNotice('serverError')
+          return
         }
 
         const data = await userDataResponse.json()
@@ -311,12 +308,11 @@ function Mypage() {
         setProfileEmail(data.email || '')
       } catch (err) {
         console.error(err)
-        window.localStorage.removeItem('bobbeori-token')
-        window.localStorage.removeItem('bobbeori-auth-mode')
-        window.dispatchEvent(new Event('bobbeori-auth-change'))
-        // 세션 만료 안내는 App의 공용 모달에서 처리합니다
-        window.dispatchEvent(new Event('bobbeori-session-expired'))
-        navigate('/login')
+        if (isSessionExpiredError(err)) {
+          navigate('/login')
+          return
+        }
+        showApiNotice('networkError')
       }
     }
 
@@ -375,10 +371,10 @@ function Mypage() {
         return
       }
 
-      await fetch(`${API_URL}/api/v1/calendar/google/disconnect`, {
+      const response = await authenticatedFetch(`${API_URL}/api/v1/calendar/google/disconnect`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
+      if (!response.ok) return
       setCalendarEnabled(false)
       setGoogleCalendarEvents([])
       return
@@ -395,13 +391,13 @@ function Mypage() {
     })
   }
 
-  const deleteSavedRecipe = (recipe) => {
+  const deleteSavedRecipe = async (recipe) => {
     const token = window.localStorage.getItem('bobbeori-token')
     if (token && recipe.recommendationId) {
-      fetch(`${API_URL}/api/v1/recommendations/${recipe.recommendationId}`, {
+      const response = await authenticatedFetch(`${API_URL}/api/v1/recommendations/${recipe.recommendationId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {})
+      }).catch(() => null)
+      if (!response?.ok) return
     }
 
     const next = removeStoredRecipe(recipe.storageId)

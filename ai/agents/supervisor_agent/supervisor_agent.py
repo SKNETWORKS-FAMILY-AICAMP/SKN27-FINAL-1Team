@@ -87,6 +87,13 @@ def _route_write_request(
     """데이터를 변경할 수 있는 요청만 LLM보다 먼저 규칙으로 분류합니다."""
     normalized = _normalize_text(text)
 
+    if (
+        previous_intent == "ingredient.guide"
+        and any(phrase in normalized for phrase in ("넣으면되", "넣어도되", "둬도되", "두면되", "보관해도되"))
+    ):
+        # 보관 가능 여부를 묻는 후속 질문은 냉장고 추가 명령으로 처리하지 않습니다.
+        return _route_result("ingredient.guide", slots=previous_slots)
+
     if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
         return _route_result("shopping.delete_item", slots=previous_slots)
 
@@ -325,7 +332,7 @@ def inventory_agent_node(state: GraphState) -> dict:
             intent=intent,
             text=state["text"],
             history=state.get("history", []),
-            db=state["db"],
+            db=state.get("db"),
             user_id=state.get("user_id"),
             slots=state.get("slots"),
         ),
@@ -338,15 +345,38 @@ def guide_agent_node(state: GraphState) -> dict:
     """식재료 가이드 요청을 Guide Agent에 전달합니다."""
     # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
     query = _rewrite_guide_query(state["text"])
+    slots = state.get("slots") or {}
+    ingredient = slots.get("ingredient") or slots.get("keyword")
+    guide_type = slots.get("guide_type")
+    guide_labels = {
+        "storage": "보관법",
+        "washing": "세척법",
+        "prep": "손질법",
+        "freshness": "신선도 확인법",
+    }
+    normalized = _normalize_text(query)
+    if ingredient and guide_type in guide_labels and (
+        "물어보" in normalized
+        or (guide_type == "storage" and any(phrase in normalized for phrase in ("넣으면되", "넣어도되", "둬도되", "두면되", "보관해도되")))
+    ):
+        # 직전 가이드 질문을 설명하는 문장은 저장된 식재료와 유형으로 복원합니다.
+        query = f"{ingredient} {guide_labels[guide_type]}"
     result = _run_agent_with_retry(lambda: state["service"]._reply_guide(query))
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def recipe_agent_node(state: GraphState) -> dict:
     """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
+    query = state["text"]
+    expiring_ingredients = (state.get("slots") or {}).get("expiring_ingredients") or []
+    if state.get("intent") == "recipe.recommend" and expiring_ingredients:
+        # 직전 임박 재료 조회 결과를 추천 조건으로 명시해 후속 질문의 문맥을 보존합니다.
+        ingredient_names = ", ".join(expiring_ingredients)
+        query = f"임박 재료({ingredient_names})를 우선 활용하고 현재 냉장고 재료를 고려한 레시피를 추천해줘"
+
     result = _run_agent_with_retry(
         lambda: run_recipe_agent(
-            state["text"],
-            db=state["db"],
+            query,
+            db=state.get("db"),
             user_id=state.get("user_id"),
             history=state.get("history", []),
             settings_obj=state.get("settings_obj"),
@@ -378,26 +408,8 @@ def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
 
-    if state.get("intent") == "shopping.price_help":
-        result = {
-            "response_text": "가격 정보 없음은 상품 검색 결과에서 판매가를 확인하지 못했다는 뜻이에요. 상품명이나 용량을 더 구체적으로 입력하면 검색 정확도가 좋아질 수 있어요."
-        }
-        return _normalize_agent_result(result, inherited_slots=state.get("slots"))
-    if not state.get("user_id"):
+    if state.get("intent") != "shopping.price_help" and not state.get("user_id"):
         return _normalize_agent_result({"response_text": LOGIN_REQUIRED_REPLY}, inherited_slots=state.get("slots"))
-
-    # 나머지/전체 조회 후속 요청은 기존 Shopping 조회 결과를 모두 펼쳐 보여줍니다.
-    if state.get("intent") == "shopping.current" and _is_shopping_show_all_request(state["text"]):
-        from app.backend.services.shopping_service import shopping_service
-        from ai.agents.shopping_agent.shopping_utils import shopping_list_action, summarize_shopping_list
-
-        shopping_list = shopping_service.get_current(db=state["db"], user_id=state["user_id"])
-        max_items = len((shopping_list or {}).get("items", [])) or 5
-        result = {
-            "response_text": summarize_shopping_list(shopping_list, max_items=max_items),
-            "actions": [shopping_list_action(shopping_list.get("id") if shopping_list else None)],
-        }
-        return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
     # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
     text = state["text"]
@@ -415,7 +427,7 @@ def shopping_agent_node(state: GraphState) -> dict:
             intent=state.get("intent", ""),
             history=state.get("history", []),
             slots=state.get("slots", {}),
-            db=state["db"],
+            db=state.get("db"),
             user_id=state.get("user_id"),
         ),
         enabled=state.get("intent") not in _SHOPPING_WRITE_INTENTS,
@@ -442,19 +454,19 @@ def alarm_agent_node(state: GraphState) -> dict:
             action=request["action"],
             confirmed=request["confirmed"],
             tools=ALARM_AGENT_TOOLS,
-            context={"user_id": state.get("user_id"), "db": state["db"]},
+            context={"user_id": state.get("user_id"), "db": state.get("db")},
         ),
         enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
     result = _alarm_result_to_state(agent_result)
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
-def fallback_agent_node(state: GraphState) -> dict:
-    """기존 Agent가 담당하지 않는 일반 요리 질문을 제한된 fallback Agent에 전달합니다."""
-    from ai.agents.fallback_agent import run_food_fallback
+def general_food_agent_node(state: GraphState) -> dict:
+    """일반 요리와 식재료 지식 질문을 General Food Agent에 전달합니다."""
+    from ai.agents.general_food_agent import run_general_food
 
     result = _run_agent_with_retry(
-        lambda: run_food_fallback(state["text"], history=state.get("history", []))
+        lambda: run_general_food(state["text"], history=state.get("history", []))
     )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
@@ -474,6 +486,7 @@ def multi_agent_node(state: GraphState) -> dict:
         "guide_agent_node": guide_agent_node,
         "recipe_agent_node": recipe_agent_node,
         "receipt_guide_node": receipt_guide_node,
+        "receipt_lookup_node": receipt_lookup_node,
         "shopping_agent_node": shopping_agent_node,
     }
     results = []
@@ -481,7 +494,16 @@ def multi_agent_node(state: GraphState) -> dict:
     task_results = {}
     failed_intents = []
 
-    for task in state.get("tasks") or []:
+    tasks = list(state.get("tasks") or [])
+    task_intents = [task.get("intent") for task in tasks]
+    if "inventory.expiring" in task_intents and "recipe.recommend" in task_intents:
+        expiring_index = task_intents.index("inventory.expiring")
+        recipe_index = task_intents.index("recipe.recommend")
+        if expiring_index > recipe_index:
+            # 임박 재료 조회 결과가 필요한 레시피 추천보다 먼저 실행되도록 순서만 보정합니다.
+            tasks.insert(recipe_index, tasks.pop(expiring_index))
+
+    for task in tasks:
         intent = task.get("intent", "")
         task_state = {
             **state,
@@ -558,7 +580,7 @@ def route_intent(state: GraphState) -> str:
         "recipe.pairing": "recipe_agent_node",
         "receipt.lookup": "receipt_lookup_node",
         "receipt.guide": "receipt_guide_node",
-        "food.general": "fallback_agent_node",
+        "food.general": "general_food_agent_node",
     }
     return routes.get(intent, "general_node")
 
@@ -572,7 +594,7 @@ workflow.add_node("guide_agent_node", guide_agent_node)
 workflow.add_node("recipe_agent_node", recipe_agent_node)
 workflow.add_node("receipt_lookup_node", receipt_lookup_node)
 workflow.add_node("receipt_guide_node", receipt_guide_node)
-workflow.add_node("fallback_agent_node", fallback_agent_node)
+workflow.add_node("general_food_agent_node", general_food_agent_node)
 workflow.add_node("general_node", general_node)
 
 workflow.set_entry_point("router")
@@ -586,7 +608,7 @@ for node_name in (
     "recipe_agent_node",
     "receipt_lookup_node",
     "receipt_guide_node",
-    "fallback_agent_node",
+    "general_food_agent_node",
     "general_node",
 ):
     workflow.add_edge(node_name, END)

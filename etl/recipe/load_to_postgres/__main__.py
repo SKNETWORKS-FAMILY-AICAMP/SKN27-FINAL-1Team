@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from .config import COOKING_STEPS_CSV, RECIPE_FIX_CSV
+from .config import RECIPE_175_CSV
 from .connection import PostgreDB
 from .loader import load_recipes_to_postgres
 
@@ -18,14 +18,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--recipe-csv",
         type=str,
-        default=str(RECIPE_FIX_CSV),
-        help="전처리된 레시피 CSV 경로",
-    )
-    parser.add_argument(
-        "--cooking-steps-csv",
-        type=str,
-        default=str(COOKING_STEPS_CSV),
-        help="조리단계 CSV 경로",
+        default=str(RECIPE_175_CSV),
+        help="recipe_175 형식의 전처리된 레시피 CSV 경로",
     )
     parser.add_argument(
         "--test-conn",
@@ -45,9 +39,8 @@ def main() -> None:
 
     logger.info("레시피 적재 시작")
     logger.info("  recipe CSV: %s", args.recipe_csv)
-    logger.info("  cooking steps CSV: %s", args.cooking_steps_csv)
 
-    load_recipes_to_postgres(args.recipe_csv, args.cooking_steps_csv)
+    load_recipes_to_postgres(args.recipe_csv)
 
 
 if __name__ == "__main__":

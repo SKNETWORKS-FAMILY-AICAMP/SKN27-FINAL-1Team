@@ -39,5 +39,4 @@ def build_dsn() -> str:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-RECIPE_FIX_CSV = PROJECT_ROOT / "storage" / "processed" / "recipe" / "recipe_fix.csv"
-COOKING_STEPS_CSV = PROJECT_ROOT / "storage" / "raw" / "recipe" / "cooking_steps.csv"
+RECIPE_175_CSV = PROJECT_ROOT / "storage" / "processed" / "recipe" / "recipe_175.csv"

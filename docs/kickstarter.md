@@ -4,9 +4,7 @@
 
 1. 프로젝트 루트에 `.env` 준비 (`.env.sample` 복사 후 `DB_PASSWORD`, `NEO4J_PASSWORD` 등 설정)
 2. 레시피 적재용 CSV가 로컬 `storage/`에 있는지 확인
-   - `storage/processed/recipe/recipe_process.csv` (전처리 결과)
-   - `storage/processed/recipe/recipe_fix.csv` (수동 수정 후 적재용)
-   - `storage/raw/recipe/cooking_steps.csv` (조리단계)
+   - `storage/processed/recipe/recipe_175.csv` (레시피·조리단계 통합 적재용)
 3. 한 번에 기동:
 
 ```powershell
@@ -93,7 +91,7 @@ docker compose logs neo4j_load
 ```powershell
 docker compose down
 Remove-Item -Recurse -Force .\storage\postgres\data\*
-docker compose up -d
+docker compose up -d --build
 ```
 
 `recipe_load` 로그에 `스키마 컬럼이 schema.sql과 일치하지 않습니다`가 보이면 위와 동일한 절차로 해결합니다.
@@ -130,5 +128,5 @@ python -m etl.recipe.load_to_postgres
 
 ```powershell
 python -m etl.recipe.load_to_postgres --test-conn
-python -m etl.recipe.load_to_postgres --recipe-csv storage/processed/recipe/recipe_fix.csv --cooking-steps-csv storage/raw/recipe/cooking_steps.csv
+python -m etl.recipe.load_to_postgres --recipe-csv storage/processed/recipe/recipe_175.csv
 ```

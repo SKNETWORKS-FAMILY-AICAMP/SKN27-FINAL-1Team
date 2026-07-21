@@ -12,7 +12,7 @@ FROM shopping_lists AS list
 WHERE item.shopping_list_id = list.id
   AND item.source_refs = '[]'::jsonb;
 
-COMMENT ON COLUMN shopping_list_items.source_type IS '장보기 재료 추가 출처(recipe/manual/fridge_restock/chatbot)';
+COMMENT ON COLUMN shopping_list_items.source_type IS '장보기 재료 추가 출처(recipe/manual/chatbot)';
 COMMENT ON COLUMN shopping_list_items.source_refs IS '재료를 추가한 레시피 등 출처 참조 목록';
 
 COMMIT;

@@ -9,6 +9,8 @@ import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageReceipt from '../../assets/extracted/images/image_receipt registration.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import { adjustCropPixelsForOffset, resizeCropBoxFromPointer } from './cropGeometry.js'
+import { getReceiptAgeInDays, isOldReceipt } from './receiptAgePolicy.js'
+import { requiresReceiptItemReview } from './receiptReviewPolicy.js'
 import { API_URL } from '../../utils/api.js'
 import {
   receiptHistory,
@@ -554,7 +556,7 @@ function getAuthState() {
 
 function getInitialEditingRows(nextRows) {
   return nextRows.reduce((acc, row) => {
-    acc[row.id] = true
+    acc[row.id] = row.review !== false
     return acc
   }, {})
 }
@@ -611,6 +613,25 @@ function toNumber(value, fallback = null) {
   return Number.isFinite(numericValue) ? numericValue : fallback
 }
 
+function isInteractiveRowTarget(target) {
+  return Boolean(
+    target?.closest?.(
+      [
+        'button',
+        'input',
+        'select',
+        'textarea',
+        'label',
+        'a',
+        '[role="button"]',
+        '[role="option"]',
+        '.receipt-row-dropdown',
+        '.receipt-ingredient-suggestions',
+      ].join(','),
+    ),
+  )
+}
+
 function getOcrReviewPolicy(qualityScore) {
   const score = Number(qualityScore)
 
@@ -644,6 +665,8 @@ function mapOcrItemsToRows(items = []) {
     const safeQuantityAmount = Number.isFinite(quantityAmount) && quantityAmount > 0 ? quantityAmount : 1
     const quantityUnit = normalizeOcrUnit(item.unit)
 
+    const review = requiresReceiptItemReview(item)
+
     return {
       id: `ocr-${index}-${rawName}`,
       raw: rawName,
@@ -654,7 +677,8 @@ function mapOcrItemsToRows(items = []) {
       price: formatPriceInput(item.item_amount),
       category: '식재료',
       storage: '냉장',
-      review: true,
+      review,
+      normalizationMatchType: item.normalization_match_type || 'none',
     }
   })
 }
@@ -665,6 +689,7 @@ function ReceiptOcr() {
   const flowTimersRef = useRef([])
   const uploadRunIdRef = useRef(0)
   const previewImageUrlRef = useRef(null)
+  const previewImageUrlsRef = useRef([])
   const cropImageUrlRef = useRef(null)
   const retakeInputRef = useRef(null)
   const ingredientSuggestionRequestRef = useRef(0)
@@ -677,7 +702,11 @@ function ReceiptOcr() {
   const [receiptMeta, setReceiptMeta] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [previewImageUrl, setPreviewImageUrl] = useState(null)
+  const [previewImages, setPreviewImages] = useState([])
+  const [previewImageIndex, setPreviewImageIndex] = useState(0)
   const [lastReceiptSourceFiles, setLastReceiptSourceFiles] = useState([])
+  const [orderReviewEntries, setOrderReviewEntries] = useState([])
+  const [orderReviewSource, setOrderReviewSource] = useState('')
   const [receiptImageEntries, setReceiptImageEntries] = useState([])
   const [cropImageIndex, setCropImageIndex] = useState(0)
   const [cropFile, setCropFile] = useState(null)
@@ -689,7 +718,6 @@ function ReceiptOcr() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
   const [isCreatingCrop, setIsCreatingCrop] = useState(false)
   const [isAddRowOpen, setIsAddRowOpen] = useState(false)
-  const [rowSelectionMode, setRowSelectionMode] = useState(false)
   const [selectedRowIds, setSelectedRowIds] = useState([])
   const [isStocking, setIsStocking] = useState(false)
   const [ingredientSuggestions, setIngredientSuggestions] = useState({
@@ -716,24 +744,61 @@ function ReceiptOcr() {
     flowTimersRef.current = []
   }
 
-  const setUploadedPreview = (file) => {
+  const clearUploadedPreviewUrls = () => {
     if (previewImageUrlRef.current) {
       URL.revokeObjectURL(previewImageUrlRef.current)
+      previewImageUrlRef.current = null
     }
 
-    const url = file ? URL.createObjectURL(file) : null
-    previewImageUrlRef.current = url
-    setPreviewImageUrl(url)
+    previewImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    previewImageUrlsRef.current = []
+  }
+
+  const setUploadedPreviews = (files) => {
+    clearUploadedPreviewUrls()
+
+    const previewFiles = Array.isArray(files) ? files.filter(Boolean) : [files].filter(Boolean)
+    const entries = previewFiles.map((file, index) => {
+      const url = URL.createObjectURL(file)
+      previewImageUrlsRef.current.push(url)
+      return {
+        id: `${Date.now()}-${index}-${file.name}-${file.size}`,
+        name: file.name || `영수증 사진 ${index + 1}`,
+        url,
+      }
+    })
+
+    setPreviewImages(entries)
+    setPreviewImageIndex(0)
+    setPreviewImageUrl(entries[0]?.url || null)
+  }
+
+  const setUploadedPreview = (file) => {
+    setUploadedPreviews(file ? [file] : [])
   }
 
   const setUploadedPreviewBlob = (blob) => {
-    if (previewImageUrlRef.current) {
-      URL.revokeObjectURL(previewImageUrlRef.current)
-    }
+    clearUploadedPreviewUrls()
 
     const url = blob ? URL.createObjectURL(blob) : null
     previewImageUrlRef.current = url
+    setPreviewImages(url ? [{ id: 'saved-preview', name: '저장된 영수증', url }] : [])
+    setPreviewImageIndex(0)
     setPreviewImageUrl(url)
+  }
+
+  const selectPreviewImage = (index) => {
+    if (index < 0 || index >= previewImages.length) {
+      return
+    }
+
+    setPreviewImageIndex(index)
+    setPreviewImageUrl(previewImages[index].url)
+  }
+
+  const movePreviewImage = (direction) => {
+    const nextIndex = previewImageIndex + direction
+    selectPreviewImage(nextIndex)
   }
 
   const setCropPreview = (file) => {
@@ -839,6 +904,16 @@ function ReceiptOcr() {
     showCropImage(entries, 0)
   }
 
+  const beginOrderReview = (files, source) => {
+    setOrderReviewEntries(createReceiptImageEntries(files))
+    setOrderReviewSource(source || '업로드 이미지')
+  }
+
+  const clearOrderReview = () => {
+    setOrderReviewEntries([])
+    setOrderReviewSource('')
+  }
+
   const loadSavedReceiptPreview = async (receiptId, token) => {
     if (!receiptId || !token) {
       return
@@ -898,8 +973,13 @@ function ReceiptOcr() {
     setIsProcessing(false)
     setActiveStep(STEP.UPLOAD)
     setIsAddRowOpen(false)
-    setRowSelectionMode(false)
     setSelectedRowIds([])
+
+    if (files.length > 1) {
+      beginOrderReview(files, source)
+      return
+    }
+
     await uploadReceiptImages(files, source || '업로드 이미지')
   }
 
@@ -927,8 +1007,9 @@ function ReceiptOcr() {
 
     clearFlowTimers()
     clearCropSelection()
+    clearOrderReview()
     setLastReceiptSourceFiles(manualCropSourceFiles)
-    setUploadedPreview(files[0])
+    setUploadedPreviews(files)
     setReceiptMeta(null)
     setDetectedRows([])
     setEditingRows({})
@@ -1044,7 +1125,9 @@ function ReceiptOcr() {
         reviewMessage: reviewPolicy.message,
         suggestManualCrop: reviewPolicy.suggestManualCrop,
       })
-      await loadSavedReceiptPreview(data.receipt_id, token)
+      if (files.length === 1) {
+        await loadSavedReceiptPreview(data.receipt_id, token)
+      }
       setActiveStep(STEP.CONFIRM)
     } catch (error) {
       if (uploadRunIdRef.current !== uploadRunId) {
@@ -1128,6 +1211,49 @@ function ReceiptOcr() {
     setCropImageIndex(Math.max(0, reordered.findIndex((item) => item.id === activeId)))
   }
 
+  const reorderOrderReviewImage = (fromIndex, toIndex) => {
+    if (
+      fromIndex === toIndex ||
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= orderReviewEntries.length ||
+      toIndex >= orderReviewEntries.length
+    ) {
+      return
+    }
+
+    setOrderReviewEntries((prev) => {
+      const reordered = [...prev]
+      const [entry] = reordered.splice(fromIndex, 1)
+      reordered.splice(toIndex, 0, entry)
+      return reordered
+    })
+  }
+
+  const moveOrderReviewImage = (index, direction) => {
+    reorderOrderReviewImage(index, index + direction)
+  }
+
+  const confirmOrderAndUpload = async () => {
+    if (isProcessing || orderReviewEntries.length === 0) {
+      return
+    }
+
+    const files = orderReviewEntries.map((entry) => entry.sourceFile)
+    const source = orderReviewSource || '업로드 이미지'
+    clearOrderReview()
+    await uploadReceiptImages(files, source)
+  }
+
+  const cancelOrderReview = () => {
+    uploadRunIdRef.current += 1
+    clearOrderReview()
+    setLastReceiptSourceFiles([])
+    setHasUploaded(false)
+    setIsProcessing(false)
+    setActiveStep(STEP.UPLOAD)
+  }
+
   const cancelCropSelection = () => {
     uploadRunIdRef.current += 1
     clearCropSelection()
@@ -1168,23 +1294,16 @@ function ReceiptOcr() {
     setIsAddRowOpen(false)
   }
 
-  const enterRowSelection = () => {
-    setRowSelectionMode(true)
-    setSelectedRowIds([])
-  }
-
-  const exitRowSelection = () => {
-    setRowSelectionMode(false)
-    setSelectedRowIds([])
-  }
-
   const toggleRowSelect = (rowId) => {
     setSelectedRowIds((prev) => (prev.includes(rowId) ? prev.filter((value) => value !== rowId) : [...prev, rowId]))
   }
 
-  const selectAllRows = () => {
-    setRowSelectionMode(true)
-    setSelectedRowIds(detectedRows.map((row) => row.id))
+  const handleRowSelectClick = (event, rowId) => {
+    if (isProcessing || isInteractiveRowTarget(event.target)) {
+      return
+    }
+
+    toggleRowSelect(rowId)
   }
 
   const toggleAllRowsConfirmation = () => {
@@ -1215,27 +1334,7 @@ function ReceiptOcr() {
       selectedRowIds.forEach((rowId) => delete next[rowId])
       return next
     })
-    exitRowSelection()
-  }
-
-  const deleteAllRows = async () => {
-    if (detectedRows.length === 0) {
-      return
-    }
-
-    const confirmed = await showConfirm('전체 삭제하시겠습니까?', {
-      title: '전체 삭제',
-      confirmText: '삭제',
-      cancelText: '취소',
-    })
-
-    if (!confirmed) {
-      return
-    }
-
-    setDetectedRows([])
-    setEditingRows({})
-    exitRowSelection()
+    setSelectedRowIds([])
   }
 
   const updateQuantityAmount = (rowId, nextAmount) => {
@@ -1455,6 +1554,7 @@ function ReceiptOcr() {
     clearFlowTimers()
     setUploadedPreview(null)
     clearCropSelection()
+    clearOrderReview()
     const initialRows = createInitialReceiptRows()
     setDetectedRows(initialRows)
     setEditingRows(getInitialEditingRows(initialRows))
@@ -1464,7 +1564,6 @@ function ReceiptOcr() {
     setIsProcessing(false)
     setActiveStep(STEP.UPLOAD)
     setIsAddRowOpen(false)
-    setRowSelectionMode(false)
     setSelectedRowIds([])
   }
 
@@ -1493,6 +1592,7 @@ function ReceiptOcr() {
     uploadRunIdRef.current += 1
     clearFlowTimers()
     setUploadedPreview(null)
+    clearOrderReview()
     beginCropFlow(lastReceiptSourceFiles, '수동 영역 조정')
     setHasUploaded(false)
     setIsProcessing(false)
@@ -1548,6 +1648,25 @@ function ReceiptOcr() {
       return
     }
 
+    const receiptAgeInDays = getReceiptAgeInDays(receiptMeta.purchaseDatetime)
+    const needsOldReceiptConfirmation = isOldReceipt(receiptMeta.purchaseDatetime)
+    let oldReceiptConfirmed = false
+
+    if (needsOldReceiptConfirmation) {
+      oldReceiptConfirmed = await showConfirm(
+        `구매일로부터 ${receiptAgeInDays}일이 지난 영수증입니다.\n일부 재료는 이미 소비기한이 지났을 수 있어요. 그래도 냉장고에 입고하시겠습니까?`,
+        {
+          title: '오래된 영수증이에요',
+          confirmText: '그래도 입고하기',
+          cancelText: '취소',
+        },
+      )
+
+      if (!oldReceiptConfirmed) {
+        return
+      }
+    }
+
     setIsStocking(true)
 
     const token = window.localStorage.getItem('bobbeori-token')
@@ -1573,6 +1692,7 @@ function ReceiptOcr() {
             purchase_datetime: receiptMeta.purchaseDatetime,
             total_amount: totalAmount,
             calendar_cost_enabled: calendarCostEnabled,
+            old_receipt_confirmed: oldReceiptConfirmed,
             items: detectedRows.map((row) => ({
               raw_name: row.raw,
               normalized_name: row.name,
@@ -1611,9 +1731,7 @@ function ReceiptOcr() {
 
     return () => {
       clearFlowTimers()
-      if (previewImageUrlRef.current) {
-        URL.revokeObjectURL(previewImageUrlRef.current)
-      }
+      clearUploadedPreviewUrls()
       if (cropImageUrlRef.current) {
         URL.revokeObjectURL(cropImageUrlRef.current)
       }
@@ -1691,6 +1809,17 @@ function ReceiptOcr() {
             onApply={applyCropAndUpload}
           />
         </div>
+      ) : orderReviewEntries.length > 1 ? (
+        <div className="receipt-branch receipt-order-focus">
+          <ReceiptOrderReviewPanel
+            imageEntries={orderReviewEntries}
+            isSubmitting={isProcessing}
+            onMoveImage={moveOrderReviewImage}
+            onReorderImage={reorderOrderReviewImage}
+            onCancel={cancelOrderReview}
+            onConfirm={confirmOrderAndUpload}
+          />
+        </div>
       ) : !hasUploaded ? (
         <div className="receipt-branch receipt-before-grid">
           <UploadPanel canUpload={isLoggedIn} onRequireLogin={requestLogin} onStartUpload={startUpload} onNotify={showAlert} />
@@ -1710,7 +1839,7 @@ function ReceiptOcr() {
                     영역 조정
                   </button>
                   <button type="button" disabled={isProcessing} onClick={openRetakePicker}>
-                    다시 촬영
+                    재업로드
                   </button>
                 </div>
                 <input
@@ -1722,7 +1851,14 @@ function ReceiptOcr() {
                   onChange={handleRetakeFileChange}
                 />
               </div>
-              <ReceiptImageViewer src={previewImageUrl} isScanning={isProcessing} />
+              <ReceiptImageViewer
+                src={previewImageUrl}
+                images={previewImages}
+                currentIndex={previewImageIndex}
+                isScanning={isProcessing}
+                onMove={movePreviewImage}
+                onSelect={selectPreviewImage}
+              />
             </section>
 
             <section className="receipt-panel receipt-mapping" aria-labelledby="mapping-title">
@@ -1796,16 +1932,15 @@ function ReceiptOcr() {
                       'receipt-mapping-row',
                       isEditing ? 'is-editing' : '',
                       isShowingIngredientSuggestions ? 'is-suggesting' : '',
-                      rowSelectionMode ? 'is-selecting' : '',
-                      rowSelectionMode && selectedRowIds.includes(row.id) ? 'is-row-selected' : '',
+                      'is-selectable',
+                      selectedRowIds.includes(row.id) ? 'is-row-selected' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    role={rowSelectionMode ? 'button' : 'row'}
-                    aria-pressed={rowSelectionMode ? selectedRowIds.includes(row.id) : undefined}
-                    aria-label={rowSelectionMode ? `${row.name} 선택` : undefined}
+                    role="row"
+                    aria-selected={selectedRowIds.includes(row.id)}
                     key={row.id}
-                    onClick={rowSelectionMode ? () => toggleRowSelect(row.id) : undefined}
+                    onClick={(event) => handleRowSelectClick(event, row.id)}
                   >
                     <span className="receipt-mapping-name-cell" role="cell">
                       <b>
@@ -1965,53 +2100,17 @@ function ReceiptOcr() {
               {!isProcessing ? (
                 <>
                   <div className="receipt-row-tools">
-                    {rowSelectionMode ? (
-                      <>
-                        {detectedRows.length > 0 && selectedRowIds.length === detectedRows.length ? (
-                          <button
-                            className="receipt-add-row receipt-row-tools__delete"
-                            type="button"
-                            onClick={deleteAllRows}
-                          >
-                            전체 삭제
-                          </button>
-                        ) : (
-                          <button
-                            className="receipt-add-row"
-                            type="button"
-                            disabled={detectedRows.length === 0}
-                            onClick={selectAllRows}
-                          >
-                            전체 선택
-                          </button>
-                        )}
-                        <button
-                          className="receipt-add-row receipt-row-tools__delete"
-                          type="button"
-                          disabled={selectedRowIds.length === 0}
-                          onClick={deleteSelectedRows}
-                        >
-                          선택 삭제{selectedRowIds.length > 0 ? ` (${selectedRowIds.length})` : ''}
-                        </button>
-                        <button className="receipt-add-row" type="button" onClick={exitRowSelection}>
-                          취소
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="receipt-add-row" type="button" onClick={addRow}>
-                          항목 추가
-                        </button>
-                        <button
-                          className="receipt-add-row receipt-row-tools__delete"
-                          type="button"
-                          disabled={detectedRows.length === 0}
-                          onClick={enterRowSelection}
-                        >
-                          항목 삭제
-                        </button>
-                      </>
-                    )}
+                    <button className="receipt-add-row" type="button" onClick={addRow}>
+                      항목 추가
+                    </button>
+                    <button
+                      className="receipt-add-row receipt-row-tools__delete"
+                      type="button"
+                      disabled={selectedRowIds.length === 0}
+                      onClick={deleteSelectedRows}
+                    >
+                      선택 삭제{selectedRowIds.length > 0 ? ` (${selectedRowIds.length})` : ''}
+                    </button>
                   </div>
                   <div className="receipt-success">
                     <span>총상품<em>{detectedRows.length}개</em></span>
@@ -2227,6 +2326,186 @@ function AddRowModal({ onClose, onSubmit }) {
         </div>
       </section>
     </div>
+  )
+}
+
+function ReceiptOrderReviewPanel({
+  imageEntries,
+  isSubmitting,
+  onMoveImage,
+  onReorderImage,
+  onCancel,
+  onConfirm,
+}) {
+  const [selectedEntryId, setSelectedEntryId] = useState(null)
+  const [dragIndex, setDragIndex] = useState(null)
+  const [dropIndex, setDropIndex] = useState(null)
+
+  // Keyed by the set of images (not their order) so reordering keeps the same
+  // object URLs instead of revoking and recreating them on every move.
+  const entriesSignature = imageEntries
+    .map((entry) => entry.id)
+    .slice()
+    .sort()
+    .join('|')
+
+  const [thumbnails, setThumbnails] = useState({})
+
+  // Object URLs must be created inside the effect (not useMemo) so they are
+  // recreated whenever the cleanup revokes them.
+  useEffect(() => {
+    const map = {}
+    imageEntries.forEach((entry) => {
+      if (entry.sourceFile) {
+        map[entry.id] = URL.createObjectURL(entry.sourceFile)
+      }
+    })
+    setThumbnails(map)
+
+    return () => {
+      Object.values(map).forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [entriesSignature])
+
+  const selectedEntry =
+    imageEntries.find((entry) => entry.id === selectedEntryId) || imageEntries[0] || null
+  const selectedIndex = selectedEntry
+    ? imageEntries.findIndex((entry) => entry.id === selectedEntry.id)
+    : -1
+
+  const endDrag = () => {
+    setDragIndex(null)
+    setDropIndex(null)
+  }
+
+  const handleDragStart = (index) => (event) => {
+    if (isSubmitting) {
+      event.preventDefault()
+      return
+    }
+
+    setDragIndex(index)
+    setDropIndex(index)
+    event.dataTransfer.effectAllowed = 'move'
+    // Firefox requires data to be set for the drag to start.
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+
+  const handleDragOver = (index) => (event) => {
+    if (dragIndex === null) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDropIndex(index)
+  }
+
+  const handleDrop = (index) => (event) => {
+    if (dragIndex === null) {
+      return
+    }
+
+    event.preventDefault()
+    onReorderImage?.(dragIndex, index)
+    endDrag()
+  }
+
+  return (
+    <section className="receipt-panel receipt-order-panel" aria-labelledby="receipt-order-title">
+      <div className="receipt-preview__title">
+        <div>
+          <h2 id="receipt-order-title">
+            사진 순서 확인
+            <span className="receipt-order-count">({imageEntries.length}장)</span>
+          </h2>
+          <p>
+            긴 영수증은 <b>위에서 아래 순서</b>로 이어 붙여 분석해요.
+            <br />
+            사진을 <b>드래그</b>해 순서를 바꾸고, 눌러서 내용을 확인하세요.
+          </p>
+        </div>
+      </div>
+
+      <ol className="receipt-crop-order receipt-order-list" aria-label="영수증 사진 분석 순서">
+        {imageEntries.map((entry, index) => (
+          <li
+            key={entry.id}
+            className={[
+              entry.id === selectedEntry?.id ? 'is-active' : '',
+              dragIndex === index ? 'is-dragging' : '',
+              dragIndex !== null && dropIndex === index && dragIndex !== index ? 'is-drop-target' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            draggable={!isSubmitting}
+            onDragStart={handleDragStart(index)}
+            onDragOver={handleDragOver(index)}
+            onDrop={handleDrop(index)}
+            onDragEnd={endDrag}
+          >
+            <span className="receipt-order-grip" aria-hidden="true" />
+            <button
+              type="button"
+              className="receipt-crop-order__select"
+              aria-pressed={entry.id === selectedEntry?.id}
+              onClick={() => setSelectedEntryId(entry.id)}
+            >
+              <span>{index + 1}</span>
+              <i className="receipt-order-thumb" aria-hidden="true">
+                {thumbnails[entry.id] ? <img src={thumbnails[entry.id]} alt="" /> : null}
+              </i>
+              <b>{entry.sourceFile?.name || `영수증 사진 ${index + 1}`}</b>
+              <em>{entry.sourceFile?.size ? `${(entry.sourceFile.size / 1024 / 1024).toFixed(1)}MB` : '선택됨'}</em>
+            </button>
+            <div className="receipt-crop-order__moves">
+              <button
+                type="button"
+                disabled={isSubmitting || index === 0}
+                aria-label={`${index + 1}번째 사진을 위로 이동`}
+                onClick={() => onMoveImage(index, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || index === imageEntries.length - 1}
+                aria-label={`${index + 1}번째 사진을 아래로 이동`}
+                onClick={() => onMoveImage(index, 1)}
+              >
+                ↓
+              </button>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {selectedEntry ? (
+        <div className="receipt-order-preview">
+          <div className="receipt-order-preview__bar">
+            <strong>{selectedIndex + 1}번 사진 미리보기</strong>
+            <em>{selectedEntry.sourceFile?.name || '영수증 사진'}</em>
+          </div>
+          <div className="receipt-order-preview__stage">
+            {thumbnails[selectedEntry.id] ? (
+              <img
+                src={thumbnails[selectedEntry.id]}
+                alt={`${selectedIndex + 1}번째 영수증 사진 미리보기`}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="receipt-order-actions">
+        <button className="receipt-soft-button" type="button" disabled={isSubmitting} onClick={onCancel}>
+          다시 선택
+        </button>
+        <button className="receipt-primary-button" type="button" disabled={isSubmitting} onClick={onConfirm}>
+          {isSubmitting ? '분석 준비 중...' : `${imageEntries.length}장 순서대로 분석`}
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -2600,7 +2879,7 @@ function ReceiptCropPanel({
   )
 }
 
-function ReceiptImageViewer({ src, isScanning = false }) {
+function ReceiptImageViewer({ src, images = [], currentIndex = 0, isScanning = false, onMove, onSelect }) {
   const minZoom = 1
   const maxZoom = 3
   const zoomStep = 0.4
@@ -2608,6 +2887,15 @@ function ReceiptImageViewer({ src, isScanning = false }) {
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const dragStateRef = useRef(null)
+  const hasMultipleImages = images.length > 1
+  const currentImageName = images[currentIndex]?.name || '업로드한 영수증'
+
+  useEffect(() => {
+    setZoom(1)
+    setOffset({ x: 0, y: 0 })
+    dragStateRef.current = null
+    setIsDragging(false)
+  }, [src])
 
   const clampZoom = (value) => Math.min(maxZoom, Math.max(minZoom, Math.round(value * 100) / 100))
 
@@ -2675,6 +2963,27 @@ function ReceiptImageViewer({ src, isScanning = false }) {
 
   return (
     <div className="receipt-image-viewer">
+      {hasMultipleImages ? (
+        <div className="receipt-image-viewer__pager" aria-label="영수증 사진 넘기기">
+          <button
+            type="button"
+            aria-label="이전 영수증 사진"
+            disabled={currentIndex <= 0}
+            onClick={() => onMove?.(-1)}
+          >
+            ‹
+          </button>
+          <strong>{currentIndex + 1} / {images.length}</strong>
+          <button
+            type="button"
+            aria-label="다음 영수증 사진"
+            disabled={currentIndex >= images.length - 1}
+            onClick={() => onMove?.(1)}
+          >
+            ›
+          </button>
+        </div>
+      ) : null}
       <div
         className={stageClassName}
         onPointerDown={handlePointerDown}
@@ -2686,7 +2995,7 @@ function ReceiptImageViewer({ src, isScanning = false }) {
         {src ? (
           <>
             <img
-              alt="업로드한 영수증 이미지"
+              alt={currentImageName}
               draggable="false"
               src={src}
               style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
@@ -2703,6 +3012,23 @@ function ReceiptImageViewer({ src, isScanning = false }) {
           </div>
         )}
       </div>
+      {hasMultipleImages ? (
+        <div className="receipt-image-viewer__thumbs" aria-label="영수증 사진 선택">
+          {images.map((image, index) => (
+            <button
+              type="button"
+              className={index === currentIndex ? 'is-active' : ''}
+              key={image.id || image.url}
+              aria-label={`${index + 1}번째 사진 보기`}
+              aria-current={index === currentIndex ? 'true' : undefined}
+              onClick={() => onSelect?.(index)}
+            >
+              <img src={image.url} alt="" />
+              <span>{index + 1}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="receipt-image-viewer__controls">
         <span>영수증 확대</span>
         <button aria-label="축소" disabled={!src || zoom <= minZoom} type="button" onClick={zoomOut}>

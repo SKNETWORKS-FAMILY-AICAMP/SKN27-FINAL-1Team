@@ -10,10 +10,10 @@ import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
 
-function ImageSlot({ src, alt = '', className = '' }) {
+function ImageSlot({ src, alt = '', className = '', loading = 'eager' }) {
   return (
     <span className={`recipe-detail-image-slot ${src ? 'is-filled' : ''} ${className}`}>
-      {src ? <img src={src} alt={alt} /> : null}
+      {src ? <img src={src} alt={alt} loading={loading} /> : null}
     </span>
   )
 }
@@ -500,7 +500,8 @@ function RecipeDetail() {
                     <ImageSlot
                       className="recipe-detail-step-slide__image"
                       src={steps[currentStep].image_url}
-                      alt={`${steps[currentStep].title} 조리 과정`}
+                      alt={`${recipe.title} 조리 ${currentStep + 1}단계`}
+                      loading="lazy"
                     />
                   ) : null}
                 </article>

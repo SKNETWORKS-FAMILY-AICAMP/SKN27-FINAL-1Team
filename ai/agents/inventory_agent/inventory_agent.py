@@ -74,6 +74,7 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
 
         if action == "add_ingredients" and len(parts) >= 3:
             added = []
+            prepared_items = []
             for raw_item in parts[2].split("|"):
                 name, quantity, storage = raw_item.split(",", 2)
                 if (
@@ -83,7 +84,28 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
                     or not resolve_ingredient_name(db, name)
                 ):
                     raise ValueError("잘못된 재료 추가 명령입니다.")
-                added.append(inventory_service.add_ingredient_by_name(db, user_id, name, float(quantity), storage, commit=False))
+                prepared_items.append(
+                    (
+                        name,
+                        quantity,
+                        storage,
+                        inventory_service.prepare_storage_rule(db, name, None, storage),
+                    )
+                )
+
+            # 모든 외부 예측을 마친 뒤 냉장고 항목을 한 트랜잭션으로 저장합니다.
+            for name, quantity, storage, prepared_rule in prepared_items:
+                added.append(
+                    inventory_service.add_ingredient_by_name(
+                        db,
+                        user_id,
+                        name,
+                        float(quantity),
+                        storage,
+                        commit=False,
+                        prepared_rule=prepared_rule,
+                    )
+                )
             db.commit()
             return {"response_text": "\n".join(added), "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 

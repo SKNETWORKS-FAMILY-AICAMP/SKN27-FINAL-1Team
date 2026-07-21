@@ -202,7 +202,15 @@ def format_amount(item: dict[str, Any]) -> str:
 
 def is_remaining_request(text: str) -> bool:
     normalized = normalize_text(text)
-    return any(word in normalized for word in ("나머지", "외", "더보여", "더알려", "계속", "다음"))
+    return any(
+        word in normalized
+        for word in ("나머지", "외", "더보여", "더알려", "계속", "다음", "전부", "다말해", "다알려", "다보여", "전체")
+    )
+
+
+def is_show_all_request(text: str) -> bool:
+    normalized = normalize_text(text)
+    return any(word in normalized for word in ("전부", "다말해", "다알려", "다보여", "전체"))
 
 
 def extract_requested_count(text: str) -> int | None:

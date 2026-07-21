@@ -1,4 +1,5 @@
 import sys
+from contextlib import nullcontext
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from unittest.mock import MagicMock
 # 직접 실행해도 프로젝트 루트 기준 import가 가능하도록 경로를 맞춥니다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from app.backend.schemas.inventory import IngredientCreate
 from app.backend.services.inventory_service.inventory_service import _object_particle, inventory_service
 
 def test_map_to_response_defaults_empty_category_to_etc() -> None:
@@ -58,6 +60,39 @@ def test_inventory_reads_do_not_commit(monkeypatch) -> None:
 
     db.commit.assert_not_called()
 
+
+def test_existing_ingredient_category_is_not_changed_by_inventory_input() -> None:
+    """사용자 등록 카테고리가 공용 식재료 마스터를 덮어쓰지 않게 합니다."""
+    ingredient = SimpleNamespace(name="감자", normalized_name="감자", category="채소")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = ingredient
+    data = IngredientCreate(name="감자", category="과일", quantity=1, unit="개")
+
+    result = inventory_service._get_or_create_ingredient(db, data)
+
+    assert result is ingredient
+    assert ingredient.category == "채소"
+    db.flush.assert_not_called()
+
+
+def test_storage_prediction_uses_separate_cache_session(monkeypatch) -> None:
+    """외부 예측 전 캐시 조회가 호출자의 트랜잭션을 변경하지 않게 합니다."""
+    db = MagicMock()
+    cache_db = MagicMock()
+    cache_db.query.return_value.filter.return_value.first.return_value = None
+    predict = MagicMock(return_value=("실온", 30))
+    monkeypatch.setattr(
+        "app.backend.services.inventory_service.inventory_service.Session",
+        lambda bind: nullcontext(cache_db),
+    )
+    monkeypatch.setattr(inventory_service, "_predict_storage_rule", predict)
+
+    result = inventory_service.prepare_storage_rule(db, "파스타면", "곡류", None)
+
+    assert result == ("실온", 30)
+    db.rollback.assert_not_called()
+    cache_db.query.assert_called_once()
+    predict.assert_called_once_with("파스타면", "곡류", None)
 
 if __name__ == "__main__":
     test_map_to_response_defaults_empty_category_to_etc()
@@ -242,11 +277,12 @@ def test_multi_add_uses_single_transaction(monkeypatch) -> None:
     calls = []
     db = MagicMock()
 
-    def fake_add(db, user_id, name, quantity, storage, *, commit):
+    def fake_add(db, user_id, name, quantity, storage, *, commit, prepared_rule):
         """각 재료가 자동 커밋 없이 호출되는지 기록합니다."""
         calls.append((name, commit))
         return f"{name} 추가"
 
+    monkeypatch.setattr(inventory_service, "prepare_storage_rule", lambda db, name, category, storage: (storage, 7))
     monkeypatch.setattr(inventory_service, "add_ingredient_by_name", fake_add)
 
     result = execute_inventory_action(
@@ -268,12 +304,13 @@ def test_multi_add_rolls_back_when_one_item_fails(monkeypatch) -> None:
 
     db = MagicMock()
 
-    def fake_add(db, user_id, name, quantity, storage, *, commit):
+    def fake_add(db, user_id, name, quantity, storage, *, commit, prepared_rule):
         """두 번째 재료에서 저장 실패를 재현합니다."""
         if name == "감자":
             raise RuntimeError("저장 실패")
         return f"{name} 추가"
 
+    monkeypatch.setattr(inventory_service, "prepare_storage_rule", lambda db, name, category, storage: (storage, 7))
     monkeypatch.setattr(inventory_service, "add_ingredient_by_name", fake_add)
 
     result = execute_inventory_action(

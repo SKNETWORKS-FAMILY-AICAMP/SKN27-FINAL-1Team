@@ -14,6 +14,7 @@ from app.backend.services.recommendation_service.fridge import (
     FridgeItemSnapshot,
     recipe_contains_banned,
 )
+from app.backend.services.recommendation_service.recipe_image_urls import build_main_image_url
 
 
 # ── SQL 검색 ──
@@ -79,7 +80,7 @@ def recipe_to_list_item(recipe: Recipe) -> dict[str, Any]:
         "difficulty": recipe.difficulty,
         "cooking_time_min": recipe.cooking_time,
         "serving_count": recipe.serving_size,
-        "main_image_url": recipe.image_url,
+        "main_image_url": build_main_image_url(recipe.id),
     }
 
 

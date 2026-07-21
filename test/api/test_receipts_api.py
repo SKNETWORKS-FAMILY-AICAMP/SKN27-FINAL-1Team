@@ -1,3 +1,6 @@
+from datetime import datetime
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -34,6 +37,7 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
                 {
                     "raw_name": "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)",
                     "normalized_name": BANANA,
+                    "normalization_match_type": "exact",
                     "quantity": 1,
                     "unit": EA,
                     "item_amount": 2000,
@@ -62,6 +66,7 @@ def test_upload_receipt_api_returns_ocr_candidates(monkeypatch):
     assert body["receipt_id"] == 10
     assert body["items"][0]["raw_name"] == "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)"
     assert body["items"][0]["normalized_name"] == BANANA
+    assert body["items"][0]["normalization_match_type"] == "exact"
     assert body["items"][0]["unit"] == EA
     assert body["quality_score"] == 1.0
     assert body["ocr_status"] == "completed"
@@ -147,6 +152,30 @@ def test_upload_receipt_stream_api_returns_stage_and_result_events(monkeypatch):
     assert '"ocr_status": "completed"' in response.text
 
 
+# 사용자 영수증 이미지가 브라우저나 중간 캐시에 저장되지 않도록 보안 헤더를 고정한다.
+def test_receipt_image_response_disables_caching_and_mime_sniffing(monkeypatch, tmp_path):
+    image_path = tmp_path / "receipt.png"
+    image_path.write_bytes(b"fake-image-bytes")
+    receipt = SimpleNamespace(original_file_path=str(image_path))
+
+    class FakeQuery:
+        def filter(self, *args):
+            return self
+
+        def first(self):
+            return receipt
+
+    fake_db = SimpleNamespace(query=lambda model: FakeQuery())
+    monkeypatch.setattr(receipts_api.receipt_storage.config, "OCR_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(receipts_api.receipt_storage.config, "RECEIPT_STORAGE_BACKEND", "local")
+
+    response = receipts_api.get_receipt_image(receipt_id=10, current_user_id=7, db=fake_db)
+
+    assert response.headers["cache-control"] == "private, no-store, max-age=0"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
 def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
     saved = {}
 
@@ -157,6 +186,7 @@ def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
         return len(request_data.items)
 
     monkeypatch.setattr(receipts_api.receipt_confirm_service, "save_confirmed_items", fake_save_confirmed_items)
+    monkeypatch.setattr(receipts_api, "_get_receipt_age_in_days", lambda value: 31)
 
     client = create_test_client()
     response = client.post(
@@ -167,6 +197,7 @@ def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
             "purchase_datetime": "2026-06-29 12:30:00",
             "total_amount": 2000,
             "calendar_cost_enabled": False,
+            "old_receipt_confirmed": True,
             "items": [
                 {
                     "raw_name": "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)",
@@ -184,6 +215,41 @@ def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
     assert response.status_code == 200
     assert response.json()["message"] == "\uc131\uacf5\uc801\uc73c\ub85c 1\uac1c \ud488\ubaa9\uc744 \uc800\uc7a5\ud588\uc2b5\ub2c8\ub2e4."
     assert saved == {"user_id": 7, "receipt_id": 10, "item_name": BANANA}
+
+
+def test_receipt_age_policy_warns_only_after_thirty_calendar_days():
+    now = datetime(2026, 7, 20, 12, 0, tzinfo=receipts_api.KST)
+
+    assert receipts_api._get_receipt_age_in_days("2026-06-20 09:00:00", now=now) == 30
+    assert receipts_api._get_receipt_age_in_days("2026-06-19 23:59:59", now=now) == 31
+
+
+# 30일 초과 영수증은 사용자가 소비기한 경고를 확인하기 전까지 입고하지 않는다.
+def test_confirm_receipt_api_rejects_old_receipt_without_acknowledgement(monkeypatch):
+    save_called = False
+
+    def fail_if_saved(**kwargs):
+        nonlocal save_called
+        save_called = True
+
+    monkeypatch.setattr(receipts_api.receipt_confirm_service, "save_confirmed_items", fail_if_saved)
+    monkeypatch.setattr(receipts_api, "_get_receipt_age_in_days", lambda value: 31)
+
+    client = create_test_client()
+    response = client.post(
+        "/api/v1/receipts/confirm",
+        json={
+            "receipt_id": 10,
+            "purchase_datetime": "2026-06-19 12:30:00",
+            "calendar_cost_enabled": False,
+            "old_receipt_confirmed": False,
+            "items": [],
+        },
+    )
+
+    assert response.status_code == 409
+    assert "30일" in response.json()["detail"]
+    assert save_called is False
 
 
 def test_receipt_history_api_returns_recent_receipts(monkeypatch):

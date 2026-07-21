@@ -16,6 +16,13 @@ class ShoppingIngredientInput(BaseModel):
     required_quantity: float | None = Field(default=None, description="필요 수량")
     unit: str | None = Field(default=None, description="필요 수량 단위")
     amount: str | None = Field(default=None, description="프론트/레시피 표시용 원본 수량 문자열")
+    provider: str | None = Field(default=None, description="쇼핑 provider")
+    product_id: str | None = Field(default=None, description="선택 상품 ID")
+    product_name: str | None = Field(default=None, description="선택 상품명")
+    product_link: str | None = Field(default=None, description="선택 상품 링크")
+    product_image: str | None = Field(default=None, description="선택 상품 이미지")
+    price: int | None = Field(default=None, description="선택 상품 가격")
+    mall_name: str | None = Field(default=None, description="선택 상품 판매처")
 
 
 class ShoppingListCreateRequest(BaseModel):
@@ -124,6 +131,13 @@ class ShoppingCompareRequest(BaseModel):
     missing_ingredients: List[str] = Field(default_factory=list, description="부족한 재료 목록")
 
 
+class ShoppingProductSearchRequest(BaseModel):
+    """직접 장보기 추가를 위한 상품 검색 요청입니다."""
+
+    keyword: str = Field(..., min_length=1, description="검색어")
+    display: int = Field(default=5, ge=1, le=20, description="검색 결과 개수")
+
+
 class MarketPriceItem(BaseModel):
     """하위 호환용 가격 비교 응답 항목입니다."""
 
@@ -147,3 +161,10 @@ class ShoppingCompareResponse(BaseModel):
     delivery_saving: int = Field(default=0, description="배달 대비 예상 절약 금액")
     market_prices: List[MarketPriceItem] = Field(default_factory=list, description="마켓별 가격 비교")
     recommended_market: str | None = Field(default=None, description="최종 추천 마켓")
+
+
+class ShoppingProductSearchResponse(BaseModel):
+    """직접 장보기 추가용 상품 검색 응답입니다."""
+
+    keyword: str
+    items: List[MarketPriceItem] = Field(default_factory=list)

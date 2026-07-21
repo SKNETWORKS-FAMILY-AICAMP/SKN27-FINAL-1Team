@@ -46,11 +46,11 @@ htmlcov/
 
 
 # ────────────────────────────────────────
-# 4. Jupyter Notebook (ai/experiments/ 등)
+# 4. Jupyter Notebook / ML experiments
 # ────────────────────────────────────────
-ai/experiments/.env
-ai/recommendation/outputs/ablation_report.json
-ai/recommendation/outputs/exp*.json
+etl/ml_lightfm/.env
+etl/ml_lightfm/outputs/ablation_report.json
+etl/ml_lightfm/outputs/exp*.json
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
@@ -130,13 +130,13 @@ test/fixtures/receipts/**
 *.pkl
 *.joblib
 ai/ocr/models/**
-ai/recommendation/models/**
+etl/ml_lightfm/model/**
 
 # 모델 디렉터리 구조 보존을 위한 .gitkeep만 추적 허용
 !ai/ocr/models/
 !ai/ocr/models/.gitkeep
-!ai/recommendation/models/
-!ai/recommendation/models/.gitkeep
+!etl/ml_lightfm/model/
+!etl/ml_lightfm/model/.gitkeep
 
 # recommendation_service 모델 파일은 추적
 !app/backend/services/recommendation_service/*.pkl
@@ -198,3 +198,6 @@ tmp-*
 *.db
 *.sqlite
 *.sqlite3
+
+# AWS CDK synthesis output
+infra/cdk*.out/

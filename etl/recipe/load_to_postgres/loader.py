@@ -7,7 +7,6 @@ import json
 import logging
 import re
 from fractions import Fraction
-from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -38,6 +37,25 @@ _REQUIRED_COLUMNS = {
     "recipe_ingredients": ("recipe_id", "ingredient_id"),
     # backend runtime (inventory / recommend)
     "fridge_items": ("is_ai_recommended",),
+}
+
+_RECIPE_175_COLUMNS = {
+    "recipe_code",
+    "recipe_name",
+    "menu_category",
+    "serving_size",
+    "ingredient_names",
+    "ingredient_amounts",
+    "ingredient_count",
+    "total_time_minutes",
+    "difficulty",
+    "step_count",
+    "cooking_steps",
+    "step_times",
+    "heat_levels",
+    "main_ingredients",
+    "main_image_url",
+    "step_image_urls",
 }
 
 
@@ -384,52 +402,103 @@ def validate_schema(db: PostgreDB) -> None:
         )
 
 
-def load_dataframes(recipe_csv: str, cooking_steps_csv: str) -> pd.DataFrame:
-    """레시피·조리단계 CSV를 병합한 데이터프레임을 반환한다."""
-    df_recipe = pd.read_csv(recipe_csv)
-    df_steps = pd.read_csv(cooking_steps_csv)
+def parse_json_array(value: Any, column_name: str) -> list[Any]:
+    """CSV의 JSON 배열 문자열을 파싱하고 컬럼 오류를 명확히 알린다."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return []
+    if isinstance(value, list):
+        return value
+    try:
+        parsed = json.loads(str(value))
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(f"{column_name}은 JSON 배열이어야 합니다: {value!r}") from exc
+    if not isinstance(parsed, list):
+        raise ValueError(f"{column_name}은 JSON 배열이어야 합니다: {value!r}")
+    return parsed
 
-    logger.info("레시피 CSV 로드: %s (%d행)", recipe_csv, len(df_recipe))
-    logger.info("조리단계 CSV 로드: %s (%d행)", cooking_steps_csv, len(df_steps))
 
-    return df_recipe.merge(
-        df_steps[["RCP_SNO", "RECIPE_URL", "RECIPE_DATA"]],
-        on="RCP_SNO",
-        how="left",
-    )
+def parse_recipe_id(recipe_code: Any) -> int:
+    """R0001 형식의 신규 코드를 기존 BIGINT PK에 사용할 숫자 1로 변환한다."""
+    match = re.fullmatch(r"R(\d{4})", str(recipe_code).strip())
+    if not match:
+        raise ValueError(f"recipe_code 형식이 올바르지 않습니다: {recipe_code!r}")
+    recipe_id = int(match.group(1))
+    if recipe_id <= 0:
+        raise ValueError(f"recipe_code는 1 이상의 ID여야 합니다: {recipe_code!r}")
+    return recipe_id
 
 
-def drop_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
-    """적재 전 데이터 검사 — 조건에 맞지 않는 행을 제외한다."""
+def parse_amount(value: Any) -> tuple[float | None, str | None]:
+    """`1개(180g)`, `10ml`, `1/4개`, `약간`에서 대표 수량과 단위를 추출한다."""
+    text = str(value).strip()
+    if not text:
+        return None, None
+    match = re.match(r"^(\d+(?:\.\d+)?|\d+/\d+)\s*([a-zA-Z가-힣]+)", text)
+    if not match:
+        return None, _clip(text, _VARCHAR_LIMITS["unit"])
+    quantity = parse_quantity(match.group(1))
+    unit = _clip(match.group(2), _VARCHAR_LIMITS["unit"])
+    return quantity, unit
 
-    def _missing_cooking_steps(row: pd.Series) -> bool:
-        """조리단계(RECIPE_DATA) 결측 또는 유효 단계 없음."""
-        return not bool(build_recipe_steps(row.get("RECIPE_DATA")))
 
-    # ponytail: 드랍 조건 추가 시 (사유, row→드랍 여부) 튜플을 append
-    drop_checks: list[tuple[str, Callable[[pd.Series], bool]]] = [
-        ("missing_cooking_steps", _missing_cooking_steps),
-    ]
+def build_recipe_steps_from_row(row: pd.Series) -> list[dict[str, Any]]:
+    """recipe_175의 단계·시간·불 세기를 기존 recipe_steps JSON 구조로 합친다."""
+    texts = parse_json_array(row.get("cooking_steps"), "cooking_steps")
+    times = parse_json_array(row.get("step_times"), "step_times")
+    heat_levels = parse_json_array(row.get("heat_levels"), "heat_levels")
+    image_urls = parse_json_array(row.get("step_image_urls"), "step_image_urls")
+    expected = int(row.get("step_count") or 0)
 
-    before = len(df)
-    drop_mask = pd.Series(False, index=df.index)
+    if not (len(texts) == len(times) == len(heat_levels) == expected):
+        raise ValueError(
+            f"{row.get('recipe_code')}: 조리단계 개수 불일치 "
+            f"steps={len(texts)}, times={len(times)}, heat={len(heat_levels)}, expected={expected}"
+        )
 
-    for reason, should_drop in drop_checks:
-        mask = df.apply(should_drop, axis=1)
-        if not mask.any():
-            continue
-        for _, row in df.loc[mask].iterrows():
-            logger.warning(
-                "적재 제외 [%s] RCP_SNO=%s title=%s",
-                reason,
-                row["RCP_SNO"],
-                row.get("CKG_NM", ""),
+    steps: list[dict[str, Any]] = []
+    for index, text in enumerate(texts):
+        image_url = image_urls[index] if index < len(image_urls) else None
+        steps.append(
+            {
+                "step_no": index + 1,
+                "title": f"{index + 1}단계",
+                "text": str(text),
+                "time": str(times[index]),
+                "heat_level": str(heat_levels[index]),
+                "image_url": _clip(image_url, _VARCHAR_LIMITS["image_url"]),
+            }
+        )
+    return steps
+
+
+def load_dataframe(recipe_csv: str) -> pd.DataFrame:
+    """recipe_175 CSV를 읽고 필수 컬럼과 행 단위 구조를 검증한다."""
+    df = pd.read_csv(recipe_csv, encoding="utf-8-sig", keep_default_na=False)
+    missing = sorted(_RECIPE_175_COLUMNS - set(df.columns))
+    if missing:
+        raise ValueError(f"recipe_175 필수 컬럼이 없습니다: {', '.join(missing)}")
+    if df.empty:
+        raise ValueError("recipe_175 CSV에 적재할 행이 없습니다.")
+
+    ids = df["recipe_code"].map(parse_recipe_id)
+    if ids.duplicated().any():
+        duplicates = df.loc[ids.duplicated(keep=False), "recipe_code"].tolist()
+        raise ValueError(f"recipe_code 숫자 ID가 중복됩니다: {duplicates}")
+
+    for _, row in df.iterrows():
+        ingredient_names = parse_json_array(row.get("ingredient_names"), "ingredient_names")
+        ingredient_amounts = parse_json_array(row.get("ingredient_amounts"), "ingredient_amounts")
+        expected_ingredients = int(row.get("ingredient_count") or 0)
+        if len(ingredient_names) != expected_ingredients or len(ingredient_amounts) != expected_ingredients:
+            raise ValueError(
+                f"{row.get('recipe_code')}: 재료 개수 불일치 "
+                f"names={len(ingredient_names)}, amounts={len(ingredient_amounts)}, "
+                f"expected={expected_ingredients}"
             )
-        drop_mask |= mask
+        build_recipe_steps_from_row(row)
 
-    kept = df.loc[~drop_mask].reset_index(drop=True)
-    logger.info("적재 대상 필터: %d → %d (제외 %d건)", before, len(kept), before - len(kept))
-    return kept
+    logger.info("recipe_175 CSV 로드 및 검증: %s (%d행)", recipe_csv, len(df))
+    return df.reset_index(drop=True)
 
 
 def clear_recipe_tables(db: PostgreDB) -> None:
@@ -450,11 +519,9 @@ def clear_recipe_tables(db: PostgreDB) -> None:
 def collect_unique_ingredients(df: pd.DataFrame) -> dict[str, str]:
     """normalized_name → 표시명 매핑을 수집한다."""
     unique: dict[str, str] = {}
-    for raw_value in df["CKG_MTRL_CN"]:
-        for ingredient in parse_ingredient_rows(raw_value):
-            if not ingredient:
-                continue
-            raw_name = str(ingredient[0])
+    for raw_value in df["ingredient_names"]:
+        for ingredient in parse_json_array(raw_value, "ingredient_names"):
+            raw_name = str(ingredient)
             resolved = resolve_ingredient_name(raw_name)
             if not resolved:
                 continue
@@ -483,18 +550,18 @@ def upsert_ingredients(db: PostgreDB, unique_ingredients: dict[str, str]) -> dic
 
 def build_recipe_row(row: pd.Series) -> dict[str, Any]:
     """recipes 테이블 INSERT 파라미터를 만든다."""
-    recipe_id = int(row["RCP_SNO"])
-    recipe_steps = build_recipe_steps(row.get("RECIPE_DATA"))
+    recipe_id = parse_recipe_id(row["recipe_code"])
+    recipe_steps = build_recipe_steps_from_row(row)
     return {
         "id": recipe_id,
-        "title": _clip(row["CKG_NM"], _VARCHAR_LIMITS["title"]) or "이름없음",
+        "title": _clip(row["recipe_name"], _VARCHAR_LIMITS["title"]) or "이름없음",
         "description": None,
-        "category": _clip(row.get("CKG_KND_ACTO_NM"), _VARCHAR_LIMITS["category"]),
-        "serving_size": parse_serving_size(row.get("CKG_INBUN_NM")),
-        "cooking_time": parse_cooking_time_minutes(row.get("CKG_TIME_NM")),
-        "difficulty": _clip(row.get("CKG_DODF_NM"), _VARCHAR_LIMITS["difficulty"]),
-        "image_url": extract_image_url(row.get("RECIPE_DATA")),
-        "source_url": _clip(row.get("RECIPE_URL"), _VARCHAR_LIMITS["source_url"]),
+        "category": _clip(row.get("menu_category"), _VARCHAR_LIMITS["category"]),
+        "serving_size": int(row["serving_size"]),
+        "cooking_time": int(row["total_time_minutes"]),
+        "difficulty": _clip(row.get("difficulty"), _VARCHAR_LIMITS["difficulty"]),
+        "image_url": _clip(row.get("main_image_url"), _VARCHAR_LIMITS["image_url"]),
+        "source_url": None,
         "recipe_steps": serialize_recipe_steps(recipe_steps),
     }
 
@@ -504,16 +571,18 @@ def build_recipe_ingredient_rows(
     ingredient_cache: dict[str, int],
 ) -> list[dict[str, Any]]:
     """recipe_ingredients 테이블 INSERT 파라미터 목록을 만든다."""
-    recipe_id = int(row["RCP_SNO"])
-    ingredient_rows = parse_ingredient_rows(row.get("CKG_MTRL_CN"))
+    recipe_id = parse_recipe_id(row["recipe_code"])
+    ingredient_names = parse_json_array(row.get("ingredient_names"), "ingredient_names")
+    ingredient_amounts = parse_json_array(row.get("ingredient_amounts"), "ingredient_amounts")
+    main_ingredients = {
+        normalize_ingredient_name(str(name))
+        for name in parse_json_array(row.get("main_ingredients"), "main_ingredients")
+    }
     params: list[dict[str, Any]] = []
 
-    for index, ingredient in enumerate(ingredient_rows):
-        if len(ingredient) < 1:
-            continue
-        raw_name = str(ingredient[0])
-        quantity = parse_quantity(ingredient[1]) if len(ingredient) > 1 else None
-        unit = _clip(ingredient[2], _VARCHAR_LIMITS["unit"]) if len(ingredient) > 2 else None
+    for raw_name_value, amount_value in zip(ingredient_names, ingredient_amounts, strict=True):
+        raw_name = str(raw_name_value)
+        quantity, unit = parse_amount(amount_value)
 
         resolved = resolve_ingredient_name(raw_name)
         if not resolved:
@@ -532,20 +601,19 @@ def build_recipe_ingredient_rows(
                 "raw_ingredient_name": _clip(raw_name.strip(), _VARCHAR_LIMITS["raw_ingredient_name"]),
                 "required_quantity": quantity,
                 "unit": unit,
-                "is_main_ingredient": index == 0,
+                "is_main_ingredient": normalize_ingredient_name(raw_name) in main_ingredients,
             }
         )
 
     return params
 
 
-def load_recipes_to_postgres(recipe_csv: str, cooking_steps_csv: str) -> None:
+def load_recipes_to_postgres(recipe_csv: str) -> None:
     """CSV 데이터를 recipes / recipe_ingredients 테이블에 적재한다."""
     db = PostgreDB()
     validate_schema(db)
 
-    df = load_dataframes(recipe_csv, cooking_steps_csv)
-    df = drop_invalid_rows(df)
+    df = load_dataframe(recipe_csv)
 
     clear_recipe_tables(db)
 
@@ -578,9 +646,10 @@ def load_recipes_to_postgres(recipe_csv: str, cooking_steps_csv: str) -> None:
 
 
 if __name__ == "__main__":
-    from .config import COOKING_STEPS_CSV, RECIPE_FIX_CSV
+    from .config import RECIPE_175_CSV
 
-    _df = load_dataframes(str(RECIPE_FIX_CSV), str(COOKING_STEPS_CSV))
-    _filtered = drop_invalid_rows(_df)
-    assert _filtered["RCP_SNO"].isin([7029209, 7035727]).sum() == 0
-    assert len(_filtered) == len(_df) - 2
+    _df = load_dataframe(str(RECIPE_175_CSV))
+    assert len(_df) == 175
+    assert parse_recipe_id(_df.iloc[0]["recipe_code"]) == 1
+    assert parse_recipe_id(_df.iloc[-1]["recipe_code"]) == 175
+    assert build_recipe_row(_df.iloc[0])["image_url"] is None
