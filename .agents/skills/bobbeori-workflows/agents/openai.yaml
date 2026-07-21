@@ -1,0 +1,14 @@
+interface:
+  display_name: "밥벌이 안전 워크플로"
+  short_description: "Safe Bobbeori MCP preview and confirmation flows"
+  default_prompt: "Use $bobbeori-workflows to review my Bobbeori data and preview any write before asking me to confirm it."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "bobbeori"
+      description: "Authenticated Bobbeori inventory, receipt, shopping, recipe, and calendar tools"
+      transport: "streamable_http"
+
+policy:
+  allow_implicit_invocation: false

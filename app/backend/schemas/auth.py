@@ -1,16 +1,29 @@
-﻿from pydantic import BaseModel, EmailStr
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, SecretStr
+
 
 class SocialLoginRequest(BaseModel):
-    provider: str  # kakao, naver, google
-    code: str      # 인가 코드 (OAuth2 Authorization Code)
-    state: Optional[str] = None  # OAuth 요청 위조 방지를 위한 state 값
-    redirect_uri: Optional[str] = None  # 프론트에서 실제 사용한 콜백 주소
+    provider: str
+    code: str
+    state: Optional[str] = None
+    redirect_uri: Optional[str] = None
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class McpIdentityLinkRequest(BaseModel):
+    oauth_access_token: SecretStr
+
+
+class McpIdentityLinkResponse(BaseModel):
+    linked: bool
+    issuer: str
+
 
 class UserResponse(BaseModel):
     id: int

@@ -1,17 +1,15 @@
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
-from app.backend.core.config import settings
 from app.backend.db.models import Receipt, ReceiptItem
 from app.backend.services.receipt_ocr_service.privacy_masking import mask_sensitive_text
+from app.backend.services.receipt_ocr_service.receipt_storage import receipt_storage
 
 
 KST = timezone(timedelta(hours=9))
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
 class ReceiptHistoryService:
@@ -56,36 +54,7 @@ class ReceiptHistoryService:
         self._delete_file(original_file_path)
 
     def _delete_file(self, relative_or_absolute_path: Optional[str]) -> None:
-        if not relative_or_absolute_path:
-            return
-
-        target = self._resolve_deletable_upload_path(relative_or_absolute_path)
-        if not target:
-            return
-
-        try:
-            if target.is_file():
-                target.unlink()
-        except OSError:
-            pass
-
-    def _resolve_deletable_upload_path(self, relative_or_absolute_path: str) -> Optional[Path]:
-        path = Path(relative_or_absolute_path)
-        target = path if path.is_absolute() else PROJECT_ROOT / path
-        upload_root = self._resolve_storage_root(settings.OCR_UPLOAD_DIR)
-
-        try:
-            resolved_target = target.resolve(strict=False)
-            resolved_upload_root = upload_root.resolve(strict=False)
-            resolved_target.relative_to(resolved_upload_root)
-        except (OSError, ValueError):
-            return None
-
-        return resolved_target
-
-    def _resolve_storage_root(self, path_value: str) -> Path:
-        path = Path(path_value)
-        return path if path.is_absolute() else PROJECT_ROOT / path
+        receipt_storage.delete(relative_or_absolute_path)
 
     def get_recent_receipts(self, *, db: Session, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         receipts = (
