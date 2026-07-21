@@ -114,6 +114,8 @@ def _extract_storage(text: str) -> str | None:
 
 def _strip_add_name(name: str) -> str:
     cleaned = name.strip()
+    # 식재료명 뒤에 붙는 '저녁에 먹으라고' 등의 불필요한 문장형 수식어 제거
+    cleaned = re.sub(r"\s+(?:아침|점심|저녁|내일|나중에|이따가)?(?:에|으로)?\s*(?:먹으라고|먹으려고|먹을|먹게|구워|해먹|하려고|하라고|쓰려고).*$", "", cleaned)
     cleaned = re.sub(r"^(그러면|그럼|그리고|아니면|아|음|자)\s+", "", cleaned)
     for token in ('냉장실에', '냉동실에', '냉장고에서', '냉장고에', '냉장고', '재료', '식재료', '어제', '오늘', '방금'):
         cleaned = cleaned.replace(token, " ")
