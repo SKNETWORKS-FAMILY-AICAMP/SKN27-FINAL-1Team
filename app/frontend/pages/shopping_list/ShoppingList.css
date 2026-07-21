@@ -1294,95 +1294,17 @@
   min-width: 220px;
 }
 
-.shopping-filter-bar {
+.shopping-filter-tabs {
   margin-top: 16px;
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.shopping-choice-group {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.shopping-choice-group > span {
-  padding: 0 2px;
-  color: #6d5d5d;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.shopping-choice-group > span small {
-  margin-left: 4px;
-  color: #a98a6f;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-/* 상태 축: 앱 공통 트랙형(단일 선택) */
-.shopping-choice-group__options {
-  min-height: 46px;
-  padding: 5px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border-radius: 18px;
-  background: #fff1f4;
-  box-sizing: border-box;
-}
-
-.shopping-choice-group__options button {
-  min-height: 36px;
-  padding: 0 16px;
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  color: #6d4128;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.shopping-choice-group__options button.is-active {
-  background: var(--figma-coral);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(123, 79, 55, 0.1);
-}
-
-.shopping-choice-group__options button em {
-  margin-left: 3px;
-  font-style: normal;
-  color: #a98a6f;
-}
-
-.shopping-choice-group__options button.is-active em {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* 출처 축: 다중 선택이라 트랙 대신 체크형 칩 */
-/* 상태 축(분홍)과 다른 크림톤 트랙으로 감싸, 같은 그룹이지만 성격이 다름을 색으로 구분한다. */
-.shopping-source-chips {
-  min-height: 46px;
-  padding: 5px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  border-radius: 18px;
-  background: var(--figma-bg);
-  box-sizing: border-box;
 }
 
-.shopping-source-chip {
+.shopping-filter-tabs button {
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 15px;
   display: inline-flex;
   align-items: center;
   border: 1.4px solid var(--figma-card-stroke);
@@ -1396,31 +1318,53 @@
   white-space: nowrap;
 }
 
-.shopping-source-chip.is-active {
+.shopping-filter-tabs button em {
+  margin-left: 4px;
+  font-style: normal;
+  color: #a98a6f;
+}
+
+.shopping-filter-tabs button.is-active {
+  border-color: var(--figma-coral-stroke);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.shopping-filter-tabs button.is-active em {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.shopping-filter-tabs .shopping-filter-source {
+  border-color: var(--figma-line);
+}
+
+.shopping-filter-tabs .shopping-filter-source.is-active {
   border-color: var(--figma-coral-stroke);
   background: #fff0f1;
   color: var(--figma-coral-stroke);
 }
 
-.shopping-source-chip.is-active::before {
-  content: "¹3";
-  margin-right: 5px;
-  font-size: 12px;
-}
-
-.shopping-source-chip em {
-  margin-left: 3px;
-  font-style: normal;
-  color: #a98a6f;
-}
-
-.shopping-source-chip.is-active em {
+.shopping-filter-tabs .shopping-filter-source.is-active em {
   color: var(--figma-coral-stroke);
 }
 
-.shopping-source-chip:disabled {
+.shopping-filter-tabs button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.shopping-filter-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--figma-card-stroke);
+}
+
+.shopping-filter-axis {
+  margin-right: 2px;
+  color: #a98a6f;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .shopping-link-list {
