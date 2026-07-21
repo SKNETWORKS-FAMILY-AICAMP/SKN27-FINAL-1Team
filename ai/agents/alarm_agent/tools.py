@@ -154,7 +154,15 @@ async def create_calendar_event_tool(payload: dict[str, Any], context: dict[str,
             "description": payload.get("description") or "밥벌이 알림 agent가 등록한 일정입니다.",
             "start": {"dateTime": start_at.isoformat()},
             "end": {"dateTime": end_at.isoformat()},
-            "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 0}]},
+            "reminders": {
+                "useDefault": False,
+                "overrides": [
+                    {
+                        "method": "popup",
+                        "minutes": int(payload.get("reminder_minutes_before", 0)),
+                    }
+                ],
+            },
             "colorId": payload.get("colorId") or "7",
             "extendedProperties": {"private": {"bobbeoriKey": event_key}},
         }
