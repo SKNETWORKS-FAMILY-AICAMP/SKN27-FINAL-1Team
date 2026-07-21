@@ -40,17 +40,6 @@ class AuthService:
                 User.provider_id == provider_id
             ).first()
             
-            # provider_id로는 못 찾았으나 동일한 이메일을 가진 계정이 있는지 조회 (이메일 통합 정책)
-            if not user and email:
-                user = db.query(User).filter(User.email == email).first()
-                if user:
-                    # 기존 계정이 있다면, 방금 접속한 소셜 플랫폼 정보로 업데이트
-                    user.provider = provider
-                    user.provider_id = provider_id
-                    if safe_nickname:
-                        user.nickname = safe_nickname
-                    db.commit()
-                    db.refresh(user)
 
             #  신규 사용자일 경우 (DB에 유저 정보가 없으면) 회원가입 처리 진행
             if not user:
