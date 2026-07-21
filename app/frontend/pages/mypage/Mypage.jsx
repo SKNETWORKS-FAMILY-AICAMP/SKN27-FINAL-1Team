@@ -304,7 +304,7 @@ function Mypage() {
           setCalendarEnabled(calendarData.connected)
         }
 
-        setProfileName(data.nickname ? `${data.nickname}님` : '')
+        setProfileName(data.nickname || '')
         setProfileEmail(data.email || '')
       } catch (err) {
         console.error(err)
@@ -355,12 +355,30 @@ function Mypage() {
     )
   }
 
-  const saveProfile = () => {
-    setIsEditingProfile(false)
-    window.localStorage.setItem(
-      'bobbeori-profile',
-      JSON.stringify({ name: profileName, email: profileEmail }),
-    )
+  const saveProfile = async () => {
+    try {
+      const response = await authenticatedFetch(`${API_URL}/api/v1/auth/me`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname: profileName.trim() }),
+      })
+
+      if (!response.ok) {
+        showApiNotice('serverError')
+        return
+      }
+
+      const updatedUser = await response.json()
+      setProfileName(updatedUser.nickname || '')
+      setIsEditingProfile(false)
+    } catch (err) {
+      console.error(err)
+      if (isSessionExpiredError(err)) {
+        navigate('/login')
+        return
+      }
+      showApiNotice('networkError')
+    }
   }
 
   const connectGoogleCalendar = async () => {
@@ -421,7 +439,7 @@ function Mypage() {
     navigate('/fridge?mode=recipe-consume', { state: { completionRecipe: recipe } })
   }
 
-  const profileDisplayName = profileName
+  const profileDisplayName = profileName ? `${profileName}님` : '이름 없음'
   const profileDisplayEmail = profileEmail
   const profileCreatedAt = userData?.created_at
     ? `가입일 ${new Date(userData.created_at).toLocaleDateString()}`
@@ -470,15 +488,7 @@ function Mypage() {
                     )}
                     <span>일반 회원</span>
                   </div>
-                  {isEditingProfile ? (
-                    <input
-                      aria-label="이메일"
-                      value={profileEmail}
-                      onChange={(event) => setProfileEmail(event.target.value)}
-                    />
-                  ) : (
-                    <p>{profileDisplayEmail}</p>
-                  )}
+                  <p>{profileDisplayEmail}</p>
                   <small>{profileCreatedAt}</small>
                   <div className="mypage-profile__actions">
                     <button

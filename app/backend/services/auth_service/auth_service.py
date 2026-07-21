@@ -47,7 +47,7 @@ class AuthService:
                     # 기존 계정이 있다면, 방금 접속한 소셜 플랫폼 정보로 업데이트
                     user.provider = provider
                     user.provider_id = provider_id
-                    if safe_nickname:
+                    if not user.nickname and safe_nickname:
                         user.nickname = safe_nickname
                     db.commit()
                     db.refresh(user)
