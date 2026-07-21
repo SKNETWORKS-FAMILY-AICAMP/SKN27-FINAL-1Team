@@ -145,6 +145,16 @@ def _build_recommend_result(items: list[dict[str, Any]], has_more: bool) -> dict
     }
 
 
+def _filter_by_owned_preference(
+    scored: list[dict[str, Any]],
+    config: RecipeRecommendConfig,
+) -> list[dict[str, Any]]:
+    """require_any_owned면 보유(또는 maybe) 재료가 1개 이상인 후보만 남긴다."""
+    if not config.require_any_owned:
+        return scored
+    return [row for row in scored if row.get("owned_ingredient_count", 0) > 0]
+
+
 class RecommendationService:
     MANUAL_SAVE_TYPE = "manual_save"
 
@@ -265,6 +275,7 @@ class RecommendationService:
             date.today(),
             model_scores=model_scores,
         )
+        scored = _filter_by_owned_preference(scored, config)
         if not scored:
             return _empty_recommend_result()
 
@@ -347,3 +358,18 @@ class RecommendationService:
 
 
 recommendation_service = RecommendationService()
+
+
+def _self_check() -> None:
+    rows = [
+        {"recipe_id": 1, "owned_ingredient_count": 0},
+        {"recipe_id": 2, "owned_ingredient_count": 2},
+    ]
+    kept = _filter_by_owned_preference(rows, RecipeRecommendConfig(require_any_owned=True))
+    assert [row["recipe_id"] for row in kept] == [2]
+    assert _filter_by_owned_preference(rows, RecipeRecommendConfig()) == rows
+
+
+if __name__ == "__main__":
+    _self_check()
+    print("ok")

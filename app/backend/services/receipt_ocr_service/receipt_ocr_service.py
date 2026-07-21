@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional, TypedDict
-from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 from langgraph.graph import END, StateGraph
@@ -27,9 +26,9 @@ from app.backend.core.config import settings
 from app.backend.db.models import Receipt
 from app.backend.services.ingredient_match_service import ingredient_name_matcher
 from app.backend.services.receipt_ocr_service.privacy_masking import mask_sensitive_text
+from app.backend.services.receipt_ocr_service.receipt_storage import receipt_storage
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
 KST = timezone(timedelta(hours=9))
 DEFAULT_UNIT = "\uac1c"
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -174,7 +173,7 @@ class ReceiptOcrService:
             storage_extension=stored_extension,
         )
 
-        image_id = Path(original_file_path).stem
+        image_id = receipt_storage.object_stem(original_file_path)
         return {
             "db": db,
             "user_id": user_id,
@@ -911,16 +910,11 @@ class ReceiptOcrService:
         raise ValueError("Unsupported WebP chunk.")
 
     def _save_receipt_image(self, *, user_id: int, image_bytes: bytes, storage_extension: str) -> str:
-        today = datetime.now(KST).strftime("%Y%m%d")
-        stored_name = f"{today}_{uuid4().hex}{storage_extension}"
-
-        upload_root = self._resolve_storage_root(settings.OCR_UPLOAD_DIR)
-        user_dir = upload_root / str(user_id)
-        user_dir.mkdir(parents=True, exist_ok=True)
-
-        stored_path = user_dir / stored_name
-        stored_path.write_bytes(image_bytes)
-        return self._to_project_relative_path(stored_path)
+        return receipt_storage.save(
+            user_id=user_id,
+            image_bytes=image_bytes,
+            extension=storage_extension,
+        )
 
     def _call_openai_vision(
         self,
@@ -1291,40 +1285,11 @@ Re-read the receipt image carefully and fix only the problematic fields. If the 
             return None
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=KST)
 
-    def _resolve_storage_root(self, path_value: str) -> Path:
-        path = Path(path_value)
-        return path if path.is_absolute() else PROJECT_ROOT / path
-
-    def _to_project_relative_path(self, path: Path) -> str:
-        try:
-            return path.relative_to(PROJECT_ROOT).as_posix()
-        except ValueError:
-            return path.as_posix()
-
     def _delete_saved_file(self, relative_or_absolute_path: str) -> None:
-        target = self._resolve_deletable_upload_path(relative_or_absolute_path)
-        if not target:
-            return
-
-        try:
-            if target.is_file():
-                target.unlink()
-        except OSError:
-            pass
+        receipt_storage.delete(relative_or_absolute_path)
 
     def _resolve_deletable_upload_path(self, relative_or_absolute_path: str) -> Optional[Path]:
-        path = Path(relative_or_absolute_path)
-        target = path if path.is_absolute() else PROJECT_ROOT / path
-        upload_root = self._resolve_storage_root(settings.OCR_UPLOAD_DIR)
-
-        try:
-            resolved_target = target.resolve(strict=False)
-            resolved_upload_root = upload_root.resolve(strict=False)
-            resolved_target.relative_to(resolved_upload_root)
-        except (OSError, ValueError):
-            return None
-
-        return resolved_target
+        return receipt_storage.local_path(relative_or_absolute_path)
 
     def _safe_filename(self, value: str) -> str:
         safe = re.sub(r"[^0-9A-Za-z\uac00-\ud7a3_-]+", "_", value).strip("._")

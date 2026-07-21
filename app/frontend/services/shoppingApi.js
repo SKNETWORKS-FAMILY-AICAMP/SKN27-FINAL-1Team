@@ -103,12 +103,6 @@ export async function getCurrentShoppingList() {
   })
 }
 
-export async function getShoppingHistory(limit = 20) {
-  return requestJson(`${API_URL}/api/v1/shopping-list/history?limit=${encodeURIComponent(limit)}`, {
-    headers: buildHeaders(),
-  })
-}
-
 export async function getShoppingList(shoppingListId) {
   return requestJson(`${API_URL}/api/v1/shopping-list/${shoppingListId}`, {
     headers: buildHeaders(),

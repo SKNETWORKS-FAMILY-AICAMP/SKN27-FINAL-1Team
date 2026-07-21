@@ -1209,8 +1209,52 @@ def _label_object_josa(label: str) -> str:
     return "를" if label.endswith("정보") else "을"
 
 
+def _guide_preview(content: Any, *, limit: int = 90) -> str:
+    if isinstance(content, list):
+        text = " ".join(str(item).strip() for item in content if str(item).strip())
+    else:
+        text = next((line.strip() for line in str(content or "").splitlines() if line.strip()), "")
+    text = re.sub(r"^[-•\d.)\s]+", "", text)
+    return f"{text[:limit]}..." if len(text) > limit else text
+
+
+def _all_guide_message(data: dict[str, Any], meta: dict[str, Any] | None = None) -> str:
+    ingredient = data.get("ingredient") or {}
+    ingredient_name = ingredient.get("name") or "식재료"
+    requested_name = (meta or {}).get("requested_ingredient")
+    guides = data.get("guides") or {}
+    lines = [
+        f"{requested_name}는 {ingredient_name} 항목으로 조회했어요."
+        if requested_name and _normalize_match_text(requested_name) != _normalize_match_text(ingredient_name)
+        else f"{ingredient_name} 식재료 가이드를 조회했어요."
+    ]
+    guide_count = 0
+
+    for key, label in (
+        ("storage", "보관법"),
+        ("prep", "손질법"),
+        ("washing", "세척법"),
+        ("freshness", "신선도 확인법"),
+    ):
+        guide = guides.get(key) or {}
+        preview = _guide_preview(guide.get("content"))
+        if guide.get("status") != "missing" and preview:
+            guide_count += 1
+            lines.append(f"- {label}: {preview}")
+
+    months = ((data.get("seasonality") or {}).get("months") or [])
+    if months:
+        lines.append(f"- 제철: {', '.join(f'{month}월' for month in months)}")
+    if guide_count == 0:
+        lines.append("현재 내부 가이드에는 보관법, 손질법, 세척법, 신선도 정보가 아직 부족해요.")
+        lines.append("필요하면 '보관법', '세척법'처럼 구체적으로 물어봐 주세요.")
+
+    return "\n".join(lines)
+
+
 def _filter_guide_response(result: dict[str, Any], guide_type: str) -> dict[str, Any]:
     if guide_type == "all":
+        result["message"] = _all_guide_message(result.get("data") or {}, result.get("meta") or {})
         return result
 
     data = result.get("data") or {}
@@ -1424,10 +1468,15 @@ def lookup_ingredient_guide(ingredient: str) -> dict[str, Any]:
                 meta={"result_code": "GUIDE_NOT_FOUND"},
             )
         data, sources = _detail_data(detail)
+        meta = {}
+        if _normalize_match_text(ingredient) != _normalize_match_text(detail.get("name")):
+            meta["requested_ingredient"] = ingredient
+            meta["matched_ingredient"] = detail.get("name")
         return build_guide_response(
             message=f"{detail['name']} 식재료 가이드를 조회했어요.",
             data=data,
             sources=sources,
+            meta=meta,
         )
     except Exception:
         return build_guide_response(
@@ -1884,3 +1933,11 @@ if __name__ == "__main__":
     assert _nutrition_lookup_name("쇠안심") == "소고기 안심"
     assert _nutrition_fuzzy_name("당콩") == "땅콩"
     assert _nutrition_fuzzy_name("고객") is None
+    assert "보관법" in _all_guide_message(
+        {
+            "ingredient": {"name": "감자"},
+            "guides": {"storage": {"status": "available", "content": "바람이 잘 통하는 곳에 보관한다."}},
+        }
+    )
+    assert "대파는 파 항목" in _all_guide_message({"ingredient": {"name": "파"}}, {"requested_ingredient": "대파"})
+    assert "정보가 아직 부족" in _all_guide_message({"ingredient": {"name": "두부"}})

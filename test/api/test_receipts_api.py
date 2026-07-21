@@ -166,7 +166,8 @@ def test_receipt_image_response_disables_caching_and_mime_sniffing(monkeypatch, 
             return receipt
 
     fake_db = SimpleNamespace(query=lambda model: FakeQuery())
-    monkeypatch.setattr(receipts_api.settings, "OCR_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(receipts_api.receipt_storage.config, "OCR_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(receipts_api.receipt_storage.config, "RECEIPT_STORAGE_BACKEND", "local")
 
     response = receipts_api.get_receipt_image(receipt_id=10, current_user_id=7, db=fake_db)
 

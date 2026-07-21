@@ -34,6 +34,8 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
+            nutrition_load:
+                condition: service_completed_successfully
             recipe_load:
                 condition: service_completed_successfully
             neo4j_load:
@@ -48,6 +50,71 @@ services:
             timeout: 10s
             retries: 5
             start_period: 15s
+
+    mcp:
+        build:
+            context: .
+            dockerfile: app/backend/Dockerfile
+        container_name: bobbeori_mcp
+        restart: unless-stopped
+        ports:
+            - "${MCP_PORT:-8001}:8001"
+        env_file:
+            - .env
+        environment:
+            DB_ENGINE: postgresql
+            DB_HOST: postgres
+            NEO4J_URI: bolt://neo4j:7687
+            MCP_DEV_TOKEN_AUTH: ${MCP_DEV_TOKEN_AUTH:-true}
+            MCP_ISSUER_URL: ${MCP_ISSUER_URL:-http://localhost:8000}
+            MCP_RESOURCE_URL: ${MCP_RESOURCE_URL:-http://localhost:8001/mcp}
+            MCP_JWKS_URL: ${MCP_JWKS_URL:-}
+            MCP_JWT_AUDIENCE: ${MCP_JWT_AUDIENCE:-}
+            MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+            MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+        volumes:
+            - ./app:/project/app
+            - ./ai:/project/ai
+        command:
+            [
+                "uvicorn",
+                "app.backend.mcp.server:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8001",
+                "--reload",
+                "--reload-dir",
+                "/project/app/backend/mcp",
+            ]
+        depends_on:
+            backend:
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8001/.well-known/oauth-protected-resource/mcp'')" || exit 1',
+                ]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 15s
+
+    calendar-sync:
+        build:
+            context: .
+            dockerfile: app/backend/Dockerfile
+        profiles: ["jobs"]
+        env_file:
+            - .env
+        environment:
+            DB_ENGINE: postgresql
+            DB_HOST: postgres
+        command: ["python", "-m", "app.backend.services.calendar_job"]
+        depends_on:
+            postgres:
+                condition: service_healthy
 
     frontend:
         build:
@@ -65,6 +132,24 @@ services:
             - /app/node_modules
         depends_on:
             backend:
+                condition: service_healthy
+
+    nutrition_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_nutrition_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            DB_HOST: postgres
+        volumes:
+            - ./storage:/project/storage:ro
+            - ./app/backend/schemas:/project/app/backend/schemas:ro
+        command: ["python", "-m", "etl.nutrition.load_to_postgres"]
+        depends_on:
+            postgres:
                 condition: service_healthy
 
     recipe_load:

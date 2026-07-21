@@ -173,6 +173,25 @@ def test_ingredient_matcher_returns_none_when_no_neo4j_standard_name_matches(neo
     assert match.match_type == "none"
 
 
+def test_ingredient_matcher_searches_neo4j_standard_names(monkeypatch):
+    monkeypatch.setattr(
+        ingredient_name_matcher,
+        "_load_neo4j_candidates",
+        lambda: [
+            (ingredient_name_matcher._match_key("우유"), "우유"),
+            (ingredient_name_matcher._match_key("milk"), "우유"),
+            (ingredient_name_matcher._match_key("바나나맛 우유"), "바나나맛 우유"),
+            (ingredient_name_matcher._match_key("뜨거운 우유"), "뜨거운 우유"),
+        ],
+    )
+
+    assert ingredient_name_matcher.search_standard_names("우유") == [
+        "우유",
+        "바나나맛 우유",
+        "뜨거운 우유",
+    ]
+
+
 # OCR 초안 정규화가 Neo4j 표준명을 우선 쓰고, 매칭 실패 시 원문으로 fallback 되는지 이 테스트가 알려준다.
 def test_ocr_normalize_result_uses_neo4j_standard_name_or_raw_name_fallback(db_session, neo4j_banana_candidates):
     service = ReceiptOcrService()

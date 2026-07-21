@@ -74,7 +74,10 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _verify_and_claim_confirm_token,
     _safe_analyze_shopping_intent,
 )
-from ai.agents.shopping_agent.shopping_utils import SHOPPING_CONFIRM_ACTIONS
+from ai.agents.shopping_agent.shopping_utils import (
+    SHOPPING_CONFIRM_ACTIONS,
+    pending_shopping_flow_intent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,13 @@ def _route_write_request(
 ) -> dict | None:
     """데이터를 변경할 수 있는 요청만 LLM보다 먼저 규칙으로 분류합니다."""
     normalized = _normalize_text(text)
+    is_shopping_stock_in = not is_receipt_query and "입고" in normalized and (
+        "냉장고" in normalized
+        or bool(previous_intent and previous_intent.startswith("shopping."))
+    )
+
+    if is_shopping_stock_in:
+        return _route_result("shopping.purchase", slots=previous_slots)
 
     if (
         previous_intent == "ingredient.guide"
@@ -237,7 +247,12 @@ def router_node(state: GraphState) -> dict:
     if normalized.startswith(CONFIRM_PREFIX):
         return _route_result("action.invalid")
     if normalized in CANCEL_WORDS:
-        return _route_result("action.cancel", slots=write_previous_slots)
+        cancel_intent = "shopping.cancel" if write_previous_slots.get("shopping_flow") else "action.cancel"
+        return _route_result(cancel_intent, slots=write_previous_slots)
+
+    pending_shopping_intent = pending_shopping_flow_intent(text, write_previous_slots)
+    if pending_shopping_intent:
+        return _route_result(pending_shopping_intent, slots=write_previous_slots)
 
     # 새 응답은 구조화된 pending 슬롯을 우선 사용하고, 기존 문장 분석은 하위 호환으로 남깁니다.
     if isinstance(inventory_pending, dict):
@@ -419,7 +434,7 @@ def shopping_agent_node(state: GraphState) -> dict:
     if state.get("intent") == "shopping.delete_item":
         text = _normalize_shopping_delete_query(text)
     compare_text = _strip_shopping_compare_suffix(text)
-    if state.get("intent") == "shopping.compare":
+    if state.get("intent") == "shopping.compare" and not (state.get("slots") or {}).get("shopping_flow"):
         compare_text = (state.get("slots") or {}).get("shopping_product") or compare_text
 
     result = _run_agent_with_retry(

@@ -126,3 +126,40 @@ def test_social_login_uses_oauth_profile_and_issues_token(monkeypatch):
     assert calls["code"] == "oauth-code"
     assert calls["auth"]["provider"] == "google"
     assert calls["auth"]["provider_id"] == "google-7"
+
+
+def test_mcp_link_verifies_oauth_subject_and_links_user(monkeypatch):
+    calls = {}
+
+    async def fake_verify_token(token):
+        calls["token"] = token
+        return SimpleNamespace(
+            subject="cognito-subject-7",
+            claims={"iss": "https://cognito-idp.ap-northeast-2.amazonaws.com/pool"},
+        )
+
+    def fake_link_external_identity(db, *, user_id, issuer, subject):
+        calls["link"] = {"user_id": user_id, "issuer": issuer, "subject": subject}
+        return SimpleNamespace(issuer=issuer)
+
+    monkeypatch.setattr(auth_api.settings, "MCP_DEV_TOKEN_AUTH", False)
+    monkeypatch.setattr(auth_api.mcp_token_verifier, "verify_token", fake_verify_token)
+    monkeypatch.setattr(auth_api, "link_external_identity", fake_link_external_identity)
+    client = create_client(user_id=7)
+
+    response = client.post(
+        "/api/v1/auth/mcp/link",
+        json={"oauth_access_token": "oauth-access-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "linked": True,
+        "issuer": "https://cognito-idp.ap-northeast-2.amazonaws.com/pool",
+    }
+    assert calls["token"] == "oauth-access-token"
+    assert calls["link"] == {
+        "user_id": 7,
+        "issuer": "https://cognito-idp.ap-northeast-2.amazonaws.com/pool",
+        "subject": "cognito-subject-7",
+    }

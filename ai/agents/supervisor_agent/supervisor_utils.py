@@ -30,7 +30,7 @@ _CONTEXT_TOKEN_TTL_MINUTES = 120
 _TRUSTED_CONTEXT_SLOT_KEYS = {
     "inventory_pending", "inventory_last_action", "ingredient", "keyword",
     "guide_type", "shopping_product", "date", "quantity", "storage", "use_inventory",
-    "expiring_ingredients",
+    "expiring_ingredients", "shopping_flow",
 }
 
 _CONTEXT_SLOT_KEYS = {
@@ -38,7 +38,7 @@ _CONTEXT_SLOT_KEYS = {
     "recipe.recommend": {"ingredient", "keyword", "use_inventory", "expiring_ingredients"},
     "recipe.search": {"ingredient", "keyword"},
     "recipe.pairing": {"ingredient", "keyword"},
-    "shopping.compare": {"shopping_product"},
+    "shopping.compare": {"shopping_product", "shopping_flow"},
     "alarm.notification": {"date", "keyword"},
     "alarm.calendar": {"date", "keyword"},
 }
@@ -334,7 +334,7 @@ def _is_shopping_show_all_request(text: str) -> bool:
 def _normalize_shopping_create_query(text: str) -> str:
     """장보기 위치 조사만 제거해 실제 상품명이 오염되지 않도록 정리합니다."""
     return re.sub(
-        r"((?:장보기|쇼핑)(?:\s*목록)?|구매\s*(?:목록|리스트))\s*에",
+        r"((?:장보기|쇼핑)(?:\s*목록)?|구매\s*(?:목록|리스트))\s*(?:에서|에)",
         r"\1 ",
         text,
     ).strip()
@@ -353,7 +353,7 @@ def _normalize_shopping_delete_query(text: str) -> str:
 def _strip_shopping_compare_suffix(text: str) -> str:
     """가격 비교 후속 표현을 제거하고 실제 상품명만 반환합니다."""
     cleaned = re.sub(
-        r"\s*더\s*(?:싼|저렴한)\s*(?:곳|데)(?:은|는)?(?:\s*없어(?:요)?)?\s*\??$",
+        r"\s*더\s*(?:싼|저렴한)\s*(?:곳|데)(?:은|는)?(?:\s*(?:있어|없어)(?:요)?)?\s*\??$",
         "",
         text,
     )
