@@ -86,6 +86,13 @@ def _route_write_request(
 ) -> dict | None:
     """데이터를 변경할 수 있는 요청만 LLM보다 먼저 규칙으로 분류합니다."""
     normalized = _normalize_text(text)
+    is_shopping_stock_in = not is_receipt_query and "입고" in normalized and (
+        "냉장고" in normalized
+        or bool(previous_intent and previous_intent.startswith("shopping."))
+    )
+
+    if is_shopping_stock_in:
+        return _route_result("shopping.purchase", slots=previous_slots)
 
     if (
         previous_intent == "ingredient.guide"

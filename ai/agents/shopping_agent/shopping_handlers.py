@@ -34,16 +34,6 @@ def _title_matches(query: str, title: str | None) -> bool:
     return bool(normalized_query and normalized_title and (normalized_query in normalized_title or normalized_title in normalized_query))
 
 
-def _find_existing_recipe_list(db: Session, user_id: int, recipe_title: str) -> dict[str, Any] | None:
-    history = shopping_service.get_history(db=db, user_id=user_id, limit=50)
-    active_matches = [
-        item
-        for item in history
-        if item.get("status") == "active" and _title_matches(recipe_title, item.get("recipe_title"))
-    ]
-    return active_matches[0] if active_matches else None
-
-
 def _find_recipe_by_title(db: Session, recipe_title: str) -> dict[str, Any] | None:
     result = recipe_search_service.search_recipes(db=db, query=recipe_title, page=1, page_size=10)
     items = result.get("items") or []
@@ -53,6 +43,80 @@ def _find_recipe_by_title(db: Session, recipe_title: str) -> dict[str, Any] | No
     exact = [item for item in items if _normalize_title(item.get("title")) == normalized_query]
     contains = [item for item in items if _title_matches(recipe_title, item.get("title"))]
     return (exact or contains or items)[0]
+
+
+def _recipe_refs(shopping_list: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not shopping_list:
+        return []
+
+    refs = [ref for ref in shopping_list.get("source_recipes") or [] if isinstance(ref, dict)]
+    if shopping_list.get("recipe_id") or shopping_list.get("recipe_title"):
+        refs.append(
+            {
+                "type": "recipe",
+                "recipe_id": shopping_list.get("recipe_id"),
+                "recipe_title": shopping_list.get("recipe_title"),
+            }
+        )
+
+    unique_refs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ref in refs:
+        key = str(ref.get("recipe_id") or _normalize_title(ref.get("recipe_title")))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique_refs.append(ref)
+    return unique_refs
+
+
+def _recipe_ref_matches(recipe_title: str, ref: dict[str, Any]) -> bool:
+    return _title_matches(recipe_title, ref.get("recipe_title"))
+
+
+def _item_matches_recipe(item: dict[str, Any], recipe_ref: dict[str, Any], fallback_recipe_id: int | None = None) -> bool:
+    recipe_id = recipe_ref.get("recipe_id") or fallback_recipe_id
+    recipe_title = recipe_ref.get("recipe_title")
+    refs = [ref for ref in item.get("source_refs") or [] if isinstance(ref, dict)]
+
+    if recipe_id and any(ref.get("type") == "recipe" and int(ref.get("recipe_id") or 0) == int(recipe_id) for ref in refs):
+        return True
+    if recipe_title and any(ref.get("type") == "recipe" and _title_matches(recipe_title, ref.get("recipe_title")) for ref in refs):
+        return True
+    if recipe_id and item.get("source_type") == "recipe" and not refs:
+        return True
+    return False
+
+
+def _filter_list_for_recipe(shopping_list: dict[str, Any], recipe_ref: dict[str, Any], recipe_title: str) -> dict[str, Any]:
+    recipe_id = recipe_ref.get("recipe_id") or shopping_list.get("recipe_id")
+    filtered_items = [
+        item
+        for item in shopping_list.get("items") or []
+        if _item_matches_recipe(item, recipe_ref, fallback_recipe_id=recipe_id)
+    ]
+    resolved_title = recipe_ref.get("recipe_title") or recipe_title
+    return {
+        **shopping_list,
+        "recipe_id": recipe_id,
+        "recipe_title": resolved_title,
+        "source_recipes": [recipe_ref],
+        "total_price": sum((item.get("price") or 0) for item in filtered_items if item.get("is_checked") and not item.get("is_purchased")),
+        "checked_count": sum(1 for item in filtered_items if item.get("is_checked")),
+        "purchased_count": sum(1 for item in filtered_items if item.get("is_purchased")),
+        "items": filtered_items,
+    }
+
+
+def _find_existing_recipe_list(db: Session, user_id: int, recipe_title: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    history = shopping_service.get_history(db=db, user_id=user_id, limit=50)
+    for shopping_list in history:
+        if shopping_list.get("status") != "active":
+            continue
+        for ref in _recipe_refs(shopping_list):
+            if _recipe_ref_matches(recipe_title, ref):
+                return shopping_list, ref
+    return None
 
 
 def _missing_to_inputs(items: list[dict[str, Any]]) -> list[ShoppingIngredientInput]:
@@ -77,16 +141,18 @@ def handle_recipe_current(
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     existing = _find_existing_recipe_list(db, user_id, recipe_title)
     if existing:
-        resolved_title = existing.get("recipe_title") or recipe_title
+        existing_list, recipe_ref = existing
+        filtered_list = _filter_list_for_recipe(existing_list, recipe_ref, recipe_title)
+        resolved_title = filtered_list.get("recipe_title") or recipe_title
         message = summarize_shopping_list(
-            existing,
+            filtered_list,
             max_items=max_items,
             start=start,
             title=f"{resolved_title} 장보기 목록이에요.",
         )
-        actions = [shopping_list_action(existing.get("id"))]
-        shown_count = min(max_items, max(0, len(active_shopping_items(existing)) - start))
-        return message, actions, shopping_list_slots(existing, start=start, shown_count=shown_count)
+        actions = [shopping_list_action(existing_list.get("id"))]
+        shown_count = min(max_items, max(0, len(active_shopping_items(filtered_list)) - start))
+        return message, actions, shopping_list_slots(filtered_list, start=start, shown_count=shown_count)
 
     recipe = _find_recipe_by_title(db, recipe_title)
     if not recipe:
@@ -113,15 +179,20 @@ def handle_recipe_current(
         missing_ingredients=missing_inputs,
     )
     title = shopping_list.get("recipe_title") or detail.get("title") or recipe_title
-    message = summarize_shopping_list(
+    filtered_list = _filter_list_for_recipe(
         shopping_list,
+        {"type": "recipe", "recipe_id": recipe_id, "recipe_title": title},
+        title,
+    )
+    message = summarize_shopping_list(
+        filtered_list,
         max_items=max_items,
         start=start,
         title=f"{title} 장보기 목록이에요.",
     )
     actions = [shopping_list_action(shopping_list.get("id"))]
-    shown_count = min(max_items, max(0, len(active_shopping_items(shopping_list)) - start))
-    return message, actions, shopping_list_slots(shopping_list, start=start, shown_count=shown_count)
+    shown_count = min(max_items, max(0, len(active_shopping_items(filtered_list)) - start))
+    return message, actions, shopping_list_slots(filtered_list, start=start, shown_count=shown_count)
 
 
 def handle_current(
@@ -137,6 +208,20 @@ def handle_current(
     message = summarize_shopping_list(shopping_list, max_items=max_items, start=start, title=title)
     shown_count = min(max_items, max(0, len(active_shopping_items(shopping_list)) - start)) if shopping_list else 0
     return message, actions, shopping_list_slots(shopping_list, start=start, shown_count=shown_count)
+
+
+def handle_recipe_filters(db: Session, user_id: int) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    shopping_list = shopping_service.get_current(db=db, user_id=user_id)
+    actions = [shopping_list_action(shopping_list.get("id") if shopping_list else None)]
+    refs = _recipe_refs(shopping_list)
+    if not refs:
+        return "현재 장보기 목록에 연결된 레시피 필터가 없어요.", actions, shopping_list_slots(shopping_list)
+
+    lines = ["현재 장보기 목록에서 볼 수 있는 레시피 필터예요."]
+    for index, ref in enumerate(refs, start=1):
+        title = ref.get("recipe_title") or f"레시피 {ref.get('recipe_id')}"
+        lines.append(f"{index}. {title}")
+    return "\n".join(lines), actions, shopping_list_slots(shopping_list)
 
 
 def handle_current_follow_up(
@@ -223,7 +308,7 @@ def handle_compare(text: str) -> tuple[str, list[dict[str, Any]]]:
             "url": row.get("product_link") or "",
             "data": {"name": row.get("name"), "price": row.get("price")},
         }
-        for row in rows[:3]
+        for row in rows[:5]
         if row.get("product_link")
     ]
     return "\n".join(lines), actions
@@ -236,9 +321,11 @@ def handle_create_request(text: str) -> tuple[str, list[dict[str, Any]]]:
 
     summary = ", ".join(names)
     command = "확인:shopping_create:" + "|".join(names)
+    is_add_request = any(word in text for word in ("추가", "담아", "넣어", "등록"))
+    prompt = f"{summary}를 장보기 목록에 추가할까요?" if is_add_request else f"{summary}로 장보기 목록을 만들까요?"
     return (
-        f"{summary}로 장보기 목록을 만들까요?",
-        [confirm_action("목록 만들기", command), confirm_action("취소", "취소")],
+        prompt,
+        [confirm_action("목록에 추가" if is_add_request else "목록 만들기", command), confirm_action("취소", "취소")],
     )
 
 
@@ -257,10 +344,34 @@ def handle_create_confirm(db: Session, user_id: int, names: list[str]) -> tuple[
     return message, [shopping_list_action(shopping_list.get("id"))]
 
 
-def handle_purchase_request(db: Session, user_id: int) -> tuple[str, list[dict[str, Any]]]:
+def handle_purchase_request(db: Session, user_id: int, text: str = "") -> tuple[str, list[dict[str, Any]]]:
     shopping_list = shopping_service.get_current(db=db, user_id=user_id)
     if not shopping_list:
         return "구매 완료 처리할 장보기 목록이 없어요.", [shopping_list_action()]
+
+    requested_names = extract_ingredient_names(text)
+    if requested_names:
+        item = find_item_by_name(shopping_list, text)
+        if not item:
+            return (
+                f"현재 장보기 목록에서 {', '.join(requested_names)} 항목을 찾지 못했어요.",
+                [shopping_list_action(shopping_list.get("id"))],
+            )
+        if item.get("is_purchased"):
+            return (
+                f"{item.get('name')}은 이미 구매 완료되어 냉장고에 입고된 항목이에요.",
+                [shopping_list_action(shopping_list.get("id"))],
+            )
+
+        list_id = shopping_list.get("id")
+        item_id = item.get("id")
+        return (
+            f"{item.get('name')} 항목을 구매 완료하고 냉장고에 입고할까요?",
+            [
+                confirm_action("냉장고에 입고", f"확인:shopping_purchase:{list_id}|{item_id}"),
+                confirm_action("취소", "취소"),
+            ],
+        )
 
     checked_count = shopping_list.get("checked_count") or 0
     if checked_count == 0:
@@ -276,8 +387,18 @@ def handle_purchase_request(db: Session, user_id: int) -> tuple[str, list[dict[s
     )
 
 
-def handle_purchase_confirm(db: Session, user_id: int, shopping_list_id: int | None = None) -> tuple[str, list[dict[str, Any]]]:
-    result = shopping_service.complete_purchase(db=db, user_id=user_id, shopping_list_id=shopping_list_id)
+def handle_purchase_confirm(
+    db: Session,
+    user_id: int,
+    shopping_list_id: int | None = None,
+    item_ids: list[int] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    result = shopping_service.complete_purchase(
+        db=db,
+        user_id=user_id,
+        shopping_list_id=shopping_list_id,
+        item_ids=item_ids,
+    )
     shopping_list = result.get("shopping_list") or {}
     return result.get("message") or "구매 완료 처리했어요.", [shopping_list_action(shopping_list.get("id"))]
 

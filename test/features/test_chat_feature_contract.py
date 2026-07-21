@@ -80,6 +80,12 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     compare_result = supervisor_agent.router_node({"text": "두부랑 양파 가격 비교해줘", "history": []})
     price_result = supervisor_agent.router_node({"text": "두부 가격알려줘", "history": []})
     cheaper_result = supervisor_agent.router_node({"text": "설탕 더 싼곳 없어?", "history": []})
+    product_candidate_result = supervisor_agent.router_node({"text": "계란 10구 상품 후보 보여줘", "history": []})
+    human_food_candidate_result = supervisor_agent.router_node({
+        "text": "강아지 닭가슴살 말고 사람이 먹는 닭가슴살 보여줘",
+        "history": [],
+    })
+    stock_in_result = supervisor_agent.router_node({"text": "장보기 목록 새우 냉장고로 입고해줘", "history": []})
     feature_result = supervisor_agent.router_node({"text": "장보기 기능 뭐있어?", "history": []})
 
     assert current_result["intent"] == "shopping.current"
@@ -89,6 +95,9 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     assert compare_result["intent"] == "shopping.compare"
     assert price_result["intent"] == "shopping.compare"
     assert cheaper_result["intent"] == "shopping.compare"
+    assert product_candidate_result["intent"] == "shopping.compare"
+    assert human_food_candidate_result["intent"] == "shopping.compare"
+    assert stock_in_result["intent"] == "shopping.purchase"
     assert supervisor_agent.route_intent(current_result) == "shopping_agent_node"
     assert supervisor_agent.route_intent(create_result) == "shopping_agent_node"
     assert supervisor_agent.route_intent(compare_result) == "shopping_agent_node"
@@ -137,6 +146,34 @@ def test_shopping_price_follow_up_passes_only_product_name(monkeypatch):
     })
 
     assert calls[0]["text"] == "설탕"
+
+
+def test_shopping_price_follow_up_with_exists_passes_only_product_name(monkeypatch):
+    calls = []
+
+    def fake_run(**kwargs):
+        calls.append(kwargs)
+        return {"response_text": "가격 비교 결과예요.", "actions": [], "sources": []}
+
+    monkeypatch.setattr("ai.agents.shopping_agent.shopping_agent.run_shopping_agent", fake_run)
+
+    supervisor_agent.shopping_agent_node({
+        "text": "새우 더 저렴한 곳 있어?",
+        "intent": "shopping.compare",
+        "history": [],
+        "db": SimpleNamespace(),
+        "user_id": 7,
+    })
+
+    assert calls[0]["text"] == "새우"
+
+
+def test_shopping_stock_in_follow_up_keeps_shopping_context():
+    history = [SimpleNamespace(role="bot", text="현재 장보기 목록이에요.", intent="shopping.current", slots={})]
+
+    result = supervisor_agent.router_node({"text": "냉장고로 입고해줘", "history": history})
+
+    assert result["intent"] == "shopping.purchase"
 
 def test_alarm_action_payload_survives_supervisor_adapter(monkeypatch):
     """Alarm Agent의 action payload가 슈퍼바이저 버튼 메시지에 유지되는지 확인합니다."""

@@ -17,11 +17,13 @@ from ai.agents.shopping_agent.shopping_handlers import (
     handle_purchase_confirm,
     handle_purchase_request,
     handle_recipe_current,
+    handle_recipe_filters,
 )
 from ai.agents.shopping_agent.shopping_utils import (
     build_shopping_response,
     extract_recipe_title_for_shopping,
     is_remaining_request,
+    is_recipe_filter_request,
     latest_shopping_slots,
     to_supervisor_state,
 )
@@ -55,8 +57,10 @@ def execute_shopping_action(action: str, payload: str, *, db: Any, user_id: int)
             return _success(message, "shopping.create", actions)
 
         if action == "shopping_purchase":
-            shopping_list_id = int(payload) if payload else None
-            message, actions = handle_purchase_confirm(db, user_id, shopping_list_id)
+            list_payload, _, item_payload = payload.partition("|")
+            shopping_list_id = int(list_payload) if list_payload else None
+            item_ids = [int(item_id) for item_id in item_payload.split(",") if item_id] or None
+            message, actions = handle_purchase_confirm(db, user_id, shopping_list_id, item_ids)
             return _success(message, "shopping.purchase", actions)
 
         if action == "shopping_delete_item":
@@ -109,7 +113,9 @@ def run_shopping_agent(
     try:
         if resolved_intent == "shopping.current":
             recipe_title = extract_recipe_title_for_shopping(text)
-            if recipe_title:
+            if is_recipe_filter_request(text):
+                message, actions, next_slots = handle_recipe_filters(db, user_id)
+            elif recipe_title:
                 message, actions, next_slots = handle_recipe_current(db, user_id, recipe_title)
             elif is_remaining_request(text) and slots:
                 message, actions, next_slots = handle_current_follow_up(db, user_id, text, slots)
@@ -128,7 +134,7 @@ def run_shopping_agent(
             message, actions = handle_create_request(text)
             next_slots = slots
         elif resolved_intent == "shopping.purchase":
-            message, actions = handle_purchase_request(db, user_id)
+            message, actions = handle_purchase_request(db, user_id, text)
             next_slots = slots
         elif resolved_intent == "shopping.delete_item":
             message, actions = handle_delete_item_request(db, user_id, text)

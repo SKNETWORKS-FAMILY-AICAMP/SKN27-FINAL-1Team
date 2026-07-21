@@ -78,7 +78,12 @@ def _is_alarm_write_query(text: str) -> bool:
 def _is_shopping_price_query(text: str) -> bool:
     """상품 가격 또는 최저가를 묻는 요청인지 확인합니다."""
     normalized = _normalize_text(text)
-    return any(word in normalized for word in ("가격", "최저가", "싼곳", "싼데", "저렴", "비싸"))
+    if any(word in normalized for word in ("가격", "최저가", "싼곳", "싼데", "저렴", "비싸", "상품후보", "상품추천")):
+        return True
+    return (
+        any(word in normalized for word in ("사람이먹는", "사람용", "강아지말고", "고양이말고", "반려동물용말고"))
+        and any(word in normalized for word in ("보여", "찾아", "추천", "상품"))
+    )
 
 
 def _is_shopping_price_explanation(text: str) -> bool:
