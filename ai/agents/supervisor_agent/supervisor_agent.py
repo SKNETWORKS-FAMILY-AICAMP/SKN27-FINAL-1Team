@@ -72,10 +72,10 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _rewrite_guide_query,
     _strip_shopping_compare_suffix,
     _verify_and_claim_confirm_token,
+    _safe_analyze_shopping_intent,
 )
 from ai.agents.shopping_agent.shopping_utils import (
     SHOPPING_CONFIRM_ACTIONS,
-    analyze_shopping_intent,
     pending_shopping_flow_intent,
 )
 
@@ -105,14 +105,14 @@ def _route_write_request(
         # 보관 가능 여부를 묻는 후속 질문은 냉장고 추가 명령으로 처리하지 않습니다.
         return _route_result("ingredient.guide", slots=previous_slots)
 
-    if previous_intent == "shopping.delete_item" and analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
+    if previous_intent == "shopping.delete_item" and _safe_analyze_shopping_intent(f"장보기 {text}") == "shopping.delete_item":
         return _route_result("shopping.delete_item", slots=previous_slots)
 
     # 생략된 쓰기 명령은 일반 냉장고 규칙보다 직전 Agent 문맥을 우선합니다.
     has_write_word = any(word in normalized for word in (*DELETE_WORDS, *CONSUME_WORDS, *ADD_WORDS))
     if previous_intent and has_write_word and _is_context_follow_up(text):
         if previous_intent.startswith("shopping."):
-            return _route_result(analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
+            return _route_result(_safe_analyze_shopping_intent(f"장보기 {text}") or previous_intent, slots=previous_slots)
         if previous_intent.startswith("alarm."):
             return _route_result(previous_intent, slots=previous_slots)
 
@@ -120,7 +120,7 @@ def _route_write_request(
         intent = "alarm.notification" if _is_alarm_notification_query(text) else "alarm.calendar"
         return _route_result(intent)
 
-    shopping_intent = analyze_shopping_intent(text)
+    shopping_intent = _safe_analyze_shopping_intent(text)
     if shopping_intent in _SHOPPING_WRITE_INTENTS:
         return _route_result(shopping_intent)
     if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
@@ -141,7 +141,7 @@ def _route_read_fallback(
 ) -> dict:
     """LLM을 사용할 수 없거나 신뢰도가 낮을 때 읽기 요청을 최소 규칙으로 보완합니다."""
     normalized = _normalize_text(text)
-    shopping_intent = analyze_shopping_intent(text)
+    shopping_intent = _safe_analyze_shopping_intent(text)
 
     if _is_receipt_lookup_query(text):
         return _route_result("receipt.lookup")
