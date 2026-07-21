@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from ai.agents.alarm_agent import ALARM_AGENT_TOOLS, apply_human_choice, analyze_intent, arun, build_response, run
+from ai.agents.alarm_agent import ALARM_AGENT_TOOLS, apply_human_choice, analyze_intent, arun, build_response, classify_intent, run
 import ai.agents.alarm_agent.alarm_agent as alarm_agent_module
 from ai.agents.alarm_agent import tools as alarm_tools
 from app.backend.api.calendar.calendar_api import _event_key_belongs_to_user
@@ -29,6 +29,50 @@ def test_alarm_agent_response_shape():
         "ui": {"actions": [], "cards": [], "sources": []},
         "meta": {},
     }
+
+
+def test_calendar_agent_classifies_before_action_mapping():
+    result = classify_intent("삼겹살 오늘 저녁에 먹으라고 등록해줘")
+
+    assert result["intent"] == "CREATE"
+    assert result["calendar_type"] == "INGREDIENT_CONSUMPTION"
+    assert result["legacy_intent"] == "calendar.create"
+    assert result["legacy_action"] == "create_event"
+
+
+def test_calendar_agent_langchain_pipeline_routes_update_request():
+    result = analyze_intent("내일 장보기 일정을 토요일로 변경해줘")
+
+    assert result["intent"] == "calendar.update"
+    assert result["action"] == "update_event"
+    assert result["payload"]["title"] == "장보기"
+
+
+def test_calendar_agent_preview_contains_structured_calendar_contract():
+    result = run("오늘 오후 7시에 대파 먹으라고 알림 등록해줘")
+
+    assert result["requires_confirmation"] is True
+    assert result["data"]["calendar_action"] == "CREATE"
+    assert result["data"]["preview"]["title"] == "대파"
+    assert result["data"]["preview"]["calendar_type"] == "INGREDIENT_CONSUMPTION"
+    assert result["data"]["preview"]["timezone"] == "Asia/Seoul"
+    assert result["data"]["preview"]["start_at"].endswith("+09:00")
+
+
+def test_calendar_agent_asks_time_for_broad_time_hint():
+    result = run("삼겹살 오늘 저녁에 먹으라고 등록해줘")
+
+    assert result["action"] == "clarify_time"
+    assert result["requires_confirmation"] is True
+    assert [action["label"] for action in result["ui"]["actions"]] == ["오후 6시 30분", "오후 7시", "오후 8시"]
+
+
+def test_calendar_agent_asks_date_for_ambiguous_weekend():
+    result = run("이번 주말 저녁에 카레 만들 일정 등록해줘")
+
+    assert result["action"] == "clarify_date"
+    assert result["requires_confirmation"] is True
+    assert [action["label"] for action in result["ui"]["actions"]] == ["이번주 토요일", "이번주 일요일"]
 
 
 def test_alarm_agent_clarifies_ambiguous_alarm_text():
