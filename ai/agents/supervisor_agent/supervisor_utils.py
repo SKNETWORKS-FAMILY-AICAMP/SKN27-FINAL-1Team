@@ -1,4 +1,4 @@
-import json
+﻿import json
 import re
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 
 from app.backend.core.config import settings
 from ai.agents.supervisor_agent.routing_rules import _normalize_text
+from ai.agents.shopping_agent.shopping_utils import analyze_shopping_intent
 
 # 챗봇 기본 응답 문구
 LOGIN_REQUIRED_REPLY = "로그인이 필요한 질문이에요. 비회원 상태에서는 보관법이나 일반 레시피 검색을 이용할 수 있어요."
@@ -397,3 +398,8 @@ def _parse_alarm_request(text: str, intent: str) -> dict[str, Any]:
         "payload": payload,
         "intent": alarm_intent,
     }
+
+def _safe_analyze_shopping_intent(text: str) -> str | None:
+    """쇼핑 에이전트에 넘기기 전, '냉장 보관'에 포함된 '장 보' 등의 오탐지를 방지합니다."""
+    safe_text = text.replace("냉장 보관", "").replace("냉장보관", "")
+    return analyze_shopping_intent(safe_text)
