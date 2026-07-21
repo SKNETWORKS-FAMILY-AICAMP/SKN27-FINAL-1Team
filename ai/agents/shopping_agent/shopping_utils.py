@@ -9,7 +9,14 @@ SHOPPING_CONFIRM_ACTIONS = {
     "shopping_create",
     "shopping_purchase",
     "shopping_delete_item",
+    "shopping_select_product",
+    "shopping_keep_item",
+    "shopping_cancel_flow",
 }
+
+SHOPPING_FLOW_SLOT = "shopping_flow"
+SHOPPING_AWAITING_SELECTION = "awaiting_product_selection"
+SHOPPING_AWAITING_PURCHASE = "awaiting_purchase_confirmation"
 
 SHOPPING_CONTEXT_WORDS = (
     "장보기",
@@ -27,9 +34,19 @@ SHOPPING_CONTEXT_WORDS = (
     "구매할",
 )
 
-SHOPPING_COMPARE_WORDS = ("가격비교", "비교", "가격", "최저가", "얼마", "상품", "마켓")
+SHOPPING_COMPARE_WORDS = ("가격비교", "비교", "가격", "최저가", "얼마", "상품", "상품후보", "상품추천", "마켓")
+SHOPPING_PRODUCT_QUERY_WORDS = ("상품후보", "상품추천")
+SHOPPING_HUMAN_PRODUCT_FILTER_WORDS = ("사람이먹는", "사람용", "강아지말고", "고양이말고", "반려동물용말고")
 SHOPPING_HISTORY_WORDS = ("내역", "히스토리", "지난", "이전", "완료된")
-SHOPPING_PURCHASE_WORDS = ("구매완료", "구매 완료", "샀어", "샀어요", "구매했어", "구매했어요")
+SHOPPING_PURCHASE_WORDS = (
+    "구매완료",
+    "구매 완료",
+    "샀어",
+    "샀어요",
+    "구매했어",
+    "구매했어요",
+    "입고",
+)
 SHOPPING_CREATE_WORDS = ("만들", "생성", "추가", "담아", "넣어", "등록")
 SHOPPING_DELETE_WORDS = ("삭제", "지워", "빼", "제외")
 SHOPPING_CHECK_WORDS = ("체크", "선택")
@@ -52,7 +69,12 @@ _COMMAND_PHRASES = (
     "가격비교",
     "가격",
     "최저가",
+    "상품 후보",
+    "상품후보",
+    "상품 추천",
+    "상품추천",
     "상품",
+    "후보",
     "마켓",
     "만들어줘",
     "만들어",
@@ -66,6 +88,20 @@ _COMMAND_PHRASES = (
     "넣어",
     "등록해줘",
     "등록",
+    "구매 완료해줘",
+    "구매완료해줘",
+    "구매 완료",
+    "구매완료",
+    "체크된 재료",
+    "체크된 항목",
+    "체크된",
+    "항목",
+    "냉장고로",
+    "냉장고에",
+    "냉장고",
+    "입고해주세요",
+    "입고해줘",
+    "입고",
     "보여줘",
     "보여",
     "조회해줘",
@@ -111,8 +147,15 @@ def analyze_shopping_intent(text: str) -> str | None:
     normalized = normalize_text(text)
     has_context = contains_shopping_context(text)
 
-    if any(word.replace(" ", "") in normalized for word in SHOPPING_COMPARE_WORDS) and (
-        has_context or "비교" in normalized or "최저가" in normalized
+    is_product_query = any(word in normalized for word in SHOPPING_PRODUCT_QUERY_WORDS)
+    is_human_product_filter_query = (
+        any(word in normalized for word in SHOPPING_HUMAN_PRODUCT_FILTER_WORDS)
+        and any(word in normalized for word in ("보여", "찾아", "추천", "상품"))
+    )
+
+    if is_human_product_filter_query or (
+        any(word.replace(" ", "") in normalized for word in SHOPPING_COMPARE_WORDS)
+        and (has_context or "비교" in normalized or "최저가" in normalized or is_product_query)
     ):
         return "shopping.compare"
     if any(word.replace(" ", "") in normalized for word in SHOPPING_PURCHASE_WORDS) and has_context:
@@ -132,6 +175,39 @@ def analyze_shopping_intent(text: str) -> str | None:
     if any(word in normalized for word in SHOPPING_LIST_WORDS):
         return "shopping.current"
     return "shopping.current"
+
+
+def pending_shopping_flow_intent(text: str, slots: dict[str, Any] | None) -> str | None:
+    """진행 중인 장보기 멀티턴 입력만 Shopping Agent로 다시 연결합니다."""
+    flow = (slots or {}).get(SHOPPING_FLOW_SLOT)
+    if not isinstance(flow, dict):
+        return None
+
+    normalized = normalize_text(text).rstrip("?")
+    step = flow.get("step")
+    cancel_words = {"취소", "그만", "안할래", "아니", "아니요", "됐어", "나중에"}
+    if normalized in cancel_words:
+        return "shopping.cancel"
+
+    if step == SHOPPING_AWAITING_SELECTION:
+        selection_words = (
+            "첫번째", "두번째", "세번째", "네번째", "다섯번째",
+            "첫번", "두번", "세번", "네번", "다섯번",
+            "가장싼", "제일싼", "더싼", "싼걸", "최저가", "저렴한", "비싼", "마지막",
+        )
+        if re.fullmatch(r"\s*\d+\s*", text or "") or re.search(r"(?:^|\s)\d+\s*(?:번|번째)(?:\s|$)", text or ""):
+            return "shopping.compare"
+        if any(word in normalized for word in (*selection_words, "말고", "대신")):
+            return "shopping.compare"
+
+    if step == SHOPPING_AWAITING_PURCHASE:
+        purchase_words = (
+            "응", "네", "예", "맞아", "좋아", "구매", "샀", "결제", "완료", "입고",
+        )
+        if any(word in normalized for word in purchase_words):
+            return "shopping.purchase"
+
+    return None
 
 
 def build_shopping_response(
@@ -213,6 +289,14 @@ def is_show_all_request(text: str) -> bool:
     return any(word in normalized for word in ("전부", "다말해", "다알려", "다보여", "전체"))
 
 
+def is_recipe_filter_request(text: str) -> bool:
+    normalized = normalize_text(text)
+    return (
+        ("레시피" in normalized or "레시필" in normalized)
+        and any(word in normalized for word in ("필터", "별", "목록", "뭐", "어떤", "있"))
+    )
+
+
 def extract_requested_count(text: str) -> int | None:
     match = re.search(r"(\d+)\s*개", text or "")
     if not match:
@@ -254,9 +338,20 @@ def latest_shopping_slots(history) -> dict[str, Any]:
 
 def extract_ingredient_names(text: str) -> list[str]:
     target = text or ""
+    target = re.sub(
+        r"(?:장보기|쇼핑)(?:\s*목록)?\s*(?:에서|에)\s*",
+        " ",
+        target,
+    )
+    target = re.sub(
+        r"\s*더\s*(?:싼|저렴한)\s*(?:곳|데)(?:은|는)?(?:\s*(?:있어|없어)(?:요)?)?\s*\??$",
+        " ",
+        target,
+    )
     for phrase in sorted(_COMMAND_PHRASES, key=len, reverse=True):
         target = target.replace(phrase, " ")
-    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l|봉|팩|묶음)?", " ", target, flags=re.IGNORECASE)
+    target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|g|kg|ml|l|봉|팩|묶음)", " ", target, flags=re.IGNORECASE)
+    target = re.sub(r"(?<!\d)\d+(?:\.\d+)?(?!\s*구|\d)", " ", target)
     target = re.sub(r"[?!.]", " ", target)
     target = re.sub(r"\s*(?:랑|하고|와|과|및)\s*", ",", target)
 

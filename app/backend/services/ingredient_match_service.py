@@ -39,6 +39,31 @@ class IngredientNameMatcher:
     def find_best_name(self, raw_name: Optional[str]) -> Optional[str]:
         return self.find_best_match(raw_name).standard_name
 
+    def search_standard_names(self, keyword: Optional[str], limit: int = 6) -> list[str]:
+        keyword_key = self._match_key(keyword)
+        if not keyword_key:
+            return []
+
+        scored_names: dict[str, int] = {}
+        for candidate_key, standard_name in self._load_neo4j_candidates():
+            if not candidate_key or keyword_key not in candidate_key:
+                continue
+
+            score = 2
+            standard_key = self._match_key(standard_name)
+            if candidate_key == keyword_key or standard_key == keyword_key:
+                score = 0
+            elif candidate_key.startswith(keyword_key) or standard_key.startswith(keyword_key):
+                score = 1
+
+            scored_names[standard_name] = min(score, scored_names.get(standard_name, score))
+
+        safe_limit = max(1, min(int(limit or 6), 20))
+        return [
+            name
+            for name, _ in sorted(scored_names.items(), key=lambda item: (item[1], item[0]))
+        ][:safe_limit]
+
     def find_best_match(self, raw_name: Optional[str]) -> IngredientNameMatch:
         raw_key = self._match_key(raw_name)
         if not raw_key:

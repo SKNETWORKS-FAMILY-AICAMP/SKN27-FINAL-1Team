@@ -2,26 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai.agents.shopping_agent.shopping_handlers import (
-    handle_check_item,
-    handle_compare,
-    handle_create_confirm,
-    handle_create_request,
-    handle_current,
-    handle_current_follow_up,
-    handle_delete_item_confirm,
-    handle_delete_item_request,
-    handle_history,
-    handle_owned,
-    handle_price_help,
-    handle_purchase_confirm,
-    handle_purchase_request,
-    handle_recipe_current,
+from ai.agents.shopping_agent.shopping_graph import (
+    execute_confirmed_shopping_action,
+    shopping_agent_graph,
 )
 from ai.agents.shopping_agent.shopping_utils import (
     build_shopping_response,
-    extract_recipe_title_for_shopping,
-    is_remaining_request,
     latest_shopping_slots,
     to_supervisor_state,
 )
@@ -48,21 +34,9 @@ def _failure(message: str, intent: str = "shopping.error") -> dict[str, Any]:
 
 
 def execute_shopping_action(action: str, payload: str, *, db: Any, user_id: int) -> dict[str, Any]:
+    """기존 확인 버튼 진입점은 유지하고 실행은 Shopping Graph 공통 핸들러에 위임합니다."""
     try:
-        if action == "shopping_create":
-            names = [name for name in payload.split("|") if name]
-            message, actions = handle_create_confirm(db, user_id, names)
-            return _success(message, "shopping.create", actions)
-
-        if action == "shopping_purchase":
-            shopping_list_id = int(payload) if payload else None
-            message, actions = handle_purchase_confirm(db, user_id, shopping_list_id)
-            return _success(message, "shopping.purchase", actions)
-
-        if action == "shopping_delete_item":
-            item_id = int(payload)
-            message, actions = handle_delete_item_confirm(db, user_id, item_id)
-            return _success(message, "shopping.delete_item", actions)
+        return execute_confirmed_shopping_action(action, payload, db=db, user_id=user_id)
     except Exception:
         if db is not None:
             try:
@@ -70,8 +44,6 @@ def execute_shopping_action(action: str, payload: str, *, db: Any, user_id: int)
             except Exception:
                 pass
         return _failure("장보기 작업을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.")
-
-    return _failure("확인할 장보기 작업을 찾지 못했어요.")
 
 
 def run_shopping_agent(
@@ -83,62 +55,25 @@ def run_shopping_agent(
     intent: str | None = None,
     slots: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Shopping Agent 단일 진입점. Supervisor GraphState subset과 boundary 호환."""
+    """Shopping Agent 호환 진입점. 내부 멀티턴 실행은 LangGraph가 담당합니다."""
     history = history or []
-    slots = slots or latest_shopping_slots(history)
+    resolved_slots = slots or latest_shopping_slots(history)
     resolved_intent = intent or "shopping.current"
 
-    if resolved_intent == "shopping.price_help":
-        message, actions = handle_price_help()
-        return _success(message, resolved_intent, actions, slots)
-
-    if not user_id:
+    if resolved_intent != "shopping.price_help" and not user_id:
         return _failure("로그인이 필요한 질문이에요. 로그인 후 장보기 기능을 이용할 수 있어요.", resolved_intent)
 
-    if resolved_intent == "action.cancel":
-        return _success("알겠어요. 장보기 작업을 취소했어요.", "shopping.cancel")
-
-    if resolved_intent == "action.confirm":
-        parts = text.split(":", 2)
-        if len(parts) >= 2:
-            action = parts[1]
-            payload = parts[2] if len(parts) >= 3 else ""
-            return execute_shopping_action(action, payload, db=db, user_id=user_id)
-        return _failure("확인할 장보기 작업을 찾지 못했어요.")
-
     try:
-        if resolved_intent == "shopping.current":
-            recipe_title = extract_recipe_title_for_shopping(text)
-            if recipe_title:
-                message, actions, next_slots = handle_recipe_current(db, user_id, recipe_title)
-            elif is_remaining_request(text) and slots:
-                message, actions, next_slots = handle_current_follow_up(db, user_id, text, slots)
-            else:
-                message, actions, next_slots = handle_current(db, user_id)
-        elif resolved_intent == "shopping.owned":
-            message, actions = handle_owned(db, user_id, slots)
-            next_slots = slots
-        elif resolved_intent == "shopping.history":
-            message, actions = handle_history(db, user_id)
-            next_slots = slots
-        elif resolved_intent == "shopping.compare":
-            message, actions = handle_compare(text)
-            next_slots = slots
-        elif resolved_intent == "shopping.create":
-            message, actions = handle_create_request(text)
-            next_slots = slots
-        elif resolved_intent == "shopping.purchase":
-            message, actions = handle_purchase_request(db, user_id)
-            next_slots = slots
-        elif resolved_intent == "shopping.delete_item":
-            message, actions = handle_delete_item_request(db, user_id, text)
-            next_slots = slots
-        elif resolved_intent == "shopping.check_item":
-            message, actions = handle_check_item(db, user_id, text)
-            next_slots = slots
-        else:
-            message, actions = "장보기 요청을 이해하지 못했어요. 목록 조회, 가격 비교, 구매 완료를 요청할 수 있어요.", []
-            next_slots = slots
+        final_state = shopping_agent_graph.invoke(
+            {
+                "text": text,
+                "db": db,
+                "user_id": user_id,
+                "history": history,
+                "intent": resolved_intent,
+                "slots": resolved_slots,
+            }
+        )
     except Exception:
         if db is not None:
             try:
@@ -147,7 +82,12 @@ def run_shopping_agent(
                 pass
         return _failure("장보기 요청을 처리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.", resolved_intent)
 
-    return _success(message, resolved_intent, actions, next_slots)
+    return {
+        "response_text": final_state.get("response_text") or "장보기 요청을 처리하지 못했어요.",
+        "actions": list(final_state.get("actions") or []),
+        "sources": list(final_state.get("sources") or []),
+        "slots": dict(final_state.get("slots") or {}),
+    }
 
 
 if __name__ == "__main__":
