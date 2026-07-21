@@ -394,7 +394,7 @@ def build_recipe_tools(context: RecipeToolContext) -> list[BaseTool]:
                 return build_tool_payload_json(
                     tool_name="recommend_from_fridge",
                     status="empty",
-                    message="현재 냉장고 재료와 매칭되는 레시피를 찾지 못했어요. 재료를 더 추가해 보세요.",
+                    message="보유 재료와 겹치는 추천을 못 찾았어요. 재료명으로 검색해볼까요?",
                 )
             match_type = "partial"
         internal_result_count = max(internal_result_count, len(items))
