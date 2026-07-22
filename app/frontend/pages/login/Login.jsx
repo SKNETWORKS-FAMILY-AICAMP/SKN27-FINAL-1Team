@@ -8,6 +8,10 @@ import iconFridge from '../../assets/extracted/icons/icon_refrigerator.png'
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
 import './Login.css'
 
+const getOAuthRedirectOrigin = () => (
+  import.meta.env.VITE_OAUTH_REDIRECT_ORIGIN || window.location.origin
+).replace(/\/$/, '')
+
 const loginMethods = [
   {
     label: '카카오 로그인', className: 'kakao', provider: 'kakao', envKey: 'VITE_KAKAO_CLIENT_ID',
@@ -63,7 +67,7 @@ function Login() {
       return
     }
 
-    const redirectUri = `${window.location.origin}/auth/callback/${method.provider}`
+    const redirectUri = `${getOAuthRedirectOrigin()}/auth/callback/${method.provider}`
     const state = createOAuthState(method.provider)
     window.sessionStorage.setItem(`bobbeori-oauth-state-${method.provider}`, state)
 
@@ -102,7 +106,7 @@ function Login() {
       return
     }
 
-    const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback/google-calendar`)
+    const redirectUri = encodeURIComponent(`${getOAuthRedirectOrigin()}/auth/callback/google-calendar`)
     const scope = encodeURIComponent('openid profile email https://www.googleapis.com/auth/calendar.events')
     window.location.href =
       `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}` +

@@ -3,6 +3,10 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { API_URL } from '../../utils/api.js'
 import './Login.css'
 
+const getOAuthRedirectOrigin = () => (
+  import.meta.env.VITE_OAUTH_REDIRECT_ORIGIN || window.location.origin
+).replace(/\/$/, '')
+
 function Callback() {
   const { provider } = useParams()
   const [searchParams] = useSearchParams()
@@ -48,7 +52,7 @@ function Callback() {
             },
             body: JSON.stringify({
               code,
-              redirect_uri: `${window.location.origin}/auth/callback/google-calendar`,
+              redirect_uri: `${getOAuthRedirectOrigin()}/auth/callback/google-calendar`,
             }),
           })
 
@@ -70,7 +74,7 @@ function Callback() {
             provider,
             code,
             state: returnedState,
-            redirect_uri: `${window.location.origin}/auth/callback/${provider}`,
+            redirect_uri: `${getOAuthRedirectOrigin()}/auth/callback/${provider}`,
           }),
         })
 
