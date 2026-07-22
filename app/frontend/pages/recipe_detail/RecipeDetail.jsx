@@ -417,7 +417,7 @@ function RecipeDetail() {
 
             <div className="recipe-detail-ingredient-list">
               {displayOwnedIngredients.length === 0 ? (
-                <p className="recipe-detail-empty-note">로그인 후 냉장고 재료를 등록하면 보유 여부를 확인할 수 있어요.</p>
+                <p className="recipe-detail-empty-note">냉장고 재료를 등록하면 보유 여부를 확인할 수 있어요.</p>
               ) : (
                 displayOwnedIngredients.map((item, index) => {
                   const isMaybe = item.ownershipType === 'maybe'
