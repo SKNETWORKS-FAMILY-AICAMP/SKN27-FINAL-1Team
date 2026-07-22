@@ -243,6 +243,64 @@ def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
     assert saved == {"user_id": 7, "receipt_id": 10, "item_name": BANANA}
 
 
+def test_confirm_receipt_calendar_event_uses_receipt_registration_copy(monkeypatch):
+    saved_event = {}
+
+    def fake_save_confirmed_items(*, db, user_id, request_data):
+        return len(request_data.items)
+
+    async def fake_get_access_token(integration, db):
+        return "google-access-token"
+
+    async def fake_create_event_once(client, calendar_id, access_token, event_key, event, db, user_id, source):
+        saved_event.update(
+            {
+                "calendar_id": calendar_id,
+                "access_token": access_token,
+                "event_key": event_key,
+                "event": event,
+                "user_id": user_id,
+                "source": source,
+            }
+        )
+
+    monkeypatch.setattr(receipts_api.receipt_confirm_service, "save_confirmed_items", fake_save_confirmed_items)
+    monkeypatch.setattr(receipts_api, "_get_receipt_age_in_days", lambda value: 0)
+    monkeypatch.setattr(receipts_api, "_get_google_integration", lambda db, user_id: SimpleNamespace(calendar_id="primary"))
+    monkeypatch.setattr(receipts_api, "_get_access_token", fake_get_access_token)
+    monkeypatch.setattr(receipts_api, "_create_event_once", fake_create_event_once)
+
+    client = create_test_client()
+    response = client.post(
+        "/api/v1/receipts/confirm",
+        json={
+            "receipt_id": 10,
+            "store_name": STORE_NAME,
+            "purchase_datetime": "2026-06-29 12:30:00",
+            "total_amount": 2000,
+            "calendar_cost_enabled": True,
+            "old_receipt_confirmed": False,
+            "items": [
+                {
+                    "raw_name": "\ubc14\ub098\ub098(\uc218\uc785\uc0b0)",
+                    "normalized_name": BANANA,
+                    "quantity": 1,
+                    "unit": EA,
+                    "item_amount": 2000,
+                    "storage_method": COLD_STORAGE,
+                    "item_memo": None,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert saved_event["event"]["summary"] == "영수증 등록 완료"
+    assert "OCR" not in saved_event["event"]["description"]
+    assert "사용비용" not in saved_event["event"]["description"]
+    assert "총 금액: 2,000원" in saved_event["event"]["description"]
+
+
 def test_receipt_age_policy_warns_only_after_thirty_calendar_days():
     now = datetime(2026, 7, 20, 12, 0, tzinfo=receipts_api.KST)
 

@@ -198,7 +198,7 @@ def register_write_tools(mcp: FastMCP) -> None:
             if total_amount is not None and line_total and total_amount != line_total:
                 warnings.append("The receipt total differs from the sum of the line items.")
             if calendar_cost_enabled:
-                warnings.append("Commit may also create or update a Google Calendar cost event.")
+                warnings.append("Commit may also create or update a Google Calendar receipt registration event.")
             payload = request.model_dump(mode="json")
             return _preview_result(
                 "receipt.commit",

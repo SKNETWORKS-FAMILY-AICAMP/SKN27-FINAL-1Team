@@ -8,7 +8,18 @@ import imageRecommendation from "../../assets/extracted/images/image_recommendat
 
 import imageSearch from "../../assets/extracted/images/image_search.png";
 
+import { useAppDialog } from "../../components/AppDialog.jsx";
+
 import { API_URL } from "../../utils/api.js";
+
+import {
+  getStoredRecipeByRecipeId,
+  readStoredRecipes,
+  removeRecommendationResult,
+  removeStoredRecipe,
+  saveRecommendationResult,
+  saveStoredRecipe,
+} from "../../utils/savedRecipes.js";
 
 import { RecipeFilterConfig } from "./recipeFilterConfig.js";
 
@@ -70,6 +81,8 @@ function RecipeList() {
 
   const navigate = useNavigate();
 
+  const { dialogNode, showAlert } = useAppDialog();
+
   const criteria = useMemo(
     () => RecipeFilterConfig.parseSearchParams(location.search),
 
@@ -92,7 +105,11 @@ function RecipeList() {
 
   const [isRecipeTypeMenuOpen, setIsRecipeTypeMenuOpen] = useState(false);
 
-  const [savedIds, setSavedIds] = useState([]);
+  const [savedIds, setSavedIds] = useState(() =>
+    readStoredRecipes().map((recipe) => recipe.recipeId),
+  );
+
+  const [busyIds, setBusyIds] = useState(() => new Set());
 
   const lastSearchRef = useRef(location.search);
   const fetchPage = lastSearchRef.current !== location.search ? 1 : page;
@@ -219,16 +236,62 @@ function RecipeList() {
     });
   };
 
-  const toggleSaved = (recipeId) => {
+  const isRecipeSaved = (recipeId) =>
+    savedIds.some((id) => String(id) === String(recipeId));
+
+  const toggleSaved = async (recipe) => {
     if (!FEATURE_FLAGS.savedRecipes) {
       return;
     }
 
-    setSavedIds((prev) =>
-      prev.includes(recipeId)
-        ? prev.filter((id) => id !== recipeId)
-        : [...prev, recipeId],
-    );
+    const recipeId = recipe?.recipe_id;
+    if (recipeId == null || busyIds.has(recipeId)) {
+      return;
+    }
+
+    const token = window.localStorage.getItem("bobbeori-token");
+    if (!token) {
+      await showAlert("레시피를 저장하려면 로그인이 필요해요.", {
+        title: "로그인이 필요해요",
+      });
+      navigate("/login");
+      return;
+    }
+
+    setBusyIds((prev) => new Set(prev).add(recipeId));
+    try {
+      if (isRecipeSaved(recipeId)) {
+        const stored = getStoredRecipeByRecipeId(recipeId);
+        if (stored?.recommendationId) {
+          await removeRecommendationResult(stored.recommendationId);
+        }
+        if (stored?.storageId) {
+          removeStoredRecipe(stored.storageId);
+        }
+        setSavedIds((prev) => prev.filter((id) => String(id) !== String(recipeId)));
+        return;
+      }
+
+      const savedResult = await saveRecommendationResult(recipe, "manual_save");
+      saveStoredRecipe({
+        recipe_id: recipe.recipe_id,
+        recommendation_id: savedResult.recommendation_id,
+        title: recipe.title,
+        category: recipe.category,
+        image: recipe.main_image_url,
+        source: "저장한 레시피",
+        savedType: "saved",
+      });
+      setSavedIds((prev) => [...prev, recipeId]);
+    } catch {
+      // keep previous heart / local state
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(recipeId);
+        return next;
+      });
+    }
   };
 
   const resetFilters = () => {
@@ -424,8 +487,8 @@ function RecipeList() {
                       type="button"
                       className="recipe-card__save"
                       aria-label={`${recipe.title} 저장`}
-                      aria-pressed={savedIds.includes(recipe.recipe_id)}
-                      disabled={!FEATURE_FLAGS.savedRecipes}
+                      aria-pressed={isRecipeSaved(recipe.recipe_id)}
+                      disabled={!FEATURE_FLAGS.savedRecipes || busyIds.has(recipe.recipe_id)}
                       title={
                         FEATURE_FLAGS.savedRecipes
                           ? undefined
@@ -434,10 +497,10 @@ function RecipeList() {
                       onClick={(event) => {
                         event.stopPropagation();
 
-                        toggleSaved(recipe.recipe_id);
+                        toggleSaved(recipe);
                       }}
                     >
-                      {savedIds.includes(recipe.recipe_id) ? "♥" : "♡"}
+                      {isRecipeSaved(recipe.recipe_id) ? "♥" : "♡"}
                     </button>
 
                     <ImageSlot
@@ -493,6 +556,7 @@ function RecipeList() {
       </section>
 
       <ImageSlot className="recipe-list-mobile-art" src={imageRecommendation} />
+      {dialogNode}
     </section>
   );
 }

@@ -28,7 +28,7 @@ class IngredientResponse(IngredientBase):
     id: int
     fridge_id: int
     ingredient_id: int = 0
-    receipt_item_id: Optional[int] = Field(None, description="영수증 OCR 입고 연결 ID")
+    receipt_item_id: Optional[int] = Field(None, description="영수증 등록 품목 연결 ID")
     purchase_date: date
     created_at: datetime
     updated_at: Optional[datetime] = None
