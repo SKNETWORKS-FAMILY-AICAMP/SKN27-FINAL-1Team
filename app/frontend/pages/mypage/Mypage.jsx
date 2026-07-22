@@ -72,6 +72,32 @@ const getCalendarTone = (event) =>
     6: 'info',
   }[String(event.colorId)] || 'green')
 
+// ponytail: 2026 운영/시연 범위만 표시한다. 연도 확장 필요 시 서버/API에서 휴일 목록을 내려준다.
+const KOREAN_HOLIDAYS_2026 = {
+  '2026-01-01': '신정',
+  '2026-02-16': '설날 연휴',
+  '2026-02-17': '설날',
+  '2026-02-18': '설날 연휴',
+  '2026-03-01': '삼일절',
+  '2026-03-02': '대체공휴일',
+  '2026-05-01': '노동절',
+  '2026-05-05': '어린이날',
+  '2026-05-24': '부처님오신날',
+  '2026-05-25': '대체공휴일',
+  '2026-06-03': '지방선거일',
+  '2026-06-06': '현충일',
+  '2026-07-17': '제헌절',
+  '2026-08-15': '광복절',
+  '2026-08-17': '대체공휴일',
+  '2026-09-24': '추석 연휴',
+  '2026-09-25': '추석',
+  '2026-09-26': '추석 연휴',
+  '2026-10-03': '개천절',
+  '2026-10-05': '대체공휴일',
+  '2026-10-09': '한글날',
+  '2026-12-25': '크리스마스',
+}
+
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
     <span className={`mypage-image-slot ${src ? 'is-filled' : ''} ${className}`}>
@@ -102,7 +128,15 @@ function CalendarPreview({ connected, events, monthDate, onChangeMonth }) {
     ...Array.from({ length: firstDay }, (_, index) => ({ id: `empty-${index}` })),
     ...Array.from({ length: lastDate }, (_, index) => {
       const day = index + 1
-      return { id: day, day, dateKey: toLocalDateKey(new Date(year, month, day)) }
+      const date = new Date(year, month, day)
+      const dateKey = toLocalDateKey(date)
+      return {
+        id: day,
+        day,
+        dateKey,
+        dayOfWeek: date.getDay(),
+        holidayName: KOREAN_HOLIDAYS_2026[dateKey],
+      }
     }),
   ]
 
@@ -127,12 +161,26 @@ function CalendarPreview({ connected, events, monthDate, onChangeMonth }) {
       <div className="mypage-calendar-preview__grid">
         {days.map((item) => {
           const dayEvents = events.filter((calendarEvent) => calendarEvent.dateKey === item.dateKey)
+          const isToday = item.dateKey === toLocalDateKey(today)
+          const dayBadge = item.holidayName || (item.dayOfWeek === 0 ? '휴일' : item.dayOfWeek === 6 ? '주말' : '')
+          const dayClassName = [
+            'mypage-calendar-preview__day',
+            isToday ? 'is-today' : '',
+            item.dayOfWeek === 0 ? 'is-sunday' : '',
+            item.dayOfWeek === 6 ? 'is-saturday' : '',
+            item.holidayName ? 'is-holiday' : '',
+          ].filter(Boolean).join(' ')
           return (
             <div
-              className={`mypage-calendar-preview__day ${item.day === today.getDate() ? 'is-today' : ''}`}
+              className={dayClassName}
               key={item.id}
             >
-              {item.day ? <span>{item.day}</span> : null}
+              {item.day ? (
+                <span>
+                  {item.day}
+                  {dayBadge ? <em>{dayBadge}</em> : null}
+                </span>
+              ) : null}
               {dayEvents.map((event) => (
                 event.htmlLink ? (
                   <a
