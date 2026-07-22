@@ -758,6 +758,14 @@
   text-align: center;
 }
 
+.mypage-calendar-preview__week span:first-child {
+  color: var(--mypage-primary);
+}
+
+.mypage-calendar-preview__week span:last-child {
+  color: #4b7fb8;
+}
+
 .mypage-calendar-preview__grid {
   margin-top: 8px;
 }
@@ -770,10 +778,54 @@
   background: #fffdfd;
 }
 
+.mypage-calendar-preview__day.is-sunday,
+.mypage-calendar-preview__day.is-holiday {
+  border-color: #ffd9dd;
+  background: #fff8f8;
+}
+
+.mypage-calendar-preview__day.is-saturday {
+  border-color: #dce9f8;
+  background: #f8fbff;
+}
+
 .mypage-calendar-preview__day > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
   color: #604e4a;
   font-size: 12px;
   font-weight: 750;
+}
+
+.mypage-calendar-preview__day.is-sunday > span,
+.mypage-calendar-preview__day.is-holiday > span {
+  color: var(--mypage-primary-dark);
+}
+
+.mypage-calendar-preview__day.is-saturday > span {
+  color: #3f73ab;
+}
+
+.mypage-calendar-preview__day em {
+  max-width: 68px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #ffe5e8;
+  color: var(--mypage-primary-dark);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mypage-calendar-preview__day.is-saturday em {
+  background: #e9f3ff;
+  color: #3f73ab;
 }
 
 .mypage-calendar-preview__day b,
