@@ -212,6 +212,7 @@ function Mypage() {
   const [calendarEnabled, setCalendarEnabled] = useState(false)
   const [googleCalendarEvents, setGoogleCalendarEvents] = useState([])
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingSettings, setOnboardingSettings] = useState(readOnboardingSettings)
@@ -319,8 +320,7 @@ function Mypage() {
   useEffect(() => {
     const token = window.localStorage.getItem('bobbeori-token')
     if (!token) {
-      showApiNotice('loginRequired')
-      navigate('/login')
+      navigate('/', { replace: true })
       return
     }
 
@@ -387,11 +387,13 @@ function Mypage() {
     setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1))
   }
 
+  // 인증 정보를 정리하고 뒤로가기로 마이페이지가 다시 노출되지 않도록 홈으로 이동합니다.
   const handleLogout = () => {
     window.localStorage.removeItem('bobbeori-token')
     window.localStorage.removeItem('bobbeori-auth-mode')
     window.dispatchEvent(new Event('bobbeori-auth-change'))
-    navigate('/login')
+    setShowLogoutConfirm(false)
+    navigate('/', { replace: true })
   }
 
   const toggleAlert = (targetLabel) => {
@@ -545,7 +547,11 @@ function Mypage() {
                     >
                       {isEditingProfile ? '저장하기' : '프로필 수정'}
                     </button>
-                    <button className="mypage-soft-button" type="button" onClick={handleLogout}>
+                    <button
+                      className="mypage-soft-button"
+                      type="button"
+                      onClick={() => setShowLogoutConfirm(true)}
+                    >
                       로그아웃
                     </button>
                   </div>
@@ -758,6 +764,15 @@ function Mypage() {
         ) : null}
         onConfirm={() => deleteTarget && deleteSavedRecipe(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
+      />
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        title="로그아웃"
+        message="로그아웃 하시겠습니까?"
+        confirmText="로그아웃"
+        danger={false}
+        onConfirm={handleLogout}
+        onClose={() => setShowLogoutConfirm(false)}
       />
       {showOnboarding && (
         <OnboardingModal
