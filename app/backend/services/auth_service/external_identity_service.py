@@ -39,9 +39,11 @@ def resolve_or_link_external_user_id(
     if user_id is not None or not email or not _is_truthy(email_verified):
         return user_id
 
-    user = db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
-    if user is None:
+    # 동일 이메일의 소셜 계정이 여러 개면 자동 선택하지 않고 명시적 MCP 연결을 요구합니다.
+    users = db.query(User).filter(func.lower(User.email) == email.strip().lower()).limit(2).all()
+    if len(users) != 1:
         return None
+    user = users[0]
 
     try:
         return int(link_external_identity(db, user_id=int(user.id), issuer=issuer, subject=subject).user_id)

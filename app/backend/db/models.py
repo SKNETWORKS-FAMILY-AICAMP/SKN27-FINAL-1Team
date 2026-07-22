@@ -31,9 +31,12 @@ class User(Base):
     """사용자 테이블을 표현하는 ORM 모델입니다."""
 
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("auth_provider", "provider_user_id", name="uq_users_provider_id"),
+    )
 
     id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
-    email = Column(String(255), nullable=False, unique=True)
+    email = Column(String(255), nullable=False)
     nickname = Column(String(100), nullable=False)
     provider = Column("auth_provider", String(50), nullable=True)
     provider_id = Column("provider_user_id", String(255), nullable=True)
