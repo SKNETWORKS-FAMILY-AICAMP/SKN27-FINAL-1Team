@@ -32,28 +32,31 @@ const storageOptions = ['냉동', '냉장', '실온']
 const maxUploadSizeMb = 10
 const maxReceiptImages = 5
 const maxTotalUploadSizeMb = 25
+const purchaseFlowHistoryLimit = 100
 const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 const ocrManualCropSuggestionMinScore = 0.75
 const ocrWeakReviewScore = 0.85
 // Main stepper indices (must match the order of receiptSteps).
 const STEP = { UPLOAD: 0, ANALYZE: 1, CONFIRM: 2, STOCK: 3 }
 
-let receiptHistoryRequest = { token: '', promise: null }
+const receiptHistoryRequests = new Map()
 
-function fetchReceiptHistory(token) {
-  if (receiptHistoryRequest.token === token) return receiptHistoryRequest.promise
+function fetchReceiptHistory(token, limit = 10) {
+  const requestKey = `${token}:${limit}`
+  const pendingRequest = receiptHistoryRequests.get(requestKey)
+  if (pendingRequest) return pendingRequest
 
-  const promise = fetch(`${API_URL}/api/v1/receipts/history`, {
+  const promise = fetch(`${API_URL}/api/v1/receipts/history?limit=${limit}`, {
     headers: { Authorization: `Bearer ${token}` },
   }).then(async (response) => {
     if (!response.ok) throw new Error('영수증 내역을 불러오지 못했어요.')
     const data = await response.json().catch(() => ({}))
     return Array.isArray(data.receipts) ? data.receipts : []
   })
-  receiptHistoryRequest = { token, promise }
+  receiptHistoryRequests.set(requestKey, promise)
 
   const clearRequest = () => {
-    if (receiptHistoryRequest.promise === promise) receiptHistoryRequest = { token: '', promise: null }
+    if (receiptHistoryRequests.get(requestKey) === promise) receiptHistoryRequests.delete(requestKey)
   }
   promise.then(clearRequest, clearRequest)
 
@@ -292,7 +295,8 @@ function buildPurchaseFlowData(receipts, options = {}) {
   const weekCount = options.weekCount || purchaseFlowWeekCount
   const fallbackToMock = options.fallbackToMock ?? false
   const sourceReceipts = Array.isArray(receipts) ? receipts : []
-  const buckets = buildRecentWeekBuckets(new Date(), weekCount)
+  const anchorDate = options.anchorDate || new Date()
+  const buckets = buildRecentWeekBuckets(anchorDate, weekCount)
 
   if (sourceReceipts.length === 0) {
     const weeklyData = buckets.map((bucket, index) => ({
@@ -303,6 +307,8 @@ function buildPurchaseFlowData(receipts, options = {}) {
     return {
       weeklyData,
       frequentIngredients: fallbackToMock ? getFrequentIngredients(mapMockHistoryToReceipts(receiptHistory)) : [],
+      totalAmount: weeklyData.reduce((sum, data) => sum + data.amount, 0),
+      totalItems: weeklyData.reduce((sum, data) => sum + data.items, 0),
     }
   }
 
@@ -312,17 +318,25 @@ function buildPurchaseFlowData(receipts, options = {}) {
   }))
   const indexByBucketKey = new Map(buckets.map((bucket, index) => [bucket.key, index]))
   const weeklyData = buckets.map((bucket) => ({ week: bucket.label, items: 0, amount: 0 }))
-
-  datedReceipts.forEach((receipt) => {
-    if (!receipt.parsedDate) {
-      return
+  const endOfAnchorDate = new Date(
+    anchorDate.getFullYear(),
+    anchorDate.getMonth(),
+    anchorDate.getDate(),
+    23,
+    59,
+    59,
+    999,
+  )
+  const recentReceipts = datedReceipts.filter((receipt) => {
+    if (!receipt.parsedDate || receipt.parsedDate > endOfAnchorDate) {
+      return false
     }
 
+    return indexByBucketKey.has(getWeekInfo(receipt.parsedDate).key)
+  })
+
+  recentReceipts.forEach((receipt) => {
     const weekIndex = indexByBucketKey.get(getWeekInfo(receipt.parsedDate).key)
-
-    if (weekIndex === undefined) {
-      return
-    }
 
     weeklyData[weekIndex].amount += getReceiptAmount(receipt)
     weeklyData[weekIndex].items += getReceiptItemCount(receipt)
@@ -330,7 +344,9 @@ function buildPurchaseFlowData(receipts, options = {}) {
 
   return {
     weeklyData,
-    frequentIngredients: getFrequentIngredients(datedReceipts),
+    frequentIngredients: getFrequentIngredients(recentReceipts),
+    totalAmount: recentReceipts.reduce((sum, receipt) => sum + getReceiptAmount(receipt), 0),
+    totalItems: recentReceipts.reduce((sum, receipt) => sum + getReceiptItemCount(receipt), 0),
   }
 }
 
@@ -376,7 +392,7 @@ function PurchaseFlowChart() {
     let active = true
     setPurchaseFlowStatus('loading')
 
-    fetchReceiptHistory(token)
+    fetchReceiptHistory(token, purchaseFlowHistoryLimit)
       .then((receipts) => {
         if (!active) {
           return
@@ -404,8 +420,8 @@ function PurchaseFlowChart() {
   const weekCount = weeklyPurchaseData.length
   const maxAmount = Math.max(...weeklyPurchaseData.map((data) => data.amount), 1)
   const maxItems = Math.max(...weeklyPurchaseData.map((data) => data.items), 1)
-  const totalAmount = weeklyPurchaseData.reduce((sum, data) => sum + data.amount, 0)
-  const totalItems = weeklyPurchaseData.reduce((sum, data) => sum + data.items, 0)
+  const totalAmount = purchaseFlowData.totalAmount ?? weeklyPurchaseData.reduce((sum, data) => sum + data.amount, 0)
+  const totalItems = purchaseFlowData.totalItems ?? weeklyPurchaseData.reduce((sum, data) => sum + data.items, 0)
 
   const baseline = 96
   const points = weeklyPurchaseData.map((data, index) => {
@@ -585,10 +601,37 @@ function createInitialReceiptRows() {
   return normalizeReceiptRows(rows).map((row) => ({ ...row, price: formatPriceInput(row.price) }))
 }
 
+function getPriceDigits(value) {
+  return String(value ?? '').replace(/[^\d]/g, '')
+}
+
 function formatPriceInput(value) {
-  const numericValue = String(value ?? '').replace(/[^\d]/g, '')
+  const numericValue = getPriceDigits(value)
 
   return numericValue ? Number(numericValue).toLocaleString() : ''
+}
+
+function beginPriceInputEdit(event, updateValue) {
+  const input = event.currentTarget
+  const currentValue = input.value
+  const selectionStart = input.selectionStart ?? currentValue.length
+  const selectionEnd = input.selectionEnd ?? selectionStart
+  const nextValue = getPriceDigits(currentValue)
+
+  updateValue(nextValue)
+
+  if (nextValue === currentValue || typeof window === 'undefined') {
+    return
+  }
+
+  const nextSelectionStart = getPriceDigits(currentValue.slice(0, selectionStart)).length
+  const nextSelectionEnd = getPriceDigits(currentValue.slice(0, selectionEnd)).length
+
+  window.requestAnimationFrame(() => {
+    if (document.activeElement === input) {
+      input.setSelectionRange(nextSelectionStart, nextSelectionEnd)
+    }
+  })
 }
 
 function toDateTimeLocalValue(value) {
@@ -1389,11 +1432,34 @@ function ReceiptOcr() {
   const updateRowField = (rowId, field, value) => {
     setDetectedRows((prev) =>
       prev.map((row) =>
-        row.id === rowId ? { ...row, [field]: field === 'price' ? formatPriceInput(value) : value, review: true } : row,
+        row.id === rowId ? { ...row, [field]: field === 'price' ? getPriceDigits(value) : value, review: true } : row,
       ),
     )
     setEditingRows((prev) => ({ ...prev, [rowId]: true }))
     setActiveStep(STEP.CONFIRM)
+  }
+
+  const updateRowPriceDisplay = (rowId, value) => {
+    setDetectedRows((prev) =>
+      prev.map((row) => (row.id === rowId && row.price !== value ? { ...row, price: value } : row)),
+    )
+  }
+
+  const beginRowPriceEdit = (event, rowId) => {
+    beginPriceInputEdit(event, (value) => updateRowPriceDisplay(rowId, value))
+  }
+
+  const finishRowPriceEdit = (rowId) => {
+    setDetectedRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) {
+          return row
+        }
+
+        const formattedPrice = formatPriceInput(row.price)
+        return formattedPrice === row.price ? row : { ...row, price: formattedPrice }
+      }),
+    )
   }
 
   const closeIngredientSuggestions = () => {
@@ -2037,7 +2103,9 @@ function ReceiptOcr() {
                             pattern="[0-9,]*"
                             type="text"
                             value={row.price}
+                            onFocus={(event) => beginRowPriceEdit(event, row.id)}
                             onChange={(event) => updateRowField(row.id, 'price', event.target.value)}
+                            onBlur={() => finishRowPriceEdit(row.id)}
                           />
                         ) : (
                           <strong className="receipt-mapping-static-value">
@@ -2301,7 +2369,9 @@ function AddRowModal({ onClose, onSubmit }) {
               pattern="[0-9,]*"
               value={price}
               placeholder="0"
-              onChange={(event) => setPrice(formatPriceInput(event.target.value))}
+              onFocus={(event) => beginPriceInputEdit(event, setPrice)}
+              onChange={(event) => setPrice(getPriceDigits(event.target.value))}
+              onBlur={() => setPrice((value) => formatPriceInput(value))}
             />
           </label>
           <label>
