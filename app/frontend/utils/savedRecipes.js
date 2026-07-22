@@ -61,6 +61,11 @@ export function removeStoredRecipe(storageId) {
   return next
 }
 
+export function getStoredRecipeByRecipeId(recipeId) {
+  const target = String(recipeId)
+  return readStoredRecipes().find((recipe) => String(recipe.recipeId) === target) || null
+}
+
 export async function saveRecommendationResult(recipe, recommendationType) {
   const recipeId = Number(recipe.recipe_id || recipe.recipeId || recipe.id)
   const token = window.localStorage.getItem('bobbeori-token')
@@ -88,4 +93,27 @@ export async function saveRecommendationResult(recipe, recommendationType) {
   }
 
   return response.json()
+}
+
+export async function removeRecommendationResult(recommendationId) {
+  const token = window.localStorage.getItem('bobbeori-token')
+  if (!token) {
+    throw new Error('로그인이 필요해요.')
+  }
+  if (recommendationId == null || recommendationId === '') {
+    throw new Error('저장 정보가 올바르지 않아요.')
+  }
+
+  const response = await fetch(`${API_URL}/api/v1/recommendations/${recommendationId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`삭제 실패 (${response.status})`)
+  }
+
+  return true
 }
