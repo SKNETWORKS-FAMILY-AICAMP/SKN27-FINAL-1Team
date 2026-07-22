@@ -9,11 +9,11 @@ import { getDragDirection, wrapSlideIndex } from '../heroCarousel.js'
 
 const slides = [
   {
-    image: hero1,
-    eyebrow: '오늘의 한 끼',
-    title: '냉장고 재료로\n오늘의 한 끼',
-    action: '메뉴 추천받기',
-    path: '/recipe-fridge',
+    image: hero3,
+    eyebrow: '재고와 소비기한 관리',
+    title: '재고와 소비기한을\n한눈에',
+    action: '내 냉장고 보기',
+    path: '/fridge',
   },
   {
     image: hero2,
@@ -23,18 +23,18 @@ const slides = [
     path: '/receipt-ocr',
   },
   {
-    image: hero3,
-    eyebrow: '재고와 소비기한 관리',
-    title: '재고와 소비기한을\n한눈에',
-    action: '내 냉장고 보기',
-    path: '/fridge',
+    image: hero1,
+    eyebrow: '오늘의 한 끼',
+    title: '냉장고 재료로\n오늘의 한 끼',
+    action: '메뉴 추천받기',
+    path: '/recipe-fridge',
   },
   {
     image: hero4,
-    eyebrow: '레시피부터 장보기까지',
+    eyebrow: '장보기 연결',
     title: '추천부터 장보기까지\n한 번에',
-    action: '레시피 둘러보기',
-    path: '/recipes',
+    action: '장보기 바로가기',
+    path: '/shopping-list',
   },
   {
     image: hero5,

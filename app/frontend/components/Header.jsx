@@ -191,16 +191,6 @@ function Header() {
           </div>
 
           <NavLink
-            to="/guide"
-            className={({ isActive }) =>
-              isActive ? 'site-header__nav-link active' : 'site-header__nav-link'
-            }
-            onClick={closeMobileMenu}
-          >
-            가이드
-          </NavLink>
-
-          <NavLink
             to="/shopping-list"
             className={({ isActive }) =>
               isActive ? 'site-header__nav-link active' : 'site-header__nav-link'
@@ -208,6 +198,16 @@ function Header() {
             onClick={closeMobileMenu}
           >
             장보기
+          </NavLink>
+
+          <NavLink
+            to="/guide"
+            className={({ isActive }) =>
+              isActive ? 'site-header__nav-link active' : 'site-header__nav-link'
+            }
+            onClick={closeMobileMenu}
+          >
+            가이드
           </NavLink>
         </nav>
 
