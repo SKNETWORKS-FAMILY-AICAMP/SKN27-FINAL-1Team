@@ -7,6 +7,7 @@ from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field
+from starlette.responses import PlainTextResponse
 
 from app.backend.core.config import settings
 from app.backend.mcp.auth import BobbeoriTokenVerifier, validate_mcp_auth_config
@@ -52,9 +53,10 @@ token_verifier = BobbeoriTokenVerifier(settings)
 mcp = FastMCP(
     "bobbeori",
     instructions=(
-        "Use these tools to read the authenticated user's Bobbeori inventory, recipes, "
-        "and ingredient guides. Never ask for or invent a user_id. Treat tool data as "
-        "private account data and do not imply that a write occurred from a read-only tool."
+        "Use Bobbeori tools only for the authenticated user's inventory, recipes, guides, "
+        "receipts, shopping lists, calendar events, and reminders. Never ask for or invent "
+        "user_id. For writes, call the matching preview tool first, show warnings, get "
+        "explicit confirmation, then pass its confirmation_token unchanged to commit/save/create."
     ),
     token_verifier=token_verifier,
     auth=AuthSettings(
@@ -244,3 +246,12 @@ def ingredient_guide(
 
 register_write_tools(mcp)
 app = mcp.streamable_http_app()
+
+
+async def openai_apps_challenge(request):
+    if not settings.OPENAI_APPS_CHALLENGE_TOKEN:
+        return PlainTextResponse("Not configured", status_code=404)
+    return PlainTextResponse(settings.OPENAI_APPS_CHALLENGE_TOKEN)
+
+
+app.add_route("/.well-known/openai-apps-challenge", openai_apps_challenge, methods=["GET"])

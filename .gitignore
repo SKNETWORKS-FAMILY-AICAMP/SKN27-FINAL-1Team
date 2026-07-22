@@ -201,3 +201,5 @@ tmp-*
 
 # AWS CDK synthesis output
 infra/cdk*.out/
+infra/cdk.context.json
+seed-prod/

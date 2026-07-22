@@ -13,9 +13,15 @@ calendar synchronization task through EventBridge Scheduler.
 - A frontend production build in `app/frontend/dist` if the deploy should also
   upload the React app to CloudFront's S3 origin.
 - A Secrets Manager JSON secret (default: `bobbeori/<environment>/external`)
-  with `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` keys.
+  with `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI`,
+  `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NAVER_SHOPPING_CLIENT_ID`,
+  `NAVER_SHOPPING_CLIENT_SECRET`, `LANGFUSE_PUBLIC_KEY`,
+  `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` keys.
 - Exact predefined OAuth callback URLs copied from the ChatGPT and Codex setup
   screens. The clients are public PKCE clients and have no client secret.
+- A Google OAuth web client that allows the Cognito callback URI printed as
+  `CognitoGoogleRedirectUri`.
 
 ## Synthesize and deploy
 
@@ -66,6 +72,10 @@ Register these frontend OAuth redirects in Google before production login:
 
 - `https://www.<root_domain>/auth/callback/google`
 - `https://www.<root_domain>/auth/callback/google-calendar`
+- `https://<cognito_domain_prefix>.auth.ap-northeast-2.amazoncognito.com/oauth2/idpresponse`
+
+The last redirect is required for Google login inside Cognito Hosted UI, which
+is what ChatGPT and Codex use during MCP connection.
 
 ## Database bootstrap and migrations
 
@@ -82,18 +92,74 @@ aws ecs run-task --cluster CLUSTER --launch-type FARGATE `
 The runner bootstraps `schema.sql` only for an empty database and records every
 versioned migration in `schema_migrations`.
 
+## Seed data import
+
+Build and upload the initial seed bundle to the stack-managed seed bucket, then
+run the one-off seed-import task. The task reads `manifest.json` from
+`SeedDataPrefix`, imports PostgreSQL CSV/SQL files, and can also load the
+food-guide split CSVs into Neo4j.
+
+Build the bundle from the source data kept on the data branch/history:
+
+```powershell
+python scripts/build_seed_bundle.py --source-rev origin/dev --output seed-prod
+```
+
+Example S3 layout:
+
+```text
+s3://<SeedDataBucketName>/prod/manifest.json
+s3://<SeedDataBucketName>/prod/postgres/recipes_seed.sql
+s3://<SeedDataBucketName>/prod/postgres/food_nutrition_facts.csv
+s3://<SeedDataBucketName>/prod/food_guide/nodes_ingredient.csv
+s3://<SeedDataBucketName>/prod/food_guide/rel_ingredient_has_guide.csv
+```
+
+Example `manifest.json`:
+
+```json
+{
+  "postgres_sql": [
+    {"key": "postgres/recipes_seed.sql"}
+  ],
+  "postgres_csv": [
+    {
+      "table": "food_nutrition_facts",
+      "key": "postgres/food_nutrition_facts.csv",
+      "mode": "skip_if_not_empty"
+    }
+  ],
+  "neo4j_food_guide": [
+    {"prefix": "food_guide/"}
+  ]
+}
+```
+
+Upload it:
+
+```powershell
+$SeedBucket="<SeedDataBucketName>"
+aws s3 sync .\seed-prod "s3://$SeedBucket/prod/" --delete --profile default
+```
+
+`postgres_csv` defaults to `mode: "skip_if_not_empty"` so reruns do not overwrite
+live data. The recipe seed SQL is idempotent for recipe ids `1..175`.
+
 ## OAuth verification
 
 Use Cognito's authorization-code flow with PKCE and include
-`resource=https://mcp.example.com/mcp`. After linking the Cognito identity to a
-signed-in Bobbeori account through `POST /api/v1/auth/mcp/link`, run:
+`resource=https://mcp.bobbeori.com`. If the Cognito login uses Google and the
+email is verified, the first MCP call auto-links the OAuth subject to the
+Bobbeori account with the same email. Explicit linking through
+`POST /api/v1/auth/mcp/link` is still supported. Then run:
 
 ```powershell
 python ../scripts/test_mcp_oauth.py `
-  --mcp-url https://mcp.example.com/mcp `
+  --mcp-url https://mcp.bobbeori.com/mcp `
+  --resource-url https://mcp.bobbeori.com `
   --access-token ACCESS_TOKEN
 ```
 
 Cognito must receive the `resource` parameter so the access token contains the
-MCP URL in its `aud` claim. The MCP server rejects tokens with a different or
-missing audience.
+MCP resource URL in its `aud` claim. The MCP server rejects tokens with a
+different or missing audience.

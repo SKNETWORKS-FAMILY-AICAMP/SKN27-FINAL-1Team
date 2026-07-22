@@ -5,6 +5,7 @@ from typing import Any, Iterator
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
+import httpx
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import ToolAnnotations
 from sqlalchemy.orm import Session
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.backend.db.session import SessionLocal
 from app.backend.mcp.contracts import ToolResult
 from app.backend.core.config import settings
-from app.backend.services.auth_service.external_identity_service import resolve_external_user_id
+from app.backend.services.auth_service.external_identity_service import resolve_or_link_external_user_id
 
 
 READ_ONLY = ToolAnnotations(
@@ -43,7 +44,22 @@ def require_user(scope: str) -> int:
         claims = token.claims or {}
         issuer = str(claims.get("iss") or "")
         with db_session() as db:
-            user_id = resolve_external_user_id(db, issuer=issuer, subject=str(token.subject))
+            user_id = resolve_or_link_external_user_id(
+                db,
+                issuer=issuer,
+                subject=str(token.subject),
+                email=_claim_email(claims),
+                email_verified=claims.get("email_verified"),
+            )
+            if user_id is None and settings.MCP_USERINFO_URL:
+                userinfo = _fetch_userinfo(token.token)
+                user_id = resolve_or_link_external_user_id(
+                    db,
+                    issuer=issuer,
+                    subject=str(token.subject),
+                    email=_claim_email(userinfo),
+                    email_verified=userinfo.get("email_verified"),
+                )
         if user_id is None:
             raise PermissionError("Link this OAuth account from Bobbeori before using MCP tools.")
         return user_id
@@ -64,6 +80,25 @@ def db_session() -> Iterator[Session]:
         yield db
     finally:
         db.close()
+
+
+def _claim_email(claims: dict[str, Any]) -> str | None:
+    email = claims.get("email")
+    return email.strip().lower() if isinstance(email, str) and email.strip() else None
+
+
+def _fetch_userinfo(access_token: str) -> dict[str, Any]:
+    try:
+        response = httpx.get(
+            settings.MCP_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=5.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+    except (httpx.HTTPError, ValueError, TypeError):
+        return {}
 
 
 def success(

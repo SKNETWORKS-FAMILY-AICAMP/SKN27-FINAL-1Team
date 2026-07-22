@@ -162,7 +162,7 @@ def test_production_runtime_maps_cognito_subject_to_bobbeori_user(monkeypatch):
     monkeypatch.setattr(runtime.settings, "MCP_DEV_TOKEN_AUTH", False)
     monkeypatch.setattr(runtime, "get_access_token", lambda: token)
     monkeypatch.setattr(runtime, "SessionLocal", FakeSession)
-    monkeypatch.setattr(runtime, "resolve_external_user_id", lambda *_args, **_kwargs: 42)
+    monkeypatch.setattr(runtime, "resolve_or_link_external_user_id", lambda *_args, **_kwargs: 42)
 
     assert runtime.require_user("inventory:read") == 42
 
@@ -183,7 +183,41 @@ def test_production_runtime_rejects_unlinked_cognito_subject(monkeypatch):
     monkeypatch.setattr(runtime.settings, "MCP_DEV_TOKEN_AUTH", False)
     monkeypatch.setattr(runtime, "get_access_token", lambda: token)
     monkeypatch.setattr(runtime, "SessionLocal", FakeSession)
-    monkeypatch.setattr(runtime, "resolve_external_user_id", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runtime, "resolve_or_link_external_user_id", lambda *_args, **_kwargs: None)
 
     with pytest.raises(PermissionError, match="Link this OAuth account"):
         runtime.require_user("inventory:read")
+
+
+def test_production_runtime_auto_links_verified_userinfo_email(monkeypatch):
+    token = AccessToken(
+        token="access-token",
+        client_id="client-id",
+        scopes=["bobbeori-mcp/inventory.read"],
+        subject="cognito-subject",
+        claims={"iss": "https://cognito.example/user-pool"},
+    )
+    calls = []
+
+    class FakeSession:
+        def close(self):
+            return None
+
+    def fake_resolve_or_link(_db, **kwargs):
+        calls.append(kwargs)
+        return None if len(calls) == 1 else 42
+
+    monkeypatch.setattr(runtime.settings, "MCP_DEV_TOKEN_AUTH", False)
+    monkeypatch.setattr(runtime.settings, "MCP_USERINFO_URL", "https://auth.example/oauth2/userInfo")
+    monkeypatch.setattr(runtime, "get_access_token", lambda: token)
+    monkeypatch.setattr(runtime, "SessionLocal", FakeSession)
+    monkeypatch.setattr(runtime, "resolve_or_link_external_user_id", fake_resolve_or_link)
+    monkeypatch.setattr(
+        runtime,
+        "_fetch_userinfo",
+        lambda _token: {"email": "Tester@Example.com", "email_verified": True},
+    )
+
+    assert runtime.require_user("inventory:read") == 42
+    assert calls[1]["email"] == "tester@example.com"
+    assert calls[1]["email_verified"] is True

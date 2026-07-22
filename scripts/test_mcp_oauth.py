@@ -4,22 +4,31 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
+from urllib.parse import urlparse
 
 import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 
-async def smoke_test(mcp_url: str, access_token: str) -> None:
+async def smoke_test(mcp_url: str, access_token: str, resource_url: str | None = None) -> None:
     mcp_url = mcp_url.rstrip("/")
-    resource_metadata_url = mcp_url.removesuffix("/mcp") + "/.well-known/oauth-protected-resource/mcp"
+    expected_resource = (resource_url or mcp_url).rstrip("/")
+    parsed_resource = urlparse(expected_resource)
+    resource_path = parsed_resource.path.strip("/")
+    resource_metadata_url = (
+        f"{parsed_resource.scheme}://{parsed_resource.netloc}/.well-known/oauth-protected-resource"
+        + (f"/{resource_path}" if resource_path else "")
+    )
 
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
         metadata_response = await client.get(resource_metadata_url)
         metadata_response.raise_for_status()
         metadata = metadata_response.json()
-        if metadata.get("resource") != mcp_url:
-            raise RuntimeError("Protected resource metadata does not match the MCP URL")
+        metadata_resource = str(metadata.get("resource", "")).rstrip("/")
+        if metadata_resource != expected_resource:
+            raise RuntimeError("Protected resource metadata does not match the expected resource URL")
 
         unauthorized = await client.post(mcp_url, json={})
         if unauthorized.status_code != 401 or "resource_metadata=" not in unauthorized.headers.get(
@@ -42,9 +51,12 @@ async def smoke_test(mcp_url: str, access_token: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mcp-url", required=True, help="Example: https://mcp.example.com/mcp")
-    parser.add_argument("--access-token", required=True)
+    parser.add_argument("--resource-url", help="Expected OAuth resource. Example: https://mcp.example.com")
+    parser.add_argument("--access-token", default=os.getenv("MCP_ACCESS_TOKEN"))
     args = parser.parse_args()
-    asyncio.run(smoke_test(args.mcp_url, args.access_token))
+    if not args.access_token:
+        parser.error("--access-token or MCP_ACCESS_TOKEN is required")
+    asyncio.run(smoke_test(args.mcp_url, args.access_token, args.resource_url))
 
 
 if __name__ == "__main__":

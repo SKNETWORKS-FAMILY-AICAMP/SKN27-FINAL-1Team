@@ -53,6 +53,8 @@ class ShoppingService:
         recipe_context = self._sync_recipe_list(db, user_id, shopping_list)
         if recipe_context["changed"]:
             shopping_list = self._get_user_list(db, user_id, shopping_list.id)
+        if self._backfill_missing_products(shopping_list):
+            db.commit()
         return self._map_list(shopping_list, owned_ingredients=recipe_context["owned_ingredients"])
 
     def get_list(self, db: Session, user_id: int, shopping_list_id: int) -> dict:
@@ -60,6 +62,8 @@ class ShoppingService:
         recipe_context = self._sync_recipe_list(db, user_id, shopping_list)
         if recipe_context["changed"]:
             shopping_list = self._get_user_list(db, user_id, shopping_list_id)
+        if self._backfill_missing_products(shopping_list):
+            db.commit()
         return self._map_list(shopping_list, owned_ingredients=recipe_context["owned_ingredients"])
 
     def get_history(self, db: Session, user_id: int, limit: int = 20) -> list[dict]:
@@ -266,6 +270,8 @@ class ShoppingService:
                     changed = True
                 if self._apply_product_snapshot(existing_item, raw_item):
                     changed = True
+                if self._backfill_product(existing_item):
+                    changed = True
                 continue
 
             product_snapshot = self._product_snapshot_from_input(raw_item)
@@ -340,6 +346,49 @@ class ShoppingService:
                 setattr(item, attr, value)
                 changed = True
         return changed
+
+    def _backfill_missing_products(self, shopping_list: ShoppingList) -> bool:
+        changed = False
+        for item in shopping_list.items:
+            if self._backfill_product(item):
+                changed = True
+        return changed
+
+    def _backfill_product(self, item: ShoppingListItem) -> bool:
+        if item.is_purchased or not self._needs_product_backfill(item):
+            return False
+
+        product = self.provider.search_best_product(item.name)
+        if not product:
+            return False
+
+        snapshot = {
+            "provider": product.provider,
+            "product_id": product.product_id,
+            "product_name": product.product_name,
+            "product_link": self.provider.build_product_link(product),
+            "product_image": product.product_image,
+            "price": product.price,
+            "mall_name": product.mall_name,
+        }
+        changed = False
+        for attr, value in snapshot.items():
+            if value is not None and getattr(item, attr) != value:
+                setattr(item, attr, value)
+                changed = True
+        return changed
+
+    def _needs_product_backfill(self, item: ShoppingListItem) -> bool:
+        return not any(
+            [
+                item.product_id,
+                item.product_name,
+                item.product_link,
+                item.product_image,
+                item.price,
+                item.mall_name,
+            ]
+        )
 
     def _build_source_ref(self, db: Session, source: str, recipe_id: int | None = None) -> dict:
         if source == "recipe" and recipe_id:

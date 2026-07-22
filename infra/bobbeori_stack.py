@@ -8,6 +8,7 @@ from aws_cdk import (
     CfnOutput,
     Duration,
     RemovalPolicy,
+    SecretValue,
     Stack,
     TimeZone,
     aws_certificatemanager as acm,
@@ -67,7 +68,10 @@ class BobbeoriStack(Stack):
             .rstrip("/")
         )
         mcp_host = f"mcp.{root_domain}"
-        mcp_url = f"https://{mcp_host}/mcp"
+        cognito_host = f"{cognito_domain_prefix}.auth.{Aws.REGION}.amazoncognito.com"
+        mcp_resource_url = f"https://{mcp_host}"
+        mcp_url = f"{mcp_resource_url}/mcp"
+        mcp_metadata_path = "/.well-known/oauth-protected-resource"
 
         vpc = ec2.Vpc(
             self,
@@ -117,6 +121,22 @@ class BobbeoriStack(Stack):
             enforce_ssl=True,
             removal_policy=RemovalPolicy.RETAIN if is_production else RemovalPolicy.DESTROY,
             auto_delete_objects=not is_production,
+        )
+        seed_data_bucket = s3.Bucket(
+            self,
+            "SeedDataBucket",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            versioned=is_production,
+            removal_policy=RemovalPolicy.RETAIN if is_production else RemovalPolicy.DESTROY,
+            auto_delete_objects=not is_production,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    abort_incomplete_multipart_upload_after=Duration.days(7),
+                    noncurrent_version_expiration=Duration.days(90) if is_production else None,
+                )
+            ],
         )
 
         app_security_group = ec2.SecurityGroup(
@@ -179,6 +199,7 @@ class BobbeoriStack(Stack):
             cognito_domain_prefix=cognito_domain_prefix,
             chatgpt_callbacks=chatgpt_callbacks,
             codex_callbacks=codex_callbacks,
+            external_secret_name=external_secret_name,
         )
         issuer_url = (
             f"https://cognito-idp.{Aws.REGION}.{Aws.URL_SUFFIX}/{user_pool.user_pool_id}"
@@ -229,15 +250,19 @@ class BobbeoriStack(Stack):
             or f"https://{app_host}",
             "MCP_DEV_TOKEN_AUTH": "false",
             "MCP_ISSUER_URL": issuer_url,
-            "MCP_RESOURCE_URL": mcp_url,
+            "MCP_RESOURCE_URL": mcp_resource_url,
             "MCP_JWKS_URL": f"{issuer_url}/.well-known/jwks.json",
-            "MCP_JWT_AUDIENCE": mcp_url,
+            "MCP_USERINFO_URL": f"https://{cognito_host}/oauth2/userInfo",
+            "MCP_JWT_AUDIENCE": mcp_resource_url,
             "MCP_SCOPE_PREFIX": "bobbeori-mcp",
             "MCP_SUPPORTED_SCOPES": ",".join(
                 f"bobbeori-mcp/{name}" for name in MCP_SCOPE_NAMES
             ),
             "MCP_REQUIRED_SCOPES": ",".join(
                 f"bobbeori-mcp/{name}" for name in MCP_SCOPE_NAMES
+            ),
+            "OPENAI_APPS_CHALLENGE_TOKEN": str(
+                self.node.try_get_context("openai_apps_challenge_token") or ""
             ),
             "GOOGLE_CALENDAR_REDIRECT_URI": self.node.try_get_context(
                 "google_calendar_redirect_uri"
@@ -262,6 +287,39 @@ class BobbeoriStack(Stack):
             ),
             "GOOGLE_CLIENT_SECRET": ecs.Secret.from_secrets_manager(
                 external_secret, "GOOGLE_CLIENT_SECRET"
+            ),
+            "KAKAO_CLIENT_ID": ecs.Secret.from_secrets_manager(
+                external_secret, "KAKAO_CLIENT_ID"
+            ),
+            "KAKAO_CLIENT_SECRET": ecs.Secret.from_secrets_manager(
+                external_secret, "KAKAO_CLIENT_SECRET"
+            ),
+            "KAKAO_REDIRECT_URI": ecs.Secret.from_secrets_manager(
+                external_secret, "KAKAO_REDIRECT_URI"
+            ),
+            "NAVER_CLIENT_ID": ecs.Secret.from_secrets_manager(
+                external_secret, "NAVER_CLIENT_ID"
+            ),
+            "NAVER_CLIENT_SECRET": ecs.Secret.from_secrets_manager(
+                external_secret, "NAVER_CLIENT_SECRET"
+            ),
+            "NAVER_SHOPPING_CLIENT_ID": ecs.Secret.from_secrets_manager(
+                external_secret, "NAVER_SHOPPING_CLIENT_ID"
+            ),
+            "NAVER_SHOPPING_CLIENT_SECRET": ecs.Secret.from_secrets_manager(
+                external_secret, "NAVER_SHOPPING_CLIENT_SECRET"
+            ),
+            "LANGFUSE_PUBLIC_KEY": ecs.Secret.from_secrets_manager(
+                external_secret, "LANGFUSE_PUBLIC_KEY"
+            ),
+            "LANGFUSE_SECRET_KEY": ecs.Secret.from_secrets_manager(
+                external_secret, "LANGFUSE_SECRET_KEY"
+            ),
+            "LANGFUSE_BASE_URL": ecs.Secret.from_secrets_manager(
+                external_secret, "LANGFUSE_BASE_URL"
+            ),
+            "LANGFUSE_HOST": ecs.Secret.from_secrets_manager(
+                external_secret, "LANGFUSE_BASE_URL"
             ),
         }
 
@@ -402,7 +460,7 @@ class BobbeoriStack(Stack):
             priority=20,
             conditions=[elbv2.ListenerCondition.host_headers([mcp_host])],
             health_check=elbv2.HealthCheck(
-                path="/.well-known/oauth-protected-resource/mcp",
+                path=mcp_metadata_path,
                 healthy_http_codes="200",
             ),
             deregistration_delay=Duration.seconds(30),
@@ -428,14 +486,70 @@ class BobbeoriStack(Stack):
             self,
             "FrontendCertificate",
             domain_name=app_host,
+            subject_alternative_names=(
+                [root_domain] if app_host != root_domain else None
+            ),
             hosted_zone=zone,
             region="us-east-1",
         )
+        frontend_domain_names = [app_host]
+        frontend_function_associations: list[cloudfront.FunctionAssociation] = []
+        if app_host != root_domain:
+            frontend_domain_names.append(root_domain)
+            apex_redirect_function = cloudfront.Function(
+                self,
+                "FrontendApexRedirectFunction",
+                code=cloudfront.FunctionCode.from_inline(
+                    f"""
+function handler(event) {{
+    var request = event.request;
+    var host = request.headers.host && request.headers.host.value;
+    if (host !== "{root_domain}") {{
+        return request;
+    }}
+
+    var querystring = request.querystring || {{}};
+    var parts = [];
+    for (var key in querystring) {{
+        if (!Object.prototype.hasOwnProperty.call(querystring, key)) {{
+            continue;
+        }}
+        var item = querystring[key];
+        if (item.multiValue) {{
+            for (var i = 0; i < item.multiValue.length; i++) {{
+                parts.push(key + "=" + item.multiValue[i].value);
+            }}
+        }} else if (item.value === "") {{
+            parts.push(key);
+        }} else {{
+            parts.push(key + "=" + item.value);
+        }}
+    }}
+
+    return {{
+        statusCode: 301,
+        statusDescription: "Moved Permanently",
+        headers: {{
+            location: {{
+                value: "https://{app_host}" + request.uri + (parts.length ? "?" + parts.join("&") : "")
+            }}
+        }}
+    }};
+}}
+""".strip()
+                ),
+            )
+            frontend_function_associations.append(
+                cloudfront.FunctionAssociation(
+                    event_type=cloudfront.FunctionEventType.VIEWER_REQUEST,
+                    function=apex_redirect_function,
+                )
+            )
         frontend_distribution = cloudfront.Distribution(
             self,
             "FrontendDistribution",
             default_root_object="index.html",
-            domain_names=[app_host],
+            domain_names=frontend_domain_names,
             certificate=frontend_certificate,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3BucketOrigin.with_origin_access_control(frontend_bucket),
@@ -443,6 +557,7 @@ class BobbeoriStack(Stack):
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
                 cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
+                function_associations=frontend_function_associations,
             ),
             error_responses=[
                 cloudfront.ErrorResponse(
@@ -468,6 +583,16 @@ class BobbeoriStack(Stack):
                 route53_targets.CloudFrontTarget(frontend_distribution)
             ),
         )
+        if app_host != root_domain:
+            route53.ARecord(
+                self,
+                "AppRootRedirectRecord",
+                zone=zone,
+                record_name=root_domain,
+                target=route53.RecordTarget.from_alias(
+                    route53_targets.CloudFrontTarget(frontend_distribution)
+                ),
+            )
         frontend_dist_path = Path(
             self.node.try_get_context("frontend_dist_path")
             or REPO_ROOT / "app/frontend/dist"
@@ -480,6 +605,7 @@ class BobbeoriStack(Stack):
                 destination_bucket=frontend_bucket,
                 distribution=frontend_distribution,
                 distribution_paths=["/*"],
+                memory_limit=512,
             )
 
         calendar_task, _ = self._task(
@@ -488,7 +614,6 @@ class BobbeoriStack(Stack):
             command=["python", "-m", "app.backend.services.calendar_job"],
             environment=common_environment,
             secrets=common_secrets,
-            receipts_bucket=receipts_bucket,
         )
         calendar_dlq = sqs.Queue(
             self,
@@ -526,8 +651,28 @@ class BobbeoriStack(Stack):
             command=["python", "-m", "app.backend.jobs.migrate"],
             environment=common_environment,
             secrets=common_secrets,
-            receipts_bucket=receipts_bucket,
         )
+        seed_data_prefix = str(
+            self.node.try_get_context("seed_data_prefix") or f"{environment_name}/"
+        ).strip("/")
+        seed_manifest_key = self.node.try_get_context("seed_manifest_key")
+        if not seed_manifest_key:
+            seed_manifest_key = (
+                f"{seed_data_prefix}/manifest.json" if seed_data_prefix else "manifest.json"
+            )
+        seed_import_task, _ = self._task(
+            name="seed-import",
+            image=image,
+            command=["python", "-m", "app.backend.jobs.seed_import"],
+            environment={
+                **common_environment,
+                "SEED_DATA_BUCKET": seed_data_bucket.bucket_name,
+                "SEED_DATA_PREFIX": seed_data_prefix,
+                "SEED_MANIFEST_KEY": str(seed_manifest_key),
+            },
+            secrets=common_secrets,
+        )
+        seed_data_bucket.grant_read(seed_import_task.task_role)
 
         CfnOutput(self, "ApiUrl", value=f"https://{api_host}")
         CfnOutput(self, "AppUrl", value=f"https://{app_host}")
@@ -538,12 +683,16 @@ class BobbeoriStack(Stack):
             value=frontend_distribution.distribution_domain_name,
         )
         CfnOutput(self, "McpUrl", value=mcp_url)
+        CfnOutput(self, "McpResourceUrl", value=mcp_resource_url)
         CfnOutput(self, "ReceiptBucketName", value=receipts_bucket.bucket_name)
         CfnOutput(self, "CognitoUserPoolId", value=user_pool.user_pool_id)
         CfnOutput(self, "CognitoIssuer", value=issuer_url)
         CfnOutput(self, "OAuthScopes", value=",".join(oauth_scopes))
         CfnOutput(self, "ClusterName", value=cluster.cluster_name)
         CfnOutput(self, "MigrationTaskDefinitionArn", value=migration_task.task_definition_arn)
+        CfnOutput(self, "SeedDataBucketName", value=seed_data_bucket.bucket_name)
+        CfnOutput(self, "SeedDataPrefix", value=seed_data_prefix)
+        CfnOutput(self, "SeedImportTaskDefinitionArn", value=seed_import_task.task_definition_arn)
         CfnOutput(self, "ApplicationSecurityGroupId", value=app_security_group.security_group_id)
         CfnOutput(
             self,
@@ -558,7 +707,9 @@ class BobbeoriStack(Stack):
         cognito_domain_prefix: str,
         chatgpt_callbacks: list[str],
         codex_callbacks: list[str],
+        external_secret_name: str,
     ) -> tuple[cognito.UserPool, cognito.UserPoolResourceServer, list[str]]:
+        cognito_host = f"{cognito_domain_prefix}.auth.{Aws.REGION}.amazoncognito.com"
         user_pool = cognito.UserPool(
             self,
             "UserPool",
@@ -594,6 +745,25 @@ class BobbeoriStack(Stack):
             identifier="bobbeori-mcp",
             scopes=scope_objects,
         )
+        google_provider = cognito.UserPoolIdentityProviderGoogle(
+            self,
+            "GoogleIdentityProvider",
+            user_pool=user_pool,
+            client_id=SecretValue.secrets_manager(
+                external_secret_name,
+                json_field="GOOGLE_CLIENT_ID",
+            ).unsafe_unwrap(),
+            client_secret_value=SecretValue.secrets_manager(
+                external_secret_name,
+                json_field="GOOGLE_CLIENT_SECRET",
+            ),
+            scopes=["openid", "email", "profile"],
+            attribute_mapping=cognito.AttributeMapping(
+                email=cognito.ProviderAttribute.GOOGLE_EMAIL,
+                email_verified=cognito.ProviderAttribute.GOOGLE_EMAIL_VERIFIED,
+                fullname=cognito.ProviderAttribute.GOOGLE_NAME,
+            ),
+        )
         oauth_scope_objects = [
             cognito.OAuthScope.resource_server(resource_server, scope)
             for scope in scope_objects
@@ -612,7 +782,8 @@ class BobbeoriStack(Stack):
                 enable_token_revocation=True,
                 access_token_validity=Duration.hours(1),
                 supported_identity_providers=[
-                    cognito.UserPoolClientIdentityProvider.COGNITO
+                    cognito.UserPoolClientIdentityProvider.COGNITO,
+                    cognito.UserPoolClientIdentityProvider.GOOGLE,
                 ],
                 o_auth=cognito.OAuthSettings(
                     flows=cognito.OAuthFlows(authorization_code_grant=True),
@@ -625,11 +796,18 @@ class BobbeoriStack(Stack):
                     logout_urls=callbacks,
                 ),
             )
+            clients[client_name].node.add_dependency(google_provider)
             CfnOutput(
                 self,
                 f"{client_name}OAuthClientId",
                 value=clients[client_name].user_pool_client_id,
             )
+
+        CfnOutput(
+            self,
+            "CognitoGoogleRedirectUri",
+            value=f"https://{cognito_host}/oauth2/idpresponse",
+        )
 
         return (
             user_pool,
@@ -748,7 +926,7 @@ class BobbeoriStack(Stack):
         command: list[str],
         environment: dict[str, str],
         secrets: dict[str, ecs.Secret],
-        receipts_bucket: s3.Bucket,
+        receipts_bucket: s3.Bucket | None = None,
         port: int | None = None,
     ) -> tuple[ecs.FargateTaskDefinition, ecs.ContainerDefinition]:
         normalized_name = "".join(part.title() for part in name.split("-"))
@@ -758,7 +936,8 @@ class BobbeoriStack(Stack):
             cpu=1024,
             memory_limit_mib=2048,
         )
-        receipts_bucket.grant_read_write(task.task_role)
+        if receipts_bucket is not None:
+            receipts_bucket.grant_read_write(task.task_role)
         log_group = logs.LogGroup(
             self,
             f"{normalized_name}LogGroup",

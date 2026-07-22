@@ -78,6 +78,12 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    LANGFUSE_BASE_URL: str = (
+        os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST", "")
+    ).rstrip("/")
+    LANGFUSE_HOST: str = (os.getenv("LANGFUSE_HOST") or LANGFUSE_BASE_URL).rstrip("/")
     
     # Runpod MCP / AI Server
     RUNPOD_CALENDAR_MCP_URL: str = os.getenv("RUNPOD_CALENDAR_MCP_URL", "")
@@ -95,6 +101,7 @@ class Settings:
     MCP_ISSUER_URL: str = os.getenv("MCP_ISSUER_URL", "").rstrip("/")
     MCP_RESOURCE_URL: str = os.getenv("MCP_RESOURCE_URL", "").rstrip("/")
     MCP_JWKS_URL: str = os.getenv("MCP_JWKS_URL", "")
+    MCP_USERINFO_URL: str = os.getenv("MCP_USERINFO_URL", "")
     MCP_JWT_AUDIENCE: str = os.getenv("MCP_JWT_AUDIENCE", "")
     MCP_JWT_ALGORITHMS: list[str] = [
         value.strip()
@@ -137,6 +144,7 @@ class Settings:
         for value in os.getenv("MCP_ALLOWED_ORIGINS", "").split(",")
         if value.strip()
     ]
+    OPENAI_APPS_CHALLENGE_TOKEN: str = os.getenv("OPENAI_APPS_CHALLENGE_TOKEN", "").strip()
 
     # Receipt OCR Settings
     OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai_vision")
@@ -164,3 +172,5 @@ class Settings:
             raise RuntimeError("S3_RECEIPT_BUCKET is required when receipt storage uses S3")
 
 settings = Settings()
+if settings.LANGFUSE_HOST and not os.getenv("LANGFUSE_HOST"):
+    os.environ["LANGFUSE_HOST"] = settings.LANGFUSE_HOST

@@ -56,13 +56,21 @@ class BobbeoriTokenVerifier(TokenVerifier):
             if jwk is None:
                 return None
 
-            payload = jwt.decode(
-                token,
-                jwk,
-                algorithms=self.config.MCP_JWT_ALGORITHMS,
-                audience=self.audience,
-                issuer=self.issuer_url,
-            )
+            payload = None
+            for audience in _audience_candidates(self.audience):
+                try:
+                    payload = jwt.decode(
+                        token,
+                        jwk,
+                        algorithms=self.config.MCP_JWT_ALGORITHMS,
+                        audience=audience,
+                        issuer=self.issuer_url,
+                    )
+                    break
+                except JWTError:
+                    continue
+            if payload is None:
+                return None
         except (JWTError, httpx.HTTPError, KeyError, TypeError, ValueError):
             return None
 
@@ -142,6 +150,11 @@ def _parse_scopes(payload: dict[str, Any]) -> list[str]:
     if isinstance(raw_scopes, list):
         return [str(scope) for scope in raw_scopes]
     return []
+
+
+def _audience_candidates(audience: str) -> list[str]:
+    stripped = audience.rstrip("/")
+    return list(dict.fromkeys(value for value in (audience, stripped, f"{stripped}/") if value))
 
 
 def _optional_int(value: Any) -> int | None:

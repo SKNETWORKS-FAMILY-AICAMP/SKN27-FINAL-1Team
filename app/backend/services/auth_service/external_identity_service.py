@@ -1,6 +1,7 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.backend.db.models import ExternalIdentity
+from app.backend.db.models import ExternalIdentity, User
 
 
 class ExternalIdentityConflictError(ValueError):
@@ -24,6 +25,28 @@ def resolve_external_user_id(db: Session, *, issuer: str, subject: str) -> int |
         .first()
     )
     return int(identity.user_id) if identity else None
+
+
+def resolve_or_link_external_user_id(
+    db: Session,
+    *,
+    issuer: str,
+    subject: str,
+    email: str | None = None,
+    email_verified: bool | str | None = None,
+) -> int | None:
+    user_id = resolve_external_user_id(db, issuer=issuer, subject=subject)
+    if user_id is not None or not email or not _is_truthy(email_verified):
+        return user_id
+
+    user = db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
+    if user is None:
+        return None
+
+    try:
+        return int(link_external_identity(db, user_id=int(user.id), issuer=issuer, subject=subject).user_id)
+    except ExternalIdentityConflictError:
+        return None
 
 
 def link_external_identity(db: Session, *, user_id: int, issuer: str, subject: str) -> ExternalIdentity:
@@ -61,3 +84,11 @@ def link_external_identity(db: Session, *, user_id: int, issuer: str, subject: s
     db.commit()
     db.refresh(identity)
     return identity
+
+
+def _is_truthy(value: bool | str | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return False
