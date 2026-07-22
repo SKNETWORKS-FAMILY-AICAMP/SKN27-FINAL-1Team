@@ -128,7 +128,7 @@ function categoryKeys(values) {
     .filter(Boolean)
 }
 
-export function getIngredientImageUrl(catalog, names, categories = []) {
+export function getIngredientImageUrl(catalog, names, categories = [], allowAliases = true) {
   if (!catalog) return ''
 
   const keys = candidateKeys(names)
@@ -136,9 +136,11 @@ export function getIngredientImageUrl(catalog, names, categories = []) {
     const item = catalog.names.get(key)
     if (item) return item.imageUrl
   }
-  for (const key of keys) {
-    const item = catalog.aliases.get(key)
-    if (item) return item.imageUrl
+  if (allowAliases) {
+    for (const key of keys) {
+      const item = catalog.aliases.get(key)
+      if (item) return item.imageUrl
+    }
   }
 
   for (const key of categoryKeys(categories)) {
