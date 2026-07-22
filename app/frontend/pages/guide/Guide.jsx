@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import './Guide.css'
 
 import iconBasket from '../../assets/extracted/icons/icon_basket.png'
@@ -115,9 +115,9 @@ function getGuideIcon(catalog, ingredient) {
       ingredient?.raw_name,
       ingredient?.name,
       ingredient?.representative_name,
-      ...(ingredient?.aliases || []),
     ],
     [ingredient?.middle_category, ingredient?.major_category],
+    false,
   )
 }
 
@@ -322,9 +322,11 @@ function Guide() {
     setGuestRecommendationPage(1)
   }, [searchTerm, selectedMajorCategory, selectedMiddleCategory])
 
-  useEffect(() => {
+  const selectMajorCategory = (category) => {
+    setSelectedMajorCategory(category)
     setSelectedMiddleCategory('')
-  }, [selectedMajorCategory])
+    setCategoryOptions((current) => ({ ...current, middle_categories: [] }))
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -479,7 +481,7 @@ function Guide() {
     window.setTimeout(() => { recipeDidDrag.current = false }, 0)
   }
 
-  const searchSuggestions = guideItems.slice(0, 6)
+  const searchSuggestions = guideItems
   const currentMonth = selectedSeasonalMonth
   const seasonalMonthControl = (
     <div
@@ -821,7 +823,7 @@ function Guide() {
                   className={!selectedMajorCategory ? 'is-active' : ''}
                   type="button"
                   aria-pressed={!selectedMajorCategory}
-                  onClick={() => setSelectedMajorCategory('')}
+                  onClick={() => selectMajorCategory('')}
                 >
                   전체
                 </button>
@@ -831,7 +833,7 @@ function Guide() {
                     key={category}
                     type="button"
                     aria-pressed={selectedMajorCategory === category}
-                    onClick={() => setSelectedMajorCategory(category)}
+                    onClick={() => selectMajorCategory(category)}
                   >
                     {category}
                   </button>
@@ -1116,19 +1118,12 @@ function Guide() {
                           resetRecipeDragVisual(event.currentTarget)
                         }}
                       >
-                        <article
+                        <Link
                           className={`guide-recipe-card is-${recipeSlideDirection}`}
                           key={currentRecommendedRecipe.recipe_id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            if (!recipeDidDrag.current) navigate(`/recipes/${currentRecommendedRecipe.recipe_id}`)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              navigate(`/recipes/${currentRecommendedRecipe.recipe_id}`)
-                            }
+                          to={`/recipes/${currentRecommendedRecipe.recipe_id}`}
+                          onClick={(event) => {
+                            if (recipeDidDrag.current) event.preventDefault()
                           }}
                         >
                           <ImageSlot alt="" className="guide-recipe-card__image" src={currentRecommendedRecipe.main_image_url} />
@@ -1139,7 +1134,7 @@ function Guide() {
                               {formatCookingTime(currentRecommendedRecipe.cooking_time_min)} · {currentRecommendedRecipe.difficulty || '난이도 정보 없음'}
                             </p>
                           </div>
-                        </article>
+                        </Link>
                       </div>
                     </>
                   ) : (

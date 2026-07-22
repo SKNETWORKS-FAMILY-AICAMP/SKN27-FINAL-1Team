@@ -107,8 +107,11 @@
   right: 0;
   left: 0;
   padding: 8px;
+  max-height: min(60vh, 480px);
   display: none;
   gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1.4px solid #efd8b8;
   border-radius: 14px;
   background: #fff;
@@ -1562,6 +1565,7 @@
   justify-content: center;
   text-align: center;
   flex-direction: column;
+  gap: 18px;
 }
 
 .guide-tip-body.is-missing {
@@ -1588,8 +1592,9 @@
 }
 
 .guide-recipe-more__icon {
-  width: 54px;
-  height: 42px;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
 }
 
 .guide-recipe-more strong {
@@ -2149,6 +2154,7 @@
   align-items: stretch;
   gap: 0;
   overflow: hidden;
+  text-decoration: none;
   animation: guide-recipe-slide-up 180ms ease-out;
   transition: transform 120ms ease-out;
 }
