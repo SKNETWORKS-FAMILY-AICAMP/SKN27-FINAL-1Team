@@ -3,6 +3,7 @@ import './Home.css'
 import HeroSection from './sections/HeroSection'
 import AppIntroSection from './sections/AppIntroSection'
 import WeeklyRecipeSection from './sections/WeeklyRecipeSection'
+import HomeFaqSection from './sections/HomeFaqSection'
 import ReviewSection from './sections/ReviewSection'
 
 function Home() {
@@ -38,6 +39,7 @@ function Home() {
       <HeroSection />
       <AppIntroSection />
       <WeeklyRecipeSection />
+      <HomeFaqSection />
       <ReviewSection />
     </div>
   )
