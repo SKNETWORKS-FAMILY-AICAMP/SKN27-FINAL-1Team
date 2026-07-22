@@ -99,7 +99,15 @@ class ShoppingService:
     def delete_item(self, db: Session, user_id: int, item_id: int) -> dict:
         item = self._get_user_item(db, user_id, item_id)
         shopping_list_id = item.shopping_list_id
-        db.delete(item)
+
+        # Recipe lists are synchronized from the latest refrigerator state whenever
+        # they are read. Keep a tombstone for recipe-backed items so that a user's
+        # explicit deletion is not immediately recreated by that synchronization.
+        if self._is_recipe_item(item):
+            item.is_deleted = True
+            item.is_checked = False
+        else:
+            db.delete(item)
         db.commit()
         return self.get_list(db, user_id=user_id, shopping_list_id=shopping_list_id)
 
@@ -239,7 +247,7 @@ class ShoppingService:
         active_by_key = {
             self._ingredient_key(item.ingredient_id, item.name): item
             for item in shopping_list.items
-            if not item.is_purchased
+            if not item.is_purchased and not self._is_deleted_item(item)
         }
         active_by_key = {key: item for key, item in active_by_key.items() if key}
         changed = False
@@ -350,6 +358,8 @@ class ShoppingService:
     def _backfill_missing_products(self, shopping_list: ShoppingList) -> bool:
         changed = False
         for item in shopping_list.items:
+            if self._is_deleted_item(item):
+                continue
             if self._backfill_product(item):
                 changed = True
         return changed
@@ -456,6 +466,13 @@ class ShoppingService:
             return False
         return any(ref.get("type") == "recipe" and int(ref.get("recipe_id") or 0) == int(recipe_id) for ref in refs)
 
+    def _is_recipe_item(self, item: ShoppingListItem) -> bool:
+        refs = self._normalize_source_refs(getattr(item, "source_refs", None))
+        return getattr(item, "source_type", None) == "recipe" or any(ref.get("type") == "recipe" for ref in refs)
+
+    def _is_deleted_item(self, item: ShoppingListItem) -> bool:
+        return bool(getattr(item, "is_deleted", False))
+
     def _remove_recipe_source(self, item: ShoppingListItem, recipe_id: int) -> list[dict]:
         return [
             ref
@@ -512,7 +529,11 @@ class ShoppingService:
             db.query(ShoppingListItem)
             .join(ShoppingList, ShoppingListItem.shopping_list_id == ShoppingList.id)
             .options(joinedload(ShoppingListItem.shopping_list).joinedload(ShoppingList.items))
-            .filter(ShoppingListItem.id == item_id, ShoppingList.user_id == user_id)
+            .filter(
+                ShoppingListItem.id == item_id,
+                ShoppingList.user_id == user_id,
+                ShoppingListItem.is_deleted.is_(False),
+            )
             .first()
         )
         if not item:
@@ -583,7 +604,26 @@ class ShoppingService:
             }
             desired_by_key = {key: item for key, item in desired_by_key.items() if key}
 
+            # Deleted recipe items stay as hidden tombstones. Otherwise the merge
+            # below would recreate them while building the DELETE response.
+            deleted_keys: set[str] = set()
+            for item in shopping_list.items:
+                item_refs = self._normalize_source_refs(getattr(item, "source_refs", None))
+                is_legacy_recipe_item = (
+                    not item_refs
+                    and shopping_list.source == "recipe"
+                    and shopping_list.recipe_id
+                    and int(shopping_list.recipe_id) == int(recipe_id)
+                )
+                if self._is_deleted_item(item) and (
+                    self._has_recipe_source(item, recipe_id) or is_legacy_recipe_item
+                ):
+                    deleted_keys.add(self._ingredient_key(item.ingredient_id, item.name))
+            desired_by_key = {key: item for key, item in desired_by_key.items() if key not in deleted_keys}
+
             for item in list(shopping_list.items):
+                if self._is_deleted_item(item):
+                    continue
                 item_refs = self._normalize_source_refs(getattr(item, "source_refs", None))
                 is_legacy_recipe_item = (
                     not item_refs
@@ -625,7 +665,10 @@ class ShoppingService:
         return {"changed": changed, "owned_ingredients": self._dedupe_owned_ingredients(owned_ingredients)}
 
     def _map_list(self, shopping_list: ShoppingList, owned_ingredients: list[dict] | None = None) -> dict:
-        items = sorted(shopping_list.items, key=lambda item: item.id)
+        items = sorted(
+            (item for item in shopping_list.items if not self._is_deleted_item(item)),
+            key=lambda item: item.id,
+        )
         total_price = sum((item.price or 0) for item in items if item.is_checked and not item.is_purchased)
         source_recipes = self._list_source_recipes(shopping_list)
         return {
@@ -666,7 +709,8 @@ class ShoppingService:
         }
 
     def _sync_list_status(self, shopping_list: ShoppingList) -> None:
-        if shopping_list.items and all(item.is_purchased for item in shopping_list.items):
+        visible_items = [item for item in shopping_list.items if not self._is_deleted_item(item)]
+        if visible_items and all(item.is_purchased for item in visible_items):
             shopping_list.status = "completed"
         else:
             shopping_list.status = "active"

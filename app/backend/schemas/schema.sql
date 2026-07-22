@@ -361,6 +361,7 @@ CREATE TABLE shopping_list_items (
     mall_name VARCHAR(255),
     is_checked BOOLEAN NOT NULL DEFAULT TRUE,
     is_purchased BOOLEAN NOT NULL DEFAULT FALSE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     source_type VARCHAR(30) NOT NULL DEFAULT 'recipe',
     source_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
