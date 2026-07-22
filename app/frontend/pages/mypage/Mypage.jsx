@@ -162,12 +162,11 @@ function CalendarPreview({ connected, events, monthDate, onChangeMonth }) {
         {days.map((item) => {
           const dayEvents = events.filter((calendarEvent) => calendarEvent.dateKey === item.dateKey)
           const isToday = item.dateKey === toLocalDateKey(today)
-          const dayBadge = item.holidayName || (item.dayOfWeek === 0 ? '휴일' : item.dayOfWeek === 6 ? '주말' : '')
+          const dayBadge = item.holidayName || ([0, 6].includes(item.dayOfWeek) ? '휴일' : '')
           const dayClassName = [
             'mypage-calendar-preview__day',
             isToday ? 'is-today' : '',
-            item.dayOfWeek === 0 ? 'is-sunday' : '',
-            item.dayOfWeek === 6 ? 'is-saturday' : '',
+            [0, 6].includes(item.dayOfWeek) ? 'is-weekend' : '',
             item.holidayName ? 'is-holiday' : '',
           ].filter(Boolean).join(' ')
           return (
