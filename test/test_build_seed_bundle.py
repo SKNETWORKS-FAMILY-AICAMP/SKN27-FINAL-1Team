@@ -14,10 +14,11 @@ def test_recipe_code_maps_to_numeric_recipe_id():
         build_seed_bundle._recipe_id("recipe-1")
 
 
-def test_amount_parser_keeps_quantity_and_display_unit():
-    assert build_seed_bundle._parse_amount("1개(180g)") == (Decimal("1"), "개(180g)")
+def test_amount_parser_strips_parenthetical_annotations():
+    assert build_seed_bundle._parse_amount("1개(180g)") == (Decimal("1"), "개")
     assert build_seed_bundle._parse_amount("1/2큰술") == (Decimal("0.5"), "큰술")
     assert build_seed_bundle._parse_amount("약간") == (None, "약간")
+    assert build_seed_bundle._parse_amount("2큰술 또는 1큰술") == (Decimal("2"), "큰술")
 
 
 def test_nutrition_csv_maps_korean_headers_to_db_columns():

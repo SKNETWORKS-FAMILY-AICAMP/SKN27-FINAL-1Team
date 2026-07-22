@@ -1,0 +1,221 @@
+@font-face {
+  font-family: "Pretendard";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/Pretendard-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/Pretendard-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/Pretendard-SemiBold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/Pretendard-Bold.woff2") format("woff2");
+}
+
+:root {
+  --primary-dark: #123d2a;
+  --primary-green: #2f8f5b;
+  --soft-green: #e7f5ec;
+
+  --page-bg: #f8faf4;
+  --warm-bg: #fff4e3;
+  --header-bg: #fff;
+  --card-bg: #fff;
+
+  --text-main: #1f2521;
+  --text-strong: #123d2a;
+  --text-sub: #667168;
+
+  --stroke: #dde8dd;
+  --stroke-green: #bfd8c7;
+  --stroke-warm: #e8d8bc;
+
+  --warning: #f3c84c;
+  --danger: #df5147;
+  --info: #3d7fa7;
+  --figma-bg: #fff;
+  --figma-line: #f4e4ce;
+  --figma-text: #2e1b12;
+  --figma-sub: #6f4b36;
+  --figma-coral: #ff6b74;
+  --figma-coral-stroke: #dd5059;
+  --figma-card-stroke: #e7c894;
+  --layout-container: min(100% - 32px, 1200px);
+}
+
+body {
+  margin: 0;
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--figma-bg);
+  color: var(--figma-text);
+}
+
+.app-shell {
+  box-sizing: border-box;
+  min-height: 100vh;
+}
+
+.app-main {
+  padding: 112px 0 0;
+}
+
+.app-main--auth {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.page-container {
+  width: var(--layout-container);
+  margin: 0 auto;
+  padding: 12px 0 56px;
+  box-sizing: border-box;
+}
+
+.page-container h1 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.page-container p {
+  margin: 12px 0 0;
+  color: var(--figma-sub);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.page-container__actions {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-container__actions a {
+  min-height: 42px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--figma-coral-stroke);
+  border-radius: 999px;
+  background: var(--figma-coral);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.info-page-list {
+  max-width: 880px;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid #ded5cf;
+  list-style: none;
+}
+
+.info-page-list li {
+  padding: 18px 2px;
+  border-bottom: 1px solid #e7e0dc;
+  color: var(--figma-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (min-width: 681px) and (max-width: 1180px) {
+  .app-main {
+    padding-top: 112px;
+  }
+
+  .app-main--auth {
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-main {
+    padding-top: 100px;
+    padding-bottom: 70px;
+  }
+
+  .app-main--auth {
+    padding: 0;
+  }
+
+  .mobile-bottom-nav {
+    width: 100%;
+    height: 66px;
+    padding: 6px 18px 8px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    box-sizing: border-box;
+    border-top: 1px solid #f1d9b3;
+    background: #fff;
+  }
+
+  .mobile-bottom-nav__item {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 3px;
+    color: #8b673e;
+    font-size: 11px;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .mobile-bottom-nav__icon {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+  }
+
+  .mobile-bottom-nav__icon svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .mobile-bottom-nav__item.active {
+    color: var(--figma-coral);
+  }
+}
