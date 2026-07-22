@@ -15,6 +15,7 @@ import MobileBottomNav from './components/MobileBottomNav.jsx'
 import OnboardingModal from './components/OnboardingModal.jsx'
 import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import Home from './pages/home/Home.jsx'
+import FaqPage from './pages/info/FaqPage.jsx'
 import InfoPage from './pages/info/InfoPage.jsx'
 import { privacyDocument, termsDocument } from './pages/info/policyContent.js'
 import Login from './pages/login/Login.jsx'
@@ -125,20 +126,7 @@ function AppLayout() {
           <Route path="/auth/callback/:provider" element={<Callback />} />
           <Route path="/mypage" element={<Mypage />} />
           <Route path="/shopping-list" element={<ShoppingList />} />
-          <Route
-            path="/faq"
-            element={
-              <InfoPage
-                title="자주 묻는 질문"
-                description="밥벌이 서비스 이용 중 자주 묻는 질문을 정리하는 페이지입니다."
-                items={[
-                  '영수증 등록 후 추출된 재료는 사용자가 확인한 항목만 냉장고에 저장됩니다.',
-                  '냉장고 파먹기 추천은 보유 재료와 소비 임박 재료를 기준으로 동작합니다.',
-                  '장보기 리스트는 추천 레시피에서 부족한 재료를 기준으로 구성됩니다.',
-                ]}
-              />
-            }
-          />
+          <Route path="/faq" element={<FaqPage />} />
           <Route
             path="/support"
             element={
