@@ -9,6 +9,7 @@ class FakeS3Client:
     def __init__(self):
         self.put_calls = []
         self.delete_calls = []
+        self.get_calls = []
         self.presign_calls = []
 
     def put_object(self, **kwargs):
@@ -16,6 +17,10 @@ class FakeS3Client:
 
     def delete_object(self, **kwargs):
         self.delete_calls.append(kwargs)
+
+    def get_object(self, **kwargs):
+        self.get_calls.append(kwargs)
+        return {"Body": b"image", "ContentType": "image/png"}
 
     def generate_presigned_url(self, operation, **kwargs):
         self.presign_calls.append((operation, kwargs))
@@ -48,6 +53,15 @@ def test_s3_receipt_storage_saves_reads_and_deletes_private_object():
         }
     ]
     assert storage.presigned_get_url(stored_path) == "https://signed.example/receipt"
+    body, media_type = storage.open_s3_object(stored_path)
+    assert body == b"image"
+    assert media_type == "image/png"
+    assert client.get_calls == [
+        {
+            "Bucket": "private-receipts",
+            "Key": stored_path.removeprefix("s3://private-receipts/"),
+        }
+    ]
     storage.delete(stored_path)
     assert client.delete_calls == [
         {

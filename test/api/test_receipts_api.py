@@ -176,6 +176,32 @@ def test_receipt_image_response_disables_caching_and_mime_sniffing(monkeypatch, 
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
+def test_s3_receipt_image_is_streamed_without_redirect(monkeypatch):
+    receipt = SimpleNamespace(original_file_path="s3://private-receipts/receipts/7/receipt.png")
+
+    class FakeQuery:
+        def filter(self, *args):
+            return self
+
+        def first(self):
+            return receipt
+
+    fake_db = SimpleNamespace(query=lambda model: FakeQuery())
+    monkeypatch.setattr(receipts_api.receipt_storage.config, "S3_RECEIPT_BUCKET", "private-receipts")
+    monkeypatch.setattr(receipts_api.receipt_storage.config, "S3_RECEIPT_PREFIX", "receipts")
+    monkeypatch.setattr(
+        receipts_api.receipt_storage,
+        "open_s3_object",
+        lambda stored_path: (b"fake-image-bytes", "image/png"),
+    )
+
+    response = receipts_api.get_receipt_image(receipt_id=10, current_user_id=7, db=fake_db)
+
+    assert response.status_code == 200
+    assert "location" not in response.headers
+    assert response.media_type == "image/png"
+
+
 def test_confirm_receipt_api_saves_confirmed_items(monkeypatch):
     saved = {}
 

@@ -6,7 +6,7 @@ from typing import List, Optional
 import httpx
 
 from fastapi import APIRouter, Depends, File, Form, Path, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -38,6 +38,20 @@ router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
 KST = timezone(timedelta(hours=9))
 PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
 OLD_RECEIPT_WARNING_DAYS = 30
+
+
+def _stream_s3_body(body):
+    try:
+        if isinstance(body, (bytes, bytearray)):
+            yield bytes(body)
+        elif hasattr(body, "iter_chunks"):
+            yield from body.iter_chunks()
+        else:
+            yield from body
+    finally:
+        close = getattr(body, "close", None)
+        if close:
+            close()
 
 
 def _format_sse_event(payload: dict) -> str:
@@ -184,9 +198,20 @@ def get_receipt_image(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image not found.")
 
     if receipt_storage.is_s3_uri(receipt.original_file_path):
-        return RedirectResponse(
-            receipt_storage.presigned_get_url(receipt.original_file_path),
-            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        try:
+            body, media_type = receipt_storage.open_s3_object(receipt.original_file_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid receipt image path.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image file not found.") from exc
+        return StreamingResponse(
+            _stream_s3_body(body),
+            media_type=media_type,
+            headers={
+                "Cache-Control": "private, no-store, max-age=0",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     image_path = receipt_storage.local_path(receipt.original_file_path)
