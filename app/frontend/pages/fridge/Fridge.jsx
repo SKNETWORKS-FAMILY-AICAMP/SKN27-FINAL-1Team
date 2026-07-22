@@ -186,6 +186,7 @@ function Fridge() {
 
   // 현재 브라우저에 저장된 로그인 토큰을 반환합니다.
   const getToken = () => window.localStorage.getItem('bobbeori-token')
+  const isLoggedIn = Boolean(getToken())
 
   useEffect(() => {
     if (!completionRecipe) return undefined
@@ -364,6 +365,10 @@ function Fridge() {
 
   // 새 식재료 등록 모달을 엽니다.
   const openAddModal = () => {
+    if (!getToken()) {
+      navigate('/login')
+      return
+    }
     setFormData(initialFormData)
     setEditingId(null)
     setIsModalOpen(true)
@@ -384,7 +389,7 @@ function Fridge() {
     setIsModalOpen(true)
   }
 
-  // 로그인 상태에 따라 로컬 mock 또는 백엔드 API로 식재료를 저장합니다.
+  // 로그인한 사용자의 식재료를 백엔드 API에 저장합니다.
   const handleSubmitIngredient = async () => {
     if (!formData.name.trim()) {
       await showAlert('재료 이름을 입력해주세요.', { title: '입력 확인' })
@@ -404,15 +409,8 @@ function Fridge() {
 
     const token = getToken()
     if (!token) {
-      setIngredients((prev) => {
-        if (editingId !== null) {
-          return prev.map((item) => (item.id === editingId ? normalizeIngredient({ ...item, ...payload }) : item))
-        }
-        return [normalizeIngredient({ ...payload, id: Date.now() }), ...prev]
-      })
-      setActiveFilter('전체')
-      setSearchQuery('')
       closeModal()
+      navigate('/login')
       return
     }
 
@@ -840,9 +838,15 @@ function Fridge() {
             {ingredients.length === 0 ? (
               <div className="fridge-empty-state">
                 <ImageSlot className="fridge-empty-state__image" src={imagePutting} />
-                <h3>냉장고가 비어 있어요.</h3>
-                <p>첫 재료를 등록하고 소비기한 관리를 시작해보세요.</p>
-                <button type="button" onClick={openAddModal}>+ 첫 재료 추가하기</button>
+                <h3>{isLoggedIn ? '냉장고가 비어 있어요.' : '로그인하고 냉장고를 채워주세요!'}</h3>
+                <p>
+                  {isLoggedIn
+                    ? '첫 재료를 등록하고 소비기한 관리를 시작해보세요.'
+                    : '로그인 후 재료를 등록하고 소비기한을 관리할 수 있어요.'}
+                </p>
+                <button type="button" onClick={isLoggedIn ? openAddModal : () => navigate('/login')}>
+                  {isLoggedIn ? '+ 첫 재료 추가하기' : '로그인하기'}
+                </button>
               </div>
             ) : sortedIngredients.length === 0 ? (
               <div className="fridge-empty-state">
@@ -922,11 +926,13 @@ function Fridge() {
                   )
                 })}
 
-                <article className="fridge-add-card">
-                  <ImageSlot className="fridge-add-card__image" src={imageAlarm} />
-                  <strong>더 많은 재료를 추가해보세요.</strong>
-                  <button type="button" onClick={openAddModal}>+ 재료 추가</button>
-                </article>
+                {isLoggedIn ? (
+                  <article className="fridge-add-card">
+                    <ImageSlot className="fridge-add-card__image" src={imageAlarm} />
+                    <strong>더 많은 재료를 추가해보세요.</strong>
+                    <button type="button" onClick={openAddModal}>+ 재료 추가</button>
+                  </article>
+                ) : null}
               </>
             )}
           </div>
@@ -1086,7 +1092,9 @@ function Fridge() {
           </div>
         </div>
       )}
-      <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={openAddModal}>+</button>
+      {isLoggedIn ? (
+        <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={openAddModal}>+</button>
+      ) : null}
     </section>
   )
 }
