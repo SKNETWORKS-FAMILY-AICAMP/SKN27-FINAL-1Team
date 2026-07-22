@@ -7,6 +7,8 @@ description: Safely use the Bobbeori MCP for refrigerator inventory, expiring in
 
 Use the connected `bobbeori` MCP. Never request or invent `user_id`; authentication supplies the account.
 
+If `bobbeori` is not connected or authenticated, stop and tell the user to connect the MCP server at `https://mcp.bobbeori.com/mcp` with OAuth before using this skill. Do not fall back to browser search or local app APIs for private account data.
+
 ## Read
 
 Call the narrowest matching read tool. Summarize returned data without claiming a mutation occurred.
@@ -29,12 +31,12 @@ If the user changes any field, run preview again. Never decode, edit, manufactur
 
 Use these pairs:
 
-- Receipt stocking: `receipt.preview` → `receipt.commit`
-- Shopping list: `shopping.preview` → `shopping.save`
-- Calendar event: `calendar.preview` → `calendar.create`
-- Food or shopping reminder: `reminder.preview` → `reminder.create`
+- Receipt stocking: `receipt.preview` -> `receipt.commit`
+- Shopping list: `shopping.preview` -> `shopping.save`
+- Calendar event: `calendar.preview` -> `calendar.create`
+- Food or shopping reminder: `reminder.preview` -> `reminder.create`
 
-Read [references/tool-workflows.md](references/tool-workflows.md) when choosing inputs, scopes, or handling failures.
+Read [references/tool-workflows.md](references/tool-workflows.md) when choosing inputs, scopes, handling failures, or explaining setup.
 
 ## Host usage
 
