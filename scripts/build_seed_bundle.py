@@ -412,8 +412,23 @@ def _normalize_name(name: str) -> str:
     return name.strip().replace(" ", "").lower()
 
 
-def _parse_amount(value: str | None) -> tuple[Decimal | None, str | None]:
+# ponytail: 분량 괄호·'또는 …' 대체문구만 제거. 재료명 clean과 분리.
+_AMOUNT_PAREN = re.compile(r"\([^)]*\)|\uff08[^\uff09]*\uff09")
+_AMOUNT_OR_ALT = re.compile(r"\s+또는\s+.*$")
+
+
+def _strip_amount_annotations(value: str | None) -> str:
+    """분량 문자열에서 소괄호 메모와 trailing '또는 …' 대체를 제거한다."""
     text = (value or "").strip()
+    if not text:
+        return ""
+    text = _AMOUNT_PAREN.sub("", text)
+    text = _AMOUNT_OR_ALT.sub("", text)
+    return text.strip()
+
+
+def _parse_amount(value: str | None) -> tuple[Decimal | None, str | None]:
+    text = _strip_amount_annotations(value)
     if not text:
         return None, None
     if "~" in text or "±" in text:
@@ -516,3 +531,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
