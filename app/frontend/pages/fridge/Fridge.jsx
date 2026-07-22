@@ -9,7 +9,11 @@ import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 import { API_URL } from '../../utils/api.js'
-import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/ingredientImages.js'
+import {
+  getIngredientImageUrl,
+  normalizeIngredientImageName,
+  useIngredientImageCatalog,
+} from '../../utils/ingredientImages.js'
 import { removeStoredRecipe } from '../../utils/savedRecipes.js'
 import { getFridgeNameClass } from './fridgeName.js'
 
