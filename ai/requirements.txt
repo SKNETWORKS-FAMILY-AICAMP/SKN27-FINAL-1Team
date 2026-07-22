@@ -1,0 +1,30 @@
+# Calendar MCP server
+httpx>=0.24.0
+mcp>=1.27.0,<2.0.0
+uvicorn[standard]>=0.22.0
+
+# ============================================================
+# 밥벌이(bobbeori) AI / OCR / Agent 실험 및 연구 전용 의존성
+# ============================================================
+
+# Jupyter Environment (실험실 필수 툴)
+jupyter>=1.0.0
+notebook>=7.0.0
+ipykernel
+
+# Deep Learning & OCR Core (박준희 담당)
+torch>=2.0.0
+torchvision
+transformers                # HuggingFace 모델 활용 시
+easyocr                     # 영수증 OCR 기본 엔진 실험
+opencv-python               # 이미지 전처리 및 OCR 연동
+Pillow                      # 이미지 처리 및 핸들링
+
+# LLM & Agent Framework (공용)
+langchain>=1.0,<2.0         # LLM 체인 및 create_agent 프레임워크
+langchain-openai>=1.0,<2.0  # ChatOpenAI 모델 연동
+langgraph>=1.0,<2.0         # 슈퍼바이저 LangGraph 워크플로 실행
+openai>=1.0.0               # OpenAI API 연동
+
+# postgresql
+psycopg[binary]==3.3.3

@@ -1,0 +1,239 @@
+services:
+    backend:
+        build:
+            context: .
+            dockerfile: app/backend/Dockerfile
+        container_name: bobbeori_backend
+        restart: unless-stopped
+        ports:
+            - "${SERVER_PORT:-8000}:8000"
+        env_file:
+            - .env
+        environment:
+            DB_ENGINE: postgresql
+            DB_HOST: postgres
+            NEO4J_URI: bolt://neo4j:7687
+        volumes:
+            - ./app:/project/app
+            - ./ai:/project/ai
+            - ./storage:/project/storage
+        command:
+            [
+                "uvicorn",
+                "app.backend.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload",
+                "--reload-dir",
+                "/project/app/backend",
+                "--reload-dir",
+                "/project/ai",
+            ]
+        depends_on:
+            postgres:
+                condition: service_healthy
+            nutrition_load:
+                condition: service_completed_successfully
+            recipe_load:
+                condition: service_completed_successfully
+            neo4j_load:
+                condition: service_completed_successfully
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8000/'')" || exit 1',
+                ]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 15s
+
+    mcp:
+        build:
+            context: .
+            dockerfile: app/backend/Dockerfile
+        container_name: bobbeori_mcp
+        restart: unless-stopped
+        ports:
+            - "${MCP_PORT:-8001}:8001"
+        env_file:
+            - .env
+        environment:
+            DB_ENGINE: postgresql
+            DB_HOST: postgres
+            NEO4J_URI: bolt://neo4j:7687
+            MCP_DEV_TOKEN_AUTH: ${MCP_DEV_TOKEN_AUTH:-true}
+            MCP_ISSUER_URL: ${MCP_ISSUER_URL:-http://localhost:8000}
+            MCP_RESOURCE_URL: ${MCP_RESOURCE_URL:-http://localhost:8001/mcp}
+            MCP_JWKS_URL: ${MCP_JWKS_URL:-}
+            MCP_JWT_AUDIENCE: ${MCP_JWT_AUDIENCE:-}
+            MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+            MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+        volumes:
+            - ./app:/project/app
+            - ./ai:/project/ai
+        command:
+            [
+                "uvicorn",
+                "app.backend.mcp.server:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8001",
+                "--reload",
+                "--reload-dir",
+                "/project/app/backend/mcp",
+            ]
+        depends_on:
+            backend:
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8001/.well-known/oauth-protected-resource/mcp'')" || exit 1',
+                ]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 15s
+
+    calendar-sync:
+        build:
+            context: .
+            dockerfile: app/backend/Dockerfile
+        profiles: ["jobs"]
+        env_file:
+            - .env
+        environment:
+            DB_ENGINE: postgresql
+            DB_HOST: postgres
+        command: ["python", "-m", "app.backend.services.calendar_job"]
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    frontend:
+        build:
+            context: ./app/frontend
+            dockerfile: Dockerfile
+        container_name: bobbeori_frontend
+        restart: unless-stopped
+        ports:
+            - "5173:5173"
+        environment:
+            VITE_API_URL: http://localhost:${SERVER_PORT:-8000}
+            CHOKIDAR_USEPOLLING: "true"
+        volumes:
+            - ./app/frontend:/app
+            - /app/node_modules
+        depends_on:
+            backend:
+                condition: service_healthy
+
+    nutrition_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_nutrition_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            DB_HOST: postgres
+        volumes:
+            - ./storage:/project/storage:ro
+            - ./app/backend/schemas:/project/app/backend/schemas:ro
+        command: ["python", "-m", "etl.nutrition.load_to_postgres"]
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    recipe_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_recipe_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            DB_HOST: postgres
+        volumes:
+            - ./storage:/project/storage:ro
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    neo4j_load:
+        build:
+            context: .
+            dockerfile: etl/Dockerfile
+        container_name: bobbeori_neo4j_load
+        restart: "no"
+        env_file:
+            - .env
+        environment:
+            NEO4J_URI: bolt://neo4j:7687
+        volumes:
+            - ./storage:/project/storage:ro
+        command:
+            - sh
+            - -c
+            - |
+                python -m etl.food_guide.load_to_neo4j \
+                    --split-dir /project/storage/processed/food_guide \
+                    --clear \
+                  && python -m etl.recipe.load_to_neo4j --clear \
+                  && python -m etl.recipe.prepare_graph_search
+        depends_on:
+            neo4j:
+                condition: service_healthy
+
+    postgres:
+        image: postgres:15
+        container_name: bobbeori_postgres
+        restart: unless-stopped
+        ports:
+            - "${DB_PORT:-5432}:5432"
+        environment:
+            POSTGRES_USER: ${DB_USER}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+            POSTGRES_DB: ${DB_NAME}
+        volumes:
+            - ./storage/postgres/data:/var/lib/postgresql/data
+            - ./app/backend/schemas/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+
+    neo4j:
+        image: neo4j:2026.04.0
+        container_name: bobbeori_neo4j
+        restart: unless-stopped
+        ports:
+            - "7474:7474"
+            - "7687:7687"
+        environment:
+            - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+            - NEO4J_PLUGINS=["graph-data-science"]
+            - NEO4J_dbms_security_procedures_allowlist=gds.*
+            - NEO4J_dbms_security_procedures_unrestricted=gds.*
+            - NEO4J_dbms_memory_heap_initial__size=512m
+            - NEO4J_dbms_memory_heap_max__size=2G
+            - NEO4J_dbms_memory_pagecache_size=1G
+        volumes:
+            - ./storage/neo4j/backups/neo4j_data:/data
+            - ./storage/neo4j/backups/neo4j_logs:/logs
+            - ./storage/neo4j/import:/var/lib/neo4j/import
+        healthcheck:
+            test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" 'RETURN 1'"]
+            interval: 10s
+            timeout: 10s
+            retries: 10
+            start_period: 30s

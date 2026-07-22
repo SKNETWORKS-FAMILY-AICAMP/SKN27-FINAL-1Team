@@ -1,0 +1,1193 @@
+from __future__ import annotations
+
+import asyncio
+import inspect
+import json
+import re
+from copy import deepcopy
+from datetime import timedelta
+from typing import Any, Callable
+
+from app.backend.core.config import settings
+
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - optional dependency guard
+    OpenAI = None
+
+try:
+    from langchain_core.runnables import RunnableLambda
+except Exception:  # pragma: no cover - optional dependency guard
+    RunnableLambda = None
+
+
+AGENT_NAME = "alarm"
+ToolMap = dict[str, Callable[[dict[str, Any], dict[str, Any]], Any]]
+REMINDER_TYPES = {"consume_reminder", "shopping_reminder", "calendar_event"}
+_LEGACY_CHOICE_SEP = "__bb_alarm_type__"
+
+MSG_CALENDAR_LIST = "캘린더 일정을 조회했어요."
+MSG_CALENDAR_CREATE = "캘린더 일정을 등록했어요."
+MSG_CALENDAR_DELETE = "캘린더 일정을 삭제했어요."
+MSG_CALENDAR_UPDATE = "캘린더 일정을 수정했어요."
+MSG_CALENDAR_PREVIEW = "캘린더 일정 미리보기를 만들었어요."
+MSG_CALENDAR_AVAILABILITY = "가능한 시간을 확인했어요."
+MSG_CALENDAR_SYNC = "오늘 알림 일정을 동기화했어요."
+MSG_ALARM_LIST = "알림 목록을 조회했어요."
+MSG_ALARM_READ = "알림을 읽음 처리했어요."
+MSG_ALARM_DEVICE = "알림 수신 기기를 등록했어요."
+MSG_CLARIFY = "어떤 알림인지 알려주세요. 먹기/구매/일반 일정 중 하나로 등록할 수 있어요."
+MSG_TIME_CLARIFY = "언제 등록할까요? 오늘 오후 7시, 내일, 30분 뒤처럼 알려주세요."
+MSG_HANDLED = "요청을 처리했어요."
+MSG_UNKNOWN = "알림/캘린더 agent가 처리할 수 없는 요청이에요."
+MSG_TOOL_MISSING = "실행할 도구가 연결되지 않았어요."
+MSG_TOOL_FAILED = "도구 실행에 실패했어요."
+MSG_ASYNC_REQUIRED = "비동기 환경에서는 arun()을 호출해주세요."
+MSG_DELETE_NOT_FOUND = "밥벌이에서 등록한 일정을 찾을 수 없어요. 밥벌이에서 등록한 일정만 삭제할 수 있어요."
+TITLE_CALENDAR_EVENT = "캘린더 일정"
+LABEL_CREATE = "등록"
+LABEL_DELETE = "삭제"
+LABEL_UPDATE = "수정"
+LABEL_SYNC = "동기화"
+LABEL_CANCEL = "취소"
+
+_INTENT_ACTIONS = {
+    "calendar.list": ("list_events", MSG_CALENDAR_LIST),
+    "calendar.create": ("create_event", MSG_CALENDAR_CREATE),
+    "calendar.preview": ("preview_event", MSG_CALENDAR_PREVIEW),
+    "calendar.delete": ("delete_event", MSG_CALENDAR_DELETE),
+    "calendar.update": ("update_event", MSG_CALENDAR_UPDATE),
+    "calendar.availability": ("check_availability", MSG_CALENDAR_AVAILABILITY),
+    "calendar.sync_daily": ("sync_daily_events", MSG_CALENDAR_SYNC),
+    "alarm.list": ("list_notifications", MSG_ALARM_LIST),
+    "alarm.read": ("mark_notification_read", MSG_ALARM_READ),
+    "alarm.register_device": ("register_device_token", MSG_ALARM_DEVICE),
+    "alarm.clarify": ("clarify", MSG_CLARIFY),
+    "mcp.calendar": ("create_event", MSG_CALENDAR_CREATE),
+    "mcp.pending_calendar": ("create_event", MSG_CALENDAR_CREATE),
+}
+_ALLOWED_INTENTS = set(_INTENT_ACTIONS)
+
+_CONFIRM_ACTIONS = {
+    "create_event",
+    "delete_event",
+    "update_event",
+    "sync_daily_events",
+    "mark_notification_read",
+    "register_device_token",
+}
+
+_CREATE_WORDS = ("등록", "추가", "생성", "예약", "잡아", "만들", "설정")
+_DELETE_WORDS = ("삭제", "지워", "취소", "없애")
+_UPDATE_WORDS = ("수정", "변경", "바꿔", "옮겨", "미뤄", "당겨", "연기")
+_LIST_WORDS = ("조회", "목록", "보여", "확인", "알려", "있어", "있나", "뭐")
+_AVAILABILITY_WORDS = ("가능", "빈시간", "빈 시간", "시간돼", "시간 돼", "언제돼", "언제 돼")
+_SYNC_WORDS = ("동기화", "자동 알림", "일일 알림", "오늘알림", "아침 알림")
+_CALENDAR_WORDS = ("캘린더", "일정", "알림", "알람", "리마인더")
+_DATE_WORDS = ("오늘", "어제", "내일", "모레", "지난주", "저번주", "이번주", "다음주", "지난달", "이번달", "다음달", "이번주말", "다음주말", "주말", "방금", "최근")
+_WEEKDAY_WORDS = ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일")
+_CONSUME_WORDS = ("먹", "사용", "소비", "처리", "요리")
+_SHOPPING_WORDS = ("사", "구매", "장보", "장볼")
+_COOKING_WORDS = ("요리", "조리", "만들", "만드는", "만들기", "냉장고파먹기", "파먹기")
+_MEAL_PLAN_WORDS = ("식단", "식사계획", "식사 계획", "밥계획", "밥 계획")
+_FRIDGE_CLEANUP_WORDS = ("냉장고정리", "냉장고 정리", "냉동실정리", "냉동실 정리")
+_FRIDGE_CHECK_WORDS = ("유통기한", "소비기한", "재고확인", "재고 확인", "냉장고확인", "냉장고 확인", "냉동실확인", "냉동실 확인")
+_MEAL_PREP_WORDS = ("밀프렙", "도시락준비", "도시락 준비", "식사준비", "식사 준비")
+_GENERAL_EVENT_WORDS = ("일정", "미팅", "약속", "예약", "회의")
+_DATE_PATTERN = r"\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}|\d{1,2}월\s*\d{1,2}일"
+_TIME_PATTERN = r"(?:(오전|오후)\s*)?(\d{1,2})(?::(\d{1,2})|시(?:\s*(\d{1,2})분?)?)"
+_DELAY_PATTERN = r"(\d{1,2})\s*(분|시간)\s*(?:뒤|후|있다가)"
+_TIME_CONTEXT_PATTERN = r"(아침|오전|점심때|점심|오후|저녁|밤|새벽|퇴근\s*후)"
+_AMBIGUOUS_WEEKEND_WORDS = {"주말", "이번주말", "다음주말"}
+_DEFAULT_DURATIONS = {
+    "INGREDIENT_CONSUMPTION": 30,
+    "COOKING": 45,
+    "MEAL_PLAN": 30,
+    "GROCERY_SHOPPING": 60,
+    "FRIDGE_CHECK": 30,
+    "FRIDGE_CLEANUP": 60,
+    "MEAL_PREP": 90,
+    "CUSTOM": 30,
+}
+_DEFAULT_REMINDERS = {
+    "INGREDIENT_CONSUMPTION": 30,
+    "COOKING": 30,
+    "MEAL_PLAN": 60,
+    "GROCERY_SHOPPING": 60,
+    "FRIDGE_CHECK": 60,
+    "FRIDGE_CLEANUP": 60,
+    "MEAL_PREP": 60,
+    "CUSTOM": 30,
+}
+_LLM_FALLBACK_HINT_WORDS = ("알려", "까먹", "잊지", "기억", "리마인드", "챙겨", "미리", "나중에")
+_PURPOSE_PHRASE_PATTERN = (
+    r"(먹으라고|먹으라|먹기|먹어야한다고|먹어야 한다고|"
+    r"사야한다고|사야 한다고|사기|구매\s*알림|구매하라고|구매해야한다고|구매하기|"
+    r"사용하라고|사용하기|소비하라고|소비하기)"
+)
+_COMMAND_SUFFIX_PATTERN = (
+    r"(?:\s*(?:일정|알림|알람|리마인더))?\s*"
+    r"(?:등록|추가|생성|예약|잡아|만들|설정|삭제|지워|취소|없애|조회|목록|보여|확인|알려)"
+    r"(?:\s*(?:해줘|해주세요|줘|줘요|해|해요|할래|할게|좀))?\??$"
+)
+ALARM_PARSE_PROMPT = """너는 밥벌이 서비스의 알림/캘린더 요청 파서다.
+규칙 기반 파서가 실패한 한국어 문장만 들어온다. JSON 객체만 반환한다.
+
+허용 intent:
+- calendar.list: 일정 조회
+- calendar.create: 일정/알림 등록
+- calendar.delete: 일정 삭제
+- alarm.clarify: 먹기 알림/구매 알림/일반 일정 중 타입이 애매함
+- unknown: 알림/캘린더 요청이 아님
+
+payload 허용 필드:
+- title: 일정/알림 제목
+- date_text: 오늘, 내일, 모레, 이번주, 다음주, 2026-07-13 등 원문 날짜 표현
+- hour: 0-23 정수
+- minute: 0-59 정수
+- delay_minutes: N분 뒤/후 같은 상대 알림 분 단위 정수
+- reminder_type: consume_reminder, shopping_reminder, calendar_event 중 하나
+
+규칙:
+- 음식 먹기/소비/사용 알림은 consume_reminder
+- 구매/장보기 알림은 shopping_reminder
+- 일반 일정/약속/회의/경기는 calendar_event
+- 알림 타입이 애매하면 intent를 alarm.clarify로 둔다.
+- 확실하지 않은 필드는 넣지 않는다.
+- 설명, 마크다운, 코드블록 없이 JSON만 반환한다.
+
+반환 예:
+{"intent":"calendar.create","payload":{"title":"두부","date_text":"내일","reminder_type":"consume_reminder"}}
+"""
+
+
+def _ui(ui: dict[str, Any] | None = None) -> dict[str, list[Any]]:
+    base = {"actions": [], "cards": [], "sources": []}
+    if not ui:
+        return base
+    return {key: list(ui.get(key) or []) for key in base}
+
+
+def build_response(
+    *,
+    ok: bool,
+    action: str,
+    intent: str,
+    message: str,
+    data: dict[str, Any] | None = None,
+    error: dict[str, Any] | None = None,
+    requires_confirmation: bool = False,
+    ui: dict[str, Any] | None = None,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "ok": ok,
+        "agent": AGENT_NAME,
+        "action": action,
+        "intent": intent,
+        "message": message,
+        "data": data or {},
+        "error": error,
+        "requires_confirmation": requires_confirmation,
+        "ui": _ui(ui),
+        "meta": meta or {},
+    }
+
+
+def _failure(intent: str, action: str, message: str, code: str = "ALARM_AGENT_ERROR") -> dict[str, Any]:
+    return build_response(
+        ok=False,
+        action=action,
+        intent=intent,
+        message=message,
+        error={"code": code, "message": message},
+    )
+
+
+def _unknown() -> dict[str, Any]:
+    return _failure("unknown", "unknown", MSG_UNKNOWN, "UNKNOWN_INTENT")
+
+
+def _calendar_subject(payload: dict[str, Any], fallback: str = "일정") -> str:
+    reminder_type = payload.get("reminder_type")
+    if reminder_type == "consume_reminder":
+        return "먹기 알림"
+    if reminder_type == "shopping_reminder":
+        return "구매 알림"
+    return fallback
+
+
+def _time_text(payload: dict[str, Any]) -> str | None:
+    if payload.get("delay_minutes"):
+        minutes = int(payload["delay_minutes"])
+        hours, rest = divmod(minutes, 60)
+        if not hours:
+            return f"{rest}분 뒤"
+        return f"{hours}시간" + (f" {rest}분" if rest else "") + " 뒤"
+    if "hour" not in payload:
+        return None
+    hour = int(payload.get("hour") or 0)
+    minute = int(payload.get("minute") or 0)
+    meridiem = "오전" if hour < 12 else "오후"
+    display_hour = hour % 12 or 12
+    return f"{meridiem} {display_hour}시" + (f" {minute}분" if minute else "")
+
+
+def _preview_datetime(payload: dict[str, Any]):
+    try:
+        from ai.agents.alarm_agent import tools as calendar_tools
+
+        start_at = calendar_tools._start_at(payload)
+        duration = int(payload.get("duration_minutes") or _DEFAULT_DURATIONS.get(_calendar_type_from_payload(payload), 30))
+        return start_at, start_at + timedelta(minutes=duration)
+    except Exception:
+        return None, None
+
+
+def _preview_description(payload: dict[str, Any], calendar_type: str) -> str:
+    if payload.get("description"):
+        return str(payload["description"])
+    title = payload.get("title") or payload.get("summary") or TITLE_CALENDAR_EVENT
+    return {
+        "INGREDIENT_CONSUMPTION": f"{title}을(를) 소비하기 위한 일정입니다.",
+        "COOKING": f"{title} 조리 일정입니다.",
+        "GROCERY_SHOPPING": f"{title} 장보기 일정입니다.",
+        "FRIDGE_CHECK": "냉장고 재고와 소비기한을 확인하는 일정입니다.",
+        "FRIDGE_CLEANUP": "냉장고를 정리하는 일정입니다.",
+        "MEAL_PREP": f"{title} 준비 일정입니다.",
+    }.get(calendar_type, f"{title} 일정입니다.")
+
+
+def _event_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    calendar_type = _calendar_type_from_payload(payload)
+    start_at, end_at = _preview_datetime(payload)
+    reminder_minutes = int(payload.get("reminder_minutes_before") or _DEFAULT_REMINDERS.get(calendar_type, 30))
+    return {
+        "title": payload.get("title") or payload.get("summary") or TITLE_CALENDAR_EVENT,
+        "calendar_type": calendar_type,
+        "start_at": start_at.isoformat() if start_at else None,
+        "end_at": end_at.isoformat() if end_at else None,
+        "timezone": "Asia/Seoul",
+        "description": _preview_description(payload, calendar_type),
+        "linked_inventory_item_ids": list(payload.get("linked_inventory_item_ids") or payload.get("inventory_item_ids") or []),
+        "linked_recipe_id": payload.get("recipe_id"),
+        "linked_shopping_list_id": payload.get("shopping_list_id"),
+        "reminders": [{"method": payload.get("reminder_method") or "popup", "minutes_before": reminder_minutes}],
+        "idempotency_key": payload.get("idempotency_key"),
+    }
+
+
+def _confirmation_data(action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    data = {"payload": deepcopy(payload)}
+    if action in {"create_event", "update_event"}:
+        data["calendar_action"] = "UPDATE" if action == "update_event" else "CREATE"
+        data["preview"] = _event_preview(payload)
+    elif action == "delete_event":
+        data["calendar_action"] = "CANCEL"
+        data["preview"] = {
+            "title": payload.get("title") or payload.get("summary") or payload.get("event_key") or TITLE_CALENDAR_EVENT,
+            "event_key": payload.get("event_key"),
+            "date_text": payload.get("date_text") or payload.get("date"),
+            "calendar_type": _calendar_type_from_payload(payload),
+        }
+    return data
+
+
+def _confirmation(intent: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    title = payload.get("title") or payload.get("summary") or payload.get("event_key") or TITLE_CALENDAR_EVENT
+    if action == "mark_notification_read":
+        return build_response(
+            ok=True,
+            action=action,
+            intent=intent,
+            message="알림을 읽음 처리할까요?",
+            data={"payload": deepcopy(payload)},
+            requires_confirmation=True,
+            ui={
+                "actions": [
+                    {"type": "confirm", "label": "읽음 처리", "value": {"intent": intent, "action": action, "payload": payload}},
+                    {"type": "cancel", "label": LABEL_CANCEL, "value": {"intent": intent, "action": "cancel"}},
+                ]
+            },
+            meta={
+                "human_in_the_loop": True,
+                "stage": "confirmation",
+                "reason": "confirm_before_tool",
+                "pending_action": action,
+            },
+        )
+    if action == "register_device_token":
+        title = "알림 수신 기기"
+    label = LABEL_DELETE if action == "delete_event" else LABEL_SYNC if action == "sync_daily_events" else LABEL_UPDATE if action == "update_event" else LABEL_CREATE
+    subject = title
+    if action in {"create_event", "delete_event", "update_event"}:
+        date_text = payload.get("date_text")
+        subject = " ".join(part for part in (date_text, _time_text(payload), title, _calendar_subject(payload)) if part)
+    return build_response(
+        ok=True,
+        action=action,
+        intent=intent,
+        message=f"{subject} {label}할까요?",
+        data=_confirmation_data(action, payload),
+        requires_confirmation=True,
+        ui={
+            "actions": [
+                {"type": "confirm", "label": label, "value": {"intent": intent, "action": action, "payload": payload}},
+                {"type": "cancel", "label": LABEL_CANCEL, "value": {"intent": intent, "action": "cancel"}},
+            ]
+        },
+        meta={
+            "human_in_the_loop": True,
+            "stage": "confirmation",
+            "reason": "confirm_before_tool",
+            "pending_action": action,
+        },
+    )
+
+
+def _clarification(payload: dict[str, Any]) -> dict[str, Any]:
+    return build_response(
+        ok=True,
+        action="clarify",
+        intent="alarm.clarify",
+        message=MSG_CLARIFY,
+        data={
+            "title": payload.get("title") or TITLE_CALENDAR_EVENT,
+            "date_text": payload.get("date_text"),
+            "candidates": ["consume_reminder", "shopping_reminder", "calendar_event"],
+        },
+        requires_confirmation=True,
+        ui={
+            "actions": [
+                {
+                    "type": "select",
+                    "label": "먹기 알림",
+                    "value": {
+                        "intent": "calendar.create",
+                        "action": "create_event",
+                        "payload": _pack_legacy_choice(apply_human_choice(payload, "consume_reminder")),
+                    },
+                },
+                {
+                    "type": "select",
+                    "label": "구매 알림",
+                    "value": {
+                        "intent": "calendar.create",
+                        "action": "create_event",
+                        "payload": _pack_legacy_choice(apply_human_choice(payload, "shopping_reminder")),
+                    },
+                },
+                {
+                    "type": "select",
+                    "label": "일반 일정",
+                    "value": {
+                        "intent": "calendar.create",
+                        "action": "create_event",
+                        "payload": _pack_legacy_choice(apply_human_choice(payload, "calendar_event")),
+                    },
+                },
+            ]
+        },
+        meta={
+            "human_in_the_loop": True,
+            "stage": "clarification",
+            "reason": "ambiguous_alarm_intent",
+        },
+    )
+
+
+def _has_schedule(payload: dict[str, Any]) -> bool:
+    return any(payload.get(key) is not None for key in ("start_at", "date", "date_text", "hour", "delay_minutes"))
+
+
+def _needs_time_clarification(payload: dict[str, Any]) -> bool:
+    return bool(payload.get("time_hint")) and not any(payload.get(key) is not None for key in ("start_at", "hour", "delay_minutes"))
+
+
+def _needs_date_clarification(payload: dict[str, Any]) -> bool:
+    compact = re.sub(r"\s+", "", str(payload.get("date_text") or payload.get("date") or ""))
+    return compact in _AMBIGUOUS_WEEKEND_WORDS
+
+
+def _time_hint_options(payload: dict[str, Any]) -> tuple[tuple[str, dict[str, Any]], ...]:
+    hint = payload.get("time_hint")
+    if hint == "dinner":
+        return (
+            ("오후 6시 30분", {"hour": 18, "minute": 30}),
+            ("오후 7시", {"hour": 19, "minute": 0}),
+            ("오후 8시", {"hour": 20, "minute": 0}),
+        )
+    if hint == "lunch":
+        return (
+            ("오전 11시 30분", {"hour": 11, "minute": 30}),
+            ("오후 12시", {"hour": 12, "minute": 0}),
+            ("오후 1시", {"hour": 13, "minute": 0}),
+        )
+    if hint == "morning":
+        return (
+            ("오전 9시", {"hour": 9, "minute": 0}),
+            ("오전 10시", {"hour": 10, "minute": 0}),
+            ("오전 11시", {"hour": 11, "minute": 0}),
+        )
+    if hint == "afternoon":
+        return (
+            ("오후 2시", {"hour": 14, "minute": 0}),
+            ("오후 3시", {"hour": 15, "minute": 0}),
+            ("오후 4시", {"hour": 16, "minute": 0}),
+        )
+    return (
+        ("오전 7시", {"hour": 7, "minute": 0}),
+        ("오전 8시", {"hour": 8, "minute": 0}),
+        ("오전 9시", {"hour": 9, "minute": 0}),
+    )
+
+
+def _time_clarification(intent: str, payload: dict[str, Any]) -> dict[str, Any]:
+    needs_time_hint = _needs_time_clarification(payload)
+    options = _time_hint_options(payload) if needs_time_hint else (
+        ("오늘", {"date_text": "오늘"}),
+        ("내일", {"date_text": "내일"}),
+        ("30분 뒤", {"date_text": "30분 뒤", "delay_minutes": 30}),
+    )
+    return build_response(
+        ok=True,
+        action="clarify_time",
+        intent=intent,
+        message="시간대가 넓어서 정확한 시간을 골라주세요." if needs_time_hint else MSG_TIME_CLARIFY,
+        data={"payload": deepcopy(payload)},
+        requires_confirmation=True,
+        ui={
+            "actions": [
+                {
+                    "type": "select",
+                    "label": label,
+                    "value": {
+                        "intent": intent,
+                        "action": "create_event",
+                        "payload": _pack_legacy_choice(
+                            {key: value for key, value in {**payload, **extra, "time_hint": None}.items() if value is not None}
+                        ),
+                    },
+                }
+                for label, extra in options
+            ]
+        },
+        meta={
+            "human_in_the_loop": True,
+            "stage": "clarification",
+            "reason": "missing_schedule",
+            "pending_action": "create_event",
+        },
+    )
+
+
+def _date_clarification(intent: str, payload: dict[str, Any]) -> dict[str, Any]:
+    compact = re.sub(r"\s+", "", str(payload.get("date_text") or payload.get("date") or ""))
+    week = "다음주" if compact == "다음주말" else "이번주"
+    options = (
+        (f"{week} 토요일", {"date_text": f"{week} 토요일"}),
+        (f"{week} 일요일", {"date_text": f"{week} 일요일"}),
+    )
+    return build_response(
+        ok=True,
+        action="clarify_date",
+        intent=intent,
+        message="주말은 토요일과 일요일 중 어느 날로 등록할까요?",
+        data={"payload": deepcopy(payload)},
+        requires_confirmation=True,
+        ui={
+            "actions": [
+                {
+                    "type": "select",
+                    "label": label,
+                    "value": {
+                        "intent": intent,
+                        "action": "create_event",
+                        "payload": _pack_legacy_choice({**payload, **extra}),
+                    },
+                }
+                for label, extra in options
+            ]
+        },
+        meta={
+            "human_in_the_loop": True,
+            "stage": "clarification",
+            "reason": "ambiguous_weekend_date",
+            "pending_action": "create_event",
+        },
+    )
+
+
+def apply_human_choice(payload: dict[str, Any], choice: str) -> dict[str, Any]:
+    if choice not in REMINDER_TYPES:
+        return deepcopy(payload)
+    next_payload = deepcopy(payload)
+    next_payload["reminder_type"] = choice
+    return next_payload
+
+
+def _pack_legacy_choice(payload: dict[str, Any]) -> dict[str, Any]:
+    next_payload = deepcopy(payload)
+    choice = next_payload.get("reminder_type")
+    title = next_payload.get("title")
+    if choice in REMINDER_TYPES and title and _LEGACY_CHOICE_SEP not in title:
+        next_payload["title"] = f"{title}{_LEGACY_CHOICE_SEP}{choice}"
+    return next_payload
+
+
+def _unpack_legacy_choice(payload: dict[str, Any]) -> dict[str, Any]:
+    title = payload.get("title")
+    if not isinstance(title, str) or _LEGACY_CHOICE_SEP not in title:
+        return payload
+    clean_title, choice = title.rsplit(_LEGACY_CHOICE_SEP, 1)
+    if choice in REMINDER_TYPES:
+        payload["title"] = clean_title
+        payload.setdefault("reminder_type", choice)
+    return payload
+
+
+def _from_tool_result(intent: str, action: str, message: str, tool_result: dict[str, Any]) -> dict[str, Any]:
+    if tool_result.get("ok") is False:
+        error = tool_result.get("error") or {"code": "TOOL_FAILED", "message": tool_result.get("message") or MSG_TOOL_FAILED}
+        return build_response(
+            ok=False,
+            action=action,
+            intent=intent,
+            message=error.get("message", MSG_TOOL_FAILED),
+            data=tool_result.get("data") or {},
+            error=error,
+            ui=tool_result.get("ui"),
+            meta=tool_result.get("meta"),
+        )
+    if action == "delete_event":
+        data = tool_result.get("data") if "data" in tool_result else tool_result
+        if not isinstance(data, dict) or data.get("deleted") is not True:
+            return build_response(
+                ok=False,
+                action=action,
+                intent=intent,
+                message=MSG_DELETE_NOT_FOUND,
+                data=data if isinstance(data, dict) else {},
+                error={"code": "CALENDAR_EVENT_NOT_FOUND", "message": MSG_DELETE_NOT_FOUND},
+                ui=tool_result.get("ui"),
+                meta=tool_result.get("meta"),
+            )
+
+    return build_response(
+        ok=True,
+        action=action,
+        intent=intent,
+        message=tool_result.get("message") or message,
+        data=tool_result.get("data") if "data" in tool_result else tool_result,
+        ui=tool_result.get("ui"),
+        meta=tool_result.get("meta"),
+    )
+
+
+def _contains_any(text: str, words: tuple[str, ...]) -> bool:
+    return any(word in text for word in words)
+
+
+def _calendar_type_from_text(text: str) -> str:
+    compact = re.sub(r"\s+", "", text or "")
+    if _contains_any(compact, _FRIDGE_CLEANUP_WORDS):
+        return "FRIDGE_CLEANUP"
+    if _contains_any(compact, _FRIDGE_CHECK_WORDS):
+        return "FRIDGE_CHECK"
+    if _contains_any(compact, _MEAL_PREP_WORDS):
+        return "MEAL_PREP"
+    if _contains_any(compact, _MEAL_PLAN_WORDS):
+        return "MEAL_PLAN"
+    if _contains_any(compact, _SHOPPING_WORDS) or "마트" in compact:
+        return "GROCERY_SHOPPING"
+    if _contains_any(compact, _COOKING_WORDS):
+        return "COOKING"
+    if _contains_any(compact, _CONSUME_WORDS) or "상하기전" in compact:
+        return "INGREDIENT_CONSUMPTION"
+    return "CUSTOM"
+
+
+def _calendar_type_from_payload(payload: dict[str, Any]) -> str:
+    if payload.get("calendar_type"):
+        return str(payload["calendar_type"])
+    reminder_type = payload.get("reminder_type")
+    if reminder_type == "consume_reminder":
+        return "INGREDIENT_CONSUMPTION"
+    if reminder_type == "shopping_reminder":
+        return "GROCERY_SHOPPING"
+    title = str(payload.get("title") or payload.get("summary") or "")
+    return _calendar_type_from_text(title)
+
+
+def _calendar_action_from_text(text: str) -> tuple[str, float]:
+    compact = re.sub(r"\s+", "", text or "")
+    if not compact:
+        return "UNKNOWN", 0.0
+    if _contains_any(compact, _UPDATE_WORDS):
+        return ("RESCHEDULE" if any(word in compact for word in ("미뤄", "당겨", "연기", "뒤로")) else "UPDATE", 0.88)
+    if _contains_any(compact, _DELETE_WORDS):
+        return "CANCEL", 0.9
+    if _contains_any(compact, _AVAILABILITY_WORDS):
+        return "AVAILABILITY", 0.82
+    if "미리보기" in compact or "초안" in compact:
+        return "PREVIEW", 0.86
+    if _contains_any(text, _SYNC_WORDS):
+        return "CREATE", 0.7
+    if _contains_any(compact, _LIST_WORDS) and _contains_any(compact, _CALENDAR_WORDS):
+        return "LIST", 0.86
+    if _contains_any(compact, _CREATE_WORDS) or any(word in compact for word in ("할거야", "하게해줘", "넣어줘")):
+        return "CREATE", 0.9
+    if _contains_any(compact, _CALENDAR_WORDS):
+        return "LIST", 0.65
+    return "UNKNOWN", 0.0
+
+
+def _legacy_intent_for_calendar_action(calendar_action: str) -> str | None:
+    return {
+        "CREATE": "calendar.create",
+        "PREVIEW": "calendar.preview",
+        "LIST": "calendar.list",
+        "UPDATE": "calendar.update",
+        "RESCHEDULE": "calendar.update",
+        "CANCEL": "calendar.delete",
+        "AVAILABILITY": "calendar.availability",
+    }.get(calendar_action)
+
+
+def classify_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    calendar_action, confidence = _calendar_action_from_text(text)
+    payload_type = _calendar_type_from_payload(payload or {})
+    text_type = _calendar_type_from_text(text)
+    calendar_type = payload_type if payload_type != "CUSTOM" else text_type
+    legacy_intent = _legacy_intent_for_calendar_action(calendar_action)
+    legacy_action = _INTENT_ACTIONS.get(legacy_intent or "", ("unknown",))[0]
+    return {
+        "intent": calendar_action,
+        "calendar_type": calendar_type,
+        "confidence": confidence,
+        "legacy_intent": legacy_intent,
+        "legacy_action": legacy_action,
+    }
+
+
+def _should_try_llm_fallback(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text or "")
+    return bool(compact) and _contains_any(compact, _LLM_FALLBACK_HINT_WORDS)
+
+
+def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed = {"title", "date_text", "hour", "minute", "delay_minutes", "reminder_type"}
+    clean = {key: value for key, value in payload.items() if key in allowed and value not in ("", None)}
+    if clean.get("reminder_type") not in REMINDER_TYPES:
+        clean.pop("reminder_type", None)
+    for key in ("hour", "minute", "delay_minutes"):
+        if key in clean:
+            try:
+                clean[key] = int(clean[key])
+            except (TypeError, ValueError):
+                clean.pop(key, None)
+    if "hour" in clean and not 0 <= clean["hour"] <= 23:
+        clean.pop("hour", None)
+    if "minute" in clean and not 0 <= clean["minute"] <= 59:
+        clean.pop("minute", None)
+    if "delay_minutes" in clean and clean["delay_minutes"] <= 0:
+        clean.pop("delay_minutes", None)
+    return clean
+
+
+def _normalize_llm_parse_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    intent = result.get("intent")
+    if intent not in _ALLOWED_INTENTS or intent in {"mcp.calendar", "mcp.pending_calendar"}:
+        return None
+    action, _ = _INTENT_ACTIONS[intent]
+    payload = _clean_llm_payload(result.get("payload") or {})
+    if intent == "calendar.create" and not payload.get("reminder_type"):
+        intent, action = "alarm.clarify", "clarify"
+    return {"intent": intent, "action": action, "payload": payload}
+
+
+def _call_llm_parser(text: str) -> dict[str, Any] | None:
+    if OpenAI is None or not settings.OPENAI_API_KEY:
+        return None
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model=settings.OPENAI_MODEL,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": ALARM_PARSE_PROMPT},
+            {"role": "user", "content": text},
+        ],
+    )
+    content = response.choices[0].message.content if response.choices else ""
+    return json.loads(content or "{}")
+
+
+def _parse_with_llm_fallback(text: str) -> dict[str, Any] | None:
+    if not _should_try_llm_fallback(text):
+        return None
+    try:
+        return _normalize_llm_parse_result(_call_llm_parser(text))
+    except Exception:
+        return None
+
+
+def _intent_message(intent: str, payload: dict[str, Any], default: str) -> str:
+    if intent == "alarm.list" and payload.get("unread_only"):
+        return "읽지 않은 알림을 조회했어요."
+    return default
+
+
+def _extract_date_text(text: str) -> str | None:
+    for pattern in (
+        _DATE_PATTERN,
+    ):
+        match = re.search(pattern, text)
+        if match:
+            return match.group(0)
+    compact = re.sub(r"\s+", "", text or "")
+    weekend_match = re.search(r"(이번주|다음주)?주말", compact)
+    if weekend_match:
+        return weekend_match.group(0)
+    weekday_match = re.search(r"(지난주|저번주|이번주|다음주)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)", compact)
+    if weekday_match:
+        return "".join(part for part in weekday_match.groups() if part)
+    return next((word for word in sorted(_DATE_WORDS, key=len, reverse=True) if word in compact), None)
+
+
+def _strip_date_words(text: str) -> str:
+    title = re.sub(_DATE_PATTERN, " ", text)
+    for weekday in _WEEKDAY_WORDS:
+        title = re.sub(r"\s*".join(map(re.escape, weekday)), " ", title)
+    for word in sorted(_DATE_WORDS, key=len, reverse=True):
+        title = re.sub(r"\s*".join(map(re.escape, word)), " ", title)
+    return title
+
+
+def _extract_time(text: str) -> tuple[int, int] | None:
+    match = re.search(_TIME_PATTERN, text or "")
+    if not match:
+        return None
+    meridiem, hour_text, colon_minute, korean_minute = match.groups()
+    hour = int(hour_text)
+    minute = int(colon_minute or korean_minute or 0)
+    compact = re.sub(r"\s+", "", text or "")
+    if (meridiem == "오후" or (meridiem is None and any(word in compact for word in ("점심", "저녁", "밤")))) and hour < 12:
+        hour += 12
+    elif (meridiem == "오전" or (meridiem is None and "새벽" in compact)) and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour, minute
+
+
+def _extract_time_hint(text: str) -> str | None:
+    compact = re.sub(r"\s+", "", text or "")
+    if any(word in compact for word in ("퇴근후", "저녁", "밤")):
+        return "dinner"
+    if "점심" in compact:
+        return "lunch"
+    if any(word in compact for word in ("아침", "오전")):
+        return "morning"
+    if "오후" in compact:
+        return "afternoon"
+    if "새벽" in compact:
+        return "early_morning"
+    return None
+
+
+def _extract_delay_minutes(text: str) -> int | None:
+    match = re.search(_DELAY_PATTERN, text or "")
+    if not match:
+        return None
+    amount, unit = match.groups()
+    minutes = int(amount) * (60 if unit == "시간" else 1)
+    return minutes if minutes > 0 else None
+
+
+def _extract_title(text: str) -> str:
+    title = _strip_date_words(text)
+    title = re.sub(_DELAY_PATTERN, " ", title)
+    title = re.sub(_TIME_CONTEXT_PATTERN, " ", title)
+    title = re.sub(_TIME_PATTERN, " ", title)
+    title = re.sub(_PURPOSE_PHRASE_PATTERN, " ", title)
+    title = re.sub(r"(?:일정|알림|알람|리마인더)?\s*(?:을|를)?\s*(?:로|으로)?\s*(?:수정|변경|바꿔|옮겨|미뤄|당겨|연기).*$", " ", title.strip())
+    title = re.sub(_COMMAND_SUFFIX_PATTERN, " ", title.strip())
+    title = re.sub(r"^(?:등록한|예약한|추가한)\s*", " ", title.strip())
+    title = re.sub(r"(?:해줘|해주세요|줘|줘요|좀|\?)$", " ", title.strip())
+    title = re.sub(r"(?:을|를|은|는|이|가)$", " ", title.strip())
+    title = re.sub(r"^(?:에|에서|을|를|은|는|이|가)\s*", " ", title.strip())
+    title = re.sub(r"\s+", " ", title).strip()
+    return title or TITLE_CALENDAR_EVENT
+
+
+def _is_unread_alarm_query(compact: str) -> bool:
+    return any(word in compact for word in ("읽지않은", "안읽은", "미확인", "미읽음"))
+
+
+def _analyze_intent_rules(text: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = deepcopy(payload or {})
+    compact = re.sub(r"\s+", "", text or "")
+
+    # ponytail: keyword routing is enough until the supervisor needs model-based ranking here.
+    if "디바이스" in compact or "기기" in compact or "푸시토큰" in compact:
+        intent = "alarm.register_device" if _contains_any(compact, _CREATE_WORDS) else "alarm.list"
+    elif _is_unread_alarm_query(compact):
+        intent = "alarm.list"
+        payload.setdefault("unread_only", True)
+    elif "읽음" in compact or "읽었" in compact:
+        intent = "alarm.read"
+    elif ("알림" in compact or "알람" in compact) and _contains_any(compact, _LIST_WORDS) and not ("캘린더" in compact or "일정" in compact):
+        intent = "alarm.list"
+    elif _contains_any(compact, _CALENDAR_WORDS):
+        if _contains_any(compact, _DELETE_WORDS):
+            intent = "calendar.delete"
+        elif _contains_any(text, _SYNC_WORDS):
+            intent = "calendar.sync_daily"
+        elif _contains_any(compact, _LIST_WORDS):
+            intent = "calendar.list"
+        elif _contains_any(compact, _CREATE_WORDS):
+            intent = "calendar.create"
+        else:
+            intent = "calendar.list"
+    else:
+        intent = "unknown"
+
+    action, _ = _INTENT_ACTIONS.get(intent, ("unknown", MSG_HANDLED))
+    if intent == "unknown":
+        fallback = _parse_with_llm_fallback(text)
+        if fallback:
+            return {
+                "intent": fallback["intent"],
+                "action": fallback["action"],
+                "payload": {**payload, **fallback["payload"]},
+            }
+    if action in {"list_events", "list_notifications", "sync_daily_events"}:
+        date_text = _extract_date_text(text)
+        if date_text:
+            payload.setdefault("date_text", date_text)
+    if action in {"create_event", "delete_event"}:
+        payload.setdefault("title", _extract_title(text))
+        date_text = _extract_date_text(text)
+        if date_text:
+            payload.setdefault("date_text", date_text)
+        elif "주말" in compact:
+            payload.setdefault("date_text", "다음주말" if "다음주" in compact else "이번주말")
+        delay_minutes = _extract_delay_minutes(text)
+        if delay_minutes:
+            payload.setdefault("delay_minutes", delay_minutes)
+        else:
+            parsed_time = _extract_time(text)
+            if parsed_time:
+                payload.setdefault("hour", parsed_time[0])
+                payload.setdefault("minute", parsed_time[1])
+            else:
+                time_hint = _extract_time_hint(text)
+                if time_hint:
+                    payload.setdefault("time_hint", time_hint)
+        if action == "create_event" and intent == "calendar.create":
+            if _contains_any(compact, _GENERAL_EVENT_WORDS) or "캘린더" in compact:
+                payload.setdefault("reminder_type", "calendar_event")
+            elif _contains_any(compact, _CONSUME_WORDS):
+                payload.setdefault("reminder_type", "consume_reminder")
+            elif _contains_any(compact, _SHOPPING_WORDS):
+                payload.setdefault("reminder_type", "shopping_reminder")
+            elif not payload.get("reminder_type"):
+                intent, action = "alarm.clarify", "clarify"
+
+    return {"intent": intent, "action": action, "payload": payload}
+
+
+def _classify_calendar_chain_input(inputs: dict[str, Any]) -> dict[str, Any]:
+    text = inputs.get("text") or ""
+    payload = deepcopy(inputs.get("payload") or {})
+    return {"text": text, "payload": payload, "classification": classify_intent(text, payload)}
+
+
+def _build_calendar_action(inputs: dict[str, Any]) -> dict[str, Any]:
+    text = inputs["text"]
+    payload = deepcopy(inputs["payload"])
+    classification = inputs["classification"]
+    result = _analyze_intent_rules(text, payload)
+
+    if result["intent"] == "unknown":
+        legacy_intent = classification.get("legacy_intent")
+        if legacy_intent in _INTENT_ACTIONS:
+            action, _ = _INTENT_ACTIONS[legacy_intent]
+            return {
+                "intent": legacy_intent,
+                "action": action,
+                "payload": _fill_calendar_payload(text, legacy_intent, action, payload),
+            }
+
+    if classification["intent"] in {"UPDATE", "RESCHEDULE", "AVAILABILITY"}:
+        legacy_intent = classification["legacy_intent"]
+        action, _ = _INTENT_ACTIONS[legacy_intent]
+        return {
+            "intent": legacy_intent,
+            "action": action,
+            "payload": _fill_calendar_payload(text, legacy_intent, action, result["payload"]),
+        }
+
+    return result
+
+
+class _SimpleCalendarChain:
+    def invoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        return _build_calendar_action(_classify_calendar_chain_input(inputs))
+
+
+_CALENDAR_AGENT_CHAIN = (
+    RunnableLambda(_classify_calendar_chain_input) | RunnableLambda(_build_calendar_action)
+    if RunnableLambda
+    else _SimpleCalendarChain()
+)
+
+
+def analyze_intent(text: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return _CALENDAR_AGENT_CHAIN.invoke({"text": text or "", "payload": deepcopy(payload or {})})
+
+
+def _candidate_matches_title(candidate: dict[str, Any], title: str | None) -> bool:
+    if not title or title == TITLE_CALENDAR_EVENT:
+        return True
+    expected = re.sub(r"\s+", "", title)
+    actual = re.sub(r"\s+", "", candidate.get("title") or candidate.get("summary") or "")
+    return expected in actual or actual in expected
+
+
+def _fill_calendar_payload(text: str | None, intent: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if text in _INTENT_ACTIONS:
+        text = None
+    if action in {"list_events", "create_event", "delete_event", "update_event", "check_availability", "sync_daily_events"}:
+        date_text = _extract_date_text(text or "")
+        if date_text:
+            payload.setdefault("date_text", date_text)
+        elif "주말" in re.sub(r"\s+", "", text or ""):
+            payload.setdefault("date_text", "다음주말" if "다음주" in re.sub(r"\s+", "", text or "") else "이번주말")
+    if action in {"create_event", "delete_event", "update_event", "check_availability"}:
+        payload.setdefault("title", _extract_title(text or ""))
+        delay_minutes = _extract_delay_minutes(text or "")
+        if delay_minutes:
+            payload.setdefault("delay_minutes", delay_minutes)
+        else:
+            parsed_time = _extract_time(text or "")
+            if parsed_time:
+                payload.setdefault("hour", parsed_time[0])
+                payload.setdefault("minute", parsed_time[1])
+            else:
+                time_hint = _extract_time_hint(text or "")
+                if time_hint:
+                    payload.setdefault("time_hint", time_hint)
+    return payload
+
+
+def _delete_candidate_response(intent: str, action: str, payload: dict[str, Any], tool_result: dict[str, Any]) -> dict[str, Any]:
+    if tool_result.get("ok") is False:
+        return _from_tool_result(intent, "list_events", MSG_CALENDAR_LIST, tool_result)
+
+    events = (tool_result.get("data") or {}).get("events") or []
+    title = payload.get("title")
+    candidates = [event for event in events if event.get("eventKey") and _candidate_matches_title(event, title)]
+
+    if not candidates:
+        return build_response(ok=False, action=action, intent=intent, message=MSG_DELETE_NOT_FOUND, error={"code": "CALENDAR_EVENT_NOT_FOUND", "message": MSG_DELETE_NOT_FOUND})
+
+    if len(candidates) == 1:
+        event = candidates[0]
+        next_payload = {
+            **payload,
+            "event_key": event["eventKey"],
+            "title": event.get("title") or title or TITLE_CALENDAR_EVENT,
+            "date_text": payload.get("date_text") or event.get("dateKey"),
+        }
+        return _confirmation(intent, action, next_payload)
+
+    return build_response(
+        ok=True,
+        action=action,
+        intent=intent,
+        message="삭제할 일정을 선택해주세요.",
+        data={"candidates": candidates},
+        requires_confirmation=True,
+        ui={
+            "actions": [
+                {
+                    "type": "confirm",
+                    "label": f"{event.get('dateKey') or ''} {event.get('title') or TITLE_CALENDAR_EVENT} 삭제",
+                    "value": {
+                        "intent": intent,
+                        "action": action,
+                        "payload": {
+                            **payload,
+                            "event_key": event["eventKey"],
+                            "title": event.get("title") or title or TITLE_CALENDAR_EVENT,
+                            "date_text": payload.get("date_text") or event.get("dateKey"),
+                        },
+                    },
+                }
+                for event in candidates[:5]
+            ]
+        },
+        meta={"human_in_the_loop": True, "stage": "select_delete_candidate"},
+    )
+
+
+def _resolve_request(
+    text_or_intent: str | None,
+    payload: dict[str, Any] | None,
+    intent: str | None,
+    action: str | None,
+) -> tuple[str, str, dict[str, Any], str]:
+    payload = _unpack_legacy_choice(deepcopy(payload or {}))
+    if intent is None and text_or_intent in _INTENT_ACTIONS:
+        intent = text_or_intent
+    if intent is None:
+        analyzed = analyze_intent(text_or_intent or "", payload)
+        default_message = _INTENT_ACTIONS.get(analyzed["intent"], ("unknown", MSG_HANDLED))[1]
+        return (
+            analyzed["intent"],
+            action or analyzed["action"],
+            analyzed["payload"],
+            _intent_message(analyzed["intent"], analyzed["payload"], default_message),
+        )
+
+    if intent not in _ALLOWED_INTENTS:
+        return "unknown", "unknown", {}, MSG_UNKNOWN
+
+    inferred_action, message = _INTENT_ACTIONS.get(intent, (action or "unknown", MSG_HANDLED))
+    resolved_action = action or inferred_action
+    payload = _fill_calendar_payload(text_or_intent, intent, resolved_action, payload)
+    return intent, resolved_action, payload, _intent_message(intent, payload, message)
+
+
+async def execute_tool(
+    action: str,
+    payload: dict[str, Any],
+    tools: ToolMap | None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not tools or action not in tools:
+        return _failure("tool.execute", action, MSG_TOOL_MISSING, "TOOL_NOT_FOUND")
+
+    try:
+        result = tools[action](payload, context or {})
+        if inspect.isawaitable(result):
+            result = await result
+    except Exception as exc:
+        return _failure("tool.execute", action, str(exc), "TOOL_EXCEPTION")
+
+    return result if isinstance(result, dict) else {"result": result}
+
+
+async def arun(
+    text_or_intent: str | None = None,
+    payload: dict[str, Any] | None = None,
+    *,
+    intent: str | None = None,
+    action: str | None = None,
+    confirmed: bool = False,
+    tool_result: dict[str, Any] | None = None,
+    tools: ToolMap | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    intent, action, payload, message = _resolve_request(text_or_intent, payload, intent, action)
+
+    if action == "unknown":
+        return _unknown()
+    if action == "clarify":
+        return _clarification(payload)
+
+    if tool_result is not None:
+        return _from_tool_result(intent, action, message, tool_result)
+
+    if action == "create_event" and _needs_date_clarification(payload):
+        return _date_clarification(intent, payload)
+
+    if action == "create_event" and (not _has_schedule(payload) or _needs_time_clarification(payload)):
+        return _time_clarification(intent, payload)
+
+    if action == "delete_event" and not payload.get("event_key"):
+        if tools and "list_events" in tools:
+            result = await execute_tool("list_events", payload, tools, context)
+            return _delete_candidate_response(intent, action, payload, result)
+        return build_response(ok=False, action=action, intent=intent, message=MSG_DELETE_NOT_FOUND, error={"code": "CALENDAR_EVENT_NOT_FOUND", "message": MSG_DELETE_NOT_FOUND})
+
+    if action in _CONFIRM_ACTIONS and not confirmed:
+        return _confirmation(intent, action, payload)
+
+    if tools:
+        result = await execute_tool(action, payload, tools, context)
+        if result.get("agent") == AGENT_NAME:
+            return result
+        if result.get("intent") == "tool.execute":
+            result["intent"] = intent
+        response = _from_tool_result(intent, action, message, result)
+        if action in _CONFIRM_ACTIONS:
+            response["meta"] = {
+                **response["meta"],
+                "human_in_the_loop": True,
+                "stage": "executed",
+                "confirmed": confirmed,
+            }
+        return response
+
+    return build_response(ok=True, action=action, intent=intent, message=message, data=deepcopy(payload))
+
+
+def run(
+    text_or_intent: str | None = None,
+    payload: dict[str, Any] | None = None,
+    *,
+    intent: str | None = None,
+    action: str | None = None,
+    confirmed: bool = False,
+    tool_result: dict[str, Any] | None = None,
+    tools: ToolMap | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            arun(
+                text_or_intent,
+                payload,
+                intent=intent,
+                action=action,
+                confirmed=confirmed,
+                tool_result=tool_result,
+                tools=tools,
+                context=context,
+            )
+        )
+
+    if tools:
+        return _failure(intent or text_or_intent or "unknown", action or "unknown", MSG_ASYNC_REQUIRED, "ASYNC_RUN_REQUIRED")
+    return _resolve_without_tool(text_or_intent, payload, intent, action, confirmed, tool_result)
+
+
+def _resolve_without_tool(
+    text_or_intent: str | None,
+    payload: dict[str, Any] | None,
+    intent: str | None,
+    action: str | None,
+    confirmed: bool,
+    tool_result: dict[str, Any] | None,
+) -> dict[str, Any]:
+    intent, action, payload, message = _resolve_request(text_or_intent, payload, intent, action)
+    if action == "unknown":
+        return _unknown()
+    if action == "clarify":
+        return _clarification(payload)
+    if tool_result is not None:
+        return _from_tool_result(intent, action, message, tool_result)
+    if action == "create_event" and _needs_date_clarification(payload):
+        return _date_clarification(intent, payload)
+    if action == "create_event" and (not _has_schedule(payload) or _needs_time_clarification(payload)):
+        return _time_clarification(intent, payload)
+    if action in _CONFIRM_ACTIONS and not confirmed:
+        return _confirmation(intent, action, payload)
+    return build_response(ok=True, action=action, intent=intent, message=message, data=deepcopy(payload))
