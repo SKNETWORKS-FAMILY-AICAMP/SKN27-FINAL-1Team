@@ -655,10 +655,10 @@ function Mypage() {
                       </li>
                     ))}
                     <li>
-                      <span>사용비용 자동 등록</span>
+                      <span>영수증 등록 완료 알림</span>
                       <Toggle
                         checked={calendarCostEnabled}
-                        label="사용비용 자동 등록"
+                        label="영수증 등록 완료 알림"
                         onClick={toggleCalendarCost}
                       />
                     </li>
@@ -668,11 +668,11 @@ function Mypage() {
                 <section className="mypage-panel mypage-calendar-connect" aria-labelledby="google-calendar-title">
                   <div>
                     <h2 id="google-calendar-title">Google Calendar 연결</h2>
-                    <p>연동하면 필요한 알림과 사용비용 기록을 캘린더에 자동 등록해요.</p>
+                    <p>연동하면 필요한 알림과 영수증 등록 기록을 캘린더에 자동 등록해요.</p>
                     <ul className="mypage-calendar-connect__list">
                       <li>소비 임박 재료는 아침에 확인할 수 있어요.</li>
                       <li>저녁 추천 메뉴와 레시피 삭제 예정일을 놓치지 않아요.</li>
-                      <li>OCR 입고 비용은 사용비용 기록으로 남길 수 있어요.</li>
+                      <li>영수증 등록 완료 기록을 캘린더에 남길 수 있어요.</li>
                     </ul>
                   </div>
                   <div className="mypage-calendar-connect__actions">

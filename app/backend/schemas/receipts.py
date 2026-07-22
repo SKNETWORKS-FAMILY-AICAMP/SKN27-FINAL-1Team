@@ -55,7 +55,7 @@ class ReceiptConfirmRequest(BaseModel):
     purchase_datetime: Optional[str] = Field(default=None, description="Final purchase datetime")
     total_amount: Optional[int] = Field(default=None, description="Receipt total amount; reference value")
     items: List[ReceiptConfirmItem] = Field(default_factory=list, description="User-confirmed item list")
-    calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar cost event")
+    calendar_cost_enabled: bool = Field(default=True, description="Whether to create a calendar receipt registration event")
     old_receipt_confirmed: bool = Field(
         default=False,
         description="Whether the user acknowledged the warning for a receipt older than 30 days",
