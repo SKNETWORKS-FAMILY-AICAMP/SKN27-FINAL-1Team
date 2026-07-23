@@ -10,6 +10,7 @@ import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/in
 const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 16
 const GUEST_RECOMMENDATION_PAGE_SIZE = 8
+const GUIDE_SCROLL_POSITION_KEY = 'guide-scroll-position'
 const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
 const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
@@ -238,7 +239,7 @@ function Guide() {
   const [recommendedRecipes, setRecommendedRecipes] = useState([])
   const [recipeSlideIndex, setRecipeSlideIndex] = useState(0)
   const [recipeSlideDirection, setRecipeSlideDirection] = useState('next')
-  const recipeDragStartY = useRef(null)
+  const recipeDragStartX = useRef(null)
   const recipeDidDrag = useRef(false)
   const [isListLoading, setIsListLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
@@ -352,6 +353,20 @@ function Guide() {
       window.clearTimeout(timer)
     }
   }, [page, searchTerm, selectedMajorCategory, selectedMiddleCategory])
+
+  useEffect(() => {
+    if (isDetailPage || isListLoading) return undefined
+    const storedPosition = sessionStorage.getItem(GUIDE_SCROLL_POSITION_KEY)
+    if (storedPosition == null) return undefined
+    const savedPosition = Number(storedPosition)
+    if (!Number.isFinite(savedPosition)) return undefined
+
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo(0, savedPosition)
+      sessionStorage.removeItem(GUIDE_SCROLL_POSITION_KEY)
+    })
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isDetailPage, isListLoading])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -513,10 +528,10 @@ function Guide() {
     if (recommendedRecipes.length <= 1) return undefined
 
     const intervalId = window.setInterval(() => {
-      if (document.hidden || recipeDragStartY.current != null) return
+      if (document.hidden || recipeDragStartX.current != null) return
       setRecipeSlideDirection('next')
       setRecipeSlideIndex((current) => (current + 1) % recommendedRecipes.length)
-    }, 5000)
+    }, 2000)
 
     return () => window.clearInterval(intervalId)
   }, [recommendedRecipes.length])
@@ -527,22 +542,22 @@ function Guide() {
   }
   const handleRecipeDragStart = (event) => {
     if (recommendedRecipes.length <= 1 || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
-    recipeDragStartY.current = event.clientY
+    recipeDragStartX.current = event.clientX
     recipeDidDrag.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const handleRecipeDragMove = (event) => {
-    if (recipeDragStartY.current == null) return
-    const distance = event.clientY - recipeDragStartY.current
+    if (recipeDragStartX.current == null) return
+    const distance = event.clientX - recipeDragStartX.current
     if (Math.abs(distance) > 6) recipeDidDrag.current = true
     event.currentTarget.classList.toggle('is-dragging', recipeDidDrag.current)
     const card = event.currentTarget.querySelector('.guide-recipe-card')
-    if (card) card.style.transform = `translateY(${Math.max(-80, Math.min(80, distance))}px)`
+    if (card) card.style.transform = `translateX(${Math.max(-80, Math.min(80, distance))}px)`
   }
   const handleRecipeDragEnd = (event) => {
-    if (recipeDragStartY.current == null) return
-    const distance = event.clientY - recipeDragStartY.current
-    recipeDragStartY.current = null
+    if (recipeDragStartX.current == null) return
+    const distance = event.clientX - recipeDragStartX.current
+    recipeDragStartX.current = null
     resetRecipeDragVisual(event.currentTarget)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (Math.abs(distance) >= 48) slideRecommendedRecipe(distance < 0 ? 'next' : 'previous')
@@ -634,6 +649,7 @@ function Guide() {
   }, [selectedCode, selectedTipTitle])
 
   const selectIngredient = (ingredient) => {
+    sessionStorage.setItem(GUIDE_SCROLL_POSITION_KEY, String(window.scrollY))
     navigate(`/guide/${encodeURIComponent(ingredient.code)}`)
   }
 
@@ -854,7 +870,6 @@ function Guide() {
           ) : null}
           {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
             <div className="guide-empty guide-fridge-empty">
-              <strong>냉장고에 등록된 식재료가 없습니다.</strong>
               <span>냉장고 재료를 등록해주세요.</span>
             </div>
           ) : null}
@@ -1181,11 +1196,33 @@ function Guide() {
                         onPointerMove={handleRecipeDragMove}
                         onPointerUp={handleRecipeDragEnd}
                         onPointerCancel={(event) => {
-                          recipeDragStartY.current = null
+                          recipeDragStartX.current = null
                           recipeDidDrag.current = false
                           resetRecipeDragVisual(event.currentTarget)
                         }}
                       >
+                        {recommendedRecipes.length > 1 ? (
+                          <>
+                            <button
+                              type="button"
+                              className="guide-recipe-arrow guide-recipe-arrow--previous"
+                              aria-label="이전 추천 레시피"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={() => slideRecommendedRecipe('previous')}
+                            >
+                              ‹
+                            </button>
+                            <button
+                              type="button"
+                              className="guide-recipe-arrow guide-recipe-arrow--next"
+                              aria-label="다음 추천 레시피"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={() => slideRecommendedRecipe('next')}
+                            >
+                              ›
+                            </button>
+                          </>
+                        ) : null}
                         <Link
                           className={`guide-recipe-card is-${recipeSlideDirection}`}
                           key={currentRecommendedRecipe.recipe_id}
