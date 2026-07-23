@@ -13,6 +13,37 @@ const GUEST_RECOMMENDATION_PAGE_SIZE = 8
 const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
 const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
+const GUIDE_IMAGE_IDS = {
+  ingredient_0003: 'ingredient_51dca13d2627a424',
+  ingredient_0030: 'ingredient_4b16a7f04f2247a6',
+  ingredient_0055: 'ingredient_8fb8d89ced712eb0',
+  ingredient_0070: 'ingredient_0be95d89abe806ff',
+  ingredient_0144: 'ingredient_50dfae78057c79cf',
+  ingredient_0147: 'ingredient_140a705c797b2b38',
+  ingredient_0209: 'ingredient_04969005d14278f7',
+  ingredient_0254: 'ingredient_8a4b20bb8def6d4a',
+  ingredient_0255: 'ingredient_6ec8fa4ace72e30e',
+  ingredient_0332: 'ingredient_7bf3f7a2700a542a',
+  ingredient_0365: 'ingredient_7ab9f2a8c9750517',
+  ingredient_0368: 'ingredient_b4117056b351c9b6',
+  ingredient_0472: 'ingredient_e68143b756f0b610',
+  ingredient_0474: 'ingredient_b422625dd360b54d',
+  ingredient_0479: 'ingredient_5cf37d871691fe94',
+  ingredient_0482: 'ingredient_ccdc5f2d5acb130c',
+  ingredient_0484: 'ingredient_36722c46ccc9a8d1',
+  ingredient_0492: 'ingredient_55bade89cf4082fe',
+  ingredient_0534: 'ingredient_79db0b3ebc94daa7',
+  ingredient_0545: 'ingredient_00b2205322c7f2b9',
+  ingredient_0548: 'ingredient_bfd8c560497bbfa8',
+  ingredient_0576: 'ingredient_ebaa36583b3f0eac',
+  ingredient_0627: 'ingredient_a7f7ec597ecbc841',
+  ingredient_0633: 'ingredient_07cff3f1a2bfcaf1',
+  ingredient_0660: 'ingredient_ccc4da97bcead35b',
+  ingredient_0708: 'ingredient_6a3d8245ace0ee9c',
+  ingredient_0715: 'ingredient_62689689a23bd56f',
+  ingredient_0719: 'ingredient_8cc673fe50722433',
+  ingredient_0736: 'ingredient_087be49a1ecfb668',
+}
 
 const TIP_DEFINITIONS = [
   { title: '보관방법', key: 'storage_tips', guideType: 'storage', sourceName: 'storage_source_name', sourceUrl: 'storage_source_url' },
@@ -109,11 +140,15 @@ function formatCookingTime(minutes) {
 }
 
 function getGuideIcon(catalog, ingredient) {
+  const imageId = GUIDE_IMAGE_IDS[ingredient?.code]
+  const mappedImage = imageId && catalog?.items.find((item) => item.id === imageId)
+  if (mappedImage) return mappedImage.imageUrl
+
   return getIngredientImageUrl(
     catalog,
     [
-      ingredient?.raw_name,
       ingredient?.name,
+      ingredient?.raw_name,
       ingredient?.representative_name,
     ],
     [ingredient?.middle_category, ingredient?.major_category],
