@@ -14,12 +14,25 @@ class RecipeSearchItem(BaseModel):
     main_image_url: Optional[str] = Field(None, description="대표 이미지 URL")
 
 
+class RecipeSearchFacets(BaseModel):
+    categories: list[str] = Field(default_factory=list, description="검색 결과의 카테고리 필터 옵션")
+    difficulties: list[str] = Field(default_factory=list, description="검색 결과의 난이도 필터 옵션")
+    cooking_time_labels: list[str] = Field(
+        default_factory=list,
+        description="검색 결과가 존재하는 조리시간 필터 구간",
+    )
+
+
 class RecipeSearchResponse(BaseModel):
     items: list[RecipeSearchItem] = Field(default_factory=list, description="검색 결과 목록")
     total: int = Field(..., description="전체 결과 수")
     page: int = Field(..., description="현재 페이지")
     page_size: int = Field(..., description="페이지 크기")
     has_next: bool = Field(..., description="다음 페이지 존재 여부")
+    facets: RecipeSearchFacets = Field(
+        default_factory=RecipeSearchFacets,
+        description="전체 검색 결과 기반 동적 필터 옵션",
+    )
 
 
 class RecipeRecommendRequest(BaseModel):

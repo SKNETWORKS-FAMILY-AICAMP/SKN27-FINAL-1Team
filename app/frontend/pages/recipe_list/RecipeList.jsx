@@ -22,23 +22,9 @@ import {
 } from "../../utils/savedRecipes.js";
 
 import { RecipeFilterConfig } from "./recipeFilterConfig.js";
+import { buildRecipeFilterOptions, mergeRecipePages } from "./recipeListState.js";
 
 const PAGE_SIZE = 20;
-
-
-const recipeTypeOptions = RecipeFilterConfig.toSelectOptions(
-  RecipeFilterConfig.recipeTypes,
-  RecipeFilterConfig.FILTER_ALL,
-);
-
-const cookingTimeOptions = [
-  { value: RecipeFilterConfig.FILTER_ALL, label: "전체" },
-  { value: "15분이내", label: "15분" },
-  { value: "30분이내", label: "30분" },
-  { value: "30분이상", label: "60분" },
-];
-
-const difficultyOptions = [RecipeFilterConfig.FILTER_ALL, ...RecipeFilterConfig.difficulties];
 
 /** 개별 기능 연결 시 true로 전환 */
 const FEATURE_FLAGS = {
@@ -99,9 +85,13 @@ function RecipeList() {
 
   const [hasNext, setHasNext] = useState(false);
 
+  const [facets, setFacets] = useState(null);
+
   const [isLoading, setIsLoading] = useState(false);
 
   const [error, setError] = useState(null);
+
+  const [retryVersion, setRetryVersion] = useState(0);
 
   const [isRecipeTypeMenuOpen, setIsRecipeTypeMenuOpen] = useState(false);
 
@@ -110,6 +100,8 @@ function RecipeList() {
   );
 
   const [busyIds, setBusyIds] = useState(() => new Set());
+
+  const loadMoreRef = useRef(null);
 
   const lastSearchRef = useRef(location.search);
   const fetchPage = lastSearchRef.current !== location.search ? 1 : page;
@@ -125,7 +117,17 @@ function RecipeList() {
   useEffect(() => {
     setDraftSearchTerm(criteria.query || criteria.ingredient);
 
+    setRecipes([]);
+
+    setTotal(0);
+
     setPage(1);
+
+    setHasNext(false);
+
+    setFacets(null);
+
+    setError(null);
 
     lastSearchRef.current = location.search;
   }, [location.search, criteria.query, criteria.ingredient]);
@@ -156,13 +158,15 @@ function RecipeList() {
 
         const data = await response.json();
 
-        setRecipes((prev) =>
-          fetchPage === 1 ? data.items : [...prev, ...data.items],
-        );
+        setRecipes((prev) => mergeRecipePages(prev, data.items, fetchPage === 1));
 
         setTotal(data.total);
 
         setHasNext(data.has_next);
+
+        if (fetchPage === 1) {
+          setFacets(data.facets ?? null);
+        }
       } catch (fetchError) {
         if (fetchError.name === "AbortError") {
           return;
@@ -187,7 +191,33 @@ function RecipeList() {
     fetchRecipes();
 
     return () => controller.abort();
-  }, [location.search, page, criteria, fetchPage]);
+  }, [location.search, page, criteria, fetchPage, retryVersion]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasNext || isLoading || error) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        observer.disconnect();
+        setPage((current) => current + 1);
+      },
+      { rootMargin: "300px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [error, hasNext, isLoading, recipes.length]);
+
+  const filterOptions = useMemo(
+    () => buildRecipeFilterOptions(total, facets),
+    [facets, total],
+  );
+
+  const recipeTypeOptions = filterOptions.recipeTypes;
+  const cookingTimeOptions = filterOptions.cookingTimes;
+  const difficultyOptions = filterOptions.difficulties;
 
   const hasActiveFilter =
     hasActiveFilters(criteria) || criteria.browseAll;
@@ -451,12 +481,22 @@ function RecipeList() {
         </h2>
 
         {error ? (
-          <p
+          <div
             className="recipe-list-status recipe-list-status--error"
             role="alert"
           >
-            {error}
-          </p>
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsLoading(true);
+                setError(null);
+                setRetryVersion((current) => current + 1);
+              }}
+            >
+              다시 시도
+            </button>
+          </div>
         ) : null}
 
         {isLoading && page === 1 ? (
@@ -539,20 +579,16 @@ function RecipeList() {
           ) : null}
         </div>
 
-        {!error ? (
-          <button
-            className="recipe-list-more"
-            type="button"
-            disabled={!hasNext || isLoading}
-            onClick={() => setPage((prev) => prev + 1)}
-          >
-            {!hasNext
-              ? "모든 레시피를 보고 있어요"
-              : isLoading
-                ? "불러오는 중..."
-                : "더 많은 레시피 보기"}
-          </button>
-        ) : null}
+        <div
+          className="recipe-list-load-more"
+          ref={loadMoreRef}
+          aria-live="polite"
+        >
+          {!error && isLoading && page > 1 ? "레시피를 더 불러오는 중..." : null}
+          {!error && !isLoading && !hasNext && recipes.length > 0
+            ? "모든 레시피를 보고 있어요"
+            : null}
+        </div>
       </section>
 
       <ImageSlot className="recipe-list-mobile-art" src={imageRecommendation} />

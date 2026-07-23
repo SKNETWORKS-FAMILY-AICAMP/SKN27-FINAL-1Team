@@ -26,6 +26,13 @@ export class RecipeFilterConfig {
   /** difficulty */
   static difficulties = ['매우 쉬움', '쉬움', '보통']
 
+  /** cooking_time_label */
+  static cookingTimes = [
+    { value: '15분이내', label: '15분' },
+    { value: '30분이내', label: '30분' },
+    { value: '30분이상', label: '60분' },
+  ]
+
   static labels = {
     recipeType: '요리타입',
     cookingTime: '조리시간',
