@@ -81,6 +81,10 @@ jobs:
             "availability-zones:account=000000000000:region=ap-northeast-2": [
               "ap-northeast-2a",
               "ap-northeast-2b"
+            ],
+            "availability-zones:account=000000000000:region=us-east-1": [
+              "us-east-1a",
+              "us-east-1b"
             ]
           }
           JSON
