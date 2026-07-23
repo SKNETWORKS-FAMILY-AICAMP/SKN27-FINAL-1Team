@@ -40,11 +40,24 @@ class ShoppingListItemUpdateRequest(BaseModel):
     is_purchased: bool | None = Field(default=None, description="구매 완료 여부")
 
 
+class ShoppingOwnedIngredientStockInput(BaseModel):
+    """보유 재료를 추가 입고할 때 필요한 재료 정보입니다."""
+
+    name: str = Field(..., min_length=1, description="레시피에 표시된 재료명")
+    amount: str | None = Field(default=None, description="레시피 수량 문자열")
+    ingredient_id: int | None = Field(default=None, description="식재료 마스터 ID")
+    fridge_ingredient_name: str | None = Field(default=None, description="냉장고에 표시할 식재료명")
+
+
 class ShoppingPurchaseRequest(BaseModel):
     """장보기 목록 구매 완료 후 냉장고 입고를 요청합니다."""
 
     shopping_list_id: int | None = Field(default=None, description="장보기 목록 ID")
     item_ids: List[int] | None = Field(default=None, description="입고 처리할 장보기 재료 ID 목록")
+    owned_ingredients: List[ShoppingOwnedIngredientStockInput] = Field(
+        default_factory=list,
+        description="추가 입고할 보유 재료 목록",
+    )
 
 
 class ShoppingProductItem(BaseModel):
