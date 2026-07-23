@@ -73,10 +73,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Create CI CDK context
+        working-directory: infra
+        run: |
+          cat > cdk.context.json <<'JSON'
+          {
+            "availability-zones:account=000000000000:region=ap-northeast-2": [
+              "ap-northeast-2a",
+              "ap-northeast-2b"
+            ]
+          }
+          JSON
+
       - name: CDK synth
         working-directory: infra
         run: |
-          npx --yes aws-cdk@2 synth \
+          npx --yes aws-cdk@2 synth --no-lookups \
             -c environment=ci \
             -c root_domain=bobbeori.com \
             -c hosted_zone_id=Z000000000000000000000 \
