@@ -26,6 +26,7 @@ jobs:
       VITE_KAKAO_CLIENT_ID: ci-kakao-client-id
       VITE_NAVER_CLIENT_ID: ci-naver-client-id
       VITE_GOOGLE_CLIENT_ID: ci-google-client-id
+      VITE_GA_MEASUREMENT_ID: G-0000000000
 
     steps:
       - name: Checkout
