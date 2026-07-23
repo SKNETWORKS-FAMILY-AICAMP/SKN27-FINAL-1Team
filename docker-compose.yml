@@ -34,11 +34,7 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
-            nutrition_load:
-                condition: service_completed_successfully
-            recipe_load:
-                condition: service_completed_successfully
-            neo4j_load:
+            seed_import:
                 condition: service_completed_successfully
         healthcheck:
             test:
@@ -134,62 +130,45 @@ services:
             backend:
                 condition: service_healthy
 
-    nutrition_load:
+    migrate:
         build:
             context: .
-            dockerfile: etl/Dockerfile
-        container_name: bobbeori_nutrition_load
+            dockerfile: app/backend/Dockerfile
+        container_name: bobbeori_migrate
         restart: "no"
         env_file:
             - .env
         environment:
+            DB_ENGINE: postgresql
             DB_HOST: postgres
         volumes:
-            - ./storage:/project/storage:ro
-            - ./app/backend/schemas:/project/app/backend/schemas:ro
-        command: ["python", "-m", "etl.nutrition.load_to_postgres"]
+            - ./app:/project/app:ro
+        command: ["python", "-m", "app.backend.jobs.migrate"]
         depends_on:
             postgres:
                 condition: service_healthy
 
-    recipe_load:
+    seed_import:
         build:
             context: .
-            dockerfile: etl/Dockerfile
-        container_name: bobbeori_recipe_load
+            dockerfile: app/backend/Dockerfile
+        container_name: bobbeori_seed_import
         restart: "no"
         env_file:
             - .env
         environment:
+            DB_ENGINE: postgresql
             DB_HOST: postgres
-        volumes:
-            - ./storage:/project/storage:ro
-        depends_on:
-            postgres:
-                condition: service_healthy
-
-    neo4j_load:
-        build:
-            context: .
-            dockerfile: etl/Dockerfile
-        container_name: bobbeori_neo4j_load
-        restart: "no"
-        env_file:
-            - .env
-        environment:
             NEO4J_URI: bolt://neo4j:7687
+            SEED_DATA_SOURCE: local
+            SEED_DATA_DIR: /seed-data
+            SEED_DATA_PREFIX: ""
         volumes:
-            - ./storage:/project/storage:ro
-        command:
-            - sh
-            - -c
-            - |
-                python -m etl.food_guide.load_to_neo4j \
-                    --split-dir /project/storage/processed/food_guide \
-                    --clear \
-                  && python -m etl.recipe.load_to_neo4j --clear \
-                  && python -m etl.recipe.prepare_graph_search
+            - ./seed-prod:/seed-data:ro
+        command: ["python", "-m", "app.backend.jobs.seed_import"]
         depends_on:
+            migrate:
+                condition: service_completed_successfully
             neo4j:
                 condition: service_healthy
 
