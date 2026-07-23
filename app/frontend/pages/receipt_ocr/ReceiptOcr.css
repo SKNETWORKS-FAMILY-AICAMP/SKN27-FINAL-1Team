@@ -991,33 +991,43 @@
   gap: 8px;
 }
 
-.receipt-history-detail__title-button {
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px solid #efd8b8;
-  border-radius: 999px;
-  background: #fff;
-  color: #8b673e;
+.receipt-history-detail__title-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
-  font-weight: 900;
+  text-align: left;
 }
 
-.receipt-history-detail__title-button:hover {
-  background: #fff4e3;
+.receipt-history-detail__title-trigger:hover strong {
+  color: #8b673e;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.receipt-history-detail__title-trigger:focus-visible {
+  outline: 2px solid var(--figma-coral-stroke);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .receipt-history-detail__title-edit {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
-.receipt-history-detail__title-edit .receipt-inline-input {
-  flex: 1;
-  min-height: 34px;
+.receipt-history-detail__title-field {
+  flex: 0 1 auto;
+}
+
+.receipt-history-detail__title-field .receipt-inline-input {
+  width: 180px;
+  min-width: 100px;
+  padding: 0 10px;
 }
 
 .receipt-history-detail__title-edit button {

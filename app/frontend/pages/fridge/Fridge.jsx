@@ -145,18 +145,18 @@ function Fridge() {
   const [isCompletionLoading, setIsCompletionLoading] = useState(Boolean(location.state?.completionRecipe))
   const [isCompletionSubmitting, setIsCompletionSubmitting] = useState(false)
   const recentStockedItemIdSet = useMemo(() => {
-    const receiptItems = ingredients
-      .filter((item) => item.receipt_item_id && item.created_at)
+    const recentItems = ingredients
+      .filter((item) => item.created_at)
       .map((item) => ({ id: Number(item.id), createdAt: new Date(item.created_at).getTime() }))
       .filter((item) => Number.isFinite(item.createdAt))
 
-    if (!receiptItems.length) return new Set()
+    if (!recentItems.length) return new Set()
 
-    // 최신 OCR 입고 묶음만 잠시 강조합니다.
-    const latestCreatedAt = Math.max(...receiptItems.map((item) => item.createdAt))
+    // 최근 입고 묶음만 잠시 강조합니다.
+    const latestCreatedAt = Math.max(...recentItems.map((item) => item.createdAt))
     if (Date.now() - latestCreatedAt > 60 * 1000) return new Set()
 
-    return new Set(receiptItems.filter((item) => latestCreatedAt - item.createdAt <= 60 * 1000).map((item) => item.id))
+    return new Set(recentItems.filter((item) => latestCreatedAt - item.createdAt <= 60 * 1000).map((item) => item.id))
   }, [ingredients, recentStockTick])
 
   const completionItems = useMemo(() => {
@@ -172,16 +172,16 @@ function Fridge() {
     })
   }, [completionIngredientRefs, ingredients])
 
-  // OCR 입고 강조가 1분 뒤 자동으로 사라지도록 화면을 한 번 갱신합니다.
+  // 최근 입고 강조가 1분 뒤 자동으로 사라지도록 화면을 한 번 갱신합니다.
   useEffect(() => {
-    const receiptTimes = ingredients
-      .filter((item) => item.receipt_item_id && item.created_at)
+    const recentItemTimes = ingredients
+      .filter((item) => item.created_at)
       .map((item) => new Date(item.created_at).getTime())
       .filter(Number.isFinite)
 
-    if (!receiptTimes.length) return undefined
+    if (!recentItemTimes.length) return undefined
 
-    const remainingMs = 60 * 1000 - (Date.now() - Math.max(...receiptTimes))
+    const remainingMs = 60 * 1000 - (Date.now() - Math.max(...recentItemTimes))
     if (remainingMs <= 0) return undefined
 
     const timer = window.setTimeout(() => setRecentStockTick((tick) => tick + 1), remainingMs + 50)

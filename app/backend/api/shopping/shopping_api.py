@@ -96,6 +96,22 @@ def delete_shopping_list(
     return {"message": "장보기 목록을 삭제했어요."}
 
 
+@router.delete("/{shopping_list_id}/recipes/{recipe_id}", response_model=ShoppingListResponse)
+def remove_recipe_from_shopping_list(
+    shopping_list_id: int,
+    recipe_id: int,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """특정 레시피가 장보기 목록에 추가한 항목만 제외합니다."""
+    return shopping_service.remove_recipe_source(
+        db=db,
+        user_id=current_user_id,
+        shopping_list_id=shopping_list_id,
+        recipe_id=recipe_id,
+    )
+
+
 @router.patch("/items/{item_id}", response_model=ShoppingListResponse)
 def update_shopping_list_item(
     item_id: int,
@@ -135,6 +151,7 @@ def complete_shopping_purchase(
         user_id=current_user_id,
         shopping_list_id=request_data.shopping_list_id,
         item_ids=request_data.item_ids,
+        owned_ingredients=request_data.owned_ingredients,
     )
 
 

@@ -97,6 +97,12 @@ export async function searchIngredientSuggestions(keyword) {
   })
 }
 
+export async function getFridgeIngredients() {
+  return requestJson(`${API_URL}/api/v1/inventory`, {
+    headers: buildHeaders(),
+  })
+}
+
 export async function getCurrentShoppingList() {
   return requestJson(`${API_URL}/api/v1/shopping-list/current`, {
     headers: buildHeaders(),
@@ -126,6 +132,13 @@ export async function deleteShoppingListItem(itemId) {
 
 export async function deleteShoppingList(shoppingListId) {
   return requestJson(`${API_URL}/api/v1/shopping-list/${shoppingListId}`, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  })
+}
+
+export async function removeShoppingListRecipe(shoppingListId, recipeId) {
+  return requestJson(`${API_URL}/api/v1/shopping-list/${shoppingListId}/recipes/${recipeId}`, {
     method: 'DELETE',
     headers: buildHeaders(),
   })

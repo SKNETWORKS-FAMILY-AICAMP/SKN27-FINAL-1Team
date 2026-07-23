@@ -38,13 +38,14 @@ const ocrManualCropSuggestionMinScore = 0.75
 const ocrWeakReviewScore = 0.85
 // Main stepper indices (must match the order of receiptSteps).
 const STEP = { UPLOAD: 0, ANALYZE: 1, CONFIRM: 2, STOCK: 3 }
+const receiptHistoryChangedEventName = 'bobbeori-receipt-history-change'
 
 const receiptHistoryRequests = new Map()
 
-function fetchReceiptHistory(token, limit = 10) {
+function fetchReceiptHistory(token, limit = 10, forceRefresh = false) {
   const requestKey = `${token}:${limit}`
   const pendingRequest = receiptHistoryRequests.get(requestKey)
-  if (pendingRequest) return pendingRequest
+  if (pendingRequest && !forceRefresh) return pendingRequest
 
   const promise = fetch(`${API_URL}/api/v1/receipts/history?limit=${limit}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -381,37 +382,49 @@ function PurchaseFlowChart() {
   const [purchaseFlowStatus, setPurchaseFlowStatus] = useState('idle')
 
   useEffect(() => {
-    const token = window.localStorage.getItem('bobbeori-token')
+    let active = true
+    let requestId = 0
 
-    if (!token) {
-      setPurchaseFlowData(fallbackPurchaseFlowData)
-      setPurchaseFlowStatus('ready')
-      return undefined
+    const loadPurchaseFlow = (forceRefresh = false) => {
+      const token = window.localStorage.getItem('bobbeori-token')
+      const currentRequestId = requestId + 1
+      requestId = currentRequestId
+
+      if (!token) {
+        setPurchaseFlowData(fallbackPurchaseFlowData)
+        setPurchaseFlowStatus('ready')
+        return
+      }
+
+      setPurchaseFlowStatus('loading')
+
+      fetchReceiptHistory(token, purchaseFlowHistoryLimit, forceRefresh)
+        .then((receipts) => {
+          if (!active || currentRequestId !== requestId) {
+            return
+          }
+
+          setPurchaseFlowData(buildPurchaseFlowData(receipts))
+          setPurchaseFlowStatus('ready')
+        })
+        .catch(() => {
+          if (!active || currentRequestId !== requestId) {
+            return
+          }
+
+          setPurchaseFlowData(fallbackPurchaseFlowData)
+          setPurchaseFlowStatus('error')
+        })
     }
 
-    let active = true
-    setPurchaseFlowStatus('loading')
+    const handleReceiptHistoryChanged = () => loadPurchaseFlow(true)
 
-    fetchReceiptHistory(token, purchaseFlowHistoryLimit)
-      .then((receipts) => {
-        if (!active) {
-          return
-        }
-
-        setPurchaseFlowData(buildPurchaseFlowData(receipts))
-        setPurchaseFlowStatus('ready')
-      })
-      .catch(() => {
-        if (!active) {
-          return
-        }
-
-        setPurchaseFlowData(fallbackPurchaseFlowData)
-        setPurchaseFlowStatus('error')
-      })
+    loadPurchaseFlow()
+    window.addEventListener(receiptHistoryChangedEventName, handleReceiptHistoryChanged)
 
     return () => {
       active = false
+      window.removeEventListener(receiptHistoryChangedEventName, handleReceiptHistoryChanged)
     }
   }, [])
 
@@ -3343,7 +3356,7 @@ function RecentHistory() {
 
   const handleDelete = async (item) => {
     const confirmed = await showConfirm(
-      `'${item.title}' 영수증 내역을 삭제할까요?\n이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
+      `'${item.title}' 영수증 내역을 삭제할까요?\n삭제하면 구매 통계에서도 제외되며, 냉장고에 입고된 식재료는 유지됩니다.`,
       { title: '영수증 내역 삭제', confirmText: '삭제', cancelText: '취소' },
     )
 
@@ -3375,6 +3388,7 @@ function RecentHistory() {
       if (selectedId === item.id) {
         setSelectedId(remaining[0]?.id ?? null)
       }
+      window.dispatchEvent(new Event(receiptHistoryChangedEventName))
     } catch (error) {
       await showAlert(error.message || '영수증 내역 삭제 중 문제가 발생했어요.', { title: '삭제 실패' })
     } finally {
@@ -3461,7 +3475,7 @@ function RecentHistory() {
     }
 
     const confirmed = await showConfirm(
-      `선택한 영수증 ${selectedIds.length}건을 삭제할까요? 이미 냉장고에 등록된 재료는 그대로 유지돼요.`,
+      `선택한 영수증 ${selectedIds.length}건을 삭제할까요?\n삭제하면 구매 통계에서도 제외되며, 냉장고에 입고된 식재료는 유지됩니다.`,
       { title: '선택 삭제', confirmText: '삭제', cancelText: '취소' },
     )
 
@@ -3499,6 +3513,7 @@ function RecentHistory() {
         if (deletedIds.includes(selectedId)) {
           setSelectedId(remaining[0]?.id ?? null)
         }
+        window.dispatchEvent(new Event(receiptHistoryChangedEventName))
       }
 
       if (failedIds.length > 0) {
@@ -3608,23 +3623,26 @@ function RecentHistory() {
                 <span>{selectedHistory.date}</span>
                 {editingTitleId === selectedHistory.id ? (
                   <div className="receipt-history-detail__title-edit">
-                    <input
-                      className="receipt-inline-input"
-                      type="text"
-                      value={titleDraft}
-                      maxLength={100}
-                      placeholder="영수증 제목"
-                      autoFocus
-                      disabled={isSavingTitle}
-                      onChange={(event) => setTitleDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          saveTitle(selectedHistory)
-                        } else if (event.key === 'Escape') {
-                          cancelEditTitle()
-                        }
-                      }}
-                    />
+                    <label className="receipt-ocr-meta__field receipt-history-detail__title-field">
+                      <small>매장명:</small>
+                      <input
+                        className="receipt-inline-input"
+                        type="text"
+                        value={titleDraft}
+                        maxLength={100}
+                        placeholder="상호명 미확인"
+                        autoFocus
+                        disabled={isSavingTitle}
+                        onChange={(event) => setTitleDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            saveTitle(selectedHistory)
+                          } else if (event.key === 'Escape') {
+                            cancelEditTitle()
+                          }
+                        }}
+                      />
+                    </label>
                     <button type="button" disabled={isSavingTitle} onClick={() => saveTitle(selectedHistory)}>
                       {isSavingTitle ? '저장 중...' : '저장'}
                     </button>
@@ -3634,13 +3652,14 @@ function RecentHistory() {
                   </div>
                 ) : (
                   <div className="receipt-history-detail__title">
-                    <strong>{selectedHistory.store}</strong>
                     <button
                       type="button"
-                      className="receipt-history-detail__title-button"
+                      className="receipt-history-detail__title-trigger"
+                      aria-label={`${selectedHistory.store} 매장명 수정`}
+                      title="클릭하여 매장명 수정"
                       onClick={() => startEditTitle(selectedHistory)}
                     >
-                      제목 수정
+                      <strong>{selectedHistory.store}</strong>
                     </button>
                   </div>
                 )}
