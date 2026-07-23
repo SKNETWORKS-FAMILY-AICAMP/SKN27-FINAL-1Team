@@ -27,6 +27,8 @@ const loginMethods = [
   },
 ]
 
+const googleIcon = loginMethods.find((method) => method.provider === 'google')?.icon
+
 const serviceFeatures = [
   { title: '냉장고 재료로', description: '똑똑한 요리', image: iconFridge },
   { title: '식재료 낭비 줄이고', description: '알뜰하게', image: iconReceipt },
@@ -192,8 +194,9 @@ function Login() {
               <div className="login-card__buttons">
                 {isCalendarMode ? (
                   <button className="login-card__button calendar" type="button" onClick={handleCalendarLogin}>
-                    <span className="login-card__provider google">G</span>
-                    일정 등록 권한 연결
+                    <span className="login-card__provider google">{googleIcon}</span>
+                    <span className="login-card__button-text">Google Calendar 연결</span>
+                    <span className="login-card__button-ghost" aria-hidden="true" />
                   </button>
                 ) : (
                   loginMethods.map((method) => (

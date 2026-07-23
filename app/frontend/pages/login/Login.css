@@ -78,6 +78,12 @@
 
 .login-card__visual.is-calendar {
   grid-template-columns: minmax(270px, 0.82fr) minmax(300px, 1fr);
+  column-gap: clamp(34px, 4vw, 64px);
+}
+
+.login-card__visual.is-calendar .login-card__description {
+  max-width: 410px;
+  white-space: normal;
 }
 
 .login-card__brand-logo {
@@ -473,8 +479,6 @@
 
 .login-card__provider.google {
   background: #fff;
-  color: #4285f4;
-  font-size: 22px;
 }
 
 .login-card__terms {

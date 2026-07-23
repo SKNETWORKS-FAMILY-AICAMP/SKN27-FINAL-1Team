@@ -4,8 +4,13 @@ import './RecipeDetail.css'
 
 import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrigerator.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
-import { createRecipeShoppingList, hasShoppingAuth } from '../../services/shoppingApi.js'
+import {
+  createRecipeShoppingList,
+  getCurrentShoppingList,
+  hasShoppingAuth,
+} from '../../services/shoppingApi.js'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
@@ -79,7 +84,7 @@ function buildDescription(recipe) {
 function RecipeDetail() {
   const navigate = useNavigate()
   const { recipeId } = useParams()
-  const { dialogNode, showAlert } = useAppDialog()
+  const { dialogNode, showAlert, showConfirm } = useAppDialog()
   const swipeStartX = useRef(null)
   const [recipe, setRecipe] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -89,6 +94,8 @@ function RecipeDetail() {
   const [isCooked, setIsCooked] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isShoppingCreating, setIsShoppingCreating] = useState(false)
+  const [isRecipeInShoppingList, setIsRecipeInShoppingList] = useState(false)
+  const [isShoppingStateLoading, setIsShoppingStateLoading] = useState(true)
 
   const handleSaveRecipe = async () => {
     const token = window.localStorage.getItem('bobbeori-token')
@@ -201,6 +208,10 @@ function RecipeDetail() {
         }
 
         const data = await response.json()
+        trackEvent('select_content', {
+          content_type: 'recipe',
+          content_id: `recipe_${data.recipe_id || recipeId}`,
+        })
         setRecipe(data)
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
@@ -221,6 +232,41 @@ function RecipeDetail() {
     fetchRecipe()
     return () => controller.abort()
   }, [recipeId])
+
+  useEffect(() => {
+    let isActive = true
+
+    const checkRecipeShoppingState = async () => {
+      setIsRecipeInShoppingList(false)
+      if (!recipe?.recipe_id || !hasShoppingAuth()) {
+        setIsShoppingStateLoading(false)
+        return
+      }
+
+      setIsShoppingStateLoading(true)
+      try {
+        const response = await getCurrentShoppingList()
+        const sourceRecipes = response?.shopping_list?.source_recipes ?? []
+        const isIncluded = sourceRecipes.some(
+          (sourceRecipe) => Number(sourceRecipe.recipe_id) === Number(recipe.recipe_id),
+        )
+        if (isActive) {
+          setIsRecipeInShoppingList(isIncluded)
+        }
+      } catch {
+        // The add action still provides the existing detailed auth/error handling.
+      } finally {
+        if (isActive) {
+          setIsShoppingStateLoading(false)
+        }
+      }
+    }
+
+    checkRecipeShoppingState()
+    return () => {
+      isActive = false
+    }
+  }, [recipe?.recipe_id])
 
   const exactOwnedIngredients = recipe?.owned_ingredients ?? []
   const maybeOwnedIngredients = recipe?.maybe_owned_ingredients ?? []
@@ -276,11 +322,10 @@ function RecipeDetail() {
       return null
     }
 
-    saveShoppingContext()
     setIsShoppingCreating(true)
 
     try {
-      return await createRecipeShoppingList({
+      const shoppingList = await createRecipeShoppingList({
         recipeId: recipe.recipe_id,
         missingIngredients: missingIngredients.map((item) => ({
           ingredient_id: item.ingredient_id,
@@ -288,6 +333,11 @@ function RecipeDetail() {
           amount: item.amount,
         })),
       })
+      trackEvent('shopping_list_create', {
+        recipe_id: String(recipe.recipe_id),
+        item_count: missingIngredients.length,
+      })
+      return shoppingList
     } catch (shoppingError) {
       if (shoppingError.status === 401) {
         await showAlert('로그인이 만료되었어요. 다시 로그인해 주세요.', {
@@ -299,10 +349,9 @@ function RecipeDetail() {
 
       if (shoppingError.status === 0) {
         const requestInfo = shoppingError.url ? `\n\n요청 주소: ${shoppingError.url}` : ''
-        await showAlert(`백엔드 장보기 목록은 만들지 못했지만, 부족 재료 화면으로 이동할게요. 구매 링크는 서버 연결 후 다시 확인할 수 있어요.${requestInfo}`, {
-          title: '임시 장보기 화면',
+        await showAlert(`장바구니에 재료를 넣지 못했어요. 잠시 후 다시 시도해 주세요.${requestInfo}`, {
+          title: '장바구니 추가 실패',
         })
-        navigate(`/shopping-list?source=recipe&fallback=1`)
         return null
       }
 
@@ -315,11 +364,26 @@ function RecipeDetail() {
     }
   }
 
-  const goShopping = async () => {
-    const shoppingList = await createShoppingList()
-    if (shoppingList?.id) {
-      navigate(`/shopping-list?shoppingListId=${shoppingList.id}`)
+  const addToShoppingCart = async () => {
+    if (isRecipeInShoppingList) {
+      navigate('/shopping-list')
+      return
     }
+
+    const shouldAdd = await showConfirm(
+      '부족한 재료를 장바구니에 담으시겠습니까?',
+      {
+        title: '장바구니에 담기',
+        confirmText: '담기',
+        cancelText: '취소',
+      },
+    )
+
+    if (!shouldAdd) {
+      return
+    }
+
+    await createShoppingList()
   }
 
   const moveCookingStep = (direction) => {
@@ -459,12 +523,22 @@ function RecipeDetail() {
               )}
             </div>
             <button
-              className="recipe-detail-ingredient-shopping-button"
+              className={`recipe-detail-ingredient-shopping-button${isRecipeInShoppingList ? ' is-shopping-link' : ''}`}
               type="button"
-              disabled={missingIngredients.length === 0 || isShoppingCreating}
-              onClick={goShopping}
+              disabled={
+                (!isRecipeInShoppingList && missingIngredients.length === 0)
+                || isShoppingCreating
+                || isShoppingStateLoading
+              }
+              onClick={addToShoppingCart}
             >
-              {isShoppingCreating ? '장보기 생성 중' : '장보기 바로가기'}
+              {isShoppingCreating
+                ? '장바구니에 넣는 중'
+                : isShoppingStateLoading
+                  ? '장바구니 상태 확인 중'
+                : isRecipeInShoppingList
+                  ? '장보기 바로가기'
+                  : '장바구니에 담기'}
             </button>
           </section>
         </aside>
