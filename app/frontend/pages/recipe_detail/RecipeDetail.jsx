@@ -10,6 +10,7 @@ import {
   hasShoppingAuth,
 } from '../../services/shoppingApi.js'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
@@ -207,6 +208,10 @@ function RecipeDetail() {
         }
 
         const data = await response.json()
+        trackEvent('select_content', {
+          content_type: 'recipe',
+          content_id: `recipe_${data.recipe_id || recipeId}`,
+        })
         setRecipe(data)
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
@@ -328,8 +333,10 @@ function RecipeDetail() {
           amount: item.amount,
         })),
       })
-      saveShoppingContext()
-      setIsRecipeInShoppingList(true)
+      trackEvent('shopping_list_create', {
+        recipe_id: String(recipe.recipe_id),
+        item_count: missingIngredients.length,
+      })
       return shoppingList
     } catch (shoppingError) {
       if (shoppingError.status === 401) {
