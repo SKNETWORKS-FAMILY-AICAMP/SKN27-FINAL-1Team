@@ -152,4 +152,4 @@ jobs:
 
           retry "https://${FRONTEND_HOST}/"
           retry "https://api.${ROOT_DOMAIN}/docs"
-          retry "https://mcp.${ROOT_DOMAIN}/.well-known/oauth-protected-resource/mcp"
+          retry "https://mcp.${ROOT_DOMAIN}/.well-known/oauth-protected-resource"
