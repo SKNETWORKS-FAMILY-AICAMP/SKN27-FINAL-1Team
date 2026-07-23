@@ -1,0 +1,90 @@
+name: migrate production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
+  STACK_NAME: ${{ vars.PROD_STACK_NAME || 'Bobbeori-prod' }}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          if [ -z "$AWS_ROLE_ARN" ]; then
+            echo "::error::AWS_ROLE_ARN is required"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+      - name: Run migration task
+        shell: bash
+        run: |
+          outputs="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs' \
+            --output json)"
+
+          output_value() {
+            jq -r --arg key "$1" '.[] | select(.OutputKey == $key) | .OutputValue' <<< "$outputs"
+          }
+
+          cluster="$(output_value ClusterName)"
+          task_definition="$(output_value MigrationTaskDefinitionArn)"
+          subnets="$(output_value ApplicationSubnetIds)"
+          security_group="$(output_value ApplicationSecurityGroupId)"
+
+          for value in "$cluster" "$task_definition" "$subnets" "$security_group"; do
+            if [ -z "$value" ] || [ "$value" = "null" ]; then
+              echo "::error::Missing required CloudFormation output"
+              exit 1
+            fi
+          done
+
+          task_arn="$(aws ecs run-task \
+            --cluster "$cluster" \
+            --launch-type FARGATE \
+            --task-definition "$task_definition" \
+            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$security_group],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+
+          if [ -z "$task_arn" ] || [ "$task_arn" = "None" ]; then
+            echo "::error::Failed to start migration task"
+            exit 1
+          fi
+
+          echo "Started migration task: $task_arn"
+          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task_arn"
+
+          exit_code="$(aws ecs describe-tasks \
+            --cluster "$cluster" \
+            --tasks "$task_arn" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)"
+
+          if [ "$exit_code" != "0" ]; then
+            echo "::error::Migration task failed with exit code $exit_code"
+            exit 1
+          fi
+
+          echo "Migration task completed"
