@@ -68,7 +68,7 @@ def test_dev_login_issues_bearer_token(monkeypatch):
 
     def fake_authenticate_social_user(**kwargs):
         calls.update(kwargs)
-        return "dev.jwt.token"
+        return "dev.jwt.token", False
 
     monkeypatch.setattr(auth_api.auth_service, "authenticate_social_user", fake_authenticate_social_user)
     client = create_client()
@@ -76,7 +76,11 @@ def test_dev_login_issues_bearer_token(monkeypatch):
     response = client.post("/api/v1/auth/dev-login")
 
     assert response.status_code == 200
-    assert response.json() == {"access_token": "dev.jwt.token", "token_type": "bearer"}
+    assert response.json() == {
+        "access_token": "dev.jwt.token",
+        "token_type": "bearer",
+        "is_new_user": False,
+    }
     assert calls["provider"] == "kakao"
     assert calls["provider_id"] == "dev_cheat_id_9999"
 
@@ -110,7 +114,7 @@ def test_social_login_uses_oauth_profile_and_issues_token(monkeypatch):
 
     def fake_authenticate_social_user(**kwargs):
         calls["auth"] = kwargs
-        return "google.jwt.token"
+        return "google.jwt.token", True
 
     monkeypatch.setattr(auth_api.oauth_client, "get_google_user", fake_google_user)
     monkeypatch.setattr(auth_api.auth_service, "authenticate_social_user", fake_authenticate_social_user)
@@ -123,6 +127,7 @@ def test_social_login_uses_oauth_profile_and_issues_token(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["access_token"] == "google.jwt.token"
+    assert response.json()["is_new_user"] is True
     assert calls["code"] == "oauth-code"
     assert calls["auth"]["provider"] == "google"
     assert calls["auth"]["provider_id"] == "google-7"
