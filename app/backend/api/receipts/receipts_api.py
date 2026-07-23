@@ -6,7 +6,7 @@ from typing import List, Optional
 import httpx
 
 from fastapi import APIRouter, Depends, File, Form, Path, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.api.calendar.calendar_api import (
@@ -38,6 +38,20 @@ router = APIRouter(prefix="/receipts", tags=["Receipts (OCR)"])
 KST = timezone(timedelta(hours=9))
 PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
 OLD_RECEIPT_WARNING_DAYS = 30
+
+
+def _stream_s3_body(body):
+    try:
+        if isinstance(body, (bytes, bytearray)):
+            yield bytes(body)
+        elif hasattr(body, "iter_chunks"):
+            yield from body.iter_chunks()
+        else:
+            yield from body
+    finally:
+        close = getattr(body, "close", None)
+        if close:
+            close()
 
 
 def _format_sse_event(payload: dict) -> str:
@@ -184,9 +198,20 @@ def get_receipt_image(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image not found.")
 
     if receipt_storage.is_s3_uri(receipt.original_file_path):
-        return RedirectResponse(
-            receipt_storage.presigned_get_url(receipt.original_file_path),
-            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        try:
+            body, media_type = receipt_storage.open_s3_object(receipt.original_file_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid receipt image path.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt image file not found.") from exc
+        return StreamingResponse(
+            _stream_s3_body(body),
+            media_type=media_type,
+            headers={
+                "Cache-Control": "private, no-store, max-age=0",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     image_path = receipt_storage.local_path(receipt.original_file_path)
@@ -218,7 +243,7 @@ async def confirm_receipt_items(
     current_user_id: int = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """사용자가 확정한 OCR 품목을 냉장고에 입고하고, 사용비용 캘린더 이벤트를 선택 등록한다."""
+    """사용자가 확정한 영수증 품목을 냉장고에 등록하고, 캘린더 등록 완료 이벤트를 선택 등록한다."""
     receipt_age_in_days = _get_receipt_age_in_days(request_data.purchase_datetime)
     if (
         receipt_age_in_days is not None
@@ -239,15 +264,15 @@ async def confirm_receipt_items(
     purchase_datetime = _parse_receipt_calendar_datetime(request_data.purchase_datetime)
 
     try:
-        # 영수증 입고 비용은 스케줄러가 아니라 확정 시점에 바로 캘린더에 남기거나 정리한다.
+        # 영수증 등록 완료 이벤트는 스케줄러가 아니라 확정 시점에 바로 캘린더에 남기거나 정리한다.
         integration = _get_google_integration(db, current_user_id)
         access_token = await _get_access_token(integration, db)
         event_key = f"receipt-cost-{current_user_id}-{request_data.receipt_id}"
         async with httpx.AsyncClient(timeout=10.0) as client:
             if request_data.calendar_cost_enabled and total_price > 0 and purchase_datetime:
                 event = {
-                    "summary": f"식재료 사용비용 {total_price:,}원",
-                    "description": f"OCR 입고 {len(request_data.items)}개 항목 기준 사용비용입니다.",
+                    "summary": "영수증 등록 완료",
+                    "description": f"영수증에서 확인한 {len(request_data.items)}개 품목을 냉장고에 등록했어요. 총 금액: {total_price:,}원",
                     "start": {"dateTime": purchase_datetime.isoformat()},
                     "end": {"dateTime": (purchase_datetime + timedelta(minutes=10)).isoformat()},
                     "colorId": "6",

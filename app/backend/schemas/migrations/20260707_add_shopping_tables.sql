@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS shopping_list_items (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Versioned migrations were introduced after some local databases had already
+-- created this table. Complete the baseline for those existing volumes before
+-- the column comments and indexes below are applied.
+ALTER TABLE shopping_list_items
+    ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'recipe';
+
+ALTER TABLE shopping_list_items
+    ADD COLUMN IF NOT EXISTS source_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 COMMENT ON TABLE shopping_lists IS '사용자 장보기 목록';
 COMMENT ON COLUMN shopping_lists.user_id IS '사용자 ID';
 COMMENT ON COLUMN shopping_lists.recipe_id IS '기준 레시피 ID';

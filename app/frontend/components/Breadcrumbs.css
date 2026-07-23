@@ -1,0 +1,56 @@
+.breadcrumbs {
+  width: var(--layout-container);
+  margin: 16px auto 18px;
+}
+
+.breadcrumbs__list {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  color: var(--figma-sub);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.breadcrumbs__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breadcrumbs__item:not(:last-child)::after {
+  content: "/";
+  color: #d6a768;
+  font-weight: 900;
+  opacity: 0.9;
+}
+
+.breadcrumbs__link {
+  color: #7b5437;
+  text-decoration: none;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.breadcrumbs__link:hover {
+  color: var(--primary-dark);
+}
+
+.breadcrumbs__current {
+  min-height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 107, 116, 0.1);
+  color: var(--figma-coral-stroke);
+  font-weight: 900;
+}
+
+@media (max-width: 680px) {
+  .breadcrumbs {
+    margin-top: 12px;
+  }
+}

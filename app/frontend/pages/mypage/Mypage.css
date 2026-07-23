@@ -1,0 +1,1075 @@
+.mypage {
+  --mypage-primary: var(--figma-coral, #ff6572);
+  --mypage-primary-dark: #e55360;
+  --mypage-pink: #ffe4e7;
+  --mypage-pink-soft: #fff1f3;
+  --mypage-peach: #fff0e9;
+  --mypage-text: #281a17;
+  --mypage-muted: #705d59;
+  --mypage-line: #eee1de;
+  width: min(calc(100% - 48px), 1280px);
+  margin: 0 auto;
+  padding: 42px 0 80px;
+  color: var(--mypage-text);
+  word-break: keep-all;
+}
+
+.mypage-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.mypage-content {
+  min-width: 0;
+}
+
+.mypage-content > * + * {
+  margin-top: 28px;
+}
+
+.mypage-tabs {
+  position: sticky;
+  top: 96px;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(238, 225, 222, 0.8);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 40px rgba(88, 49, 43, 0.08);
+}
+
+.mypage-tabs button {
+  min-height: 54px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: #63514e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.mypage-tabs button:hover {
+  background: #fff6f5;
+  color: var(--mypage-primary);
+}
+
+.mypage-tabs button.is-active {
+  background: var(--mypage-primary);
+  color: #fff;
+  font-weight: 800;
+}
+
+.mypage-tab-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.mypage-panel,
+.mypage-primary-button,
+.mypage-soft-button {
+  box-sizing: border-box;
+}
+
+.mypage-panel {
+  border: 1px solid rgba(238, 225, 222, 0.78);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 36px rgba(88, 49, 43, 0.065);
+}
+
+.mypage-image-slot {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.mypage-image-slot img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.mypage-profile {
+  position: relative;
+  min-height: 230px;
+  padding: 34px 40px;
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  align-items: center;
+  gap: 40px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 97% 90%, rgba(207, 236, 207, 0.56), transparent 19%),
+    linear-gradient(118deg, #fff 0%, #fffafa 72%, #fff 100%);
+}
+
+.mypage-profile::before {
+  position: absolute;
+  top: -68px;
+  right: -20px;
+  width: 220px;
+  height: 140px;
+  border-radius: 50%;
+  background: rgba(255, 224, 226, 0.34);
+  filter: blur(28px);
+  content: '';
+}
+
+.mypage-profile__avatar-wrap {
+  position: relative;
+  z-index: 1;
+  width: 156px;
+  height: 156px;
+}
+
+.mypage-profile__avatar {
+  width: 100%;
+  height: 100%;
+  border: 5px solid #fff;
+  border-radius: 50%;
+  background: #f4efed;
+  box-shadow: 0 12px 30px rgba(69, 42, 37, 0.13);
+}
+
+.mypage-profile__avatar img {
+  padding: 14px;
+  object-fit: contain;
+  box-sizing: border-box;
+}
+
+.mypage-profile__info {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.mypage-profile__name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mypage-profile h2 {
+  margin: 0;
+  color: var(--mypage-text);
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.mypage-profile__name span {
+  min-height: 30px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #ffcbd0;
+  border-radius: 999px;
+  background: var(--mypage-pink);
+  color: var(--mypage-primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mypage-profile p,
+.mypage-profile small {
+  display: block;
+  color: var(--mypage-muted);
+  font-weight: 500;
+}
+
+.mypage-profile p {
+  margin: 14px 0 0;
+  font-size: 16px;
+}
+
+.mypage-profile small {
+  margin-top: 7px;
+  font-size: 14px;
+}
+
+.mypage-profile input {
+  width: min(100%, 340px);
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #d9c5c1;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--mypage-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  outline: 0;
+}
+
+.mypage-profile input:focus {
+  border-color: var(--mypage-primary);
+  box-shadow: 0 0 0 3px rgba(255, 101, 114, 0.14);
+}
+
+.mypage-profile__name input {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.mypage-profile__actions,
+.mypage-recipe-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mypage-primary-button,
+.mypage-soft-button {
+  min-height: 42px;
+  padding: 0 22px;
+  border-radius: 13px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.mypage-primary-button {
+  border: 1px solid var(--mypage-primary);
+  background: var(--mypage-primary);
+  color: #fff;
+}
+
+.mypage-primary-button:hover {
+  border-color: var(--mypage-primary-dark);
+  background: var(--mypage-primary-dark);
+}
+
+.mypage-soft-button {
+  border: 1px solid #9b7e79;
+  background: #fff;
+  color: #4a3531;
+}
+
+.mypage-soft-button:hover {
+  border-color: var(--mypage-primary);
+  background: #fff8f7;
+}
+
+.mypage-info-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(310px, 0.85fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.mypage-account-info,
+.mypage-preferences,
+.mypage-settings,
+.mypage-saved,
+.mypage-calendar-preview,
+.mypage-calendar-connect {
+  padding: 32px 36px;
+}
+
+.mypage-panel__title {
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--mypage-line);
+}
+
+.mypage-panel h2,
+.mypage-panel__title h2 {
+  margin: 0;
+  color: var(--mypage-text);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.mypage-panel__title h2 span {
+  margin-left: 8px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--mypage-pink-soft);
+  color: var(--mypage-primary);
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.mypage-account-info dl {
+  margin: 20px 0 0;
+}
+
+.mypage-account-info dl div {
+  min-height: 61px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #f4ecea;
+}
+
+.mypage-account-info dl div:last-child {
+  border-bottom: 0;
+}
+
+.mypage-account-info dt,
+.mypage-account-info dd {
+  margin: 0;
+  font-size: 15px;
+}
+
+.mypage-account-info dt {
+  color: var(--mypage-muted);
+  font-weight: 500;
+}
+
+.mypage-account-info dd {
+  padding-inline: 12px;
+  color: var(--mypage-text);
+  font-weight: 700;
+  text-align: right;
+}
+
+.mypage-account-info dd.is-connected {
+  color: #208a47;
+}
+
+.mypage-account-info dd.is-count {
+  padding-block: 6px;
+  border-radius: 999px;
+  background: #ffe7e9;
+  color: var(--mypage-primary-dark);
+}
+
+.mypage-preferences {
+  display: flex;
+  flex-direction: column;
+}
+
+.mypage-preference-group {
+  margin-top: 20px;
+}
+
+.mypage-preference-group strong {
+  display: block;
+  color: #493632;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mypage-preference-chips {
+  margin-top: 9px;
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.mypage-preference-chips span,
+.mypage-preference-chips em {
+  padding: 9px 15px;
+  border: 1px solid #f0d8d1;
+  border-radius: 13px;
+  background: var(--mypage-peach);
+  color: #6f5b56;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.mypage-preferences__reset {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 0;
+}
+
+.mypage-preferences__reset span {
+  margin-right: 6px;
+}
+
+.mypage-content > .mypage-settings[aria-labelledby="onboarding-title"] {
+  display: none;
+}
+
+.mypage-saved #saved-recipes-title {
+  font-size: 30px;
+}
+
+.mypage-saved-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+.mypage-saved-section + .mypage-saved-section {
+  padding-top: 32px;
+  border-top: 1px solid var(--mypage-line);
+}
+
+.mypage-saved-section__head h3 {
+  margin: 0;
+  color: var(--mypage-text);
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.mypage-saved-list {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px 18px;
+}
+
+.mypage-saved-card {
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.mypage-saved-card__delete {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(231, 207, 202, 0.9);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #7a5d57;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgba(74, 45, 40, 0.1);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.mypage-saved-card__delete:hover {
+  background: #fff0f0;
+  color: var(--mypage-primary-dark);
+}
+
+.mypage-saved-card__delete svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.mypage-saved-card__image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 20px;
+  background: #fff3ef;
+}
+
+.mypage-saved-card__image img {
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.mypage-saved-card:hover .mypage-saved-card__image img {
+  transform: scale(1.04);
+}
+
+.mypage-saved-card__body {
+  flex: 1;
+  padding: 14px 2px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mypage-saved-card__body > h3 {
+  margin: 0;
+  color: var(--mypage-text);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.mypage-saved-card__description {
+  margin: 8px 0 0;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--mypage-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mypage-recipe-meta {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.mypage-recipe-meta span,
+.mypage-saved-card small {
+  min-height: 25px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.mypage-recipe-meta span {
+  background: var(--mypage-pink-soft);
+  color: var(--mypage-primary-dark);
+}
+
+.mypage-saved-card small {
+  background: var(--mypage-peach);
+  color: #79584d;
+}
+
+.mypage-recipe-actions {
+  margin-top: auto;
+  padding-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mypage-recipe-actions button {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
+.mypage-saved-empty__image {
+  width: 132px;
+  height: 98px;
+  border-radius: 14px;
+  background: #fff3ef;
+}
+
+.mypage-saved-column-empty {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.mypage-saved-column-empty h3 {
+  margin: 16px 0 0;
+  color: var(--mypage-text);
+  font-size: 17px;
+}
+
+.mypage-saved-column-empty p {
+  margin: 8px 0 18px;
+  color: var(--mypage-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mypage-alert-calendar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.mypage-setting-note {
+  margin: 8px 0 0;
+  color: var(--mypage-muted);
+  font-size: 13px;
+}
+
+.mypage-settings ul {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.mypage-settings li {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #f4ecea;
+  color: #4f3d39;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.mypage-settings li:first-child {
+  border-top: 0;
+}
+
+.mypage-toggle {
+  width: 44px;
+  height: 26px;
+  padding: 3px;
+  display: inline-flex;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 999px;
+  background: #ded4d1;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.mypage-toggle::before {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(48, 28, 25, 0.2);
+  content: '';
+}
+
+.mypage-toggle.is-on {
+  justify-content: flex-end;
+  background: var(--mypage-primary);
+}
+
+.mypage-calendar-connect {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.mypage-calendar-connect h2,
+.mypage-calendar-preview__head h2 {
+  margin: 0;
+}
+
+.mypage-calendar-connect p,
+.mypage-calendar-preview__head p {
+  margin: 8px 0 0;
+  color: var(--mypage-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mypage-calendar-connect__list {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  list-style: none;
+}
+
+.mypage-calendar-connect__list li {
+  position: relative;
+  padding-left: 16px;
+  color: var(--mypage-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mypage-calendar-connect__list li::before {
+  position: absolute;
+  top: 0.55em;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mypage-primary);
+  content: '';
+}
+
+.mypage-calendar-connect__actions,
+.mypage-calendar-connect__actions button {
+  width: 100%;
+}
+
+.mypage-calendar-preview__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.mypage-calendar-preview__month {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mypage-calendar-preview__month strong {
+  color: var(--mypage-primary);
+  font-size: 17px;
+}
+
+.mypage-calendar-preview__month button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--mypage-line);
+  border-radius: 50%;
+  background: #fff;
+  color: #604844;
+  cursor: pointer;
+  font: inherit;
+  font-size: 19px;
+}
+
+.mypage-calendar-preview__week,
+.mypage-calendar-preview__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mypage-calendar-preview__week {
+  margin-top: 22px;
+}
+
+.mypage-calendar-preview__week span {
+  color: #8b7570;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.mypage-calendar-preview__week span:first-child,
+.mypage-calendar-preview__week span:last-child {
+  color: #4b7fb8;
+}
+
+.mypage-calendar-preview__grid {
+  margin-top: 8px;
+}
+
+.mypage-calendar-preview__day {
+  min-height: 80px;
+  padding: 8px;
+  border: 1px solid #f0e5e2;
+  border-radius: 12px;
+  background: #fffdfd;
+}
+
+.mypage-calendar-preview__day.is-weekend {
+  border-color: #dce9f8;
+  background: #f8fbff;
+}
+
+.mypage-calendar-preview__day.is-holiday {
+  border-color: #ffd9dd;
+  background: #fff8f8;
+}
+
+.mypage-calendar-preview__day > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  color: #604e4a;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mypage-calendar-preview__day.is-weekend > span {
+  color: #3f73ab;
+}
+
+.mypage-calendar-preview__day.is-holiday > span {
+  color: var(--mypage-primary-dark);
+}
+
+.mypage-calendar-preview__day em {
+  max-width: 68px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #ffe5e8;
+  color: var(--mypage-primary-dark);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mypage-calendar-preview__day.is-weekend em {
+  background: #e9f3ff;
+  color: #3f73ab;
+}
+
+.mypage-calendar-preview__day.is-holiday em {
+  background: #ffe5e8;
+  color: var(--mypage-primary-dark);
+}
+
+.mypage-calendar-preview__day b,
+.mypage-calendar-preview__day a {
+  display: block;
+  margin-top: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.mypage-calendar-preview__day.is-today {
+  border-color: var(--mypage-primary);
+  box-shadow: inset 0 0 0 1px rgba(255, 101, 114, 0.14);
+}
+
+.mypage-calendar-preview__day .is-danger { background: #ffe8ea; color: #a22e39; }
+.mypage-calendar-preview__day .is-green { background: #e6f5ea; color: #267540; }
+.mypage-calendar-preview__day .is-yellow { background: #fff2cf; color: #8a6500; }
+.mypage-calendar-preview__day .is-info { background: #e9f4fa; color: #357895; }
+
+@media (max-width: 1100px) {
+  .mypage-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .mypage-info-grid,
+  .mypage-alert-calendar {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-preferences__reset {
+    margin-top: 28px;
+  }
+
+  .mypage-saved-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-saved-section + .mypage-saved-section {
+    padding-top: 28px;
+    padding-left: 0;
+    border-top: 1px solid var(--mypage-line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .mypage {
+    width: min(calc(100% - 32px), 560px);
+    padding: 22px 0 88px;
+  }
+
+  .mypage-layout {
+    display: block;
+  }
+
+  .mypage-tabs {
+    position: static;
+    margin: 0 0 18px;
+    padding: 5px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(88, 49, 43, 0.06);
+  }
+
+  .mypage-tabs button {
+    min-height: 42px;
+    padding: 0 12px;
+    flex: 1 0 auto;
+    justify-content: center;
+    gap: 7px;
+    border-radius: 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .mypage-tab-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .mypage-content > * + * {
+    margin-top: 16px;
+  }
+
+  .mypage-panel {
+    border-radius: 18px;
+  }
+
+  .mypage-profile {
+    min-height: 0;
+    padding: 22px 18px;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .mypage-profile__avatar-wrap {
+    width: 92px;
+    height: 92px;
+  }
+
+  .mypage-profile__avatar {
+    border-width: 3px;
+  }
+
+  .mypage-profile__avatar img {
+    padding: 8px;
+  }
+
+  .mypage-profile h2 {
+    font-size: 20px;
+  }
+
+  .mypage-profile__name span {
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .mypage-profile p {
+    margin-top: 8px;
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mypage-profile small {
+    margin-top: 4px;
+    font-size: 11px;
+  }
+
+  .mypage-profile__actions {
+    grid-column: 1 / -1;
+    margin-top: 13px;
+  }
+
+  .mypage-profile__actions button {
+    flex: 1;
+  }
+
+  .mypage-primary-button,
+  .mypage-soft-button {
+    min-height: 39px;
+    padding: 0 15px;
+    font-size: 12px;
+  }
+
+  .mypage-account-info,
+  .mypage-preferences,
+  .mypage-settings,
+  .mypage-saved,
+  .mypage-calendar-preview,
+  .mypage-calendar-connect {
+    padding: 22px 18px;
+  }
+
+  .mypage-panel h2,
+  .mypage-panel__title h2 {
+    font-size: 20px;
+  }
+
+  .mypage-account-info dl div {
+    min-height: 52px;
+  }
+
+  .mypage-account-info dt,
+  .mypage-account-info dd {
+    font-size: 13px;
+  }
+
+  .mypage-saved-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mypage-saved-empty__image {
+    width: 92px;
+    height: 76px;
+  }
+
+  .mypage-recipe-actions {
+    gap: 6px;
+  }
+
+  .mypage-calendar-preview__head {
+    display: grid;
+  }
+
+  .mypage-calendar-preview__week,
+  .mypage-calendar-preview__grid {
+    gap: 4px;
+  }
+
+  .mypage-calendar-preview__day {
+    min-height: 54px;
+    padding: 5px;
+    border-radius: 8px;
+  }
+
+  .mypage-calendar-preview__day b,
+  .mypage-calendar-preview__day a {
+    padding: 3px;
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mypage {
+    width: min(calc(100% - 24px), 420px);
+  }
+
+  .mypage-saved-list {
+    grid-template-columns: 1fr;
+  }
+
+  .mypage-tabs button {
+    padding: 0 9px;
+  }
+
+  .mypage-tabs button span {
+    font-size: 11px;
+  }
+
+  .mypage-profile {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  .mypage-profile__avatar-wrap {
+    width: 76px;
+    height: 76px;
+  }
+
+  .mypage-profile__name {
+    gap: 6px;
+  }
+
+  .mypage-profile h2 {
+    font-size: 18px;
+  }
+}

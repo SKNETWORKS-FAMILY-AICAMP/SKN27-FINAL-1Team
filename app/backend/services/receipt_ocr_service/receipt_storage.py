@@ -68,6 +68,11 @@ class ReceiptStorage:
             ExpiresIn=expires_seconds,
         )
 
+    def open_s3_object(self, stored_path: str):
+        bucket, key = self._parse_s3_uri(stored_path)
+        response = self._s3_client().get_object(Bucket=bucket, Key=key)
+        return response["Body"], response.get("ContentType") or self.media_type(key)
+
     def local_path(self, stored_path: str) -> Path | None:
         if self.is_s3_uri(stored_path):
             return None

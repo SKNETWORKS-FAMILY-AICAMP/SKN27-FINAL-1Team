@@ -12,6 +12,7 @@ from app.backend.schemas.auth import (
     SocialLoginRequest,
     TokenResponse,
     UserResponse,
+    UserUpdate,
 )
 from app.backend.services.auth_service.auth_service import auth_service
 from app.backend.services.auth_service.external_identity_service import (
@@ -64,6 +65,24 @@ def get_me(current_user_id: int = Depends(get_current_user_required), db: Sessio
     user = db.query(User).filter(User.id == current_user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+    return user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    user_data: UserUpdate,
+    current_user_id: int = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == current_user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+    
+    if user_data.nickname is not None:
+        user.nickname = user_data.nickname
+        
+    db.commit()
+    db.refresh(user)
     return user
 
 

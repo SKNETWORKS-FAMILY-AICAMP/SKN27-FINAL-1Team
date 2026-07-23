@@ -1,0 +1,2774 @@
+.guide-page {
+  width: var(--layout-container);
+  margin: 0 auto;
+  padding: 10px 0 72px;
+  color: var(--figma-text);
+  word-break: keep-all;
+}
+
+.guide-hero {
+  min-height: 238px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  grid-template-areas:
+    "copy art"
+    "search art";
+  align-items: center;
+  align-content: center;
+  gap: 48px;
+}
+
+.guide-hero__copy {
+  grid-area: copy;
+  align-self: end;
+}
+
+.guide-hero__copy h1 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: clamp(40px, 5vw, 56px);
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.guide-hero__copy p {
+  margin: 14px 0 0;
+  color: #5f4635;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.guide-search-wrap {
+  grid-area: search;
+  width: min(100%, 560px);
+  margin-top: -30px;
+  position: relative;
+  z-index: 2;
+}
+
+.guide-search {
+  box-sizing: border-box;
+  width: 100%;
+  height: 46px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(69, 42, 25, 0.06);
+}
+
+.guide-search span {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 2px solid #9b7a62;
+  border-radius: 50%;
+  position: relative;
+}
+
+.guide-search span::after {
+  width: 7px;
+  height: 2px;
+  position: absolute;
+  right: -6px;
+  bottom: -3px;
+  border-radius: 999px;
+  background: #9b7a62;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.guide-search input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.guide-search input::placeholder {
+  color: #9c8a7a;
+  font-weight: 600;
+}
+
+.guide-search-suggestions {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  padding: 8px;
+  max-height: min(60vh, 480px);
+  display: none;
+  gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1.4px solid #efd8b8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(69, 42, 25, 0.12);
+}
+
+.guide-search-wrap:focus-within .guide-search-suggestions {
+  display: grid;
+}
+
+.guide-search-suggestions button {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--figma-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.guide-search-suggestions button:hover,
+.guide-search-suggestions button:focus-visible {
+  background: #fff4e3;
+  outline: 0;
+}
+
+.guide-search-suggestions button span,
+.guide-search-suggestions p {
+  margin: 0;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.guide-search-suggestions p {
+  padding: 10px 12px;
+}
+
+.guide-hero__art {
+  grid-area: art;
+  min-height: 190px;
+  display: grid;
+  place-items: center;
+}
+
+.guide-hero__art img {
+  width: min(100%, 300px);
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 22px rgba(69, 42, 25, 0.08));
+}
+
+.guide-panel {
+  box-sizing: border-box;
+  border: 1.4px solid #f0d7b1;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.guide-section-title {
+  margin-bottom: 14px;
+  color: var(--figma-text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.guide-ingredients {
+  padding: 18px 0 22px;
+}
+
+.guide-ingredients:has(+ .guide-all) {
+  padding-bottom: 14px;
+}
+
+.guide-ingredients--seasonal {
+  padding: 0 0 22px;
+}
+
+.guide-all + .guide-ingredients--seasonal,
+.guide-recipes + .guide-ingredients--seasonal {
+  margin-top: 32px;
+}
+
+.guide-ingredients--seasonal .guide-ingredients__header {
+  margin-bottom: 12px;
+}
+
+.guide-ingredients--seasonal .guide-ingredient-list {
+  grid-template-columns: repeat(8, minmax(72px, 1fr));
+  gap: 10px;
+}
+
+.guide-ingredients--seasonal .guide-ingredient {
+  height: 56px;
+  padding: 6px 10px;
+  gap: 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.guide-ingredients--seasonal .guide-ingredient__image {
+  width: 34px;
+  height: 34px;
+}
+
+.guide-ingredients--seasonal .guide-ingredient__name {
+  font-size: 13px;
+}
+
+.guide-ingredients__header {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guide-ingredients__header .guide-section-title {
+  margin-bottom: 0;
+}
+
+.guide-ingredients__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guide-ingredients__actions .guide-list-summary {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: #9a7662;
+}
+
+.guide-seasonal-month-control {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.guide-seasonal-month-button {
+  height: 30px;
+  padding: 0 10px 0 12px;
+  border: 1px solid #efd8b8;
+  border-radius: 9px;
+  background: #fff;
+  color: #8a5635;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.guide-seasonal-month-button svg {
+  display: block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guide-seasonal-month-button:hover {
+  background: #fff4e3;
+}
+
+.guide-seasonal-month-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  width: 156px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  border: 1px solid #efd8b8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(109, 65, 40, 0.14);
+}
+
+.guide-seasonal-month-menu button {
+  height: 30px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a5635;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guide-seasonal-month-menu button:hover,
+.guide-seasonal-month-menu button.is-active {
+  background: #ff6670;
+  color: #fff;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.guide-ingredient-list {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px;
+}
+
+.guide-fridge-pager {
+  position: relative;
+}
+
+.guide-fridge-pager:has(.guide-fridge-page-button) {
+  padding: 0 46px;
+}
+
+.guide-fridge-page-button {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #e9c9b2;
+  border-radius: 50%;
+  background: #fff;
+  color: #80543e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 900;
+  transform: translateY(-50%);
+}
+
+.guide-fridge-page-button.is-previous {
+  left: 0;
+}
+
+.guide-fridge-page-button.is-next {
+  right: 0;
+}
+
+.guide-fridge-page-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.guide-fridge-page-button:hover:not(:disabled) {
+  border-color: #ff9da3;
+  background: #fff1ef;
+  color: var(--figma-coral);
+}
+
+.guide-ingredient,
+.guide-more-button {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 66px;
+  border: 1px solid #edd5c2;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--figma-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.guide-ingredient {
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.guide-ingredient:hover,
+.guide-more-button:hover {
+  border-color: #ff8b93;
+  box-shadow: 0 5px 14px rgba(255, 107, 116, 0.1);
+}
+
+.guide-ingredient.is-active {
+  border-color: var(--figma-coral);
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 116, 0.28);
+}
+
+.guide-more-button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.guide-more-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.guide-more-button span {
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid #9b6d4d;
+  border-right: 2px solid #9b6d4d;
+  transform: rotate(45deg);
+}
+
+.guide-image-slot {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: 1.4px dashed #f0cfa4;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.guide-image-slot.is-filled {
+  border: 0;
+  background: transparent;
+}
+
+.guide-image-slot img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.guide-image-placeholder {
+  width: min(68%, 96px);
+  height: min(68%, 96px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff1f2;
+  color: #d96a72;
+}
+
+.guide-image-placeholder svg {
+  width: 72%;
+  height: 72%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guide-ingredient__image {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+}
+
+.guide-ingredient__name {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--guide-ingredient-name-size, 14px);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.guide-ingredient__name.is-short {
+  white-space: nowrap;
+}
+
+.guide-ingredient__image img,
+.guide-all-item__image img,
+.guide-detail__image img {
+  transform: scale(1.12);
+}
+
+.guide-content-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: minmax(320px, 1.2fr) minmax(0, 2.8fr);
+  gap: 16px;
+}
+
+.guide-detail {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+}
+
+.guide-detail__header {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.guide-detail__header > div {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+}
+
+.guide-detail__image {
+  width: 148px;
+  height: 148px;
+  border-radius: 18px;
+}
+
+.guide-detail h2,
+.guide-recipes h2,
+.guide-tip-nutrition h2 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 23px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.guide-detail__header p {
+  max-width: 100%;
+  margin: 8px 0 0;
+  color: #6f4b36;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.guide-owned-badge {
+  width: fit-content;
+  min-height: 34px;
+  margin-top: 12px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #badf9d;
+  border-radius: 999px;
+  background: #e8f8d8;
+  color: #3c7a33;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.guide-detail__header .guide-owned-badge {
+  margin-top: 0;
+}
+
+.guide-primary-button {
+  box-sizing: border-box;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.guide-primary-button {
+  border: 1.6px solid var(--figma-coral-stroke);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.guide-all {
+  margin-top: 16px;
+  padding: 24px 0 0;
+}
+
+.guide-ingredients + .guide-all {
+  margin-top: 0;
+  padding-top: 8px;
+}
+
+.guide-category-tabs {
+  margin: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.guide-category-tab-list {
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 18px;
+  background: #fff1f4;
+  scrollbar-width: none;
+}
+
+.guide-category-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.guide-category-tab-list button {
+  min-height: 36px;
+  padding: 0 16px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.guide-category-tab-list button:hover {
+  background: #ffe4e8;
+}
+
+.guide-category-tab-list button:focus-visible {
+  outline: 2px solid rgba(255, 107, 116, 0.42);
+  outline-offset: 2px;
+}
+
+.guide-category-tab-list--major {
+  align-items: center;
+  padding: 0;
+  gap: 24px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-category-tab-list--major button {
+  min-height: 42px;
+  padding: 0 2px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+
+.guide-category-tab-list--major button:hover {
+  background: transparent;
+  color: var(--figma-coral);
+}
+
+.guide-category-tab-list button.is-active {
+  background: var(--figma-coral);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(123, 79, 55, 0.1);
+}
+
+.guide-category-tab-list--major button.is-active {
+  border-bottom-color: var(--figma-coral);
+  background: transparent;
+  color: var(--figma-coral);
+  box-shadow: none;
+}
+
+.guide-category-tab-list--middle {
+  background: #fff1f4;
+}
+
+.guide-category-tab-list--middle button {
+  border-radius: 14px;
+}
+
+.guide-category-tab-list--middle button:hover,
+.guide-category-tab-list--middle button:focus-visible {
+  background: #ffe4e8;
+}
+
+.guide-category-tab-list--middle button.is-active {
+  background: var(--figma-coral);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(123, 79, 55, 0.1);
+}
+
+.guide-pagination button:hover:not(:disabled) {
+  border-color: var(--figma-coral);
+  box-shadow: 0 8px 16px rgba(255, 107, 116, 0.1);
+}
+
+.guide-pagination button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.4px solid #c79a74;
+  border-radius: 12px;
+  background: #fff;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.guide-pagination button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.guide-all__header {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.guide-all__header .guide-list-summary {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: #9a7662;
+}
+
+.guide-list-summary {
+  min-height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.guide-all-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.guide-all-item {
+  min-width: 0;
+  min-height: 132px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--figma-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.guide-all-item:hover,
+.guide-all-item:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 10px 20px rgba(255, 107, 116, 0.1);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.guide-all-item__image {
+  width: 82px;
+  height: 82px;
+}
+
+.guide-all-item strong {
+  display: block;
+  color: var(--figma-text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.guide-all-item p {
+  margin: 6px 0 0;
+  color: #6f4b36;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.guide-all-item small {
+  display: block;
+  margin-top: 6px;
+  color: #8b673e;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.guide-all-item > span[aria-hidden="true"] {
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid #9b6d4d;
+  border-right: 2px solid #9b6d4d;
+  transform: rotate(45deg);
+}
+
+.guide-pagination {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.guide-pagination span {
+  text-align: center;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.guide-pagination__status {
+  min-width: 72px;
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.4px solid #efd8b8;
+  border-radius: 12px;
+  background: #fff4e3;
+}
+
+.guide-detail__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.guide-detail-back {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1.4px solid #c79a74;
+  border-radius: 50%;
+  background: #fff;
+  color: #6d4128;
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.guide-detail__path {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #efd8b8;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.guide-detail-back:hover,
+.guide-detail-back:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.12);
+  outline: 0;
+}
+
+.guide-tip-grid {
+  margin: -28px -28px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: flex-end;
+  gap: 4px;
+  overflow: hidden;
+  background: linear-gradient(var(--figma-coral), var(--figma-coral)) bottom / 100% 2px no-repeat;
+  scrollbar-width: thin;
+}
+
+.guide-tip-grid.is-missing {
+  background: none;
+}
+
+.guide-tip-card {
+  box-sizing: border-box;
+  height: 52px;
+  margin-bottom: 0;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.4px solid #efd8b8;
+  border-bottom: 2px solid var(--figma-coral);
+  border-radius: 10px 10px 0 0;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.guide-tip-card:hover,
+.guide-tip-card:focus-visible {
+  border-color: var(--figma-coral);
+  background: #fff0ec;
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 116, 0.18);
+  outline: 0;
+}
+
+.guide-tip-card.is-active {
+  position: relative;
+  z-index: 1;
+  border-color: var(--figma-coral);
+  border-bottom-color: #fff4f3;
+  background: #fff4f3;
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 116, 0.18);
+}
+
+.guide-tip-card.is-missing {
+  border-color: rgba(40, 30, 25, 0.18);
+  background: var(--guide-missing-film);
+  box-shadow: none;
+}
+
+.guide-tip-card.is-missing.is-active {
+  border-color: var(--figma-coral);
+  border-bottom-color: var(--guide-missing-seam);
+  background: var(--guide-missing-film);
+  box-shadow: none;
+}
+
+.guide-tip-card.is-active::after {
+  height: 4px;
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  background: #fff4f3;
+  content: "";
+}
+
+.guide-tip-card.is-missing.is-active::after {
+  background: var(--guide-missing-seam);
+}
+
+.guide-tip-card.is-missing .guide-tip-card__title span {
+  border-color: #efd8b8;
+  background: #fff4e3;
+}
+
+.guide-tip-card.is-missing .guide-tip-card__title span::before {
+  background: #c98a4b;
+}
+
+.guide-tip-card.is-missing h3 {
+  color: #6d6259;
+}
+
+.guide-tip-card__title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.guide-tip-card__title span {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #fff4e3;
+  border: 1px solid #efd8b8;
+}
+
+.guide-tip-card__title span::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--figma-coral);
+  content: "";
+}
+
+.guide-tip-card h3 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.guide-tip-card.is-active h3 {
+  font-size: 16px;
+}
+
+.guide-tip-detail {
+  --guide-missing-film: rgba(0, 0, 0, 0.24);
+  --guide-missing-seam: #c2bcb5;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+}
+
+.guide-tip-body {
+  box-sizing: border-box;
+  margin: 0 -28px -28px;
+  padding: 20px 24px 16px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  border: 1.4px solid #efd8b8;
+  border-top: 0;
+  border-radius: 0 0 18px 18px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.guide-tip-copy-stack {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+}
+
+.guide-tip-copy {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  visibility: hidden;
+}
+
+.guide-tip-copy.is-active {
+  visibility: visible;
+}
+
+.guide-tip-copy .guide-suggestion {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.guide-tip-detail ul {
+  margin: 12px 0 0;
+  padding: 0 0 12px;
+  display: grid;
+  gap: 12px;
+  list-style: none;
+}
+
+.guide-tip-detail li {
+  padding-left: 16px;
+  position: relative;
+  color: #3c2a1f;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.guide-tip-detail li::before {
+  width: 6px;
+  height: 6px;
+  position: absolute;
+  top: 9px;
+  left: 0;
+  border-radius: 50%;
+  background: var(--figma-coral);
+  content: "";
+}
+
+.guide-tip-source {
+  margin: auto 0 0;
+  padding: 12px 0 0;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid #f1d9b3;
+}
+
+.guide-tip-source a,
+.guide-tip-source span {
+  min-height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #e8f8d8;
+  color: #3c7a33;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.guide-tip-source a:hover,
+.guide-tip-source a:focus-visible {
+  color: #246323;
+  box-shadow: 0 0 0 3px rgba(91, 164, 65, 0.18);
+  outline: 0;
+}
+
+.guide-tip-source a::after {
+  margin-left: 7px;
+  content: "↗";
+}
+
+.guide-suggestion {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #f0cfc3;
+  border-radius: 14px;
+  background: #fff8f5;
+}
+
+.guide-suggestion:not(.is-complete):not(.is-form-open) {
+  box-sizing: border-box;
+  display: grid;
+}
+
+.guide-suggestion.is-form-open {
+  box-sizing: border-box;
+  display: grid;
+}
+
+.guide-suggestion__panel {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  border: 1px solid #f0cfc3;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.guide-suggestion__intro h3 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.guide-suggestion.is-form-open .guide-suggestion__intro {
+  display: none;
+}
+
+.guide-suggestion__intro p,
+.guide-suggestion__message {
+  margin: 6px 0 0;
+  color: #765746;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.guide-suggestion__open,
+.guide-suggestion__actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #eab5a9;
+  border-radius: 10px;
+  background: #fff;
+  color: #9b493e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.guide-suggestion__open {
+  width: 100%;
+  margin-top: 12px;
+  border-color: var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.guide-suggestion__open:hover,
+.guide-suggestion__open:focus-visible,
+.guide-suggestion__actions button:hover,
+.guide-suggestion__actions button:focus-visible {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.12);
+  outline: 0;
+}
+
+.guide-suggestion__form {
+  display: grid;
+  gap: 8px;
+}
+
+.guide-suggestion__form label {
+  display: grid;
+  gap: 6px;
+  color: #68493a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guide-suggestion__form input,
+.guide-suggestion__form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e8cfc4;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--figma-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.guide-suggestion__form textarea {
+  height: 120px;
+  min-height: 120px;
+  resize: none;
+}
+
+.guide-suggestion__form input:focus,
+.guide-suggestion__form textarea:focus {
+  border-color: var(--figma-coral);
+  box-shadow: 0 0 0 3px rgba(255, 107, 116, 0.1);
+  outline: 0;
+}
+
+.guide-suggestion__source-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.guide-suggestion__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: end;
+  gap: 8px;
+}
+
+.guide-suggestion__actions button:last-child {
+  border-color: var(--figma-coral);
+  background: var(--figma-coral);
+  color: #fff;
+}
+
+.guide-suggestion__actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.guide-suggestion__message {
+  color: #a1473f;
+}
+
+.guide-suggestion.is-complete {
+  box-sizing: border-box;
+  padding: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.guide-suggestion__complete {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid #f0cfc3;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--figma-text);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.guide-suggestion__complete::before {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #f4d3c7;
+  border-radius: 12px;
+  background: #fff4ea;
+  color: var(--figma-coral);
+  font-size: 20px;
+  font-weight: 900;
+  content: "✓";
+}
+
+.guide-suggestion__complete strong {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.guide-suggestion__complete span {
+  color: #765746;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.guide-tip-nutrition {
+  margin-top: 16px;
+  padding: 18px 22px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.guide-tip-nutrition__header {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.guide-tip-nutrition__summary {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.guide-tip-nutrition__energy {
+  color: var(--figma-coral);
+  background: #fff0ec;
+}
+
+.guide-tip-nutrition__energy,
+.guide-tip-nutrition__amount {
+  min-height: 38px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.guide-tip-nutrition__amount {
+  background: #fff4e3;
+  color: #6d4128;
+}
+
+.guide-tip-nutrition__summary small {
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.guide-tip-nutrition__source {
+  min-height: 34px;
+  margin-left: auto;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #e8f8d8;
+  color: #3c7a33;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.guide-error,
+.guide-empty,
+.guide-loading {
+  color: #7b5d46;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.guide-fridge-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.guide-fridge-empty strong {
+  color: var(--figma-text);
+  white-space: nowrap;
+}
+
+.guide-fridge-empty span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.guide-error {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #f2beb4;
+  border-radius: 12px;
+  background: #fff4f3;
+}
+
+.guide-nutrition-grid {
+  margin-bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guide-nutrition-grid strong {
+  min-height: 44px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 12px;
+  background: #fff;
+  color: #6d4128;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.guide-nutrition-grid b {
+  color: #8b673e;
+  white-space: nowrap;
+}
+
+.guide-recipes {
+  margin-top: 16px;
+  padding: 18px 22px;
+}
+
+.guide-recipes__header {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.guide-recipes__header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.guide-recipes__header span {
+  min-height: 26px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #8b673e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guide-recipe-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.guide-recipe-card,
+.guide-recipe-more {
+  box-sizing: border-box;
+  min-height: 112px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.guide-recipe-card {
+  position: relative;
+  cursor: pointer;
+}
+
+.guide-recipe-card__image {
+  width: 96px;
+  height: 78px;
+  flex: 0 0 auto;
+}
+
+.guide-recipe-card h3 {
+  margin: 0;
+  color: var(--figma-text);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.guide-recipe-card span {
+  min-height: 24px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff4e3;
+  color: #8b673e;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.guide-recipe-card p {
+  margin: 8px 0 0;
+  color: #6f4b36;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.guide-recipe-more {
+  justify-content: center;
+  text-align: center;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.guide-tip-body.is-missing {
+  background: var(--guide-missing-film);
+  box-shadow: none;
+}
+
+.guide-recipe-status {
+  margin: 0;
+  padding: 18px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 14px;
+  background: #fff;
+  color: #6f4b36;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.guide-recipe-status--error {
+  border-color: #f2beb4;
+  background: #fff4f3;
+  color: #9a3d35;
+}
+
+.guide-recipe-more__icon {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+}
+
+.guide-recipe-more strong {
+  color: var(--figma-text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.guide-recipe-more .guide-primary-button {
+  min-height: 34px;
+  padding: 0 22px;
+}
+
+/* Guide detail */
+.guide-page--detail {
+  padding-top: 30px;
+}
+
+.guide-detail-nav {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #6f5548;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guide-detail-nav button {
+  width: auto;
+  height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #fff0ea;
+  color: #38241b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.guide-detail-nav button:hover,
+.guide-detail-nav button:focus-visible {
+  background: #ffdcd3;
+  outline: 0;
+  transform: translateX(-2px);
+}
+
+.guide-detail-primary {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.85fr);
+  grid-template-areas:
+    "heading ."
+    "summary guide";
+  align-items: stretch;
+  column-gap: 32px;
+  row-gap: 0;
+}
+
+.guide-detail-heading {
+  min-width: 0;
+  grid-area: heading;
+}
+
+.guide-detail-summary {
+  min-width: 0;
+  grid-area: summary;
+}
+
+.guide-detail-visual {
+  aspect-ratio: 1;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #f2d3c7;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at 72% 20%, rgba(255, 255, 255, 0.94), transparent 32%),
+    linear-gradient(145deg, #fff8f5 0%, #fff0eb 100%);
+  box-shadow: 0 16px 38px rgba(85, 50, 35, 0.07);
+}
+
+.guide-detail-visual::before {
+  width: 68%;
+  aspect-ratio: 1;
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  content: "";
+  filter: blur(1px);
+}
+
+.guide-detail-visual__image {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+  border-radius: inherit;
+  filter: drop-shadow(0 18px 22px rgba(73, 42, 27, 0.12));
+}
+
+.guide-detail-visual__image img {
+  object-fit: cover;
+}
+
+.guide-detail-season {
+  min-height: 40px;
+  padding: 0 16px;
+  position: absolute;
+  z-index: 2;
+  bottom: 24px;
+  left: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #27713a;
+  box-shadow: 0 8px 20px rgba(70, 48, 35, 0.1);
+  font-size: 13px;
+  font-weight: 900;
+  backdrop-filter: blur(8px);
+}
+
+.guide-detail-season i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #169447;
+}
+
+.guide-detail-category {
+  margin: 0 0 8px;
+  color: #796357;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.guide-detail-heading h1 {
+  margin: 0 0 20px;
+  color: #271712;
+  font-size: clamp(34px, 3vw, 46px);
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.guide-detail-guide {
+  --guide-missing-film: #fff9f7;
+  --guide-missing-seam: #f3d7ce;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  grid-area: guide;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #f2c7b7;
+  border-radius: 32px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(85, 50, 35, 0.06);
+}
+
+.guide-page--detail .guide-tip-grid {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0 12px;
+  align-items: center;
+  gap: 24px;
+  overflow-x: auto;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-grid.is-missing {
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-card {
+  height: 50px;
+  margin: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #463129;
+  box-shadow: none;
+  font: inherit;
+}
+
+.guide-page--detail .guide-tip-card:hover,
+.guide-page--detail .guide-tip-card:focus-visible {
+  border-bottom-color: transparent;
+  background: transparent;
+  color: var(--figma-coral);
+  box-shadow: none;
+}
+
+.guide-page--detail .guide-tip-card:focus-visible {
+  outline: 2px solid rgba(255, 107, 116, 0.35);
+  outline-offset: -2px;
+}
+
+.guide-page--detail .guide-tip-card.is-active,
+.guide-page--detail .guide-tip-card.is-missing.is-active {
+  border: 0;
+  border-bottom: 2px solid var(--figma-coral);
+  background: transparent;
+  box-shadow: none;
+}
+
+.guide-page--detail .guide-tip-card.is-active::after {
+  display: none;
+}
+
+.guide-page--detail .guide-tip-card__title {
+  justify-content: center;
+}
+
+.guide-page--detail .guide-tip-card__title > span {
+  display: none;
+}
+
+.guide-page--detail .guide-tip-card h3,
+.guide-page--detail .guide-tip-card.is-active h3,
+.guide-page--detail .guide-tip-card.is-missing h3 {
+  color: #463129;
+  font-size: 16px;
+}
+
+.guide-page--detail .guide-tip-card.is-active h3 {
+  color: var(--figma-coral);
+}
+
+.guide-page--detail .guide-tip-card:hover h3,
+.guide-page--detail .guide-tip-card:focus-visible h3 {
+  color: var(--figma-coral);
+}
+
+.guide-page--detail .guide-tip-body,
+.guide-page--detail .guide-tip-body.is-missing {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 28px 28px 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-copy-stack {
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-color: #e5b9aa transparent;
+  scrollbar-width: thin;
+}
+
+.guide-page--detail .guide-tip-copy {
+  min-width: 0;
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.guide-page--detail .guide-tip-copy:has(.guide-suggestion) {
+  justify-content: center;
+}
+
+.guide-page--detail .guide-tip-copy:has(.guide-suggestion.is-form-open) {
+  justify-content: flex-start;
+}
+
+.guide-page--detail .guide-suggestion {
+  width: 100%;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-suggestion__panel {
+  padding: 0;
+  justify-items: center;
+  gap: 18px;
+  border: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.guide-page--detail .guide-suggestion__intro {
+  max-width: 560px;
+}
+
+.guide-page--detail .guide-suggestion__open {
+  width: min(100%, 320px);
+  margin-top: 0;
+}
+
+.guide-page--detail .guide-suggestion.is-form-open .guide-suggestion__panel {
+  justify-items: stretch;
+  text-align: left;
+}
+
+.guide-page--detail .guide-suggestion.is-form-open .guide-suggestion__form {
+  gap: 16px;
+}
+
+.guide-page--detail .guide-suggestion.is-complete {
+  padding: 0;
+}
+
+.guide-page--detail .guide-suggestion__complete {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-copy ul {
+  max-width: 72ch;
+  margin: 0;
+  padding: 8px 0 28px;
+  display: grid;
+  gap: 20px;
+  list-style: none;
+}
+
+.guide-page--detail .guide-tip-copy li {
+  padding-left: 22px;
+  position: relative;
+  color: #44322a;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.75;
+}
+
+.guide-page--detail .guide-tip-copy li::before {
+  width: 6px;
+  height: 6px;
+  position: absolute;
+  top: 11px;
+  left: 0;
+  border-radius: 50%;
+  background: #ad3740;
+  content: "";
+}
+
+.guide-page--detail .guide-tip-source {
+  margin: auto 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid #eadfd8;
+  background: transparent;
+}
+
+.guide-page--detail .guide-tip-source a,
+.guide-page--detail .guide-tip-source span {
+  max-width: 100%;
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: #77665e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.guide-page--detail .guide-tip-source a::before,
+.guide-page--detail .guide-tip-source span::before {
+  margin-right: 8px;
+  color: #a33139;
+  font-weight: 900;
+  content: "출처";
+}
+
+.guide-page--detail .guide-tip-source a:hover,
+.guide-page--detail .guide-tip-source a:focus-visible {
+  color: #a33139;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  box-shadow: none;
+}
+
+.guide-detail-secondary {
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.85fr);
+  align-items: start;
+  gap: 32px;
+}
+
+.guide-detail-nutrition-column {
+  min-width: 0;
+}
+
+.guide-detail-section-title,
+.guide-detail-recipes h2 {
+  margin: 2px 0 18px;
+  color: #271712;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.guide-detail-nutrition {
+  padding: 28px 32px 22px;
+  border: 1px solid #f2c7b7;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(85, 50, 35, 0.05);
+}
+
+.guide-detail-nutrition__header {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #f3d7ce;
+}
+
+.guide-detail-nutrition__header > div {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+.guide-detail-nutrition__header small {
+  color: #716057;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guide-detail-nutrition__header strong {
+  color: #a33139;
+  font-size: 27px;
+  line-height: 1;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px 18px;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid strong {
+  min-height: auto;
+  padding: 0;
+  display: grid;
+  justify-content: stretch;
+  gap: 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid span {
+  color: #716057;
+  font-size: 12px;
+}
+
+.guide-detail-nutrition .guide-nutrition-grid b {
+  color: #271712;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.guide-detail-nutrition__source {
+  color: #8b7670;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.guide-detail-recipes {
+  min-width: 0;
+}
+
+.guide-detail-recipes .guide-recipes__header {
+  margin: 0 0 18px;
+  justify-content: space-between;
+}
+
+.guide-detail-recipes .guide-recipes__header h2,
+.guide-detail-recipes .guide-recipes__header .guide-recipe-pager {
+  margin: 0;
+}
+
+.guide-detail-recipes .guide-recipe-list {
+  grid-template-columns: 1fr;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.guide-detail-recipes .guide-recipe-list::after {
+  padding: 8px 12px;
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(39, 23, 18, 0.72);
+  color: #fff;
+  content: "↕ 위아래로 드래그";
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.guide-detail-recipes .guide-recipe-list:hover::after,
+.guide-detail-recipes .guide-recipe-list:focus-within::after,
+.guide-detail-recipes .guide-recipe-list.is-dragging::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.guide-detail-recipes .guide-recipe-list.is-dragging::after {
+  background: rgba(255, 107, 116, 0.9);
+  content: "↕ 놓아서 넘기기";
+}
+
+.guide-detail-recipes .guide-recipe-list.is-dragging {
+  cursor: grabbing;
+}
+
+.guide-detail-recipes .guide-recipe-card,
+.guide-detail-recipes .guide-recipe-more {
+  min-height: 250px;
+  border-color: #f0ddd5;
+  border-radius: 20px;
+  box-shadow: 0 8px 22px rgba(85, 50, 35, 0.035);
+}
+
+.guide-detail-recipes .guide-recipe-card {
+  height: 250px;
+  padding: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  text-decoration: none;
+  animation: guide-recipe-slide-up 180ms ease-out;
+  transition: transform 120ms ease-out;
+}
+
+.guide-detail-recipes .guide-recipe-card.is-previous {
+  animation-name: guide-recipe-slide-down;
+}
+
+.guide-detail-recipes .guide-recipe-list.is-dragging .guide-recipe-card {
+  animation: none;
+  transition: none;
+}
+
+.guide-detail-recipes .guide-recipe-card:hover,
+.guide-detail-recipes .guide-recipe-card:focus-visible {
+  border-color: #e7b7a7;
+  outline: 0;
+}
+
+.guide-detail-recipes .guide-recipe-card__image {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: block;
+  border-radius: 19px;
+}
+
+.guide-detail-recipes .guide-recipe-card__image img {
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.guide-detail-recipes .guide-recipe-card > div {
+  padding: 64px 18px 18px;
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(transparent, rgba(39, 23, 18, 0.86));
+}
+
+.guide-detail-recipes .guide-recipe-card h3 {
+  color: #fff;
+  font-size: 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
+}
+
+.guide-detail-recipes .guide-recipe-card p {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.guide-detail-recipes .guide-recipe-card > div span {
+  background: rgba(255, 255, 255, 0.9);
+  color: #7d503b;
+}
+
+.guide-recipe-pager {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-recipe-pager span {
+  min-width: 58px;
+  min-height: 28px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff3ef;
+  color: #785c51;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+@keyframes guide-recipe-slide-up {
+  from {
+    opacity: 0.35;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes guide-recipe-slide-down {
+  from {
+    opacity: 0.35;
+    transform: translateY(-18px);
+  }
+}
+
+.guide-page--detail > .guide-loading,
+.guide-page--detail > .guide-empty {
+  min-height: 360px;
+  padding: 32px;
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 1080px) {
+  .guide-ingredient-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .guide-more-button {
+    width: 100%;
+    border-radius: 14px;
+  }
+
+  .guide-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-tip-detail {
+    max-width: none;
+  }
+
+  .guide-all-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-recipe-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-nutrition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .guide-page {
+    width: min(100% - 36px, 390px);
+    padding: 0 0 108px;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .guide-hero {
+    min-height: auto;
+    padding-top: 4px;
+    display: block;
+  }
+
+  .guide-hero__copy {
+    align-self: auto;
+  }
+
+  .guide-hero__copy h1 {
+    font-size: 30px;
+    line-height: 1.18;
+  }
+
+  .guide-hero__copy p {
+    max-width: 100%;
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .guide-search-wrap {
+    width: 100%;
+    margin-top: 18px;
+  }
+
+  .guide-search {
+    height: 44px;
+  }
+
+  .guide-hero__art {
+    display: none;
+  }
+
+  .guide-panel {
+    border-radius: 16px;
+  }
+
+  .guide-ingredients {
+    margin-top: 14px;
+    padding: 16px 0;
+  }
+
+  .guide-section-title {
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  .guide-ingredient-list {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .guide-fridge-page-button {
+    width: 34px;
+    height: 34px;
+    font-size: 24px;
+  }
+
+  .guide-fridge-pager {
+    padding: 0;
+  }
+
+  .guide-fridge-pager:has(.guide-fridge-page-button) {
+    padding: 0 40px;
+  }
+
+  .guide-fridge-page-button.is-previous {
+    left: 0;
+  }
+
+  .guide-fridge-page-button.is-next {
+    right: 0;
+  }
+
+  .guide-ingredient {
+    width: 100%;
+    height: 82px;
+    padding: 8px 6px;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient {
+    height: 58px;
+    flex-direction: row;
+    gap: 5px;
+  }
+
+  .guide-ingredient__image {
+    width: 46px;
+    height: 46px;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient__image {
+    width: 30px;
+    height: 30px;
+  }
+
+  .guide-more-button {
+    width: 100%;
+    height: 82px;
+    border-radius: 14px;
+  }
+
+  .guide-content-grid {
+    margin-top: 12px;
+    gap: 12px;
+  }
+
+  .guide-detail,
+  .guide-tip-detail,
+  .guide-recipes {
+    padding: 16px;
+  }
+
+  .guide-all {
+    margin-top: 12px;
+    padding: 20px 0 0;
+  }
+
+  .guide-category-tabs {
+    margin: 0 0 10px;
+  }
+
+  .guide-category-tab-list button {
+    padding: 0 14px;
+  }
+
+  .guide-all__header {
+    margin-bottom: 6px;
+  }
+
+  .guide-all-list {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .guide-all-item {
+    min-height: 104px;
+    padding: 10px;
+    grid-template-columns: 72px minmax(0, 1fr) 14px;
+    gap: 10px;
+  }
+
+  .guide-all-item__image {
+    width: 68px;
+    height: 68px;
+  }
+
+  .guide-all-item strong {
+    font-size: 14px;
+  }
+
+  .guide-all-item p {
+    font-size: 11px;
+  }
+
+  .guide-detail__header {
+    grid-template-columns: 98px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .guide-detail__header > div {
+    gap: 10px;
+  }
+
+  .guide-detail__image {
+    width: 94px;
+    height: 94px;
+    border-radius: 14px;
+  }
+
+  .guide-detail h2,
+  .guide-recipes h2,
+  .guide-tip-nutrition h2 {
+    font-size: 19px;
+  }
+
+  .guide-detail__header p {
+    margin-top: 5px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .guide-owned-badge {
+    min-height: 30px;
+    margin-top: 8px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  .guide-tip-grid {
+    margin: -16px -16px 0;
+    padding: 0;
+    grid-template-columns: repeat(4, minmax(112px, 1fr));
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .guide-tip-body {
+    margin: 0 -16px -16px;
+    padding: 20px 20px 14px;
+    border-radius: 0 0 16px 16px;
+  }
+
+  .guide-tip-detail ul {
+    padding-bottom: 14px;
+  }
+
+  .guide-tip-source {
+    padding-top: 14px;
+  }
+
+  .guide-tip-copy .guide-suggestion {
+    margin-bottom: 14px;
+  }
+
+  .guide-tip-nutrition {
+    margin-top: 12px;
+    padding: 16px;
+  }
+
+  .guide-tip-card {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  .guide-tip-card__title {
+    justify-content: flex-start;
+  }
+
+  .guide-tip-card__title span {
+    order: -1;
+    width: 20px;
+    height: 20px;
+  }
+
+  .guide-tip-card__title::after {
+    display: none;
+    width: 8px;
+    height: 8px;
+    margin-left: auto;
+    border-top: 2px solid #6f4b36;
+    border-right: 2px solid #6f4b36;
+    content: "";
+    transform: rotate(45deg);
+  }
+
+  .guide-tip-detail li {
+    font-size: 13px;
+  }
+
+  .guide-suggestion__source-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-recipes {
+    margin-top: 12px;
+  }
+
+  .guide-recipes__header,
+  .guide-recipes__header > div:first-child {
+    flex-wrap: wrap;
+  }
+
+  .guide-recipe-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    overflow: visible;
+  }
+
+  .guide-nutrition-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-recipe-card,
+  .guide-recipe-more {
+    width: 100%;
+    min-height: 104px;
+  }
+
+  .guide-recipe-card {
+    padding-bottom: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  .guide-page {
+    width: min(100% - 24px, 430px);
+  }
+
+  .guide-hero__copy p {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .guide-detail-primary,
+  .guide-detail-secondary {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-detail-primary {
+    grid-template-areas:
+      "heading"
+      "summary"
+      "guide";
+    align-items: start;
+    row-gap: 0;
+  }
+
+  .guide-detail-guide {
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .guide-detail-heading,
+  .guide-detail-summary {
+    width: min(100%, 520px);
+    margin: 0 auto;
+  }
+
+  .guide-detail-secondary {
+    gap: 28px;
+  }
+
+  .guide-detail-recipes .guide-recipe-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .guide-page--detail {
+    padding-top: 14px;
+  }
+
+  .guide-detail-nav {
+    margin-bottom: 18px;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .guide-detail-nav button {
+    width: auto;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .guide-detail-primary {
+    gap: 0;
+  }
+
+  .guide-detail-visual {
+    aspect-ratio: 4 / 3;
+    border-radius: 24px;
+  }
+
+  .guide-detail-season {
+    min-height: 34px;
+    bottom: 16px;
+    left: 16px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+
+  .guide-detail-category {
+    margin-top: 0;
+  }
+
+  .guide-detail-heading h1 {
+    font-size: 32px;
+  }
+
+  .guide-detail-guide {
+    min-height: 0;
+    padding: 8px;
+    border-radius: 24px;
+  }
+
+  .guide-page--detail .guide-tip-grid {
+    grid-template-columns: repeat(4, minmax(108px, 1fr)) !important;
+    padding: 0 8px;
+    gap: 18px;
+    border-radius: 0;
+  }
+
+  .guide-page--detail .guide-tip-card {
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 0;
+  }
+
+  .guide-page--detail .guide-tip-card h3,
+  .guide-page--detail .guide-tip-card.is-active h3,
+  .guide-page--detail .guide-tip-card.is-missing h3 {
+    font-size: 14px;
+  }
+
+  .guide-page--detail .guide-tip-body,
+  .guide-page--detail .guide-tip-body.is-missing {
+    padding: 22px 18px 0;
+  }
+
+  .guide-page--detail .guide-tip-copy {
+    min-height: 320px;
+  }
+
+  .guide-page--detail .guide-tip-copy li {
+    font-size: 13px;
+  }
+
+  .guide-page--detail .guide-tip-source {
+    margin-right: 0;
+    margin-left: 0;
+    padding: 12px 0 0;
+  }
+
+  .guide-detail-secondary {
+    margin-top: 28px;
+  }
+
+  .guide-detail-nutrition {
+    padding: 22px 18px 18px;
+    border-radius: 22px;
+  }
+
+  .guide-detail-nutrition__header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+  }
+
+  .guide-detail-section-title,
+  .guide-detail-recipes h2 {
+    font-size: 20px;
+  }
+
+  .guide-detail-nutrition__header strong {
+    font-size: 21px;
+  }
+
+  .guide-detail-nutrition .guide-nutrition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 12px;
+  }
+
+  .guide-detail-recipes .guide-recipe-list {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-detail-recipes .guide-recipe-card {
+    padding: 0;
+  }
+}

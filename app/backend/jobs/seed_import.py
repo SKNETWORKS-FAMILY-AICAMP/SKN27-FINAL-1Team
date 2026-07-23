@@ -6,6 +6,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import psycopg2
@@ -183,44 +184,79 @@ class S3Object:
     key: str
 
 
-def run_seed_import() -> None:
-    import boto3
+class S3SeedSource:
+    def __init__(self, bucket: str) -> None:
+        import boto3
 
-    bucket = _required_env("SEED_DATA_BUCKET")
-    prefix = _normalize_prefix(os.getenv("SEED_DATA_PREFIX", "prod/"))
+        self.bucket = bucket
+        self.client = boto3.client("s3", region_name=settings.AWS_REGION)
+
+    def read_text(self, key: str) -> str:
+        body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+        return body.decode("utf-8-sig")
+
+    def describe(self, key: str) -> str:
+        return f"s3://{self.bucket}/{key}"
+
+
+class LocalSeedSource:
+    def __init__(self, root: str) -> None:
+        self.root = Path(root).resolve()
+
+    def read_text(self, key: str) -> str:
+        path = (self.root / key).resolve()
+        if path != self.root and self.root not in path.parents:
+            raise ValueError(f"seed key escapes SEED_DATA_DIR: {key}")
+        return path.read_text(encoding="utf-8-sig")
+
+    def describe(self, key: str) -> str:
+        return str(self.root / key)
+
+
+def run_seed_import() -> None:
+    source_type = os.getenv("SEED_DATA_SOURCE", "s3").strip().lower()
+    if source_type == "s3":
+        source = S3SeedSource(_required_env("SEED_DATA_BUCKET"))
+        default_prefix = "prod/"
+    elif source_type == "local":
+        source = LocalSeedSource(_required_env("SEED_DATA_DIR"))
+        default_prefix = ""
+    else:
+        raise RuntimeError("SEED_DATA_SOURCE must be s3 or local")
+
+    prefix = _normalize_prefix(os.getenv("SEED_DATA_PREFIX", default_prefix))
     manifest_key = os.getenv("SEED_MANIFEST_KEY") or f"{prefix}manifest.json"
-    s3 = boto3.client("s3", region_name=settings.AWS_REGION)
-    manifest = json.loads(_read_s3_text(s3, S3Object(bucket, manifest_key)))
+    manifest = json.loads(source.read_text(manifest_key))
 
     with psycopg2.connect(settings.DATABASE_URL) as connection:
         for entry in manifest.get("postgres_sql", []):
-            _run_postgres_sql(connection, s3, bucket, prefix, entry)
+            _run_postgres_sql(connection, source, prefix, entry)
         for entry in manifest.get("postgres_csv", []):
-            _run_postgres_csv(connection, s3, bucket, prefix, entry)
+            _run_postgres_csv(connection, source, prefix, entry)
 
     neo4j_entries = manifest.get("neo4j_cypher", [])
     if neo4j_entries:
-        _run_neo4j_cypher(s3, bucket, prefix, neo4j_entries)
+        _run_neo4j_cypher(source, prefix, neo4j_entries)
 
     food_guide_entries = manifest.get("neo4j_food_guide", [])
     if food_guide_entries:
-        _run_neo4j_food_guide(s3, bucket, prefix, food_guide_entries)
+        _run_neo4j_food_guide(source, prefix, food_guide_entries)
 
 
-def _run_postgres_sql(connection, s3, bucket: str, prefix: str, entry: dict[str, Any]) -> None:
+def _run_postgres_sql(connection, source, prefix: str, entry: dict[str, Any]) -> None:
     key = _object_key(prefix, entry["key"])
-    statement = _read_s3_text(s3, S3Object(bucket, key))
+    statement = source.read_text(key)
     with connection.cursor() as cursor:
         cursor.execute(statement)
     connection.commit()
-    print(f"postgres_sql imported: s3://{bucket}/{key}")
+    print(f"postgres_sql imported: {source.describe(key)}")
 
 
-def _run_postgres_csv(connection, s3, bucket: str, prefix: str, entry: dict[str, Any]) -> None:
+def _run_postgres_csv(connection, source, prefix: str, entry: dict[str, Any]) -> None:
     table = _table_name(entry["table"])
     mode = entry.get("mode", "skip_if_not_empty")
     key = _object_key(prefix, entry["key"])
-    csv_text = _read_s3_text(s3, S3Object(bucket, key))
+    csv_text = source.read_text(key)
     columns = entry.get("columns") or _csv_header(csv_text)
     _validate_identifiers(columns)
 
@@ -245,10 +281,10 @@ def _run_postgres_csv(connection, s3, bucket: str, prefix: str, entry: dict[str,
         if "id" in columns:
             _reset_id_sequence(cursor, table)
     connection.commit()
-    print(f"postgres_csv imported: s3://{bucket}/{key} -> {table}")
+    print(f"postgres_csv imported: {source.describe(key)} -> {table}")
 
 
-def _run_neo4j_cypher(s3, bucket: str, prefix: str, entries: list[dict[str, Any]]) -> None:
+def _run_neo4j_cypher(source, prefix: str, entries: list[dict[str, Any]]) -> None:
     from neo4j import GraphDatabase
 
     driver = GraphDatabase.driver(
@@ -259,15 +295,15 @@ def _run_neo4j_cypher(s3, bucket: str, prefix: str, entries: list[dict[str, Any]
         with driver.session(database=settings.NEO4J_DATABASE) as session:
             for entry in entries:
                 key = _object_key(prefix, entry["key"])
-                cypher_text = _read_s3_text(s3, S3Object(bucket, key))
+                cypher_text = source.read_text(key)
                 for statement in _split_cypher_statements(cypher_text):
                     session.run(statement).consume()
-                print(f"neo4j_cypher imported: s3://{bucket}/{key}")
+                print(f"neo4j_cypher imported: {source.describe(key)}")
     finally:
         driver.close()
 
 
-def _run_neo4j_food_guide(s3, bucket: str, prefix: str, entries: list[dict[str, Any]]) -> None:
+def _run_neo4j_food_guide(source, prefix: str, entries: list[dict[str, Any]]) -> None:
     from neo4j import GraphDatabase
 
     driver = GraphDatabase.driver(
@@ -277,15 +313,15 @@ def _run_neo4j_food_guide(s3, bucket: str, prefix: str, entries: list[dict[str, 
     try:
         with driver.session(database=settings.NEO4J_DATABASE) as session:
             for entry in entries:
-                _run_neo4j_food_guide_entry(session, s3, bucket, prefix, entry)
+                _run_neo4j_food_guide_entry(session, source, prefix, entry)
     finally:
         driver.close()
 
 
-def _run_neo4j_food_guide_entry(session, s3, bucket: str, prefix: str, entry: dict[str, Any]) -> None:
+def _run_neo4j_food_guide_entry(session, source, prefix: str, entry: dict[str, Any]) -> None:
     guide_prefix = _normalize_prefix(entry.get("prefix", "food_guide/"))
     tables = {
-        filename: _read_s3_csv(s3, S3Object(bucket, _object_key(prefix, f"{guide_prefix}{filename}")))
+        filename: _read_seed_csv(source, _object_key(prefix, f"{guide_prefix}{filename}"))
         for filename in (*_FOOD_GUIDE_NODE_SPECS, *_FOOD_GUIDE_RELATION_SPECS)
     }
     _validate_food_guide_tables(tables)
@@ -326,7 +362,11 @@ def _run_neo4j_food_guide_entry(session, s3, bucket: str, prefix: str, entry: di
 
     for query in _FOOD_GUIDE_COMPATIBILITY_QUERIES:
         session.run(query).consume()
-    print(f"neo4j_food_guide imported from s3://{bucket}/{_object_key(prefix, guide_prefix)}")
+    print(f"neo4j_food_guide imported from {source.describe(_object_key(prefix, guide_prefix))}")
+
+
+def _read_seed_csv(source, key: str) -> list[dict[str, str]]:
+    return list(csv.DictReader(io.StringIO(source.read_text(key))))
 
 
 def _read_s3_csv(s3, obj: S3Object) -> list[dict[str, str]]:

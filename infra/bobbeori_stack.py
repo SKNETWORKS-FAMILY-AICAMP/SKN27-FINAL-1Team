@@ -106,6 +106,17 @@ class BobbeoriStack(Stack):
             versioned=is_production,
             removal_policy=RemovalPolicy.RETAIN if is_production else RemovalPolicy.DESTROY,
             auto_delete_objects=not is_production,
+            cors=[
+                s3.CorsRule(
+                    allowed_methods=[s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+                    allowed_origins=list(
+                        dict.fromkeys([f"https://{app_host}", f"https://{root_domain}"])
+                    ),
+                    allowed_headers=["*"],
+                    exposed_headers=["ETag"],
+                    max_age=3000,
+                )
+            ],
             lifecycle_rules=[
                 s3.LifecycleRule(
                     abort_incomplete_multipart_upload_after=Duration.days(7),

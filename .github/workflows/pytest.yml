@@ -6,6 +6,7 @@ on:
     branches:
       - dev
       - main
+      - feature_deploy
       - "feature/**"
 
 jobs:

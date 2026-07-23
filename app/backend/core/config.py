@@ -154,8 +154,9 @@ class Settings:
     OCR_OUTPUT_DIR: str = os.getenv("OCR_OUTPUT_DIR", "storage/processed/receipts")
     RECEIPT_STORAGE_BACKEND: str = os.getenv("RECEIPT_STORAGE_BACKEND", "local").lower()
     AWS_REGION: str = os.getenv("AWS_REGION", "ap-northeast-2")
-    S3_RECEIPT_BUCKET: str = os.getenv("S3_RECEIPT_BUCKET", "")
-    S3_RECEIPT_PREFIX: str = os.getenv("S3_RECEIPT_PREFIX", "receipts")
+    S3_RECEIPT_BUCKET: str = os.getenv("RECEIPT_S3_BUCKET") or os.getenv("S3_RECEIPT_BUCKET", "")
+    S3_RECEIPT_PREFIX: str = os.getenv("RECEIPT_S3_PREFIX") or os.getenv("S3_RECEIPT_PREFIX", "receipts")
+    S3_RECEIPT_TEMP_PREFIX: str = os.getenv("RECEIPT_S3_TEMP_PREFIX", "")
     S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL", "")
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 10))
     RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RECEIPT_UPLOAD_RATE_LIMIT_PER_MINUTE", 5))
@@ -169,7 +170,7 @@ class Settings:
         if self.RECEIPT_STORAGE_BACKEND not in {"local", "s3"}:
             raise RuntimeError("RECEIPT_STORAGE_BACKEND must be local or s3")
         if self.RECEIPT_STORAGE_BACKEND == "s3" and not self.S3_RECEIPT_BUCKET:
-            raise RuntimeError("S3_RECEIPT_BUCKET is required when receipt storage uses S3")
+            raise RuntimeError("RECEIPT_S3_BUCKET or S3_RECEIPT_BUCKET is required when receipt storage uses S3")
 
 settings = Settings()
 if settings.LANGFUSE_HOST and not os.getenv("LANGFUSE_HOST"):
