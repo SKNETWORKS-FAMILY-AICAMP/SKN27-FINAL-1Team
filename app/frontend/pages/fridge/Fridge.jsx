@@ -9,6 +9,7 @@ import IngredientModal from '../../components/modals/IngredientModal'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import { initialIngredientFormData as initialFormData } from '../../mock/fridgeMock.js'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 import {
   getIngredientImageUrl,
   normalizeIngredientImageName,
@@ -440,6 +441,9 @@ function Fridge() {
       }
 
       const savedItem = await response.json()
+      if (!isEditing) {
+        trackEvent('fridge_ingredient_add', { ingredient_id: String(savedItem.ingredient_id || savedItem.id) })
+      }
       setIngredients((prev) => {
         if (isEditing) {
           return prev.map((item) => (item.id === editingId ? normalizeIngredient(savedItem) : item))
@@ -457,10 +461,11 @@ function Fridge() {
   }
 
   // 식재료를 삭제하거나, 로그인 전 상태에서는 로컬 목록에서 제거합니다.
-  const executeDelete = async (id) => {
+  const executeDelete = async (id, consumedItem = null) => {
     const token = getToken()
     if (!token) {
       setIngredients((prev) => prev.filter((item) => item.id !== id))
+      if (consumedItem) trackEvent('ingredient_consume', { ingredient_id: String(id), consume_all: true })
       setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
       return
     }
@@ -475,6 +480,7 @@ function Fridge() {
         return
       }
       if (response.ok) {
+        if (consumedItem) trackEvent('ingredient_consume', { ingredient_id: String(id), consume_all: true })
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
         fetchFridgeData()
       } else {
@@ -587,7 +593,7 @@ function Fridge() {
         isOpen: true,
         title: '모두 소비',
         message: <span style={{ color: 'var(--figma-coral)', fontWeight: 'bold', fontSize: '18px' }}>{item.name}을 모두 소비 처리할까요?</span>,
-        onConfirm: () => executeDelete(item.id),
+        onConfirm: () => executeDelete(item.id, item),
       })
       return
     }
@@ -623,6 +629,12 @@ function Fridge() {
         await showAlert('소비 처리에 실패했습니다.', { title: '소비 처리 실패' })
         return
       }
+      trackEvent('ingredient_consume', {
+        ingredient_id: String(item.ingredient_id || item.id),
+        quantity: consumeAmount,
+        unit: item.unit,
+        consume_all: false,
+      })
       fetchFridgeData()
     } catch (err) {
       console.error(err)

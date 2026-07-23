@@ -6,6 +6,7 @@ import imageEatRefrigerator from '../../assets/extracted/images/image_eat_refrig
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import { createRecipeShoppingList, hasShoppingAuth } from '../../services/shoppingApi.js'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 import { saveStoredRecipe } from '../../utils/savedRecipes.js'
 
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
@@ -201,6 +202,10 @@ function RecipeDetail() {
         }
 
         const data = await response.json()
+        trackEvent('select_content', {
+          content_type: 'recipe',
+          content_id: `recipe_${data.recipe_id || recipeId}`,
+        })
         setRecipe(data)
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
@@ -280,7 +285,7 @@ function RecipeDetail() {
     setIsShoppingCreating(true)
 
     try {
-      return await createRecipeShoppingList({
+      const shoppingList = await createRecipeShoppingList({
         recipeId: recipe.recipe_id,
         missingIngredients: missingIngredients.map((item) => ({
           ingredient_id: item.ingredient_id,
@@ -288,6 +293,11 @@ function RecipeDetail() {
           amount: item.amount,
         })),
       })
+      trackEvent('shopping_list_create', {
+        recipe_id: String(recipe.recipe_id),
+        item_count: missingIngredients.length,
+      })
+      return shoppingList
     } catch (shoppingError) {
       if (shoppingError.status === 401) {
         await showAlert('로그인이 만료되었어요. 다시 로그인해 주세요.', {

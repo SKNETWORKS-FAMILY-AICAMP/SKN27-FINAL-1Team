@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 import './Login.css'
 
 const getOAuthRedirectOrigin = () => (
@@ -89,6 +90,7 @@ function Callback() {
           window.localStorage.setItem('bobbeori-auth-mode', 'user')
           window.sessionStorage.removeItem('bobbeori-session-expired-alerted')
           window.dispatchEvent(new Event('bobbeori-auth-change'))
+          trackEvent(data.is_new_user ? 'sign_up' : 'login', { method: provider })
           navigate('/')
         } else {
           throw new Error('토큰 발급에 실패했습니다.')

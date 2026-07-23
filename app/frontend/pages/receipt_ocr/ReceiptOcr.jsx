@@ -12,6 +12,7 @@ import { adjustCropPixelsForOffset, resizeCropBoxFromPointer } from './cropGeome
 import { getReceiptAgeInDays, isOldReceipt } from './receiptAgePolicy.js'
 import { requiresReceiptItemReview } from './receiptReviewPolicy.js'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 import {
   receiptHistory,
   receiptRows as rows,
@@ -1171,6 +1172,11 @@ function ReceiptOcr() {
       if (files.length === 1) {
         await loadSavedReceiptPreview(data.receipt_id, token)
       }
+      trackEvent('receipt_ocr_complete', {
+        item_count: nextRows.length,
+        image_count: files.length,
+        crop_mode: cropMode,
+      })
       setActiveStep(STEP.CONFIRM)
     } catch (error) {
       if (uploadRunIdRef.current !== uploadRunId) {
