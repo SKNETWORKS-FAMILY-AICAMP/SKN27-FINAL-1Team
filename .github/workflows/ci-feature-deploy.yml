@@ -34,7 +34,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: app/frontend/package-lock.json
 
@@ -58,7 +58,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -81,6 +81,10 @@ jobs:
             "availability-zones:account=000000000000:region=ap-northeast-2": [
               "ap-northeast-2a",
               "ap-northeast-2b"
+            ],
+            "availability-zones:account=000000000000:region=us-east-1": [
+              "us-east-1a",
+              "us-east-1b"
             ]
           }
           JSON
