@@ -6,6 +6,7 @@ import imageHello from '../../assets/extracted/images/image_hello.png'
 import imageMenuRecommendation from '../../assets/extracted/images/image_menu_recommendation.png'
 import { readStoredRecipes, saveRecommendationResult, saveStoredRecipe } from '../../utils/savedRecipes.js'
 import { API_URL } from '../../utils/api.js'
+import { trackEvent } from '../../utils/analytics.js'
 
 
 function ImageSlot({ src, alt = '', className = '' }) {
@@ -63,6 +64,11 @@ function FridgeRecipe() {
       }
 
       const data = await response.json()
+      trackEvent('recipe_recommend', {
+        recommendation_type: 'fridge_consume',
+        result_count: (data.items || []).length,
+        refresh: Boolean(refreshPool),
+      })
       setItems(data.items || [])
       setHasMore(Boolean(data.has_more))
       setHasRequested(true)

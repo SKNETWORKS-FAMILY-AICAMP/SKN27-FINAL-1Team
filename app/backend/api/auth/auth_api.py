@@ -50,14 +50,14 @@ async def social_login(login_data: SocialLoginRequest, db: Session = Depends(get
             detail=f"소셜 인증 서버 통신 중 오류가 발생했습니다: {exc}",
         ) from exc
 
-    access_token = auth_service.authenticate_social_user(
+    access_token, is_new_user = auth_service.authenticate_social_user(
         db=db,
         provider=provider,
         provider_id=user_info["provider_id"],
         email=user_info.get("email"),
         nickname=user_info.get("nickname"),
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "is_new_user": is_new_user}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -120,11 +120,11 @@ def dev_cheat_login(db: Session = Depends(get_db)):
     if not settings.DEV_MODE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
-    access_token = auth_service.authenticate_social_user(
+    access_token, is_new_user = auth_service.authenticate_social_user(
         db=db,
         provider="kakao",
         provider_id="dev_cheat_id_9999",
         email="dev@bobbeori.com",
         nickname="개발자용치트유저",
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "is_new_user": is_new_user}

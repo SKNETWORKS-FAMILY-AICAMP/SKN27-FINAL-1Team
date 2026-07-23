@@ -7,6 +7,7 @@ import {
   authenticatedFetch,
   isSessionExpiredError,
 } from './utils/api.js'
+import { trackPageView } from './utils/analytics.js'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
@@ -32,7 +33,7 @@ import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
 
 function AppLayout() {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const isAuthPage = pathname === '/login' || pathname.startsWith('/auth/callback')
   
@@ -58,6 +59,10 @@ function AppLayout() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [pathname])
+
+  useEffect(() => {
+    trackPageView(`${pathname}${search}`)
+  }, [pathname, search])
 
   useEffect(() => {
     const token = localStorage.getItem('bobbeori-token')

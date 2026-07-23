@@ -10,9 +10,74 @@ import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/in
 const GUIDE_PAGE_SIZE = 12
 const FRIDGE_PAGE_SIZE = 16
 const GUEST_RECOMMENDATION_PAGE_SIZE = 8
+const GUIDE_SCROLL_POSITION_KEY = 'guide-scroll-position'
 const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
 const EMPTY_SUGGESTION_FORM = { content: '', sourceUrl: '' }
+const GUIDE_IMAGE_IDS = {
+  ingredient_0003: 'ingredient_51dca13d2627a424',
+  ingredient_0030: 'ingredient_4b16a7f04f2247a6',
+  ingredient_0055: 'ingredient_8fb8d89ced712eb0',
+  ingredient_0070: 'ingredient_0be95d89abe806ff',
+  ingredient_0144: 'ingredient_50dfae78057c79cf',
+  ingredient_0147: 'ingredient_140a705c797b2b38',
+  ingredient_0209: 'ingredient_04969005d14278f7',
+  ingredient_0211: 'ingredient_35dca46d57a184da',
+  ingredient_0254: 'ingredient_8a4b20bb8def6d4a',
+  ingredient_0255: 'ingredient_6ec8fa4ace72e30e',
+  ingredient_0332: 'ingredient_7bf3f7a2700a542a',
+  ingredient_0338: 'ingredient_71074cacaababa4b',
+  ingredient_0364: 'ingredient_46b97d1a17c345c1',
+  ingredient_0365: 'ingredient_7ab9f2a8c9750517',
+  ingredient_0368: 'ingredient_b4117056b351c9b6',
+  ingredient_0369: 'ingredient_46b97d1a17c345c1',
+  ingredient_0472: 'ingredient_e68143b756f0b610',
+  ingredient_0474: 'ingredient_b422625dd360b54d',
+  ingredient_0479: 'ingredient_5cf37d871691fe94',
+  ingredient_0482: 'ingredient_ccdc5f2d5acb130c',
+  ingredient_0484: 'ingredient_36722c46ccc9a8d1',
+  ingredient_0492: 'ingredient_55bade89cf4082fe',
+  ingredient_0506: 'ingredient_0543fe1553ca82b2',
+  ingredient_0510: 'ingredient_8f7a1eea1f2ce9d4',
+  ingredient_0535: 'ingredient_35198fc48c7061fd',
+  ingredient_0534: 'ingredient_79db0b3ebc94daa7',
+  ingredient_0545: 'ingredient_00b2205322c7f2b9',
+  ingredient_0548: 'ingredient_bfd8c560497bbfa8',
+  ingredient_0576: 'ingredient_ebaa36583b3f0eac',
+  ingredient_0196: 'ingredient_ef203e9bdd97e53c',
+  ingredient_0619: 'ingredient_faa6bce867320b1c',
+  ingredient_0627: 'ingredient_a7f7ec597ecbc841',
+  ingredient_0629: 'ingredient_3027c3ecfdcaf14f',
+  ingredient_0633: 'ingredient_07cff3f1a2bfcaf1',
+  ingredient_0636: 'ingredient_139329398547feef',
+  ingredient_0647: 'ingredient_ae73681d9af44870',
+  ingredient_0652: 'ingredient_191c145287f21597',
+  ingredient_0656: 'ingredient_9fb0b055df76cfea',
+  ingredient_0657: 'ingredient_eac4d660efd2e6c7',
+  ingredient_0660: 'ingredient_ccc4da97bcead35b',
+  ingredient_0680: 'ingredient_82a6e1d9349c3470',
+  ingredient_0692: 'ingredient_0cb6b083d03fba0e',
+  ingredient_0701: 'ingredient_eed6360ce80212d9',
+  ingredient_0708: 'ingredient_6a3d8245ace0ee9c',
+  ingredient_0714: 'ingredient_915ecb41fa436d27',
+  ingredient_0715: 'ingredient_62689689a23bd56f',
+  ingredient_0719: 'ingredient_8cc673fe50722433',
+  ingredient_0724: 'ingredient_d46b960ed8a86b19',
+  ingredient_0725: 'ingredient_3bc17982f7e50042',
+  ingredient_0728: 'ingredient_8f27a4aa3880ef68',
+  ingredient_0733: 'ingredient_cfa472e600224d6b',
+  ingredient_0736: 'ingredient_087be49a1ecfb668',
+  ingredient_0440: 'ingredient_28ad4edcf446c64b',
+  ingredient_0448: 'ingredient_b843e8b01e8904ce',
+  ingredient_0450: 'ingredient_0bd080fa0243c648',
+  ingredient_0453: 'ingredient_6454befbdb61c843',
+  ingredient_0462: 'ingredient_8c78951e49d7698a',
+  ingredient_0496: 'ingredient_0f3f164be8c9ea88',
+  ingredient_0505: 'ingredient_5143a3be656edb6c',
+  ingredient_0567: 'ingredient_5c1d1384ac954b76',
+  ingredient_0586: 'ingredient_293c250e95911eed',
+  ingredient_0596: 'ingredient_fa9fc5ce6cf71050',
+}
 
 const TIP_DEFINITIONS = [
   { title: '보관방법', key: 'storage_tips', guideType: 'storage', sourceName: 'storage_source_name', sourceUrl: 'storage_source_url' },
@@ -109,11 +174,15 @@ function formatCookingTime(minutes) {
 }
 
 function getGuideIcon(catalog, ingredient) {
+  const imageId = GUIDE_IMAGE_IDS[ingredient?.code]
+  const mappedImage = imageId && catalog?.items.find((item) => item.id === imageId)
+  if (mappedImage) return mappedImage.imageUrl
+
   return getIngredientImageUrl(
     catalog,
     [
-      ingredient?.raw_name,
       ingredient?.name,
+      ingredient?.raw_name,
       ingredient?.representative_name,
     ],
     [ingredient?.middle_category, ingredient?.major_category],
@@ -170,7 +239,7 @@ function Guide() {
   const [recommendedRecipes, setRecommendedRecipes] = useState([])
   const [recipeSlideIndex, setRecipeSlideIndex] = useState(0)
   const [recipeSlideDirection, setRecipeSlideDirection] = useState('next')
-  const recipeDragStartY = useRef(null)
+  const recipeDragStartX = useRef(null)
   const recipeDidDrag = useRef(false)
   const [isListLoading, setIsListLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
@@ -284,6 +353,20 @@ function Guide() {
       window.clearTimeout(timer)
     }
   }, [page, searchTerm, selectedMajorCategory, selectedMiddleCategory])
+
+  useEffect(() => {
+    if (isDetailPage || isListLoading) return undefined
+    const storedPosition = sessionStorage.getItem(GUIDE_SCROLL_POSITION_KEY)
+    if (storedPosition == null) return undefined
+    const savedPosition = Number(storedPosition)
+    if (!Number.isFinite(savedPosition)) return undefined
+
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo(0, savedPosition)
+      sessionStorage.removeItem(GUIDE_SCROLL_POSITION_KEY)
+    })
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isDetailPage, isListLoading])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -445,10 +528,10 @@ function Guide() {
     if (recommendedRecipes.length <= 1) return undefined
 
     const intervalId = window.setInterval(() => {
-      if (document.hidden || recipeDragStartY.current != null) return
+      if (document.hidden || recipeDragStartX.current != null) return
       setRecipeSlideDirection('next')
       setRecipeSlideIndex((current) => (current + 1) % recommendedRecipes.length)
-    }, 5000)
+    }, 2000)
 
     return () => window.clearInterval(intervalId)
   }, [recommendedRecipes.length])
@@ -459,22 +542,22 @@ function Guide() {
   }
   const handleRecipeDragStart = (event) => {
     if (recommendedRecipes.length <= 1 || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
-    recipeDragStartY.current = event.clientY
+    recipeDragStartX.current = event.clientX
     recipeDidDrag.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const handleRecipeDragMove = (event) => {
-    if (recipeDragStartY.current == null) return
-    const distance = event.clientY - recipeDragStartY.current
+    if (recipeDragStartX.current == null) return
+    const distance = event.clientX - recipeDragStartX.current
     if (Math.abs(distance) > 6) recipeDidDrag.current = true
     event.currentTarget.classList.toggle('is-dragging', recipeDidDrag.current)
     const card = event.currentTarget.querySelector('.guide-recipe-card')
-    if (card) card.style.transform = `translateY(${Math.max(-80, Math.min(80, distance))}px)`
+    if (card) card.style.transform = `translateX(${Math.max(-80, Math.min(80, distance))}px)`
   }
   const handleRecipeDragEnd = (event) => {
-    if (recipeDragStartY.current == null) return
-    const distance = event.clientY - recipeDragStartY.current
-    recipeDragStartY.current = null
+    if (recipeDragStartX.current == null) return
+    const distance = event.clientX - recipeDragStartX.current
+    recipeDragStartX.current = null
     resetRecipeDragVisual(event.currentTarget)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (Math.abs(distance) >= 48) slideRecommendedRecipe(distance < 0 ? 'next' : 'previous')
@@ -566,6 +649,7 @@ function Guide() {
   }, [selectedCode, selectedTipTitle])
 
   const selectIngredient = (ingredient) => {
+    sessionStorage.setItem(GUIDE_SCROLL_POSITION_KEY, String(window.scrollY))
     navigate(`/guide/${encodeURIComponent(ingredient.code)}`)
   }
 
@@ -786,7 +870,6 @@ function Guide() {
           ) : null}
           {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
             <div className="guide-empty guide-fridge-empty">
-              <strong>냉장고에 등록된 식재료가 없습니다.</strong>
               <span>냉장고 재료를 등록해주세요.</span>
             </div>
           ) : null}
@@ -1113,11 +1196,33 @@ function Guide() {
                         onPointerMove={handleRecipeDragMove}
                         onPointerUp={handleRecipeDragEnd}
                         onPointerCancel={(event) => {
-                          recipeDragStartY.current = null
+                          recipeDragStartX.current = null
                           recipeDidDrag.current = false
                           resetRecipeDragVisual(event.currentTarget)
                         }}
                       >
+                        {recommendedRecipes.length > 1 ? (
+                          <>
+                            <button
+                              type="button"
+                              className="guide-recipe-arrow guide-recipe-arrow--previous"
+                              aria-label="이전 추천 레시피"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={() => slideRecommendedRecipe('previous')}
+                            >
+                              ‹
+                            </button>
+                            <button
+                              type="button"
+                              className="guide-recipe-arrow guide-recipe-arrow--next"
+                              aria-label="다음 추천 레시피"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={() => slideRecommendedRecipe('next')}
+                            >
+                              ›
+                            </button>
+                          </>
+                        ) : null}
                         <Link
                           className={`guide-recipe-card is-${recipeSlideDirection}`}
                           key={currentRecommendedRecipe.recipe_id}

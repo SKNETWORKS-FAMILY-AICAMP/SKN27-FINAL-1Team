@@ -15,7 +15,7 @@ class AuthService:
         provider_id: str, 
         email: str = None, 
         nickname: str = None
-    ) -> str:
+    ) -> tuple[str, bool]:
         """
         소셜 프로필 정보를 받아 DB 조회를 거쳐 회원가입 또는 로그인을 처리하고,
         자체 서비스 권한 인증을 위한 JWT Access Token을 발급합니다.
@@ -42,7 +42,8 @@ class AuthService:
             
 
             #  신규 사용자일 경우 (DB에 유저 정보가 없으면) 회원가입 처리 진행
-            if not user:
+            is_new_user = user is None
+            if is_new_user:
                 #  User 테이블에 신규 회원 레코드 추가
                 user = User(
                     provider=provider,
@@ -61,7 +62,7 @@ class AuthService:
                 
             # 자체 JWT Access Token 생성 (유저 ID를 subject로 담음)
             access_token = create_access_token(subject=str(user.id))
-            return access_token
+            return access_token, is_new_user
 
         except SQLAlchemyError as db_error:
             # 데이터베이스 처리 중 예외 발생 시 롤백 및 에러 반환
