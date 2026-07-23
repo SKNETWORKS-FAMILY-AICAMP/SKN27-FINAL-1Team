@@ -34,6 +34,7 @@ def run_migrations() -> None:
                     (migration_path.name,),
                 )
                 if cursor.fetchone():
+                    print(f"migration skipped (already applied): {migration_path.name}")
                     continue
                 cursor.execute(migration_path.read_text(encoding="utf-8-sig"))
                 cursor.execute(
@@ -41,6 +42,7 @@ def run_migrations() -> None:
                     (migration_path.name,),
                 )
             connection.commit()
+            print(f"migration applied: {migration_path.name}")
 
 
 def main() -> None:
