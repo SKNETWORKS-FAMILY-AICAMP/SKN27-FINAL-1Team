@@ -131,6 +131,17 @@ class ShoppingService:
                 detail="장보기 목록에서 해당 레시피 출처를 찾을 수 없습니다.",
             )
 
+        remaining_recipe_ids = [
+            source_recipe_id
+            for source_recipe_id in self._recipe_ids_for_list(shopping_list)
+            if int(source_recipe_id) != int(recipe_id)
+        ]
+        remaining_refs_by_ingredient = self._recipe_refs_by_ingredient(
+            db=db,
+            user_id=user_id,
+            recipe_ids=remaining_recipe_ids,
+        )
+
         for item in list(shopping_list.items):
             refs = self._item_source_refs(shopping_list, item)
             has_target_recipe = any(
@@ -149,6 +160,16 @@ class ShoppingService:
                     and int(ref.get("recipe_id") or 0) == int(recipe_id)
                 )
             ]
+            ingredient_keys = {
+                self._ingredient_key(item.ingredient_id, item.name),
+                self._ingredient_key(None, item.name),
+            }
+            for ingredient_key in ingredient_keys:
+                if not ingredient_key:
+                    continue
+                for source_ref in remaining_refs_by_ingredient.get(ingredient_key, []):
+                    next_refs = self._append_source_ref(next_refs, source_ref)
+
             if next_refs:
                 item.source_refs = next_refs
                 item.source_type = next_refs[0].get("type") or item.source_type
@@ -511,18 +532,57 @@ class ShoppingService:
 
     def _merge_source_ref(self, item: ShoppingListItem, source_ref: dict | None) -> list[dict]:
         refs = self._normalize_source_refs(getattr(item, "source_refs", None))
+        return self._append_source_ref(refs, source_ref)
+
+    def _append_source_ref(self, refs: list[dict], source_ref: dict | None) -> list[dict]:
         if not source_ref:
             return refs
 
         ref_type = source_ref.get("type")
         recipe_id = source_ref.get("recipe_id")
         for index, ref in enumerate(refs):
-            if ref.get("type") == ref_type and ref.get("recipe_id") == recipe_id:
+            same_recipe_id = (
+                ref.get("recipe_id") == recipe_id
+                or (
+                    ref.get("recipe_id") is not None
+                    and recipe_id is not None
+                    and int(ref["recipe_id"]) == int(recipe_id)
+                )
+            )
+            if ref.get("type") == ref_type and same_recipe_id:
                 if source_ref.get("recipe_title") and not ref.get("recipe_title"):
                     refs[index] = {**ref, "recipe_title": source_ref["recipe_title"]}
                 return refs
 
         return [*refs, source_ref]
+
+    def _recipe_refs_by_ingredient(
+        self,
+        db: Session,
+        user_id: int,
+        recipe_ids: list[int],
+    ) -> dict[str, list[dict]]:
+        refs_by_ingredient: dict[str, list[dict]] = {}
+
+        for recipe_id in recipe_ids:
+            recipe_detail = recipe_detail_service.get_recipe_detail(db, recipe_id, user_id)
+            source_ref = {
+                "type": "recipe",
+                "recipe_id": int(recipe_id),
+                "recipe_title": recipe_detail.get("title"),
+            }
+            for ingredient in recipe_detail.get("missing_ingredients", []):
+                ingredient_keys = {
+                    self._ingredient_key(ingredient.get("ingredient_id"), ingredient.get("name")),
+                    self._ingredient_key(None, ingredient.get("name")),
+                }
+                for ingredient_key in ingredient_keys:
+                    if not ingredient_key:
+                        continue
+                    current_refs = refs_by_ingredient.setdefault(ingredient_key, [])
+                    refs_by_ingredient[ingredient_key] = self._append_source_ref(current_refs, source_ref)
+
+        return refs_by_ingredient
 
     def _merge_quantity(
         self,
@@ -572,7 +632,11 @@ class ShoppingService:
             if not (ref.get("type") == "recipe" and int(ref.get("recipe_id") or 0) == int(recipe_id))
         ]
 
-    def _list_source_recipes(self, shopping_list: ShoppingList) -> list[dict]:
+    def _list_source_recipes(
+        self,
+        shopping_list: ShoppingList,
+        owned_ingredients: list[dict] | None = None,
+    ) -> list[dict]:
         recipes: dict[int, dict] = {}
         if shopping_list.recipe_id:
             recipes[int(shopping_list.recipe_id)] = {
@@ -583,6 +647,17 @@ class ShoppingService:
 
         for item in shopping_list.items:
             for ref in self._item_source_refs(shopping_list, item):
+                recipe_id = ref.get("recipe_id")
+                if ref.get("type") == "recipe" and recipe_id:
+                    existing = recipes.get(int(recipe_id), {})
+                    recipes[int(recipe_id)] = {
+                        "type": "recipe",
+                        "recipe_id": int(recipe_id),
+                        "recipe_title": ref.get("recipe_title") or existing.get("recipe_title"),
+                    }
+
+        for item in owned_ingredients or []:
+            for ref in self._normalize_source_refs(item.get("source_refs")):
                 recipe_id = ref.get("recipe_id")
                 if ref.get("type") == "recipe" and recipe_id:
                     existing = recipes.get(int(recipe_id), {})
@@ -661,15 +736,28 @@ class ShoppingService:
 
     def _dedupe_owned_ingredients(self, owned_ingredients: list[dict]) -> list[dict]:
         deduped: list[dict] = []
-        seen_keys: set[str] = set()
+        deduped_by_key: dict[str, dict] = {}
 
         for item in owned_ingredients:
             name = str(item.get("name") or "").strip().lower()
             key = f"name:{name}" if name else f"id:{item.get('ingredient_id')}"
-            if not key or key in seen_keys:
+            if not key:
                 continue
-            seen_keys.add(key)
-            deduped.append(item)
+
+            existing = deduped_by_key.get(key)
+            if existing:
+                merged_refs = self._normalize_source_refs(existing.get("source_refs"))
+                for source_ref in self._normalize_source_refs(item.get("source_refs")):
+                    merged_refs = self._append_source_ref(merged_refs, source_ref)
+                existing["source_refs"] = merged_refs
+                continue
+
+            normalized_item = {
+                **item,
+                "source_refs": self._normalize_source_refs(item.get("source_refs")),
+            }
+            deduped_by_key[key] = normalized_item
+            deduped.append(normalized_item)
 
         return deduped
 
@@ -686,8 +774,21 @@ class ShoppingService:
 
         for recipe_id in recipe_ids:
             recipe_detail = recipe_detail_service.get_recipe_detail(db, recipe_id, user_id)
-            owned_ingredients.extend(recipe_detail.get("owned_ingredients", []))
-            owned_ingredients.extend(recipe_detail.get("maybe_owned_ingredients", []))
+            source_ref = {
+                "type": "recipe",
+                "recipe_id": int(recipe_id),
+                "recipe_title": recipe_detail.get("title"),
+            }
+            owned_ingredients.extend(
+                {
+                    **item,
+                    "source_refs": [source_ref],
+                }
+                for item in [
+                    *recipe_detail.get("owned_ingredients", []),
+                    *recipe_detail.get("maybe_owned_ingredients", []),
+                ]
+            )
             missing_ingredients = recipe_detail.get("missing_ingredients", [])
 
             desired_by_key = {
@@ -763,7 +864,8 @@ class ShoppingService:
             key=lambda item: item.id,
         )
         total_price = sum((item.price or 0) for item in items if item.is_checked and not item.is_purchased)
-        source_recipes = self._list_source_recipes(shopping_list)
+        normalized_owned_ingredients = owned_ingredients or []
+        source_recipes = self._list_source_recipes(shopping_list, normalized_owned_ingredients)
         return {
             "id": shopping_list.id,
             "user_id": shopping_list.user_id,
@@ -776,7 +878,7 @@ class ShoppingService:
             "checked_count": sum(1 for item in items if item.is_checked),
             "purchased_count": sum(1 for item in items if item.is_purchased),
             "created_at": shopping_list.created_at,
-            "owned_ingredients": owned_ingredients or [],
+            "owned_ingredients": normalized_owned_ingredients,
             "items": [
                 {
                     "id": item.id,
