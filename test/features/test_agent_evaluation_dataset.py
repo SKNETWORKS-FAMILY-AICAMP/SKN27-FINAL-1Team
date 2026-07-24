@@ -8,25 +8,9 @@ from scripts.evaluate_supervisor_routing import classify_failure
 
 
 # 에이전트별 최소 비교 단위가 흔들리지 않도록 목표 분포를 고정합니다.
-EXPECTED_AGENT_COUNTS = {
-    "inventory": 60,
-    "guide": 60,
-    "recipe": 50,
-    "shopping": 50,
-    "alarm": 60,
-    "general_food": 40,
-    "supervisor": 40,
-}
-EXPECTED_SPLIT_COUNTS = {"dev": 260, "holdout": 100}
-EXPECTED_DEV_AGENT_COUNTS = {
-    "inventory": 43,
-    "guide": 43,
-    "recipe": 36,
-    "shopping": 36,
-    "alarm": 43,
-    "general_food": 29,
-    "supervisor": 30,
-}
+EXPECTED_AGENT_COUNTS = {"supervisor": 20}
+EXPECTED_SPLIT_COUNTS = {"dev": 14, "holdout": 6}
+EXPECTED_DEV_AGENT_COUNTS = {"supervisor": 14}
 DATASET_PATH = (
     Path(__file__).resolve().parents[1]
     / "fixtures"
@@ -44,7 +28,7 @@ def test_agent_evaluation_dataset_has_balanced_agent_counts():
     """도메인별 평가 케이스 수가 합의한 균형 분포와 같은지 확인합니다."""
     cases = _load_cases()
 
-    assert len(cases) == 360
+    assert len(cases) == 20
     assert Counter(case["agent"] for case in cases) == EXPECTED_AGENT_COUNTS
     assert Counter(case["split"] for case in cases) == EXPECTED_SPLIT_COUNTS
     assert Counter(case["agent"] for case in cases if case["split"] == "dev") == EXPECTED_DEV_AGENT_COUNTS
@@ -70,11 +54,16 @@ def test_agent_evaluation_dataset_has_required_contract_fields():
         assert case["message"]
         assert "???" not in case["message"]
         assert isinstance(case["history"], list)
+        assert case["difficulty"] == "hard"
         assert case["scenario"]
         assert expected["intent"]
         assert isinstance(expected["requires_confirmation"], bool)
         assert isinstance(expected["required_slots"], list)
         assert expected["acceptance"]
+        if expected["intent"] == "multi_agent":
+            # 다중의도 요청은 두 개 이상의 작업 intent를 명시해야 합니다.
+            assert len(expected["tasks"]) >= 2
+            assert all(task["intent"] for task in expected["tasks"])
 
 
 def test_supervisor_failure_types_distinguish_wrong_agent_from_detail_mismatch():

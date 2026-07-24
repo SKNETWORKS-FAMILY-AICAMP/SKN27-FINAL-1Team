@@ -63,6 +63,8 @@ def evaluate_case(case: dict) -> dict:
     )
     actual_intent = result.get("intent", "general")
     expected_intent = case["expected"]["intent"]
+    expected_tasks = [task["intent"] for task in case["expected"].get("tasks", [])]
+    actual_tasks = [task.get("intent") for task in result.get("tasks", []) if isinstance(task, dict)]
     return {
         "id": case["id"],
         "agent": case["agent"],
@@ -71,6 +73,9 @@ def evaluate_case(case: dict) -> dict:
         "actual_intent": actual_intent,
         "intent_passed": actual_intent == expected_intent,
         "agent_routing_passed": intent_agent(actual_intent) == intent_agent(expected_intent),
+        "expected_tasks": expected_tasks,
+        "actual_tasks": actual_tasks,
+        "task_decomposition_passed": not expected_tasks or actual_tasks == expected_tasks,
         "failure_type": classify_failure(expected_intent, actual_intent),
     }
 
@@ -93,6 +98,8 @@ def build_report(results: list[dict], split: str) -> dict:
     }
     intent_passed = sum(item["intent_passed"] for item in results)
     agent_routing_passed = sum(item["agent_routing_passed"] for item in results)
+    multi_intent_results = [item for item in results if item["expected_tasks"]]
+    task_decomposition_passed = sum(item["task_decomposition_passed"] for item in multi_intent_results)
     return {
         "evaluated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "scope": "supervisor_routing_only",
@@ -102,6 +109,9 @@ def build_report(results: list[dict], split: str) -> dict:
         "intent_accuracy": round(intent_passed / len(results), 4) if results else 0.0,
         "agent_routing_passed": agent_routing_passed,
         "agent_routing_accuracy": round(agent_routing_passed / len(results), 4) if results else 0.0,
+        "multi_intent_total": len(multi_intent_results),
+        "task_decomposition_passed": task_decomposition_passed,
+        "task_decomposition_accuracy": round(task_decomposition_passed / len(multi_intent_results), 4) if multi_intent_results else 0.0,
         "by_agent": by_agent,
         "intent_failures": [item for item in results if not item["intent_passed"]],
         "agent_routing_failures": [item for item in results if not item["agent_routing_passed"]],
@@ -130,6 +140,8 @@ def main() -> None:
 
     print(f"Intent accuracy: {report['intent_passed']}/{report['total']} ({report['intent_accuracy']:.1%})")
     print(f"Agent routing accuracy: {report['agent_routing_passed']}/{report['total']} ({report['agent_routing_accuracy']:.1%})")
+    if report["multi_intent_total"]:
+        print(f"Task decomposition accuracy: {report['task_decomposition_passed']}/{report['multi_intent_total']} ({report['task_decomposition_accuracy']:.1%})")
     print(f"결과 파일: {output_path}")
 
 

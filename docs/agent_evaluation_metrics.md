@@ -246,3 +246,58 @@ python -m pytest -q test\features\test_agent_evaluation_dataset.py test\features
 
 - 이번 단계에서는 사용자 담당 범위인 Inventory Agent의 실제 DB 상태 검증을 우선 추가했습니다.
 - Guide, Recipe, Shopping, Alarm, General Food Agent는 공통 계약·라우팅·기존 단위 테스트로 검증합니다. 실제 외부 DB/API 결과까지 포함한 Task Success 평가는 각 담당 에이전트의 테스트 DB 또는 모의 API 환경이 준비된 뒤 같은 표에 추가합니다.
+## 16. 난이도 기반 평가셋 분리 (2026-07-24)
+
+기존의 짧고 명확한 단일 질문은 점수 산출에서 제외하고 스모크/회귀 테스트로 분리했습니다.
+
+| 구분 | 파일 | 건수 | 사용 목적 |
+| --- | --- | ---: | --- |
+| 스모크 테스트 | `test/fixtures/agent_evaluation/agent_smoke_cases.jsonl` | 360건 | 기본 라우팅과 대표 기능이 깨지지 않았는지 빠르게 확인 |
+| 고난도 평가 | `test/fixtures/agent_evaluation/agent_eval_cases.jsonl` | 20건 | 다중의도 분해, Agent 간 작업 순서, 결과 통합 품질 측정 |
+
+고난도 평가셋은 다음과 같은 복합 요청만 포함합니다.
+
+- 소비기한 임박 재료 조회 + 해당 재료 레시피 추천
+- 식재료 보관법/손질법 + 가격 비교
+- 조리 시간 조회 + 가격 비교
+- 식재료 가이드 + 레시피 조회
+- 곁들임 메뉴 추천 + 가격 비교
+
+### 점수 해석 기준
+
+- 단일 intent 정확도만으로 Agent 성능을 높게 판단하지 않습니다.
+- 다중의도 요청은 `multi_agent` 분기뿐 아니라 **예상 작업 목록과 실제 tasks 목록이 순서까지 일치**해야 성공으로 처리합니다.
+- `Task Decomposition Accuracy`를 Supervisor의 Agent 협업 핵심 지표로 사용합니다.
+- LLM API 연결 실패는 모델 품질 실패와 구분해 별도 인프라 오류로 기록하며, 최종 벤치마크 점수에는 포함하지 않습니다.
+
+로컬 임시 실행에서는 holdout 6건 중 4건이 작업 분해에 성공했지만, 2건에서 OpenAI 연결 거부가 발생했습니다. 따라서 **66.7%는 최종 성능 점수가 아니며**, API 연결이 정상인 배포 또는 CI 환경에서 재측정한 결과만 보고서에 기록합니다.
+
+## 17. 도메인 에이전트 응답 품질 평가 (2026-07-24)
+
+Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 전달하는 응답 품질을 평가합니다.
+
+| Agent | 고난도 케이스 | 확인 항목 |
+| --- | ---: | --- |
+| Inventory | 8건 | 수량 확인, 보관 위치, 비식재료 차단, 전체 삭제 방지 |
+| Guide | 8건 | 신선도, 후보 정정, 영양/제철, 데이터 없음 처리 |
+| Recipe | 8건 | 보유 재료 활용, 임박 재료 우선, 조건 기반 추천, 페어링 |
+| Shopping | 8건 | 후속 문맥, 복수 가격 비교, 목록 추가/삭제, 상품명 보존 |
+| Alarm | 8건 | 상대 날짜, 시간, 등록/조회/삭제, 알림과 일정 구분 |
+| General Food | 8건 | 계량, 재가열, 식재료 비교, 서비스 범위 밖 질문 차단 |
+
+- 평가 데이터: `test/fixtures/agent_evaluation/domain_agent_quality_cases.jsonl`
+- 평가 실행기: `scripts/evaluate_agent_quality.py`
+- 결과 입력 형식: `{"id":"guide-01","response_text":"..."}` JSONL
+- 채점 기준: 필수 정보 포함, 잘못된 도메인 응답 미포함, 빈 응답 아님
+
+이 평가는 도메인별 업무가 다르므로 Agent 간 단순 순위 경쟁용이 아니라, 각 Agent의 이전 실행 결과와 비교해 회귀를 찾는 기준으로 사용합니다.
+### 실제 응답 수집 및 채점
+
+실제 점수는 수동으로 작성하지 않고, 개발 DB에 연결된 상태에서 Agent별 응답을 수집한 뒤 채점합니다. 수집기는 확인 명령을 보내지 않으며, 실행 후 DB 세션을 롤백합니다.
+
+```powershell
+python scripts\collect_agent_quality_results.py --user-id 1
+python scripts\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
+```
+
+특정 Agent만 확인할 때는 `--agent guide`처럼 실행합니다. 외부 API 또는 DB 연결 오류는 응답 품질 실패와 구분해 결과 파일의 `error` 필드에 기록합니다.
