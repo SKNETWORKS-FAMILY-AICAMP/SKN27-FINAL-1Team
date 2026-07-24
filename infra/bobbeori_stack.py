@@ -516,6 +516,17 @@ function handler(event) {{
     var request = event.request;
     var host = request.headers.host && request.headers.host.value;
     if (host !== "{root_domain}") {{
+        var prerenderedRoutes = {{
+            "/faq": "/faq/index.html",
+            "/faq/": "/faq/index.html",
+            "/terms": "/terms/index.html",
+            "/terms/": "/terms/index.html",
+            "/privacy": "/privacy/index.html",
+            "/privacy/": "/privacy/index.html"
+        }};
+        if (prerenderedRoutes[request.uri]) {{
+            request.uri = prerenderedRoutes[request.uri];
+        }}
         return request;
     }}
 
