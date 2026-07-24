@@ -447,14 +447,14 @@ function RecipeList() {
             <div className="recipe-list-choice-group__options">
               {difficultyOptions.map((option) => (
                 <button
-                  className={criteria.levelFilter === option ? "is-active" : ""}
-                  key={option}
+                  className={criteria.levelFilter === option.value ? "is-active" : ""}
+                  key={option.value}
                   type="button"
-                  aria-pressed={criteria.levelFilter === option}
+                  aria-pressed={criteria.levelFilter === option.value}
                   disabled={!FEATURE_FLAGS.levelFilter}
-                  onClick={() => handleFilterChange({ levelFilter: option })}
+                  onClick={() => handleFilterChange({ levelFilter: option.value })}
                 >
-                  {option}
+                  {option.label}
                 </button>
               ))}
             </div>
