@@ -100,8 +100,9 @@ Response schema:
 }}
 
 Rules:
-- recipe.recommend: menu recommendation, fridge ingredient cooking ideas, leftover ingredient use.
+- recipe.recommend: menu recommendation only when the user explicitly asks to use their fridge or owned ingredients.
 - recipe.search: making a named dish, recipe steps, or the original cooking time for a dish. Do not use it for reheating already-cooked or leftover food.
+- food.general: use this for general cooking tips or food ideas without the user's fridge context, including leftover rice use, dressing tips, rolling kimbap, and snack ideas.
 - recipe.pairing: side dish, pairing food, food that goes well with another dish.
 - ingredient.guide: a single ingredient's overview, storage, washing, prep, freshness, nutrition, calories, seasonal food, or ingredient category lists. Do not use it to compare two ingredient or product variants.
 - inventory.expiring: expiry, use-by date, expiring ingredients.
@@ -110,10 +111,10 @@ Rules:
 - receipt.guide: receipt OCR or purchase upload guide.
 - shopping.current/history: current shopping list or purchase history lookup.
 - shopping.compare: asks for a product price, lowest price, cheaper seller, or why a product is expensive. Put an explicitly named product in slots.shopping_product; leave it null for a context-only follow-up.
-- shopping.price_help: only asks why a previous shopping result has no price; never use it for a direct product price question.
+- shopping.price_help: asks for general shopping price guidance, including why prices are unavailable or how to find better-value products; never use it for a direct named product price question.
 - alarm.notification: notification lookup or management.
 - alarm.calendar: calendar schedule lookup or management.
-- food.general: food-related unit conversion, ingredient substitution, comparison between ingredient or product variants, reheating already-cooked or leftover food, or general cooking knowledge not handled by another intent.
+- food.general: food-related unit conversion, ingredient substitution, comparison between ingredient or product variants, reheating already-cooked leftovers, or general cooking knowledge not handled by another intent. Do not use it for storage questions, including leftover food storage.
 - Examples: "동물성 휘핑크림과 식물성은 뭐가 달라?" and "남은 치킨 데우는 방법은?" must be food.general.
 - multi_agent: a request that needs two or more read-only intents. Put each task in tasks as {{"intent": "...", "text": "..."}}.
 - general: non-food requests or unsupported requests outside the service scope.
