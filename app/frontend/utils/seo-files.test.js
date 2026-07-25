@@ -39,3 +39,18 @@ test('home page declares the stable, square favicon', () => {
     /<link rel="icon" type="image\/png" sizes="128x128" href="\/favicon\.png" \/>/,
   )
 })
+
+test('home page declares the preferred site name as WebSite structured data', () => {
+  const structuredDataMatch = indexHtml.match(
+    /<script type="application\/ld\+json">\s*({[\s\S]*?})\s*<\/script>/,
+  )
+
+  assert.ok(structuredDataMatch)
+  assert.deepEqual(JSON.parse(structuredDataMatch[1]), {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: '밥벌이',
+    alternateName: 'Bobbeori',
+    url: 'https://www.bobbeori.com/',
+  })
+})
