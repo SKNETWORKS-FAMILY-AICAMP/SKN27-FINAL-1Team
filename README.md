@@ -2,7 +2,7 @@
 <div align="center">
 
 # 🍳 밥벌이 (bobbeori)
-# www.bobbeori.com(https://github.com/EJ-pro)
+# www.bobbeori.com
 ### 버려지는 식재료부터 장보기까지, 한 번에 관리하는 AI 기반 식재료 관리 서비스
 
 **영수증만 찍으면 냉장고가 자동으로 채워지고, 있는 재료로 만들 수 있는 레시피를 추천받고, AI가 재고를 관리·알림해주는 AI 식자재 관리 서비스**
