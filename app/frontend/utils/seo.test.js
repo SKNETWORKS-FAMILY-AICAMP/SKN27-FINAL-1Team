@@ -20,6 +20,10 @@ test('indexable routes use a self-referencing canonical URL', () => {
   assert.equal(getSeoConfig('/privacy').canonical, 'https://www.bobbeori.com/privacy')
 })
 
+test('home route uses the approved search result title', () => {
+  assert.equal(getSeoConfig('/').title, '밥벌이 | AI 냉장고 레시피 식재료 관리')
+})
+
 test('personalized and authentication routes are noindex', () => {
   for (const pathname of [
     '/login',
@@ -58,4 +62,3 @@ test('pathname normalization removes duplicate and trailing slashes', () => {
   assert.equal(normalizePathname('/faq/'), '/faq')
   assert.equal(normalizePathname('//terms//'), '/terms')
 })
-
