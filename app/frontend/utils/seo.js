@@ -6,7 +6,7 @@ const DEFAULT_DESCRIPTION =
 
 export const INDEXABLE_ROUTE_SEO = Object.freeze({
   '/': {
-    title: '밥벌이 | AI 기반 식재료 관리 서비스',
+    title: '밥벌이 | AI 냉장고 레시피 식재료 관리',
     description: DEFAULT_DESCRIPTION,
   },
   '/faq': {
@@ -79,4 +79,3 @@ export function getSeoConfig(pathname) {
     indexable: false,
   }
 }
-
