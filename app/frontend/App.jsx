@@ -14,6 +14,7 @@ import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import MobileBottomNav from './components/MobileBottomNav.jsx'
 import OnboardingModal from './components/OnboardingModal.jsx'
+import Seo from './components/Seo.jsx'
 import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import Home from './pages/home/Home.jsx'
 import FaqPage from './pages/info/FaqPage.jsx'
@@ -105,6 +106,7 @@ function AppLayout() {
 
   return (
     <div className={isAuthPage ? 'app-shell app-shell--auth' : 'app-shell'}>
+      <Seo />
       {showOnboarding && <OnboardingModal seenKey={onboardingSeenKey} onClose={() => setShowOnboarding(false)} />}
 
       <ConfirmModal
