@@ -87,13 +87,14 @@ def run_case(case: dict, db, user_id: int) -> dict:
     except Exception as error:
         # 실행 환경 오류를 품질 점수와 구분하기 위해 결과에 기록합니다.
         result = {"response_text": "", "error": f"{type(error).__name__}: {error}"}
+    ui = result.get("ui") if isinstance(result.get("ui"), dict) else {}
     return {
         "id": case["id"],
         "agent": case["agent"],
         "intent": state["intent"],
         "response_text": result.get("response_text", ""),
-        "actions": result.get("actions", []),
-        "sources": result.get("sources", []),
+        "actions": result.get("actions") or ui.get("actions", []),
+        "sources": result.get("sources") or ui.get("sources", []),
         "slots": result.get("slots", {}),
         "error": result.get("error"),
     }

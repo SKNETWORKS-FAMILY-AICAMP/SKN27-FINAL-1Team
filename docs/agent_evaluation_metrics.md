@@ -236,10 +236,10 @@
 ### 실행 결과
 
 ```powershell
-python -m pytest -q test\features\test_agent_evaluation_dataset.py test\features\test_supervisor_routing_regression.py test\features\test_agent_evaluation_contracts.py test\features\test_inventory_agent_task_success.py test\test_alarm_agent.py test\test_shopping_item_delete.py --basetemp=outputs\pytest-agent-evaluation -p no:cacheprovider
+python -m pytest -q test\features\test_domain_agent_quality_dataset.py test\features\test_agent_tool_use_evaluation.py test\features\test_agent_evaluation_contracts.py test\features\test_inventory_agent_task_success.py test\test_alarm_agent.py
 ```
 
-- 결과: **73 passed**
+- 결과: **74 passed**
 - 경고: Python 3.14 환경의 LangChain Pydantic V1 호환성 경고와 Pydantic/SQLAlchemy deprecation 경고 9건. 테스트 실패는 없습니다.
 
 ### 현재 범위와 다음 단계
@@ -278,19 +278,19 @@ Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 �
 
 | Agent | 고난도 케이스 | 확인 항목 |
 | --- | ---: | --- |
-| Inventory | 8건 | 수량 확인, 보관 위치, 비식재료 차단, 전체 삭제 방지 |
-| Guide | 8건 | 신선도, 후보 정정, 영양/제철, 데이터 없음 처리 |
-| Recipe | 8건 | 보유 재료 활용, 임박 재료 우선, 조건 기반 추천, 페어링 |
-| Shopping | 8건 | 후속 문맥, 복수 가격 비교, 목록 추가/삭제, 상품명 보존 |
-| Alarm | 8건 | 상대 날짜, 시간, 등록/조회/삭제, 알림과 일정 구분 |
-| General Food | 8건 | 계량, 재가열, 식재료 비교, 서비스 범위 밖 질문 차단 |
+| Inventory | 40건 | 수량 확인, 보관 위치, 비식재료 차단, 전체 삭제 방지 |
+| Guide | 40건 | 보관·세척·신선도·영양·제철, 식재료 정정, 후속 질문 |
+| Recipe | 40건 | 보유 재료 활용, 임박 재료 우선, 조건 기반 추천, 페어링, 중복 제외 |
+| Shopping | 40건 | 후속 문맥, 복수 가격 비교, 목록 추가/삭제, 상품명 보존 |
+| Alarm | 40건 | 상대 날짜·시간, 등록/조회/삭제/수정, 알림과 일정 구분 |
+| General Food | 40건 | 계량·대체·재가열·비교·조리 보정·음식 궁합 |
 
 - 평가 데이터: `test/fixtures/agent_evaluation/domain_agent_quality_cases.jsonl`
 - 평가 실행기: `scripts/evaluate_agent_quality.py`
 - 결과 입력 형식: `{"id":"guide-01","response_text":"..."}` JSONL
-- 채점 기준: 필수 정보 포함, 잘못된 도메인 응답 미포함, 빈 응답 아님
+- 채점 기준: 필수 정보 포함, 잘못된 도메인 응답 미포함, 최소 길이, 확인 액션, 출처, 구조화 슬롯
 
-이 평가는 도메인별 업무가 다르므로 Agent 간 단순 순위 경쟁용이 아니라, 각 Agent의 이전 실행 결과와 비교해 회귀를 찾는 기준으로 사용합니다.
+각 Agent는 개발용 30건과 최종 확인용 holdout 10건으로 분리합니다. 평가는 도메인별 업무가 다르므로 단순 순위 경쟁용이 아니라, 동일 Agent의 이전 실행 결과와 비교해 회귀를 찾는 기준으로 사용합니다.
 ### 실제 응답 수집 및 채점
 
 실제 점수는 수동으로 작성하지 않고, 개발 DB에 연결된 상태에서 Agent별 응답을 수집한 뒤 채점합니다. 수집기는 확인 명령을 보내지 않으며, 실행 후 DB 세션을 롤백합니다.
@@ -298,6 +298,12 @@ Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 �
 ```powershell
 python scripts\collect_agent_quality_results.py --user-id 1
 python scripts\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
+```
+
+평가셋을 다시 만들 때는 아래 명령을 사용합니다.
+
+```powershell
+python scripts\build_domain_agent_quality_dataset.py
 ```
 
 특정 Agent만 확인할 때는 `--agent guide`처럼 실행합니다. 외부 API 또는 DB 연결 오류는 응답 품질 실패와 구분해 결과 파일의 `error` 필드에 기록합니다.

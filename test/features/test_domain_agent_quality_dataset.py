@@ -5,6 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from scripts.evaluate_agent_quality import build_report
+from scripts.build_domain_agent_quality_dataset import build_cases
 
 
 DATASET_PATH = (
@@ -14,12 +15,12 @@ DATASET_PATH = (
     / "domain_agent_quality_cases.jsonl"
 )
 EXPECTED_AGENT_COUNTS = {
-    "inventory": 8,
-    "guide": 8,
-    "recipe": 8,
-    "shopping": 8,
-    "alarm": 8,
-    "general_food": 8,
+    "inventory": 40,
+    "guide": 40,
+    "recipe": 40,
+    "shopping": 40,
+    "alarm": 40,
+    "general_food": 40,
 }
 
 
@@ -32,10 +33,16 @@ def test_domain_agent_quality_dataset_is_balanced_and_hard():
     """모든 도메인 에이전트가 같은 수의 고난도 질문을 받는지 확인합니다."""
     cases = _load_cases()
 
-    assert len(cases) == 48
+    assert len(cases) == 240
     assert Counter(case["agent"] for case in cases) == EXPECTED_AGENT_COUNTS
     assert all(case["difficulty"] == "hard" for case in cases)
+    assert Counter(case["split"] for case in cases) == {"dev": 180, "holdout": 60}
     assert len({case["id"] for case in cases}) == len(cases)
+
+
+def test_domain_agent_quality_fixture_matches_reproducible_generator():
+    """버전 관리하는 JSONL이 평가셋 생성 규칙과 달라지지 않아야 합니다."""
+    assert _load_cases() == build_cases()
 
 
 def test_domain_agent_quality_dataset_has_response_quality_criteria():
@@ -44,11 +51,15 @@ def test_domain_agent_quality_dataset_has_response_quality_criteria():
         acceptance = case["expected"]["acceptance"]
 
         assert case["message"]
+        assert case["split"] in {"dev", "holdout"}
         assert case["expected"]["scenario"]
         assert isinstance(case["history"], list)
         assert isinstance(acceptance["must_contain_any"], list)
         assert isinstance(acceptance["forbidden_patterns"], list)
         assert acceptance["minimum_length"] >= 20
+        assert int(acceptance.get("minimum_sources", 0)) >= 0
+        assert isinstance(acceptance.get("required_action_labels", []), list)
+        assert isinstance(acceptance.get("required_slot_keys", []), list)
 
 
 def test_domain_agent_quality_report_rejects_wrong_domain_response():
@@ -88,3 +99,36 @@ def test_domain_agent_quality_report_rejects_wrong_domain_response():
     assert report["passed"] == 1
     assert report["by_agent"]["guide"]["accuracy"] == 0.0
     assert report["by_agent"]["shopping"]["accuracy"] == 1.0
+
+
+def test_domain_agent_quality_report_checks_sources_actions_and_slots():
+    """출처, 확인 액션, 구조화 슬롯이 누락되면 응답 품질 평가에서 실패해야 합니다."""
+    cases = [{
+        "id": "recipe-contract",
+        "agent": "recipe",
+        "expected": {"acceptance": {
+            "must_contain_any": ["감자"],
+            "forbidden_patterns": [],
+            "minimum_length": 20,
+            "requires_action": True,
+            "required_action_labels": ["레시피 보기"],
+            "minimum_sources": 1,
+            "requires_source_url": True,
+            "required_slot_keys": ["shown_recipe_ids"],
+        }},
+    }]
+
+    report = build_report(cases, [{
+        "id": "recipe-contract",
+        "response_text": "감자로 만들 수 있는 요리를 안내해드릴게요. 조리 순서도 함께 확인해보세요.",
+        "actions": [{"label": "다른 버튼"}],
+        "sources": [{"title": "출처"}],
+        "slots": {},
+    }])
+
+    failure = report["failures"][0]
+    assert report["accuracy"] == 0.0
+    assert failure["missing_action_labels"] == ["레시피 보기"]
+    assert failure["missing_sources"] == 0
+    assert failure["missing_source_url"] is True
+    assert failure["missing_slot_keys"] == ["shown_recipe_ids"]
