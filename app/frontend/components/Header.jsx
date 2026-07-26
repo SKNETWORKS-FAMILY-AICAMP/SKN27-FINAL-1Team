@@ -146,7 +146,11 @@ function Header() {
           ))}
 
           <div
-            className={isRecipeMenuOpen ? 'site-header__dropdown is-open' : 'site-header__dropdown'}
+            className={
+              isRecipeMenuOpen
+                ? 'site-header__dropdown site-header__desktop-only is-open'
+                : 'site-header__dropdown site-header__desktop-only'
+            }
             onMouseEnter={() => setIsRecipeMenuOpen(true)}
             onMouseLeave={() => setIsRecipeMenuOpen(false)}
             onFocus={() => setIsRecipeMenuOpen(true)}
@@ -189,6 +193,21 @@ function Header() {
               ))}
             </div>
           </div>
+
+          {recipeItems.map((item) => (
+            <NavLink
+              key={`mobile-${item.to}`}
+              to={item.to}
+              className={({ isActive }) =>
+                isActive
+                  ? 'site-header__nav-link site-header__mobile-only active'
+                  : 'site-header__nav-link site-header__mobile-only'
+              }
+              onClick={closeMobileMenu}
+            >
+              {item.label}
+            </NavLink>
+          ))}
 
           <NavLink
             to="/shopping-list"
