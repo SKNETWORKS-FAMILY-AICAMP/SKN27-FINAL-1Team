@@ -6,12 +6,20 @@ from collections import defaultdict
 from pathlib import Path
 
 
-DATASET_PATH = Path("test/fixtures/agent_evaluation/domain_agent_quality_cases.jsonl")
+DATASET_PATHS = (
+    Path("test/fixtures/agent_evaluation/domain_agent_quality_cases.jsonl"),
+    Path("test/fixtures/agent_evaluation/agent_regression_cases.jsonl"),
+)
 
 
 def load_jsonl(path: Path) -> list[dict]:
     """UTF-8 JSONL 파일을 빈 줄 없이 읽습니다."""
     return [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+
+
+def load_cases() -> list[dict]:
+    """고난도 평가셋과 실제 실패 회귀셋을 함께 읽습니다."""
+    return [case for path in DATASET_PATHS for case in load_jsonl(path)]
 
 
 def evaluate_case(case: dict, result: dict) -> dict:
@@ -145,7 +153,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs/agent_evaluations/domain-agent-quality.json"))
     args = parser.parse_args()
 
-    report = build_report(load_jsonl(DATASET_PATH), load_jsonl(args.results))
+    report = build_report(load_cases(), load_jsonl(args.results))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     for agent, summary in report["by_agent"].items():

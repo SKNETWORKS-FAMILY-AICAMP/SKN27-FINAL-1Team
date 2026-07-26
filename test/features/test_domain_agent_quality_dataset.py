@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from scripts.evaluate_agent_quality import build_report
+from scripts.agent_evaluation.evaluate_agent_quality import build_report
 from scripts.build_domain_agent_quality_dataset import build_cases
 
 

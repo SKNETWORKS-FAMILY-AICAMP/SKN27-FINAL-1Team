@@ -106,3 +106,19 @@ def test_inventory_agent_executes_add_only_after_confirmed_action(monkeypatch):
     assert calls == [(7, "양파", 1.0, "냉장")]
     assert preview["actions"][0]["label"] == "확인"
     assert confirmed["response_text"] == "양파를 추가했어요."
+
+
+def test_inventory_agent_reasks_when_one_of_multiple_add_quantities_is_missing():
+    """복수 재료 등록에서 수량이 하나라도 빠지면 임의 저장 후보를 만들지 않아야 합니다."""
+    result = inventory_agent.run_inventory_agent(
+        intent="inventory.pending_add_many",
+        text="양파 1개, 토마토",
+        history=[],
+        db=_FakeDb(),
+        user_id=7,
+        slots={"inventory_pending": {"action": "add_many"}},
+    )
+
+    assert "식재료와 개수를 함께" in result["response_text"]
+    assert result["slots"] == {"inventory_pending": {"action": "add_many"}}
+    assert "actions" not in result

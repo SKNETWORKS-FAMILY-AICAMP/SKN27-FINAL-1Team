@@ -296,8 +296,8 @@ Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 �
 실제 점수는 수동으로 작성하지 않고, 개발 DB에 연결된 상태에서 Agent별 응답을 수집한 뒤 채점합니다. 수집기는 확인 명령을 보내지 않으며, 실행 후 DB 세션을 롤백합니다.
 
 ```powershell
-python scripts\collect_agent_quality_results.py --user-id 1
-python scripts\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
+python scripts\agent_evaluation\collect_agent_quality_results.py --user-id 1
+python scripts\agent_evaluation\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
 ```
 
 평가셋을 다시 만들 때는 아래 명령을 사용합니다.

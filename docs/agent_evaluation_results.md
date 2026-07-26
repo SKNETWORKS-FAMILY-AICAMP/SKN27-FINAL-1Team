@@ -2,6 +2,81 @@
 
 평가일: 2026-07-26
 
+## 최신 평가 결과 요약 (2026-07-26)
+
+OpenAI API 키와 외부 연동 환경이 설정된 Backend 컨테이너에서 실제 응답을 다시 수집했습니다. 이전 로컬 실행에서 발생한 API 키 누락 오류는 이 결과에 포함하지 않습니다.
+
+### 규칙 기반 계약 통과율
+
+아래 수치는 필수 정보, 확인 액션, 출처, 구조화 결과를 모두 충족했는지 확인하는 엄격한 계약 통과율입니다. 답변의 자연스러움이나 의미적 적절성과는 구분합니다.
+
+| 에이전트 | 평가 가능 건수 | 엄격 계약 통과율 | 인프라 제외 |
+| --- | ---: | ---: | ---: |
+| Inventory Agent | 40 | 10.0% (4/40) | 0 |
+| Guide Agent | 40 | 70.0% (28/40) | 0 |
+| Recipe Agent | 38 | 0.0% (0/38) | 2 |
+| Shopping Agent | 40 | 37.5% (15/40) | 0 |
+| Alarm Agent | 24 | 37.5% (9/24) | 16 |
+| General Food Agent | 40 | 100.0% (40/40) | 0 |
+
+### LLM 심사 기반 실제 응답 품질
+
+규칙만으로는 자연스러운 일반 음식 답변이 과대평가될 수 있어, 실제 응답 222건을 별도 LLM 심사로 평가했습니다. 관련성 4점, 유용성 4점, 완결성 2점으로 총 10점 만점이며, 실행 자체가 실패한 18건은 품질 점수에서 제외했습니다.
+
+| 에이전트 | 실제 응답 품질 | 주요 확인 사항 |
+| --- | ---: | --- |
+| Inventory Agent | 6.03 / 10 (60.2점) | 보관 위치 변경, 보유 수량 기반 조회·삭제 문맥 |
+| Guide Agent | 6.42 / 10 (64.2점) | 재료 오매칭, 후속 보관 위치 질문 |
+| Recipe Agent | 6.61 / 10 (66.1점) | 조건 기반 추천 실패와 DB 검색 오류 |
+| Shopping Agent | 6.33 / 10 (63.2점) | 수량 보존, `외 n개` 후속 문맥 |
+| Alarm Agent | 6.83 / 10 (68.3점) | 일정 시간 수정, 기간 조건 조회 |
+| General Food Agent | 8.97 / 10 (89.8점) | 특수한 계량·맛 조절 질문의 사실성 |
+| 전체 | **6.87 / 10 (68.7점)** | 222건 평가, 인프라 오류 18건 제외 |
+
+Recipe Agent의 일부 실행 실패는 PostgreSQL `similarity()` 함수가 없는 환경 문제이며, Alarm Agent의 제외 건은 캘린더 연동 환경이 없는 상태에서 발생했습니다. 두 항목은 답변 품질 실패와 분리해 담당 영역에서 조치합니다.
+### 3회 반복 회귀 평가
+
+실제 사용자 실패 사례 4건을 같은 평가 프로필로 3회 반복 실행했습니다. 이 결과는 전체 Agent 품질 점수가 아니라 **멀티턴·외부 데이터 의존 경로의 재현성 확인**입니다.
+
+| Agent | 회귀 케이스 | 3회 평균 | 표준편차 | 해석 |
+| --- | --- | ---: | ---: | --- |
+| Guide Agent | 이전 재료 정정 후 보관법 조회 | 10.0 / 10 | 0.000 | 양파 보관법으로 일관되게 정정됨 |
+| Alarm Agent | 구매 알림 등록 | 8.0 / 10 | 0.000 | 확인 액션을 일관되게 제공함 |
+| Inventory Agent | 복수 재료 수량 누락 재입력 | 평가 보류 | - | 단일 Agent 실행에는 대기 슬롯이 복원되지 않아 Supervisor Graph 통합 평가가 필요함 |
+| Shopping Agent | `외 n개` 후속 조회 | 평가 보류 | - | 전용 평가 사용자에 활성 장보기 목록 시드가 없어 실제 목록 문맥을 검증할 수 없음 |
+
+`0점`으로 나온 Inventory·Shopping 결과는 Agent 자체의 최종 품질 점수로 사용하지 않습니다. 현재 평가 실행기가 이전 대화의 문구만 전달하고, 실제 Graph 상태의 `inventory_pending`·장보기 목록 데이터를 준비하지 않았기 때문입니다. 이 문제를 드러낸 것이 이번 회귀 평가의 핵심 결과입니다.
+
+### 평가 데이터 고정 및 사람 검수
+
+- `test/fixtures/agent_evaluation/evaluation_profile.json`에 평가 사용자와 필요한 초기 상태를 고정했습니다.
+- 공유 개발 DB를 자동 초기화하지 않습니다. 평가 전용 사용자·재고·장보기·캘린더 시드가 준비된 뒤에만 전체 반복 점수를 비교합니다.
+- LLM 심사 결과에서 Agent별 저점·중간점·고점 3건씩, 총 18건을 사람이 직접 확인할 수 있는 표본 문서를 생성합니다.
+
+```powershell
+# 이전 실패 회귀셋만 실제 실행합니다.
+python scripts\agent_evaluation\collect_agent_quality_results.py --regression-only --output outputs\agent_evaluations\regression-results.jsonl
+
+# LLM 심사 결과를 3회 집계합니다.
+python scripts\agent_evaluation\summarize_agent_quality_runs.py --inputs outputs\agent_evaluations\regression-judge-1.json outputs\agent_evaluations\regression-judge-2.json outputs\agent_evaluations\regression-judge-3.json
+
+# 사람 검수용 응답 표본을 생성합니다.
+python scripts\agent_evaluation\export_agent_human_review_sample.py --judge outputs\agent_evaluations\domain-agent-llm-judge-20260726.json --responses outputs\agent_evaluations\domain-agent-results-20260726-container.jsonl
+```
+
+### 최신 실행 방법
+
+```powershell
+# 실제 Agent 응답을 수집합니다.
+python scripts\agent_evaluation\collect_agent_quality_results.py --user-id 1
+
+# 필수 정보·액션·출처 계약을 채점합니다.
+python scripts\agent_evaluation\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results-20260726-container.jsonl
+
+# OpenAI API 키가 설정된 Backend 컨테이너에서 실제 답변 품질을 심사합니다.
+docker compose exec -T backend sh -lc "cd /tmp/agent-evaluation && PYTHONPATH=/project python scripts/judge_agent_quality.py --results outputs/domain-agent-results-20260726-container.jsonl"
+```
+
 ## 1. 자동 기능 검증 결과
 
 아래 수치는 기능 회귀 테스트 통과 건수입니다. 에이전트 답변 품질 점수와 혼동하지 않기 위해 점수로 표시하지 않습니다.
@@ -28,38 +103,37 @@
 | 실행 안전성 | 추가, 소비, 삭제, 등록 요청에서 확인 또는 취소 액션이 누락됨 |
 | 출처·구조화 결과 | 출처가 필요한 응답에서 출처가 없거나, 기대한 액션·슬롯이 누락됨 |
 
-## 3. 실제 실행 결과
+## 3. 초기 계약 검증 결과 참고
 
-Docker DB와 현재 로컬 환경 변수로 각 에이전트 40건씩 총 240건을 실제 호출해 측정했습니다. 외부 연동 또는 데이터 환경 때문에 정상 응답을 만들지 못한 건은 품질 점수의 분모에서 제외하고 별도로 집계했습니다.
+아래 초기 실행 표는 응답 내용뿐 아니라 출처·확인 액션·구조화 슬롯·외부 연동 상태까지 모두 만족해야 통과하는 계약 점검 결과였습니다. 따라서 답변 자체의 유용성이나 자연스러움을 나타내는 점수로 사용하지 않습니다.
 
-| 에이전트 | 실행 | 평가 가능 | 엄격 종합 | 응답 품질 | 출처 충족 | 인프라 제외 | 해석 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Inventory Agent | 40 | 40 | 12.5% (5/40) | 22.5% (9/40) | 해당 없음 | 0 | 실제 평가 사용자 재고 상태와 시나리오 전제가 맞지 않는 케이스가 많음 |
-| Guide Agent | 40 | 36 | 69.4% (25/36) | 86.1% (31/36) | 83.3% (30/36) | 4 | 영양 정보 질의 일부가 오류 상태로 반환됨 |
-| Recipe Agent | 40 | 40 | 0.0% (0/40) | 100.0% (40/40) | 0.0% (0/40) | 0 | 답변 내용은 통과했지만 결과에 출처 구조화 데이터가 전달되지 않음 |
-| Shopping Agent | 40 | 24 | 8.3% (2/24) | 8.3% (2/24) | 해당 없음 | 16 | 상품 검색 API 인증 또는 호출 제한 영향이 큼 |
-| Alarm Agent | 40 | 24 | 37.5% (9/24) | 37.5% (9/24) | 해당 없음 | 16 | 캘린더 연동 상태가 없는 요청이 제외되었고, 남은 케이스는 응답이 짧은 경우가 많음 |
-| General Food Agent | 40 | 40 | 100.0% (40/40) | 100.0% (40/40) | 해당 없음 | 0 | 현재 40개 평가 기준을 모두 충족함 |
+- 최신 비교 기준은 문서 상단의 **LLM 심사 기반 실제 응답 품질**입니다.
+- 초기 계약 검증은 구조화 응답 누락, 평가 사용자 데이터 불일치, 캘린더·상품 검색 환경 미연결에 크게 영향을 받았습니다.
+- 인프라 오류는 품질 실패와 분리하며, 이후에는 전용 테스트 사용자와 연동 샌드박스 환경에서 재측정합니다.
 
-`엄격 종합`은 응답 내용, 확인 액션·슬롯, 출처 요구사항을 모두 만족한 비율입니다. `응답 품질`은 출처나 구조화 결과와 분리해 답변 내용만 평가한 비율입니다. 따라서 Recipe Agent의 0.0%는 답변이 전부 틀렸다는 의미가 아니라, 출처 연결 계약을 전혀 충족하지 못했다는 의미입니다.
+## 4. 최신 결과 기준 개선 우선순위
 
-인프라 제외 36건은 0점으로 처리하지 않았습니다. 외부 API 인증·호출 제한이나 연결 상태를 모델 품질 실패로 합산하면 비교 가능한 점수가 되지 않기 때문입니다.
+| 우선순위 | 대상 | 현재 확인된 문제 | 개선 방향 |
+| --- | --- | --- | --- |
+| 1 | Recipe Agent | 로컬 DB의 `pg_trgm` 확장 적용 후 검색 실행 오류는 해소됐지만, 일부 응답에 출처 필드가 비어 있음 | 배포 DB에서도 기존 마이그레이션을 적용하고, Recipe Agent가 레시피 출처를 공통 응답에 포함하는지 담당 영역에서 확인 |
+| 2 | Inventory Agent | 보유 수량·보관 위치 변경·취소 후 정정 같은 멀티턴 요청의 문맥 정확도가 낮음 | 전용 평가 재고를 고정하고 수량·전체/일부 처리·취소 후 재입력 시나리오를 DB 상태로 검증 |
+| 3 | Shopping Agent | 수량 보존과 `외 n개`, `더 싼 곳` 같은 후속 질문 처리 부족 | 이전 목록과 비교 결과를 대화 문맥에 유지하고 후속 표현 평가셋을 보강 |
+| 4 | Guide Agent | 재료 오매칭과 후속 보관 위치 질문에서 이전 가이드 목적이 사라질 수 있음 | 후보 선택 시 원래 가이드 유형을 유지하고 재료명 오매칭 회귀 케이스 추가 |
+| 5 | Alarm Agent | 일정 시간 수정·기간 조건 조회가 캘린더 연동 상태에 따라 불안정 | 전용 캘린더 샌드박스에서 등록·조회·수정·삭제를 같은 사용자 기준으로 검증 |
+| 6 | General Food Agent | 특수 계량·맛 조절처럼 전제가 부정확한 질문에서 일반론 답변 가능 | 사실성 경계 질문을 별도 평가셋으로 유지하고 근거 없는 단정을 감점 |
 
-## 4. 현재 확인된 보완 항목
+### 재평가 원칙
 
-1. **Recipe Agent 출처 연결**: 레시피 카드 또는 검색 결과의 URL·출처를 Supervisor 응답의 `sources`로 전달해야 합니다. 이 작업이 완료되면 현재 응답 품질 100.0%가 엄격 종합 점수에도 반영될 수 있습니다.
-2. **Guide Agent 영양 정보 경로**: 영양 정보 질의 4건이 `agent_status=error`로 반환됐습니다. Neo4j의 보관·섭취 팁 속성과 영양 데이터 조회 경로를 실제 스키마와 맞춰야 합니다.
-3. **Shopping Agent 외부 검색 안정화**: 네이버 쇼핑 API의 인증 정보와 호출 제한을 점검하고, 평가는 속도 제한을 둔 전용 키 또는 모의 검색 제공자로 재현 가능하게 만들어야 합니다.
-4. **Alarm Agent 평가용 캘린더 환경**: 연동되지 않은 계정 때문에 16건이 제외됐습니다. 전용 샌드박스 캘린더 또는 모의 Calendar Tool을 두고 실제 등록 성공 여부까지 검증해야 합니다.
-5. **Inventory Agent 데이터 고정**: `user_id=1`의 현재 냉장고 상태에 의존하면 케이스마다 전제가 달라집니다. 평가 전용 사용자·시드 데이터·초기화 절차를 만들어 Task Success를 측정해야 합니다.
-6. **반복 측정과 심화 평가**: LLM이 포함된 Agent는 최소 3회 이상 실행해 평균과 표준편차를 기록하고, 키워드 검사만으로 판단하기 어려운 사실성·자연스러움은 사람 검수 또는 보정된 LLM Judge로 추가 검증해야 합니다.
+1. 에이전트별 실제 응답을 최소 3회 실행해 평균 점수와 변동 폭을 함께 기록합니다.
+2. DB를 바꾸는 기능은 답변 문구가 아니라 실행 전후 DB 상태로 성공 여부를 판정합니다.
+3. 외부 API·캘린더 연결 오류는 별도 인프라 지표로 집계하고 답변 품질 점수에 섞지 않습니다.
 
 ## 5. 실행 방법
 
 ```powershell
 # Docker DB와 필요한 API 환경 변수를 준비한 뒤 실행합니다.
-python scripts\collect_agent_quality_results.py --user-id 1
-python scripts\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
+python scripts\agent_evaluation\collect_agent_quality_results.py --user-id 1
+python scripts\agent_evaluation\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
 ```
 
 특정 에이전트만 확인할 때는 `--agent guide`처럼 실행합니다. 평가 결과에는 통과 여부뿐 아니라 필수 정보 누락, 금지 표현, 짧은 답변, 액션 누락, 인프라 오류 원인이 함께 기록됩니다.
