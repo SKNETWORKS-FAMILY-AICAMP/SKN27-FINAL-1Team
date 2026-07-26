@@ -95,6 +95,7 @@ class ShoppingOwnedIngredientItem(BaseModel):
     expiry_date: date | None = None
     status: str | None = None
     is_expired: bool = False
+    source_refs: List[dict] = Field(default_factory=list)
 
 
 class ShoppingListResponse(BaseModel):
