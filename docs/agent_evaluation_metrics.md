@@ -16,9 +16,9 @@
 
 초기 평가셋은 각 문장을 기대 `intent`, `slots`, `도구 호출 여부`, `기대 응답 조건`과 함께 JSONL 또는 테스트 파라미터로 관리한다.
 
-- 실행 데이터셋: `test/fixtures/agent_evaluation/agent_eval_cases.jsonl`
+- 실행 데이터셋: 기본 smoke 360건, 도메인 응답 품질 240건, 실제 실패 회귀 4건
 - 데이터셋 계약 검증: `test/features/test_agent_evaluation_dataset.py`
-- 분할: 개발용 260건, 홀드아웃 100건
+- 분할: 도메인 응답 품질 평가셋은 Agent별 개발용 30건, holdout 10건
 
 | 구분 | 초기 권장 수 | 대표 문장 |
 | --- | ---: | --- |
@@ -72,7 +72,7 @@
 | Shopping Agent | 목록 문맥 유지, 가격 조회 의도 정확도 | `외 n개`, 가격 비교 후속 질문 처리 | 목록 추가·삭제·입고 작업 성공률 | 삭제 계약 테스트 완료, 실제 입고 트랜잭션 평가는 필요 |
 | Alarm Agent | 제목·날짜·시간 추출, 일정·알림 구분 | 상대 날짜, 추가 입력, 확인·취소 흐름 | 캘린더·알림 도구 인자와 실행 정확도 | 단독 자동 테스트로 검증 완료, 실제 연동 평가는 필요 |
 | General Food Agent | 음식 도메인 적합률, 비음식 질문 차단률 | 답변 관련성·사실성·표현 품질 | 외부 LLM 호출 성공·오류 처리 | 공통 응답 계약 테스트 완료, 사람 평가 표본이 필요 |
-| Supervisor Agent | intent·담당 Agent 라우팅, 복합 요청 분해 정확도 | 멀티턴 문맥, 재시도, fallback 전환 | 확인 토큰 검증, Agent 호출 순서 | 홀드아웃 100건 Intent 95.0%, Agent Routing 97.0% |
+| Supervisor Agent | intent·담당 Agent 라우팅, 복합 요청 분해 정확도 | 멀티턴 문맥, 재시도, fallback 전환 | 확인 토큰 검증, Agent 호출 순서 | 재현 가능한 통합 회귀 평가로 확인 |
 
 ### 공통 목표 기준
 
@@ -130,10 +130,10 @@
 
 | 구분 | 측정 여부 | 현재 확인 범위 |
 | --- | --- | --- |
-| 평가셋 계약 검증 | 완료 | JSONL 360건의 스키마·분할·영역 분포 확인 |
-| Supervisor 라우팅 | 완료 | 홀드아웃 100건의 intent·담당 Agent 라우팅 측정 |
+| 평가셋 구조 검증 | 완료 | 기본 smoke 360건, 도메인 품질 240건, 회귀 4건의 형식 확인 |
+| Supervisor 라우팅 | 회귀 테스트 보유 | 확인·취소·추가·소비·폐기와 후속 문맥의 라우팅 회귀 확인 |
 | Supervisor 안전 라우팅 | 기존 테스트 보유 | 확인·취소·추가·소비·폐기 등 쓰기 작업의 회귀 테스트 |
-| 도메인 Agent 답변 품질 | 미측정 | Guide·Recipe·Shopping·General Food 실제 응답 품질 평가 필요 |
+| 도메인 Agent 답변 품질 | 측정 완료 | 실제 응답 222건 LLM 심사 및 사람 검수 표본 생성 |
 | Tool-use·Task Success | 미측정 | 테스트 DB에서 도구 인자와 실행 전후 상태를 평가해야 함 |
 
 ### 주의 사항
@@ -142,11 +142,11 @@
 - 실행한 테스트 명령과 결과는 배포·PR 시점에 별도 결과로 남긴다.
 - Python 3.14에서는 LangChain Core의 Pydantic V1 호환성 경고가 나타날 수 있으므로, 운영 Python 3.11 환경과 같은 버전으로 평가하는 편이 안전하다.
 
-## 12. 평가 체계 보완 사항
+## 11. 평가 체계 보완 사항
 
 ### 데이터셋 구성 보완
 
-- 평가셋을 **개발용 260건 / 홀드아웃 100건**으로 분리한다. 개발용은 수정 후 반복 실행하고, 홀드아웃은 점수 확인용으로만 사용한다.
+- 도메인 품질 평가셋은 Agent별 개발용 30건과 holdout 10건, 총 240건을 기준으로 관리한다. 실제 실패 문장은 별도 회귀셋으로 추가한다.
 - 전체 데이터의 최소 20%는 오타·띄어쓰기·동의어·후속 표현으로 구성한다. 예: `먹엇어`, `외2개`, `냉동실에`, `그거 취소`.
 - 각 케이스에 `로그인 여부`, `초기 DB 상태`, `이전 대화`, `외부 API 모킹 여부`를 명시한다. 같은 질문도 냉장고 보유 재료나 로그인 상태에 따라 기대 결과가 달라진다.
 - LLM 응답은 정답 문장 완전 일치가 아니라 `intent`, `필수 슬롯`, `금지 행동`, `출처 여부`, `핵심 키워드` 같은 조건으로 채점한다.
@@ -166,33 +166,7 @@
 3. Recipe Agent는 레시피 제목 일치보다 **보유 재료 포함률**과 **소비 임박 재료 우선 반영률**을 계산한다.
 4. Shopping Agent는 `외 n개`, `더 싼 곳`, `그거 삭제` 같은 후속 문맥을 별도 그룹으로 관리한다.
 5. LLM JSON 분류에는 `confidence`, 원본 모델 응답, fallback 여부를 Langfuse metadata로 남겨 저신뢰 라우팅을 바로 찾을 수 있게 한다.
-## 13. Supervisor 라우팅 홀드아웃 결과 (2026-07-24)
-
-- 실행 명령: `python scripts/evaluate_supervisor_routing.py --split holdout`
-- 범위: 홀드아웃 100건, **DB 변경 없이 Supervisor 라우팅만 평가**
-- Intent Accuracy: **95 / 100 (95.0%)**
-- Agent Routing Accuracy: **97 / 100 (97.0%)**
-
-| 담당 영역 | 건수 | Intent Accuracy | Agent Routing Accuracy |
-| --- | ---: | ---: | ---: |
-| Inventory | 17 | 100.0% | 100.0% |
-| Guide | 17 | 88.2% | 88.2% |
-| Recipe | 14 | 100.0% | 100.0% |
-| Shopping | 14 | 85.7% | 100.0% |
-| Alarm | 17 | 100.0% | 100.0% |
-| General Food | 11 | 90.9% | 90.9% |
-| Supervisor 복합·문맥 | 10 | 100.0% | 100.0% |
-
-### 실패 유형 분석
-
-| 실패 유형 | 건수 | 사례 | 개선 방향 |
-| --- | ---: | --- | --- |
-| 담당 Agent 오분류 | 3 | `채소에 뭐가 있어?`, `먹다 남은 치킨 보관법`, `케이크 크림 대체 재료` | 분류·보관법은 Guide 우선, 대체 재료는 General Food 우선 규칙을 LLM 결과 보정 후보로 관리 |
-| 세부 intent 오분류 | 2 | `더 싼 곳 없어?`, `가격 비교 결과 해석해줘` | 둘 다 Shopping Agent로 전달되므로 기능 영향은 없지만, `shopping.price_help`와 `shopping.compare`의 설명을 구분 |
-
-- 이 평가는 **Supervisor의 분류 성능**이다. 각 Agent의 답변 사실성, Tool 인자 정확도, DB 변경 성공률은 별도 테스트 DB와 Agent별 실행기로 이어서 측정한다.
-- LLM 기반 분류는 실행 시점에 결과가 조금 달라질 수 있으므로, 홀드아웃 결과 JSON과 모델·프롬프트 버전을 함께 보관한다.
-## 14. 에이전트 공통 계약 QA 실행 결과 (2026-07-24)
+## 12. 에이전트 공통 계약 QA 실행 결과 (2026-07-24)
 
 - 실행 명령: `python -m pytest -q test/features/test_agent_evaluation_dataset.py test/features/test_supervisor_routing_regression.py test/features/test_agent_evaluation_contracts.py test/features/test_inventory_agent_task_success.py test/test_alarm_agent.py test/test_shopping_item_delete.py`
 - 결과: **73 passed**
@@ -213,13 +187,13 @@
 - `제철음식`처럼 월을 생략한 Guide 질의는 현재 `needs_input` 대신 `error`로 반환될 수 있다. 공통 응답 형식은 유지되지만, 사용자 경험상 월 입력 요청으로 개선이 필요하다.
 - 이 결과는 **Agent QA/계약 검증**이며, 실제 외부 데이터 기반 답변의 관련성·사실성·출처 품질과 DB 최종 상태는 아직 측정하지 않았다.
 - 다음 실행 평가는 테스트 DB를 초기화한 뒤 Inventory·Shopping·Alarm의 Tool-use/Task Success를 측정하고, Guide·Recipe·General Food는 홀드아웃 표본 20건을 사람 평가로 채점한다.
-## 15. 2차 Agent QA 및 Tool-use / Task Success 결과 (2026-07-24)
+## 13. 2차 Agent QA 및 Tool-use / Task Success 결과 (2026-07-24)
 
 ### 평가 데이터 보강
 
-- 공통 JSONL 평가셋은 **360건**으로 구성했으며, Inventory 60건, Guide 60건, Recipe 50건, Shopping 50건, Alarm 60건, General Food 40건, Supervisor 40건을 포함합니다.
-- 각 도메인 에이전트는 최소 40건 이상의 독립 문장을 포함하므로, 특정 표현 하나에만 맞춘 평가가 되지 않도록 구성했습니다.
-- 개발용 260건과 최종 확인용 holdout 100건을 분리해, 라우팅 규칙 수정 후 동일 문장에만 과적합되는 것을 줄였습니다.
+- 기본 smoke 평가셋 360건과 별도로, 도메인 응답 품질 평가셋 240건을 운영합니다.
+- 도메인 응답 품질 평가셋은 Agent별 40건의 독립 문장으로 구성해 특정 표현 하나에만 맞춘 평가가 되지 않도록 합니다.
+- 개발용과 holdout을 분리해, 수정한 동일 문장에만 과적합되는 것을 줄입니다.
 
 ### Inventory Tool-use / Task Success
 
@@ -246,7 +220,7 @@ python -m pytest -q test\features\test_domain_agent_quality_dataset.py test\feat
 
 - 이번 단계에서는 사용자 담당 범위인 Inventory Agent의 실제 DB 상태 검증을 우선 추가했습니다.
 - Guide, Recipe, Shopping, Alarm, General Food Agent는 공통 계약·라우팅·기존 단위 테스트로 검증합니다. 실제 외부 DB/API 결과까지 포함한 Task Success 평가는 각 담당 에이전트의 테스트 DB 또는 모의 API 환경이 준비된 뒤 같은 표에 추가합니다.
-## 16. 난이도 기반 평가셋 분리 (2026-07-24)
+## 14. 난이도 기반 평가셋 분리 (2026-07-24)
 
 기존의 짧고 명확한 단일 질문은 점수 산출에서 제외하고 스모크/회귀 테스트로 분리했습니다.
 
@@ -272,7 +246,7 @@ python -m pytest -q test\features\test_domain_agent_quality_dataset.py test\feat
 
 로컬 임시 실행에서는 holdout 6건 중 4건이 작업 분해에 성공했지만, 2건에서 OpenAI 연결 거부가 발생했습니다. 따라서 **66.7%는 최종 성능 점수가 아니며**, API 연결이 정상인 배포 또는 CI 환경에서 재측정한 결과만 보고서에 기록합니다.
 
-## 17. 도메인 에이전트 응답 품질 평가 (2026-07-24)
+## 15. 도메인 에이전트 응답 품질 평가 (2026-07-24)
 
 Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 전달하는 응답 품질을 평가합니다.
 
@@ -286,9 +260,10 @@ Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 �
 | General Food | 40건 | 계량·대체·재가열·비교·조리 보정·음식 궁합 |
 
 - 평가 데이터: `test/fixtures/agent_evaluation/domain_agent_quality_cases.jsonl`
-- 평가 실행기: `scripts/evaluate_agent_quality.py`
+- 실제 응답 수집기: `scripts/agent_evaluation/collect_agent_quality_results.py`
+- LLM 심사기: `scripts/agent_evaluation/judge_agent_quality.py`
 - 결과 입력 형식: `{"id":"guide-01","response_text":"..."}` JSONL
-- 채점 기준: 필수 정보 포함, 잘못된 도메인 응답 미포함, 최소 길이, 확인 액션, 출처, 구조화 슬롯
+- 채점 기준: 관련성 4점, 유용성 4점, 완결성 2점의 실제 응답 품질 심사
 
 각 Agent는 개발용 30건과 최종 확인용 holdout 10건으로 분리합니다. 평가는 도메인별 업무가 다르므로 단순 순위 경쟁용이 아니라, 동일 Agent의 이전 실행 결과와 비교해 회귀를 찾는 기준으로 사용합니다.
 ### 실제 응답 수집 및 채점
@@ -297,7 +272,7 @@ Supervisor 라우팅 점수와 별도로, 각 Agent가 최종 사용자에게 �
 
 ```powershell
 python scripts\agent_evaluation\collect_agent_quality_results.py --user-id 1
-python scripts\agent_evaluation\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
+python scripts\agent_evaluation\judge_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
 ```
 
 평가셋을 다시 만들 때는 아래 명령을 사용합니다.

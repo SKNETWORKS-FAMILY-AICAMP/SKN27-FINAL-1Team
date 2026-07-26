@@ -6,22 +6,9 @@
 
 OpenAI API 키와 외부 연동 환경이 설정된 Backend 컨테이너에서 실제 응답을 다시 수집했습니다. 이전 로컬 실행에서 발생한 API 키 누락 오류는 이 결과에 포함하지 않습니다.
 
-### 규칙 기반 계약 통과율
-
-아래 수치는 필수 정보, 확인 액션, 출처, 구조화 결과를 모두 충족했는지 확인하는 엄격한 계약 통과율입니다. 답변의 자연스러움이나 의미적 적절성과는 구분합니다.
-
-| 에이전트 | 평가 가능 건수 | 엄격 계약 통과율 | 인프라 제외 |
-| --- | ---: | ---: | ---: |
-| Inventory Agent | 40 | 10.0% (4/40) | 0 |
-| Guide Agent | 40 | 70.0% (28/40) | 0 |
-| Recipe Agent | 38 | 0.0% (0/38) | 2 |
-| Shopping Agent | 40 | 37.5% (15/40) | 0 |
-| Alarm Agent | 24 | 37.5% (9/24) | 16 |
-| General Food Agent | 40 | 100.0% (40/40) | 0 |
-
 ### LLM 심사 기반 실제 응답 품질
 
-규칙만으로는 자연스러운 일반 음식 답변이 과대평가될 수 있어, 실제 응답 222건을 별도 LLM 심사로 평가했습니다. 관련성 4점, 유용성 4점, 완결성 2점으로 총 10점 만점이며, 실행 자체가 실패한 18건은 품질 점수에서 제외했습니다.
+실제 사용자 관점의 답변 품질을 확인하기 위해 실제 응답 222건을 별도 LLM 심사로 평가했습니다. 관련성 4점, 유용성 4점, 완결성 2점으로 총 10점 만점이며, 실행 자체가 실패한 18건은 품질 점수에서 제외했습니다.
 
 | 에이전트 | 실제 응답 품질 | 주요 확인 사항 |
 | --- | ---: | --- |
@@ -70,9 +57,6 @@ python scripts\agent_evaluation\export_agent_human_review_sample.py --judge outp
 # 실제 Agent 응답을 수집합니다.
 python scripts\agent_evaluation\collect_agent_quality_results.py --user-id 1
 
-# 필수 정보·액션·출처 계약을 채점합니다.
-python scripts\agent_evaluation\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results-20260726-container.jsonl
-
 # OpenAI API 키가 설정된 Backend 컨테이너에서 실제 답변 품질을 심사합니다.
 docker compose exec -T backend sh -lc "cd /tmp/agent-evaluation && PYTHONPATH=/project python scripts/judge_agent_quality.py --results outputs/domain-agent-results-20260726-container.jsonl"
 ```
@@ -103,15 +87,7 @@ docker compose exec -T backend sh -lc "cd /tmp/agent-evaluation && PYTHONPATH=/p
 | 실행 안전성 | 추가, 소비, 삭제, 등록 요청에서 확인 또는 취소 액션이 누락됨 |
 | 출처·구조화 결과 | 출처가 필요한 응답에서 출처가 없거나, 기대한 액션·슬롯이 누락됨 |
 
-## 3. 초기 계약 검증 결과 참고
-
-아래 초기 실행 표는 응답 내용뿐 아니라 출처·확인 액션·구조화 슬롯·외부 연동 상태까지 모두 만족해야 통과하는 계약 점검 결과였습니다. 따라서 답변 자체의 유용성이나 자연스러움을 나타내는 점수로 사용하지 않습니다.
-
-- 최신 비교 기준은 문서 상단의 **LLM 심사 기반 실제 응답 품질**입니다.
-- 초기 계약 검증은 구조화 응답 누락, 평가 사용자 데이터 불일치, 캘린더·상품 검색 환경 미연결에 크게 영향을 받았습니다.
-- 인프라 오류는 품질 실패와 분리하며, 이후에는 전용 테스트 사용자와 연동 샌드박스 환경에서 재측정합니다.
-
-## 4. 최신 결과 기준 개선 우선순위
+## 3. 최신 결과 기준 개선 우선순위
 
 | 우선순위 | 대상 | 현재 확인된 문제 | 개선 방향 |
 | --- | --- | --- | --- |
@@ -128,12 +104,11 @@ docker compose exec -T backend sh -lc "cd /tmp/agent-evaluation && PYTHONPATH=/p
 2. DB를 바꾸는 기능은 답변 문구가 아니라 실행 전후 DB 상태로 성공 여부를 판정합니다.
 3. 외부 API·캘린더 연결 오류는 별도 인프라 지표로 집계하고 답변 품질 점수에 섞지 않습니다.
 
-## 5. 실행 방법
+## 4. 실행 방법
 
 ```powershell
 # Docker DB와 필요한 API 환경 변수를 준비한 뒤 실행합니다.
 python scripts\agent_evaluation\collect_agent_quality_results.py --user-id 1
-python scripts\agent_evaluation\evaluate_agent_quality.py --results outputs\agent_evaluations\domain-agent-results.jsonl
 ```
 
-특정 에이전트만 확인할 때는 `--agent guide`처럼 실행합니다. 평가 결과에는 통과 여부뿐 아니라 필수 정보 누락, 금지 표현, 짧은 답변, 액션 누락, 인프라 오류 원인이 함께 기록됩니다.
+특정 에이전트만 확인할 때는 `--agent guide`처럼 실행합니다. 평가 결과에는 실제 응답, LLM 심사 점수, 사람 검수 표본, 인프라 오류 원인이 함께 기록됩니다.
