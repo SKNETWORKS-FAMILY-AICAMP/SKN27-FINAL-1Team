@@ -101,6 +101,15 @@
   font-weight: 600;
 }
 
+.guide-search button {
+  display: none;
+}
+
+.guide-search button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .guide-search-suggestions {
   position: absolute;
   top: calc(100% + 8px);
@@ -1597,6 +1606,10 @@
   flex: 0 0 64px;
 }
 
+.guide-fridge-empty__mobile {
+  display: none;
+}
+
 .guide-recipe-more strong {
   color: var(--figma-text);
   font-size: 13px;
@@ -2311,7 +2324,7 @@
 
 @media (max-width: 760px) {
   .guide-page {
-    width: min(100% - 28px, 430px);
+    width: min(100% - 32px, 430px);
     padding: 0 0 108px;
     overflow-x: hidden;
     overflow-wrap: anywhere;
@@ -2322,7 +2335,7 @@
     padding: 22px 20px;
     display: block;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid #f3d9dc;
     border-radius: 22px;
     background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
@@ -2352,8 +2365,21 @@
 
   .guide-search {
     height: 42px;
-    padding: 0 13px;
+    padding: 0 6px 0 13px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 54px;
+    gap: 7px;
     border-color: #edcfd2;
+  }
+
+  .guide-search input {
+    font-size: 12px;
+  }
+
+  .guide-search button {
+    display: block;
+    height: 32px;
+    font-size: 11px;
   }
 
   .guide-hero__art {
@@ -2365,8 +2391,29 @@
   }
 
   .guide-ingredients {
-    margin-top: 14px;
-    padding: 16px 0;
+    margin-top: 10px;
+    padding: 12px 0;
+  }
+
+  .guide-ingredients__header {
+    margin-bottom: 8px;
+  }
+
+  .guide-ingredients.is-empty {
+    padding-bottom: 0;
+  }
+
+  .guide-ingredients.is-empty .guide-ingredient-list {
+    display: block;
+    padding-bottom: 0;
+  }
+
+  .guide-fridge-empty__desktop {
+    display: none;
+  }
+
+  .guide-fridge-empty__mobile {
+    display: inline;
   }
 
   .guide-section-title {
@@ -2390,10 +2437,10 @@
 
   .guide-ingredients:not(.guide-ingredients--seasonal) .guide-ingredient-list {
     display: grid;
-    grid-template-rows: repeat(2, 96px);
+    grid-template-rows: 72px;
     grid-template-columns: none;
     grid-auto-flow: column;
-    grid-auto-columns: 84px;
+    grid-auto-columns: 72px;
   }
 
   .guide-fridge-page-button {
@@ -2417,12 +2464,12 @@
   }
 
   .guide-ingredient {
-    flex: 0 0 84px;
+    flex: 0 0 72px;
     width: 100%;
-    height: 96px;
-    padding: 8px 6px;
+    height: 72px;
+    padding: 6px 4px;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -2443,6 +2490,7 @@
 
   .guide-ingredients:not(.guide-ingredients--seasonal) .guide-ingredient__name {
     width: 100%;
+    font-size: 13px;
     white-space: normal;
   }
 
@@ -2461,8 +2509,8 @@
   }
 
   .guide-ingredient__image {
-    width: 46px;
-    height: 46px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
   }
 
@@ -2801,7 +2849,7 @@
   }
 
   .guide-page--detail .guide-tip-copy {
-    min-height: 320px;
+    min-height: 0;
   }
 
   .guide-page--detail .guide-tip-copy:has(.guide-suggestion):not(:has(.guide-suggestion.is-form-open)) {

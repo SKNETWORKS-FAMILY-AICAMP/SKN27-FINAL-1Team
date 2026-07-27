@@ -788,15 +788,23 @@ function Guide() {
         </div>
 
         <div className="guide-search-wrap">
-          <label className="guide-search guide-hero__search" aria-label="식재료명 검색">
+          <div className="guide-search guide-hero__search" role="search">
             <span aria-hidden="true" />
             <input
+              aria-label="식재료명 검색"
               placeholder="식재료명을 검색해보세요"
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
-          </label>
+            <button
+              type="button"
+              disabled={!searchTerm.trim() || !searchSuggestions.length}
+              onClick={() => selectIngredient(searchSuggestions[0])}
+            >
+              검색
+            </button>
+          </div>
 
           {searchTerm.trim() ? (
             <div className="guide-search-suggestions" aria-live="polite">
@@ -831,7 +839,7 @@ function Guide() {
       {errorMessage ? <p className="guide-error">{errorMessage}</p> : null}
 
       <section
-        className={`guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}`}
+        className={`guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}${isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? ' is-empty' : ''}`}
         aria-labelledby="guide-ingredients-title"
       >
           <div className="guide-ingredients__header">
@@ -874,7 +882,8 @@ function Guide() {
           ) : null}
           {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
             <div className="guide-empty guide-fridge-empty">
-              <span>냉장고 재료를 등록해주세요.</span>
+              <span className="guide-fridge-empty__desktop">냉장고 재료를 등록해주세요.</span>
+              <span className="guide-fridge-empty__mobile">등록된 재료가 없습니다.</span>
             </div>
           ) : null}
           {!isLoggedIn && !isListLoading && guestSuggestions.length === 0 ? (

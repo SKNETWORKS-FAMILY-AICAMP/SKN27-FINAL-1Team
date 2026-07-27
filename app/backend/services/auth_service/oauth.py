@@ -43,6 +43,7 @@ class OAuthClient:
                     "provider_id": str(user_data.get("id")),
                     "email": user_data.get("kakao_account", {}).get("email"),
                     "nickname": user_data.get("properties", {}).get("nickname"),
+                    "profile_image_url": user_data.get("properties", {}).get("profile_image"),
                 }
         except httpx.HTTPError as e:
             raise HTTPException(
@@ -92,6 +93,7 @@ class OAuthClient:
                     "provider_id": str(response_data.get("id")),
                     "email": response_data.get("email"),
                     "nickname": response_data.get("nickname"),
+                    "profile_image_url": response_data.get("profile_image"),
                 }
         except httpx.HTTPError as e:
             raise HTTPException(
@@ -134,6 +136,7 @@ class OAuthClient:
                     "provider_id": str(user_data.get("sub")),
                     "email": user_data.get("email"),
                     "nickname": user_data.get("name"),
+                    "profile_image_url": user_data.get("picture"),
                 }
         except httpx.HTTPError as e:
             raise HTTPException(

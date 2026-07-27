@@ -887,7 +887,7 @@ function ShoppingList() {
 
   return (
     <section className="shopping-page" aria-labelledby="shopping-title">
-      <div className="shopping-hero">
+      <div className="shopping-hero shopping-hero--card">
         <div className="shopping-hero__copy">
           <span className="shopping-eyebrow">장보기</span>
           <h1 id="shopping-title">지금 사야 할 재료</h1>
