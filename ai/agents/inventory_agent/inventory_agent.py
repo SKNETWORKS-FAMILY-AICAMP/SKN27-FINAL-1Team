@@ -369,11 +369,16 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
 
     if intent == "inventory.pending_add_many":
         items = _extract_add_items(text)
-        payload = "|".join(f"{item['name']},{item['quantity'] or 1},{item['storage'] or DEFAULT_STORAGE}" for item in items)
-        summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'] or 1)}개" for item in items)
+        # 수량이 빠진 항목을 임의의 1개로 저장하지 않고 재입력을 요청합니다.
+        if not items or any(item["quantity"] is None for item in items):
+            return {
+                "response_text": "식재료와 개수를 함께 말해주세요. 예: 파스타면1, 토마토소스1, 냉동 새우1",
+                "slots": {"inventory_pending": {"action": "add_many"}},
+            }
+        payload = "|".join(f"{item['name']},{item['quantity']},{item['storage'] or DEFAULT_STORAGE}" for item in items)
+        summary = ", ".join(f"{item['name']} {_quantity_text(item['quantity'])}개" for item in items)
         reply = f"{summary}를 냉장고에 추가할까요?"
         return {"response_text": reply, "actions": [_confirm_action("확인", f"확인:add_ingredients:{payload}"), _confirm_action("취소", "취소")], "slots": {"inventory_pending": None}}
-
     if intent == "inventory.action":
         return _handle_inventory_action(text, db, user_id)
 

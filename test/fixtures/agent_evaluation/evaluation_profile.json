@@ -1,0 +1,12 @@
+{
+  "profile": "local-agent-evaluation-v1",
+  "user_id": 1,
+  "reset_required": true,
+  "description": "반복 평가 전에는 전용 평가 사용자와 동일한 초기 재고·장보기·캘린더 상태를 준비해야 한다.",
+  "required_state": {
+    "inventory": "전용 평가 재고로 초기화",
+    "shopping": "전용 평가 장보기 목록으로 초기화",
+    "calendar": "전용 테스트 캘린더 연동",
+    "external_api": "평가 전 API 키와 연결 상태 확인"
+  }
+}
