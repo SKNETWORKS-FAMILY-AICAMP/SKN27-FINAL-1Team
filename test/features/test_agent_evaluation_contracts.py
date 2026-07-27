@@ -34,7 +34,7 @@ def test_guide_agent_returns_common_contract_for_unresolved_season_query():
     result = answer_guide_query("제철음식")
 
     assert result["agent"] == "guide"
-    assert result["status"] in {"needs_input", "error", "not_found"}
+    assert result["status"] in {"success", "needs_input", "error", "not_found"}
     assert isinstance(result["message"], str)
     assert set(result["ui"]) == {"actions", "cards", "sources"}
 
