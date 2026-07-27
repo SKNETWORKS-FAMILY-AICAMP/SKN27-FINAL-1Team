@@ -2322,7 +2322,7 @@
     padding: 22px 20px;
     display: block;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid #f3d9dc;
     border-radius: 22px;
     background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
@@ -2801,7 +2801,7 @@
   }
 
   .guide-page--detail .guide-tip-copy {
-    min-height: 320px;
+    min-height: 0;
   }
 
   .guide-page--detail .guide-tip-copy:has(.guide-suggestion):not(:has(.guide-suggestion.is-form-open)) {
