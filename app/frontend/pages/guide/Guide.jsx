@@ -112,6 +112,10 @@ function splitTipText(text) {
     .filter(Boolean)
 }
 
+function compactTipTitle(title = '') {
+  return String(title).replace(/(?:방법|확인법)$/, '').trim()
+}
+
 function normalizeSourceUrl(url) {
   if (!url) return null
   let normalized = String(url).trim().replace(/\s+/g, '')
@@ -1045,11 +1049,17 @@ function Guide() {
                         key={tip.title}
                         role="tab"
                         aria-selected={selectedTip.title === tip.title}
+                        aria-label={tip.title}
                         onClick={() => setSelectedTipTitle(tip.title)}
                       >
                         <div className="guide-tip-card__title">
                           <span aria-hidden="true" />
-                          <h3>{tip.title}</h3>
+                          <h3>
+                            <b className="guide-tip-title--full">{tip.title}</b>
+                            <b aria-hidden="true" className="guide-tip-title--compact">
+                              {compactTipTitle(tip.title)}
+                            </b>
+                          </h3>
                         </div>
                       </button>
                     ))}
@@ -1080,11 +1090,13 @@ function Guide() {
                             {!tip.isMissing ? (
                               <div className="guide-tip-source">
                                 {tip.sourceUrl ? (
-                                  <a href={tip.sourceUrl} target="_blank" rel="noreferrer">
-                                    {tip.source}
+                                  <a href={tip.sourceUrl} target="_blank" rel="noreferrer" title={tip.source}>
+                                    <span className="guide-tip-source__name">{tip.source.split(' - ')[0]}</span>
                                   </a>
                                 ) : (
-                                  <span>{tip.source}</span>
+                                  <span title={tip.source}>
+                                    <span className="guide-tip-source__name">{tip.source.split(' - ')[0]}</span>
+                                  </span>
                                 )}
                               </div>
                             ) : (
