@@ -583,7 +583,7 @@
 
 @media (max-width: 760px) {
   .recipe-list-page {
-    width: min(100% - 28px, 430px);
+    width: min(100% - 32px, 430px);
     padding: 0 0 108px;
     overflow-x: hidden;
   }

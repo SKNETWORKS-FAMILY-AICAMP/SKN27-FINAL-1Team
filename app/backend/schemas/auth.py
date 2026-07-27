@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
     email: Optional[EmailStr] = None
     provider: str
     nickname: Optional[str] = None
+    profile_image_url: Optional[str] = None
     created_at: datetime
     is_onboarded: bool = False
 

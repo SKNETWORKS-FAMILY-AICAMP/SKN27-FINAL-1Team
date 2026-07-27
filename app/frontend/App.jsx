@@ -12,7 +12,6 @@ import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
-import MobileBottomNav from './components/MobileBottomNav.jsx'
 import OnboardingModal from './components/OnboardingModal.jsx'
 import Seo from './components/Seo.jsx'
 import ConfirmModal from './components/modals/ConfirmModal.jsx'
@@ -174,7 +173,6 @@ function AppLayout() {
         </Routes>
       </main>
       {!isAuthPage && <Footer />}
-      {!isAuthPage && <MobileBottomNav />}
       {!isAuthPage && <FloatingChatbot />}
     </div>
   )

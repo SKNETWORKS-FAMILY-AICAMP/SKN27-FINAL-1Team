@@ -146,10 +146,6 @@ body {
   line-height: 1.7;
 }
 
-.mobile-bottom-nav {
-  display: none;
-}
-
 @media (min-width: 681px) and (max-width: 1180px) {
   .app-main {
     padding-top: 112px;
@@ -163,59 +159,10 @@ body {
 @media (max-width: 680px) {
   .app-main {
     padding-top: 100px;
-    padding-bottom: 70px;
   }
 
   .app-main--auth {
     padding: 0;
   }
 
-  .mobile-bottom-nav {
-    width: 100%;
-    height: 66px;
-    padding: 6px 18px 8px;
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 90;
-    box-sizing: border-box;
-    border-top: 1px solid #f1d9b3;
-    background: #fff;
-  }
-
-  .mobile-bottom-nav__item {
-    min-width: 0;
-    display: grid;
-    justify-items: center;
-    align-content: center;
-    gap: 3px;
-    color: #8b673e;
-    font-size: 11px;
-    font-weight: 900;
-    text-decoration: none;
-  }
-
-  .mobile-bottom-nav__icon {
-    width: 22px;
-    height: 22px;
-    display: grid;
-    place-items: center;
-  }
-
-  .mobile-bottom-nav__icon svg {
-    width: 22px;
-    height: 22px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .mobile-bottom-nav__item.active {
-    color: var(--figma-coral);
-  }
 }
