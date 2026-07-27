@@ -1652,7 +1652,7 @@
 
 @media (max-width: 760px) {
   .shopping-page {
-    width: min(100% - 36px, 390px);
+    width: min(100% - 32px, 430px);
     padding: 0 0 108px;
     overflow-x: hidden;
     overflow-wrap: anywhere;
@@ -1682,6 +1682,30 @@
   }
 
   .shopping-hero__art {
+    display: none;
+  }
+
+  .shopping-hero--card {
+    min-height: auto;
+    padding: 22px 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid #f3d9dc;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
+    box-shadow: 0 12px 36px rgba(85, 42, 43, 0.07);
+  }
+
+  .shopping-hero--card .shopping-hero__copy h1 {
+    font-size: 25px;
+  }
+
+  .shopping-hero--card .shopping-hero__copy p {
+    font-size: 12px;
+  }
+
+  .shopping-hero--card .shopping-eyebrow,
+  .shopping-hero--card .shopping-hero__art {
     display: none;
   }
 

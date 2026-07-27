@@ -38,6 +38,7 @@ class User(Base):
     id = Column(BigIntPrimaryKey, primary_key=True, autoincrement=True)
     email = Column(String(255), nullable=False)
     nickname = Column(String(100), nullable=False)
+    profile_image_url = Column(String(1000), nullable=True)
     provider = Column("auth_provider", String(50), nullable=True)
     provider_id = Column("provider_user_id", String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

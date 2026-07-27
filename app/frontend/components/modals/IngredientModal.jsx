@@ -121,7 +121,7 @@ export default function IngredientModal({
   return (
     <div className="fridge-modal-overlay">
       <div
-        className="fridge-modal-content"
+        className="fridge-modal-content fridge-ingredient-modal"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="fridge-modal-header">

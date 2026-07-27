@@ -587,15 +587,20 @@
 
 @media (max-width: 760px) {
   .fridge-page {
-    width: min(100% - 28px, 430px);
+    width: min(100% - 32px, 430px);
     padding: 0 0 108px;
   }
 
   .fridge-hero {
     min-height: auto;
-    padding-top: 2px;
-    grid-template-columns: 1fr;
-    gap: 12px;
+    padding: 22px 20px;
+    display: block;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid #f3d9dc;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
+    box-shadow: 0 12px 36px rgba(85, 42, 43, 0.07);
   }
 
   .fridge-hero__copy {
@@ -603,19 +608,35 @@
   }
 
   .fridge-hero__copy h1 {
-    margin-top: 8px;
     font-size: 25px;
   }
 
   .fridge-hero__copy p {
-    margin-top: -2px;
+    margin-top: 8px;
     font-size: 12px;
   }
 
   .fridge-search {
-    grid-column: 1 / -1;
-    height: 44px;
-    margin-top: 0;
+    display: none;
+  }
+
+  .fridge-ingredient-modal .fridge-modal-header {
+    height: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .fridge-ingredient-modal .fridge-modal-header h2 {
+    display: none;
+  }
+
+  .fridge-ingredient-modal .fridge-modal-header button {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    z-index: 2;
+    padding: 4px;
+    line-height: 1;
   }
 
   .fridge-layout {
@@ -830,6 +851,7 @@
 }
 
 .fridge-modal-content {
+  position: relative;
   width: 100%;
   max-width: 480px;
   background: #fff;
