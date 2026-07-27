@@ -28,18 +28,19 @@ export function buildRecipeFilterOptions(total, facets) {
   const difficulties = useDynamicOptions ? uniqueNonEmpty(facets.difficulties) : []
   const cookingTimeLabels = useDynamicOptions ? uniqueNonEmpty(facets.cooking_time_labels) : []
 
-  const categoryValues = useDynamicOptions ? categories : RecipeFilterConfig.recipeTypes
-  const difficultyValues = useDynamicOptions ? difficulties : RecipeFilterConfig.difficulties
-  const availableCookingTimes = useDynamicOptions
-    ? RecipeFilterConfig.cookingTimes.filter((option) => cookingTimeLabels.includes(option.value))
-    : RecipeFilterConfig.cookingTimes
+  const recipeTypeDefs = useDynamicOptions
+    ? RecipeFilterConfig.filterByApiValues(RecipeFilterConfig.recipeTypes, categories)
+    : [...RecipeFilterConfig.recipeTypes]
+  const difficultyDefs = useDynamicOptions
+    ? RecipeFilterConfig.filterByApiValues(RecipeFilterConfig.difficulties, difficulties)
+    : [...RecipeFilterConfig.difficulties]
+  const cookingTimeDefs = useDynamicOptions
+    ? RecipeFilterConfig.filterByApiValues(RecipeFilterConfig.cookingTimes, cookingTimeLabels)
+    : [...RecipeFilterConfig.cookingTimes]
 
   return {
-    recipeTypes: RecipeFilterConfig.toSelectOptions(categoryValues, RecipeFilterConfig.FILTER_ALL),
-    difficulties: [RecipeFilterConfig.FILTER_ALL, ...difficultyValues],
-    cookingTimes: [
-      { value: RecipeFilterConfig.FILTER_ALL, label: RecipeFilterConfig.FILTER_ALL },
-      ...availableCookingTimes,
-    ],
+    recipeTypes: RecipeFilterConfig.toSelectOptions(recipeTypeDefs),
+    difficulties: RecipeFilterConfig.toSelectOptions(difficultyDefs),
+    cookingTimes: RecipeFilterConfig.toSelectOptions(cookingTimeDefs),
   }
 }

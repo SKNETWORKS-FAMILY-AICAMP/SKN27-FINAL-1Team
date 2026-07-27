@@ -6,6 +6,9 @@ import imageShop from '../../assets/extracted/images/image_shop.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
 import {
   buildSourceFilterOptions,
+  findExactSelectedRecipe,
+  getSelectedDeleteCount,
+  getShoppingSelectionState,
   getSourceRecipeTitles,
   itemMatchesSourceOption,
 } from './shoppingSourceFilters.js'
@@ -26,11 +29,6 @@ import {
 } from '../../services/shoppingApi.js'
 
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
-const SHOPPING_STATUS_FILTERS = [
-  { key: 'all', label: '전체' },
-  { key: 'need_buy', label: '구매 필요' },
-  { key: 'owned', label: '보유 재료' },
-]
 
 function ImageSlot({ src, alt = '', className = '' }) {
   return (
@@ -123,8 +121,8 @@ function isOwnedIngredientExpired(item) {
 }
 
 function resolveOwnedIngredients(shoppingList, storedContext, isFallbackList) {
-  if (shoppingList?.recipe_id && !isFallbackList) {
-    return Array.isArray(shoppingList.owned_ingredients) ? shoppingList.owned_ingredients : []
+  if (!isFallbackList) {
+    return Array.isArray(shoppingList?.owned_ingredients) ? shoppingList.owned_ingredients : []
   }
 
   if (storedContext?.recipeId && Number(storedContext.recipeId) === Number(shoppingList?.recipe_id)) {
@@ -328,8 +326,6 @@ function ShoppingList() {
   const [isManualAdding, setIsManualAdding] = useState(false)
   const [ingredientSuggestions, setIngredientSuggestions] = useState([])
   const [fridgeIngredients, setFridgeIngredients] = useState([])
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [sourceFilters, setSourceFilters] = useState([])
   const [selectedOwnedKeys, setSelectedOwnedKeys] = useState([])
 
   const isLoggedIn = hasShoppingAuth()
@@ -349,49 +345,42 @@ function ShoppingList() {
   const hasCurrentShoppingList = Boolean(shoppingList?.id)
   const sourceFilterOptions = buildSourceFilterOptions(shoppingList, activeItems)
   const recipeFilterOptionCount = sourceFilterOptions.filter((option) => option.type === 'recipe').length
-  const sourceFilterKey = sourceFilterOptions.map((option) => option.key).join('|')
-
-  const itemMatchesSourceKey = (item, sourceKey) => {
-    const option = sourceFilterOptions.find((candidate) => candidate.key === sourceKey)
-    return itemMatchesSourceOption(item, option, recipeFilterOptionCount)
-  }
-
-  const getFilteredItems = (status, sources) => {
-    const selectedSources = Array.isArray(sources) ? sources : []
-    let active = activeItems
-    let owned = ownedShoppingItems
-
-    if (selectedSources.length > 0) {
-      active = active.filter((item) => selectedSources.some((sourceKey) => itemMatchesSourceKey(item, sourceKey)))
-      const hasRecipeSource = selectedSources.some((sourceKey) => (
-        sourceFilterOptions.find((option) => option.key === sourceKey)?.type === 'recipe'
-      ))
-      owned = hasRecipeSource ? owned : []
-    }
-
-    if (status === 'need_buy') {
-      owned = []
-    } else if (status === 'owned') {
-      active = []
-    }
-
-    return { active, owned }
-  }
-
-  const countFilteredItems = (status, sources = sourceFilters) => {
-    const filtered = getFilteredItems(status, sources)
-    return filtered.active.length + filtered.owned.length
-  }
-
-  const filteredItems = getFilteredItems(statusFilter, sourceFilters)
-  const visibleActiveItems = filteredItems.active
-  const visibleOwnedShoppingItems = filteredItems.owned
-  const selectedItems = visibleActiveItems.filter((item) => item.is_checked)
-  const selectedOwnedItems = visibleOwnedShoppingItems.filter((item) => (
-    selectedOwnedKeys.includes(getIngredientDisplayKey(item))
-  ))
-  const selectedCount = selectedItems.length + selectedOwnedItems.length
+  const visibleActiveItems = activeItems
+  const visibleOwnedShoppingItems = ownedShoppingItems
+  const {
+    selectedActiveItems: selectedItems,
+    selectedOwnedItems,
+    selectedCount,
+  } = getShoppingSelectionState(activeItems, ownedShoppingItems, selectedOwnedKeys)
+  const recipeSelectionCandidates = sourceFilterOptions
+    .filter((option) => option.type === 'recipe')
+    .map((option) => {
+      const recipeItems = {
+        active: activeItems.filter((item) => (
+          itemMatchesSourceOption(item, option, recipeFilterOptionCount)
+        )),
+        owned: ownedShoppingItems.filter((item) => (
+          itemMatchesSourceOption(item, option, recipeFilterOptionCount)
+        )),
+      }
+      return { option, recipeItems }
+    })
+  const selectedRecipeSelection = findExactSelectedRecipe(
+    recipeSelectionCandidates,
+    selectedCount,
+    selectedOwnedKeys,
+  )
+  const selectedRecipeSourceOption = selectedRecipeSelection?.option || null
+  const selectedRecipeItems = selectedRecipeSelection?.recipeItems || { active: [], owned: [] }
+  const isEntireRecipeSelected = Boolean(selectedRecipeSelection)
+  const selectedDeleteCount = getSelectedDeleteCount({
+    selectedActiveItems: selectedItems,
+    recipeActiveItems: selectedRecipeItems.active,
+    recipeOwnedItems: selectedRecipeItems.owned,
+    isEntireRecipeSelected,
+  })
   const visibleItemCount = visibleActiveItems.length + visibleOwnedShoppingItems.length
+  const totalItemCount = activeItems.length + ownedShoppingItems.length
   const selectedTotalPrice = [...selectedItems, ...selectedOwnedItems]
     .reduce((sum, item) => sum + Number(item.price || 0), 0)
   const manualOwnedIngredient = findOwnedFridgeIngredient(
@@ -455,18 +444,6 @@ function ShoppingList() {
       isAlive = false
     }
   }, [shoppingListId, sourceParam, fallbackParam, storedContext])
-
-  // 선택한 출처 필터가 사라지면(레시피 제거 등) 해당 필터만 제외한다.
-  useEffect(() => {
-    setSourceFilters((prev) => {
-      if (prev.length === 0) {
-        return prev
-      }
-
-      const next = prev.filter((key) => sourceFilterOptions.some((option) => option.key === key))
-      return next.length === prev.length ? prev : next
-    })
-  }, [sourceFilterKey])
 
   useEffect(() => {
     let isAlive = true
@@ -640,47 +617,24 @@ function ShoppingList() {
     ))
   }
 
-  const removeRecipeSource = async (filter) => {
-    if (isFallbackList || !shoppingList?.id || !filter.recipeId) {
-      return
-    }
-
-    const confirmed = await showConfirm(`${filter.label}에서 추가된 장보기 항목을 제외할까요?`, {
-      title: '이 레시피 장보기에서 제외',
-      confirmText: '제외하기',
-      cancelText: '취소',
-    })
-    if (!confirmed) {
-      return
-    }
-
-    setIsMutating(true)
-    try {
-      const updated = await removeShoppingListRecipe(shoppingList.id, filter.recipeId)
-      setShoppingList(updated)
-      setSourceFilters((previousFilters) => (
-        previousFilters.includes(filter.key) ? [] : previousFilters
-      ))
-      await showAlert(`‘${filter.label}’ 레시피를 장보기 목록에서 제외했어요.`, {
-        title: '레시피 제외 완료',
-      })
-    } catch (shoppingError) {
-      await showAlert(shoppingError.message || '레시피를 장보기 목록에서 제외하지 못했어요.', {
-        title: '레시피 제외 실패',
-      })
-    } finally {
-      setIsMutating(false)
-    }
+  const reconcileSelectedOwnedItems = (ownedIngredients) => {
+    const remainingOwnedKeys = new Set((ownedIngredients || []).map(getIngredientDisplayKey))
+    setSelectedOwnedKeys((previousKeys) => (
+      previousKeys.filter((key) => remainingOwnedKeys.has(key))
+    ))
   }
 
   const deleteSelectedItems = async () => {
-    if (selectedItems.length === 0) {
+    if (selectedDeleteCount === 0) {
       return
     }
 
-    const confirmed = await showConfirm(`총 ${selectedItems.length}개 삭제하시겠습니까?`, {
-      title: '선택 삭제',
-      confirmText: '삭제',
+    const confirmMessage = isEntireRecipeSelected
+      ? `‘${selectedRecipeSourceOption.label}’의 재료 ${selectedDeleteCount}개를 장보기 목록에서 삭제할까요?\n다른 레시피에도 필요한 공통 재료는 남아 있어요.`
+      : `선택한 구매 필요 재료 ${selectedDeleteCount}개를 장보기 목록에서 삭제할까요?\n보유 재료는 냉장고에서 삭제되지 않아요.`
+    const confirmed = await showConfirm(confirmMessage, {
+      title: isEntireRecipeSelected ? '레시피 장보기 삭제' : '선택 재료 삭제',
+      confirmText: isEntireRecipeSelected ? '레시피 삭제' : '재료 삭제',
       cancelText: '취소',
     })
     if (!confirmed) {
@@ -688,6 +642,12 @@ function ShoppingList() {
     }
 
     if (isFallbackList) {
+      if (isEntireRecipeSelected) {
+        setShoppingList(buildEmptyShoppingList())
+        setSelectedOwnedKeys([])
+        return
+      }
+
       const selectedIds = new Set(selectedItems.map((item) => item.id))
       setShoppingList((prev) => ({
         ...prev,
@@ -698,6 +658,16 @@ function ShoppingList() {
 
     setIsMutating(true)
     try {
+      if (isEntireRecipeSelected && selectedRecipeSourceOption?.recipeId) {
+        const updated = await removeShoppingListRecipe(
+          shoppingList.id,
+          selectedRecipeSourceOption.recipeId,
+        )
+        setShoppingList(updated)
+        reconcileSelectedOwnedItems(updated?.owned_ingredients)
+        return
+      }
+
       let latest = shoppingList
       for (const item of selectedItems) {
         latest = await deleteShoppingListItem(item.id)
@@ -935,7 +905,7 @@ function ShoppingList() {
           <div className="shopping-list-toolbar">
             <div className="shopping-list-toolbar__title">
               <h2 id="shopping-list-title">현재 장보기 목록</h2>
-              <span className="shopping-count-badge">{visibleItemCount}개</span>
+              <span className="shopping-count-badge">전체 {visibleItemCount}개</span>
             </div>
             <div className="shopping-list-toolbar__actions">
               <button
@@ -951,90 +921,12 @@ function ShoppingList() {
                 className={`shopping-select-all ${allChecked ? 'is-active' : ''}`}
                 onClick={toggleSelectAll}
                 disabled={isMutating || visibleItemCount === 0}
-                aria-label={selectedCount > 0 ? `${selectedCount}개 선택됨` : '전체 선택'}
+                aria-label={allChecked ? '전체 해제' : '전체 선택'}
               >
                 <span className={`shopping-check ${allChecked ? 'is-checked' : ''}`} aria-hidden="true" />
-                {selectedCount > 0 ? <em>{selectedCount}개 선택됨</em> : '전체 선택'}
+                <span>{allChecked ? '전체 해제' : '전체 선택'}</span>
               </button>
             </div>
-          </div>
-
-          <div className="shopping-filter-groups" aria-label="장보기 목록 필터">
-            <div className="shopping-filter-group" role="group" aria-label="재료 상태">
-              <span>상태</span>
-              <div className="shopping-filter-group__options">
-                {SHOPPING_STATUS_FILTERS.map((filter) => (
-                  <button
-                    type="button"
-                    key={filter.key}
-                    className={statusFilter === filter.key ? 'is-active' : ''}
-                    aria-pressed={statusFilter === filter.key}
-                    onClick={() => setStatusFilter(filter.key)}
-                  >
-                    {filter.label} <em>{countFilteredItems(filter.key)}</em>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {sourceFilterOptions.length > 0 ? (
-              <div className="shopping-filter-group shopping-filter-group--source" role="group" aria-label="재료 출처">
-                <span title="같은 재료가 여러 레시피에 포함되면 출처별 개수는 중복될 수 있어요.">출처</span>
-                <div className="shopping-filter-group__options">
-                  <button
-                    type="button"
-                    className={sourceFilters.length === 0 ? 'is-active' : ''}
-                    aria-pressed={sourceFilters.length === 0}
-                    onClick={() => setSourceFilters([])}
-                  >
-                    전체 <em>{countFilteredItems(statusFilter, [])}</em>
-                  </button>
-                  {sourceFilterOptions.map((filter) => {
-                    const isActive = sourceFilters.includes(filter.key)
-
-                    if (filter.type === 'recipe') {
-                      return (
-                        <div
-                          className={`shopping-filter-recipe-option ${isActive ? 'is-active' : ''}`}
-                          key={filter.key}
-                        >
-                          <button
-                            type="button"
-                            className="shopping-filter-recipe-select"
-                            aria-pressed={isActive}
-                            onClick={() => setSourceFilters([filter.key])}
-                          >
-                            {filter.label} <em>{countFilteredItems(statusFilter, [filter.key])}</em>
-                          </button>
-                          <button
-                            type="button"
-                            className="shopping-filter-recipe-remove"
-                            aria-label={`${filter.label} 장보기에서 제외`}
-                            title="이 레시피 장보기에서 제외"
-                            disabled={isMutating || isFallbackList || !filter.recipeId}
-                            onClick={() => removeRecipeSource(filter)}
-                          >
-                            <span aria-hidden="true">×</span>
-                          </button>
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <button
-                        type="button"
-                        key={filter.key}
-                        className={isActive ? 'is-active' : ''}
-                        aria-pressed={isActive}
-                        onClick={() => setSourceFilters([filter.key])}
-                      >
-                        {filter.label} <em>{countFilteredItems(statusFilter, [filter.key])}</em>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
           </div>
 
           {isManualAddOpen ? (
@@ -1144,17 +1036,11 @@ function ShoppingList() {
             {visibleItemCount === 0 ? (
               <div className="shopping-empty-block">
                 <p className="shopping-empty-note">
-                  {sourceFilters.length > 0
-                    ? '선택한 출처 기준으로 표시할 장보기 재료가 없어요.'
-                    : statusFilter === 'owned'
-                      ? '현재 냉장고에 보유 중인 레시피 재료가 없어요.'
-                    : ownedItems.length > 0 && statusFilter !== 'need_buy'
-                    ? '따로 구매할 재료가 없어요. 필요한 재료는 이미 냉장고에 있어요.'
-                    : hasCurrentShoppingList
-                      ? '구매가 필요한 재료를 모두 냉장고에 입고했어요.'
-                      : '아직 장보기 목록에 담긴 재료가 없어요.'}
+                  {hasCurrentShoppingList
+                    ? '장보기 목록에 남아 있는 재료가 없어요.'
+                    : '아직 장보기 목록에 담긴 재료가 없어요.'}
                 </p>
-                {hasCurrentShoppingList ? (
+                {hasCurrentShoppingList && totalItemCount === 0 ? (
                   <button
                     className="shopping-delete-list-button"
                     type="button"
@@ -1282,15 +1168,19 @@ function ShoppingList() {
               disabled={isMutating || selectedCount === 0}
               onClick={completePurchase}
             >
-              선택 {selectedCount}개 냉장고 입고
+              {selectedCount === 0 ? '입고할 재료를 선택하세요' : `선택한 ${selectedCount}개 입고하기`}
             </button>
             <button
               className="shopping-sidebar__danger"
               type="button"
-              disabled={isMutating || selectedItems.length === 0}
+              disabled={isMutating || selectedDeleteCount === 0}
               onClick={deleteSelectedItems}
             >
-              선택 {selectedItems.length}개 삭제
+              {selectedDeleteCount === 0
+                ? '삭제할 재료를 선택하세요'
+                : isEntireRecipeSelected
+                  ? `‘${selectedRecipeSourceOption.label}’ 레시피 전체 삭제`
+                  : `선택한 ${selectedDeleteCount}개 삭제`}
             </button>
           </div>
 
@@ -1302,6 +1192,20 @@ function ShoppingList() {
             ← 레시피 상세로 돌아가기
           </button>
         </aside>
+      </div>
+      <div className="shopping-mobile-action-bar" aria-label="모바일 장보기 구매 완료">
+        <div className="shopping-mobile-action-bar__summary">
+          <strong>선택 {selectedCount}개</strong>
+          <span>{formatPrice(selectedTotalPrice)}</span>
+        </div>
+        <button
+          type="button"
+          disabled={isMutating || selectedCount === 0}
+          onClick={completePurchase}
+          aria-label={`선택한 ${selectedCount}개 구매 완료 및 냉장고 입고`}
+        >
+          구매 완료
+        </button>
       </div>
       {dialogNode}
     </section>

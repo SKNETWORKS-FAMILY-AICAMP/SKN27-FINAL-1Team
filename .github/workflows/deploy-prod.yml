@@ -76,8 +76,9 @@ jobs:
           KAKAO_CLIENT_ID="$(jq -r '.KAKAO_CLIENT_ID // empty' /tmp/bobbeori-external.json)"
           NAVER_CLIENT_ID="$(jq -r '.NAVER_CLIENT_ID // empty' /tmp/bobbeori-external.json)"
           GOOGLE_CLIENT_ID="$(jq -r '.GOOGLE_CLIENT_ID // empty' /tmp/bobbeori-external.json)"
+          GA_MEASUREMENT_ID="$(jq -r '.GA_MEASUREMENT_ID // empty' /tmp/bobbeori-external.json)"
 
-          for name in KAKAO_CLIENT_ID NAVER_CLIENT_ID GOOGLE_CLIENT_ID; do
+          for name in KAKAO_CLIENT_ID NAVER_CLIENT_ID GOOGLE_CLIENT_ID GA_MEASUREMENT_ID; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is missing from $EXTERNAL_SECRET_NAME"
               exit 1
@@ -91,6 +92,7 @@ jobs:
             echo "VITE_KAKAO_CLIENT_ID=$KAKAO_CLIENT_ID"
             echo "VITE_NAVER_CLIENT_ID=$NAVER_CLIENT_ID"
             echo "VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
+            echo "VITE_GA_MEASUREMENT_ID=$GA_MEASUREMENT_ID"
           } >> "$GITHUB_ENV"
 
       - name: Build frontend

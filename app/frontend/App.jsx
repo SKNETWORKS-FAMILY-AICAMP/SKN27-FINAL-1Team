@@ -7,13 +7,14 @@ import {
   authenticatedFetch,
   isSessionExpiredError,
 } from './utils/api.js'
-import { trackPageView } from './utils/analytics.js'
+import { initAnalytics, trackPageView } from './utils/analytics.js'
 import Breadcrumbs from './components/Breadcrumbs.jsx'
 import FloatingChatbot from './components/FloatingChatbot.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import MobileBottomNav from './components/MobileBottomNav.jsx'
 import OnboardingModal from './components/OnboardingModal.jsx'
+import Seo from './components/Seo.jsx'
 import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import Home from './pages/home/Home.jsx'
 import FaqPage from './pages/info/FaqPage.jsx'
@@ -31,7 +32,6 @@ import RecipeList from './pages/recipe_list/RecipeList.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
 import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
-
 function AppLayout() {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
@@ -41,6 +41,9 @@ function AppLayout() {
   const [onboardingSeenKey, setOnboardingSeenKey] = useState('hasSeenOnboarding_v4')
   const [apiNotice, setApiNotice] = useState(null)
 
+  useEffect(() => {
+    initAnalytics()
+  }, [])
 
   useEffect(() => {
     // API 오류를 서비스 디자인 모달로 안내하고 세션 만료는 한 번만 표시합니다.
@@ -103,6 +106,7 @@ function AppLayout() {
 
   return (
     <div className={isAuthPage ? 'app-shell app-shell--auth' : 'app-shell'}>
+      <Seo />
       {showOnboarding && <OnboardingModal seenKey={onboardingSeenKey} onClose={() => setShowOnboarding(false)} />}
 
       <ConfirmModal

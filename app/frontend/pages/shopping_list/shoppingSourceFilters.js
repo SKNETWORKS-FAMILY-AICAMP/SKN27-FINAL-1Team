@@ -5,6 +5,14 @@ function normalizeSourceRefs(item) {
   return Array.isArray(item?.source_refs) ? item.source_refs : []
 }
 
+function getOwnedSelectionKey(item) {
+  const normalizedName = String(item?.name || '').trim().replace(/\s+/g, ' ').toLowerCase()
+  if (normalizedName) {
+    return `name:${normalizedName}`
+  }
+  return item?.ingredient_id != null ? `id:${item.ingredient_id}` : ''
+}
+
 function getRecipeSources(list) {
   const sources = []
   const addSource = (source) => {
@@ -35,6 +43,14 @@ function getRecipeSources(list) {
   addSource({ recipe_id: list?.recipe_id, recipe_title: list?.recipe_title })
 
   ;(list?.items || []).forEach((item) => {
+    normalizeSourceRefs(item).forEach((ref) => {
+      if (ref?.type === 'recipe') {
+        addSource(ref)
+      }
+    })
+  })
+
+  ;(list?.owned_ingredients || []).forEach((item) => {
     normalizeSourceRefs(item).forEach((ref) => {
       if (ref?.type === 'recipe') {
         addSource(ref)
@@ -93,4 +109,56 @@ export function itemMatchesSourceOption(item, option, recipeOptionCount) {
   }
 
   return item?.source_type === option.type || refs.some((ref) => ref?.type === option.type)
+}
+
+export function areAllSourceItemsSelected(activeItems, ownedItems, selectedOwnedKeys) {
+  const active = Array.isArray(activeItems) ? activeItems : []
+  const owned = Array.isArray(ownedItems) ? ownedItems : []
+  if (active.length + owned.length === 0) {
+    return false
+  }
+
+  const ownedKeys = new Set(Array.isArray(selectedOwnedKeys) ? selectedOwnedKeys : [])
+  return active.every((item) => item?.is_checked)
+    && owned.every((item) => {
+      const key = getOwnedSelectionKey(item)
+      return key && ownedKeys.has(key)
+    })
+}
+
+export function getShoppingSelectionState(activeItems, ownedItems, selectedOwnedKeys) {
+  const active = Array.isArray(activeItems) ? activeItems : []
+  const owned = Array.isArray(ownedItems) ? ownedItems : []
+  const ownedKeys = new Set(Array.isArray(selectedOwnedKeys) ? selectedOwnedKeys : [])
+  const selectedActiveItems = active.filter((item) => item?.is_checked)
+  const selectedOwnedItems = owned.filter((item) => ownedKeys.has(getOwnedSelectionKey(item)))
+
+  return {
+    selectedActiveItems,
+    selectedOwnedItems,
+    selectedCount: selectedActiveItems.length + selectedOwnedItems.length,
+  }
+}
+
+export function getSelectedDeleteCount({
+  selectedActiveItems,
+  recipeActiveItems,
+  recipeOwnedItems,
+  isEntireRecipeSelected,
+}) {
+  if (isEntireRecipeSelected) {
+    return (recipeActiveItems?.length || 0) + (recipeOwnedItems?.length || 0)
+  }
+  return selectedActiveItems?.length || 0
+}
+
+export function findExactSelectedRecipe(recipeCandidates, selectedCount, selectedOwnedKeys) {
+  const matches = (Array.isArray(recipeCandidates) ? recipeCandidates : []).filter((candidate) => {
+    const active = candidate?.recipeItems?.active || []
+    const owned = candidate?.recipeItems?.owned || []
+    return active.length + owned.length === selectedCount
+      && areAllSourceItemsSelected(active, owned, selectedOwnedKeys)
+  })
+
+  return matches.length === 1 ? matches[0] : null
 }

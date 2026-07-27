@@ -182,7 +182,11 @@ def _route_read_fallback(
         return _route_result(previous_intent, slots=previous_slots)
     if _is_recipe_recommend_query(text):
         return _route_result("recipe.recommend")
-    if any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS):
+    if (
+        not _is_guide_query(text)
+        and not _is_alarm_calendar_query(text)
+        and any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS)
+    ):
         return _route_result("inventory.list")
     if _is_recipe_search_query(text):
         return _route_result("recipe.search")
@@ -235,6 +239,19 @@ def router_node(state: GraphState) -> dict:
         return result
 
     normalized = _normalize_text(text)
+    # "장본 거"는 냉장고 재료 목록이 아니라 장보기 목록 조회로 우선 처리합니다.
+    if "장본" in normalized:
+        return _route_result("shopping.current")
+    # 장보기 기능 문의는 "뭐 있어" 표현보다 장보기 문맥을 우선합니다.
+    if "장보기" in normalized:
+        return _route_result(analyze_shopping_intent(text) or "shopping.current")
+    # 목록 조회 표현은 등록 같은 단어가 포함돼도 재료 추가 요청으로 처리하지 않습니다.
+    if (
+        not _is_guide_query(text)
+        and not _is_alarm_calendar_query(text)
+        and any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS)
+    ):
+        return _route_result("inventory.list")
     is_receipt_query = _is_receipt_query(text)
 
     if text.startswith(SIGNED_CONFIRM_PREFIX):

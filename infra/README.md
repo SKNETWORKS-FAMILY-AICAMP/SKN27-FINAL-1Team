@@ -35,6 +35,7 @@ $env:VITE_API_URL="https://api.bobbeori.com"
 $env:VITE_KAKAO_CLIENT_ID="KAKAO_CLIENT_ID"
 $env:VITE_NAVER_CLIENT_ID="NAVER_CLIENT_ID"
 $env:VITE_GOOGLE_CLIENT_ID="GOOGLE_CLIENT_ID"
+$env:VITE_GA_MEASUREMENT_ID="G-XXXXXXXXXX"
 npm run build
 cd ../../infra
 npx aws-cdk bootstrap aws://ACCOUNT_ID/ap-northeast-2
