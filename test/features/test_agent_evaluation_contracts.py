@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from ai.agents.general_food_agent import general_food_agent
 from ai.agents.guide_agent.guide_agent import answer_guide_query
 from ai.agents.inventory_agent import inventory_agent
+from ai.agents.inventory_agent.inventory_utils import _extract_delete_name, _extract_quantity
 from ai.agents.recipe_agent.recipe_agent import build_supervisor_result
 from ai.agents.recipe_agent.recipe_state import RecipeAction, RecipeAgentReply, RecipeSource
 
@@ -122,3 +123,11 @@ def test_inventory_agent_reasks_when_one_of_multiple_add_quantities_is_missing()
     assert "식재료와 개수를 함께" in result["response_text"]
     assert result["slots"] == {"inventory_pending": {"action": "add_many"}}
     assert "actions" not in result
+
+
+def test_inventory_partial_delete_uses_requested_quantity_and_clean_name():
+    """전체 보유량과 일부 폐기량이 함께 있으면 실제 폐기량과 재료명을 정확히 추출해야 합니다."""
+    text = "감자 5개 중 2개만 버릴게"
+
+    assert _extract_quantity(text) == 2
+    assert _extract_delete_name(text) == "감자"

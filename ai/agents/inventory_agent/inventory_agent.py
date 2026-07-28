@@ -22,6 +22,7 @@ from ai.agents.inventory_agent.inventory_utils import (
     _quantity_text,
     _confirm_action,
     _pending_add_from_history,
+    _pending_add_many_from_history,
     _pending_add_storage_from_history,
     _pending_consume_from_history,
     _storage_choice_response,
@@ -294,6 +295,10 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
     """냉장고 에이전트의 단일 진입점입니다."""
     pending = (slots or {}).get("inventory_pending")
     pending = pending if isinstance(pending, dict) else {}
+
+    # 직전 복수 재료 수량 질문이 있으면 흔들린 intent보다 대기 문맥을 우선합니다.
+    if intent == "inventory.action" and _pending_add_many_from_history(history):
+        intent = "inventory.pending_add_many"
 
     if intent == "action.confirm":
         parts = text.split(":")

@@ -65,6 +65,13 @@ def _quantity_text(quantity: float) -> str:
 
 def _extract_quantity(text: str) -> float | None:
     """문장에서 숫자 또는 한글 수량을 추출합니다."""
+    partial_match = re.search(
+        r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?\s*중(?:에서)?\s*(\d+(?:\.\d+)?)",
+        text,
+        re.IGNORECASE,
+    )
+    if partial_match:
+        return float(partial_match.group(1))
     match = re.search(r"(\d+(?:\.\d+)?)\s*(?:개|피스|g|kg|ml|l)?", text, re.IGNORECASE)
     if match:
         return float(match.group(1))
@@ -82,11 +89,14 @@ def _is_all_quantity_request(text: str) -> bool:
 
 
 def _extract_delete_name(text: str) -> str:
-    target = text
-    for word in DELETE_WORDS:
-        if word in target:
-            target = target.split(word, 1)[0]
-            break
+    """폐기 문장에서 수량과 명령 표현을 제외한 식재료명만 추출합니다."""
+    target = re.split(r"(?:삭제|폐기|지워|버릴|버리|버려)", text, maxsplit=1)[0]
+    target = re.sub(
+        r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?\s*중(?:에서)?\s*\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?\s*만?",
+        " ",
+        target,
+        flags=re.IGNORECASE,
+    )
     target = re.sub(r"\d+(?:\.\d+)?\s*(?:개|피스|g|kg|ml|l)?", " ", target, flags=re.IGNORECASE)
     for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료", "어제", "오늘", "방금"):
         target = target.replace(token, " ")
