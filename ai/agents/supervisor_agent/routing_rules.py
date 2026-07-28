@@ -1,7 +1,7 @@
 import re
 
 _RECIPE_RECOMMEND_PHRASES = (
-    "뭐해먹", "뭐먹", "만들어먹", "요리추천", "메뉴추천", "추천메뉴", "냉장고파먹",
+    "뭐해먹", "뭐먹", "만들어먹", "만들수", "만들수있", "요리추천", "메뉴추천", "추천메뉴", "냉장고파먹",
 )
 _RECIPE_SEARCH_PHRASES = ("레시피", "요리법", "요리방법")
 _GUIDE_PHRASES = (
@@ -143,7 +143,7 @@ def _is_cooking_time_question(text: str) -> bool:
 def _is_expiring_question(text: str) -> bool:
     """소비기한 임박 재료를 묻는 질문인지 먼저 확인합니다."""
     normalized = text.replace(" ", "").lower()
-    return any(word in normalized for word in ("상하는", "임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이"))
+    return any(word in normalized for word in ("상하는", "임박", "소비임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이"))
 
 def _build_read_tasks(text: str) -> list[dict[str, str]]:
     """복합 조회 요청을 기존 Agent가 처리할 순차 작업 목록으로 분해합니다."""
