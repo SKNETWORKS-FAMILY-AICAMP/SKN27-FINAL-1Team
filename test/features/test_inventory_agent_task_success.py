@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from ai.agents.inventory_agent.inventory_agent import execute_inventory_action
+from ai.agents.inventory_agent.inventory_agent import execute_inventory_action, get_inventory_list, run_inventory_agent
 from app.backend.db.models import FridgeItem
 from app.backend.schemas.inventory import IngredientCreate
 from app.backend.services.inventory_service.inventory_service import inventory_service
@@ -181,3 +181,51 @@ def test_inventory_add_action_creates_item_in_test_db(monkeypatch, name, quantit
 
     assert result["slots"] == {"inventory_pending": None}
     assert _active_quantity(db, name) == Decimal(str(quantity))
+
+def test_inventory_storage_change_action_updates_only_target_item():
+    """보관 위치 변경 확인 명령은 대상 재료 한 건의 위치만 변경해야 합니다."""
+    db = _test_db()
+    _seed_item(db, name="감자", quantity=2, storage="냉장")
+    _seed_item(db, name="양파", quantity=1, storage="실온")
+
+    result = execute_inventory_action(
+        "change_storage",
+        ["confirm", "change_storage", "감자", "냉동"],
+        db,
+        user_id=1,
+    )
+
+    potato = db.query(FridgeItem).filter(FridgeItem.display_name == "감자").one()
+    onion = db.query(FridgeItem).filter(FridgeItem.display_name == "양파").one()
+    assert "냉동" in result["response_text"]
+    assert potato.storage_location == "냉동"
+    assert onion.storage_location == "실온"
+
+
+def test_inventory_list_filters_by_requested_storage():
+    """보관 위치를 지정한 재고 조회는 해당 위치의 재료만 보여줘야 합니다."""
+    db = _test_db()
+    _seed_item(db, name="감자", quantity=1, storage="냉장")
+    _seed_item(db, name="새우", quantity=1, storage="냉동")
+
+    reply = get_inventory_list(db, user_id=1, storage="냉동")
+
+    assert "냉동" in reply
+    assert "새우" in reply
+    assert "감자" not in reply
+
+def test_inventory_storage_change_request_returns_confirmation_action():
+    """자연어 보관 위치 변경 요청은 실행 전에 확인 버튼을 제공해야 합니다."""
+    db = _test_db()
+    _seed_item(db, name="감자", quantity=1, storage="냉장")
+
+    result = run_inventory_agent(
+        "inventory.storage_change",
+        "감자 보관 위치를 냉동으로 바꿔줘",
+        [],
+        db,
+        user_id=1,
+    )
+
+    assert "감자 보관 위치를 냉동으로 변경할까요?" == result["response_text"]
+    assert result["actions"][0]["label"] == "확인"

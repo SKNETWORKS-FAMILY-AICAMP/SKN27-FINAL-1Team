@@ -413,6 +413,26 @@ def test_guide_context_switch_uses_latest_ingredient():
     assert result["response_text"] == "양파 보관법이에요."
 
 
+def test_guide_follow_up_reuses_previous_ingredient_and_guide_type():
+    """가이드 후속 질문은 직전 식재료와 가이드 유형으로 복원합니다."""
+    received = []
+
+    class GuideService:
+        def _reply_guide(self, text):
+            received.append(text)
+            return {"response_text": "감자 냉동 보관법이에요.", "actions": [], "sources": []}
+
+    result = supervisor_agent.guide_agent_node(
+        {
+            "text": "그럼 냉동 보관은?",
+            "slots": {"ingredient": "감자", "guide_type": "storage"},
+            "service": GuideService(),
+        }
+    )
+
+    assert received == ["감자 냉동 보관법"]
+    assert result["response_text"] == "감자 냉동 보관법이에요."
+
 def test_context_switch_cancel_word_stops_pending_request():
     """새 명령이 없는 번복 표현은 진행 중 작업을 취소합니다."""
     history = [SimpleNamespace(role="bot", text="두부를 몇 개 추가하시겠어요?", intent="inventory.action")]
@@ -420,3 +440,18 @@ def test_context_switch_cancel_word_stops_pending_request():
     result = supervisor_agent.router_node({"text": "아니다", "history": history})
 
     assert result["intent"] == "action.cancel"
+
+
+def test_supervisor_rewrites_guide_queries_for_domain_agent():
+    """가이드 질문은 식재료명과 조회 유형이 분명한 문장으로 정규화합니다."""
+    assert supervisor_utils._rewrite_guide_query("감자와 비슷한 식재료도 알려줘") == "감자 뭐가 있어?"
+    assert supervisor_utils._rewrite_guide_query("양파 깨끗하게 세척하는 방법") == "양파 세척법 알려줘"
+    assert supervisor_utils._rewrite_guide_query("고추 영양성분과 칼로리 알려줘") == "고추 영양성분 알려줘"
+
+
+def test_supervisor_normalizes_shopping_create_question_suffix():
+    """장보기 추가 의문형 어미가 상품명으로 전달되지 않게 정리합니다."""
+    normalized = supervisor_utils._normalize_shopping_create_query("우유 2개를 장보기 목록에 추가할까?")
+
+    assert normalized == "우유 2개를 장보기 목록 추가해줘"
+    assert "할까" not in normalized
