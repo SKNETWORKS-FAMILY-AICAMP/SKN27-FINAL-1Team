@@ -319,8 +319,18 @@ def _inherit_route_context(payload: dict[str, Any], previous_intent: str | None,
 
 
 def _rewrite_guide_query(text: str) -> str:
-    """정정 표현이 포함된 가이드 질문에서 마지막 식재료 질문만 남깁니다."""
-    return re.sub(r"^.+?(?:말고|대신)\s+", "", text).strip()
+    """Guide Agent가 식재료명과 조회 유형을 정확히 읽도록 질문을 정규화합니다."""
+    query = re.sub(r"^.+?(?:말고|대신)\s+", "", text).strip()
+    related = re.match(r"^(.+?)(?:와|과)\s*비슷한\s*식재료", query)
+    if related:
+        return f"{related.group(1).strip()} 뭐가 있어?"
+    washing = re.match(r"^(.+?)\s*깨끗하게\s*세척하는\s*방법", query)
+    if washing:
+        return f"{washing.group(1).strip()} 세척법 알려줘"
+    nutrition = re.match(r"^(.+?)\s*영양성분(?:과|와)\s*칼로리", query)
+    if nutrition:
+        return f"{nutrition.group(1).strip()} 영양성분 알려줘"
+    return query
 
 
 def _is_shopping_show_all_request(text: str) -> bool:
@@ -332,12 +342,65 @@ def _is_shopping_show_all_request(text: str) -> bool:
 
 
 def _normalize_shopping_create_query(text: str) -> str:
-    """장보기 위치 조사만 제거해 실제 상품명이 오염되지 않도록 정리합니다."""
-    return re.sub(
+    """장보기 추가 질문의 의문형 어미와 위치 조사로 상품명이 오염되지 않게 정리합니다."""
+    query = re.sub(
         r"((?:장보기|쇼핑)(?:\s*목록)?|구매\s*(?:목록|리스트))\s*(?:에서|에)",
         r"\1 ",
         text,
-    ).strip()
+    )
+    query = re.sub(r"(?:추가|담아|넣어)(?:할까|할까요)\??$", "추가해줘", query.strip())
+    return re.sub(r"\s+", " ", query).strip()
+
+
+def _is_shopping_history_request(text: str) -> bool:
+    """현재 목록이 아니라 과거 구매 기록을 묻는 장보기 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    return any(word in normalized for word in ("기록", "내역", "히스토리", "지난")) and any(
+        word in normalized for word in ("산", "구매", "샀")
+    )
+
+
+def _shopping_requested_quantity(text: str) -> str | None:
+    """장보기 추가 질문에 명시된 수량을 사용자 안내용 문자열로 추출합니다."""
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(개|g|kg|ml|l|봉|팩|묶음)", text, re.IGNORECASE)
+    return f"{match.group(1)}{match.group(2)}" if match else None
+
+
+def _truncated_shopping_count(history: list[Any] | None) -> int | None:
+    """직전 장보기 응답에서 생략됐다고 안내한 품목 수를 복원합니다."""
+    for message in reversed(history or []):
+        role = message.get("role") if isinstance(message, dict) else getattr(message, "role", "")
+        content = message.get("text", "") if isinstance(message, dict) else getattr(message, "text", "")
+        if role != "bot":
+            continue
+        match = re.search(r"외\s*(\d+)개", content or "")
+        return int(match.group(1)) if match else None
+    return None
+
+
+def _should_use_food_fallback(domain: str, query: str, response_text: str) -> bool:
+    """도메인 응답이 질문의 핵심 조건을 놓쳤을 때 일반 음식 답변으로 보완할지 판단합니다."""
+    normalized_query = _normalize_text(query)
+    normalized_response = _normalize_text(response_text)
+    if domain == "recipe":
+        if any(marker in normalized_response for marker in ("찾지못", "서비스에없", "추천하기어려", "등록되어있지않")):
+            return True
+        excluded = re.match(r"^(.+?)(?:없이|대신)", query.strip())
+        return bool(excluded and _normalize_text(excluded.group(1)) in normalized_response)
+    if domain == "guide":
+        if "비슷한식재료" in normalized_query and not any(
+            marker in normalized_response for marker in ("관련식재료", "비슷한식재료", "후보")
+        ):
+            return True
+        if any(word in normalized_query for word in ("세척", "영양", "칼로리")) and "비슷한식재료를찾았어요" in normalized_response:
+            return True
+        if "상했" in normalized_query and not any(
+            word in normalized_response for word in ("냄새", "물러", "곰팡이", "변색", "썩")
+        ):
+            return True
+        storage = next((word for word in ("냉장", "냉동", "실온") if word in normalized_query), None)
+        return bool(storage and storage not in normalized_response)
+    return False
 
 
 def _normalize_shopping_delete_query(text: str) -> str:

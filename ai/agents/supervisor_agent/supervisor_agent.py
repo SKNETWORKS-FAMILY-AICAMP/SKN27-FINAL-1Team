@@ -1,4 +1,5 @@
 import logging
+import re
 
 from langgraph.graph import END, StateGraph
 
@@ -12,6 +13,7 @@ from ai.agents.inventory_agent.inventory_utils import (
     _extract_add_items,
     _extract_quantity,
     _is_all_quantity_request,
+    _is_storage_change_request,
     ADD_WORDS,
     DELETE_WORDS,
     CONSUME_WORDS,
@@ -66,7 +68,11 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _SHOPPING_WRITE_INTENTS,
     _is_shopping_show_all_request,
     _inherit_route_context,
+    _is_shopping_history_request,
     _normalize_shopping_create_query,
+    _shopping_requested_quantity,
+    _should_use_food_fallback,
+    _truncated_shopping_count,
     _normalize_shopping_delete_query,
     _parse_alarm_request,
     _rewrite_guide_query,
@@ -123,6 +129,8 @@ def _route_write_request(
     shopping_intent = analyze_shopping_intent(text)
     if shopping_intent in _SHOPPING_WRITE_INTENTS:
         return _route_result(shopping_intent)
+    if not is_receipt_query and _is_storage_change_request(text):
+        return _route_result("inventory.storage_change")
     if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
         return _route_result("inventory.delete")
     if not is_receipt_query and not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
@@ -382,9 +390,18 @@ def inventory_agent_node(state: GraphState) -> dict:
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 
+def _general_food_fallback(state: GraphState, query: str | None = None) -> dict:
+    """도메인 Agent가 핵심 조건을 놓쳤을 때 일반 음식 Agent로 한 번만 보완합니다."""
+    from ai.agents.general_food_agent import run_general_food
+
+    result = _run_agent_with_retry(
+        lambda: run_general_food(query or state["text"], history=state.get("history", []))
+    )
+    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
+
+
 def guide_agent_node(state: GraphState) -> dict:
     """식재료 가이드 요청을 Guide Agent에 전달합니다."""
-    # 정정 표현이 있으면 마지막에 선택한 식재료 질문만 가이드에 전달합니다.
     query = _rewrite_guide_query(state["text"])
     slots = state.get("slots") or {}
     ingredient = slots.get("ingredient") or slots.get("keyword")
@@ -398,17 +415,24 @@ def guide_agent_node(state: GraphState) -> dict:
     normalized = _normalize_text(query)
     if ingredient and guide_type in guide_labels and (
         "물어보" in normalized
+        or normalized.startswith("그럼")
         or (guide_type == "storage" and any(phrase in normalized for phrase in ("넣으면되", "넣어도되", "둬도되", "두면되", "보관해도되")))
     ):
-        # 직전 가이드 질문을 설명하는 문장은 저장된 식재료와 유형으로 복원합니다.
         query = f"{ingredient} {guide_labels[guide_type]}"
+    if ingredient and guide_type == "storage" and any(storage in normalized for storage in ("냉장", "냉동", "실온")):
+        storage = next(storage for storage in ("냉장", "냉동", "실온") if storage in normalized)
+        query = f"{ingredient} {storage} 보관법"
+
     result = _run_agent_with_retry(lambda: state["service"]._reply_guide(query))
-    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
+    normalized_result = _normalize_agent_result(result, inherited_slots=state.get("slots"))
+    if _should_use_food_fallback("guide", query, normalized_result.get("response_text", "")):
+        return _general_food_fallback(state, query)
+    return normalized_result
+
 
 def recipe_agent_node(state: GraphState) -> dict:
     """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
     query = state["text"]
-    # 보유 재료를 반영하는 메뉴 추천은 사용자 냉장고 정보가 필요합니다.
     if state.get("intent") == "recipe.recommend" and not state.get("user_id"):
         return _normalize_agent_result(
             {"response_text": LOGIN_REQUIRED_REPLY},
@@ -416,7 +440,6 @@ def recipe_agent_node(state: GraphState) -> dict:
         )
     expiring_ingredients = (state.get("slots") or {}).get("expiring_ingredients") or []
     if state.get("intent") == "recipe.recommend" and expiring_ingredients:
-        # 직전 임박 재료 조회 결과를 추천 조건으로 명시해 후속 질문의 문맥을 보존합니다.
         ingredient_names = ", ".join(expiring_ingredients)
         query = f"임박 재료({ingredient_names})를 우선 활용하고 현재 냉장고 재료를 고려한 레시피를 추천해줘"
 
@@ -430,7 +453,12 @@ def recipe_agent_node(state: GraphState) -> dict:
             intent=state.get("intent"),
         )
     )
-    return _normalize_agent_result(result, inherited_slots=state.get("slots"))
+    normalized_result = _normalize_agent_result(result, inherited_slots=state.get("slots"))
+    if _should_use_food_fallback("recipe", state["text"], normalized_result.get("response_text", "")):
+        return _general_food_fallback(state)
+    if any(phrase in _normalize_text(state["text"]) for phrase in ("말고다른", "다른메뉴")):
+        normalized_result["response_text"] = "이전에 본 메뉴와 겹치지 않는 다른 후보예요.\n" + normalized_result["response_text"]
+    return normalized_result
 
 def receipt_guide_node(state: GraphState) -> dict:
     """영수증 OCR 화면 이동 액션을 안내합니다."""
@@ -455,37 +483,61 @@ def shopping_agent_node(state: GraphState) -> dict:
     """장보기 관리를 Shopping Agent로 위임합니다."""
     from ai.agents.shopping_agent.shopping_agent import run_shopping_agent
 
-    if state.get("intent") != "shopping.price_help" and not state.get("user_id"):
+    intent = state.get("intent", "")
+    text = state["text"]
+    if _is_shopping_price_explanation(text):
+        intent = "shopping.price_help"
+    elif _is_shopping_history_request(text):
+        intent = "shopping.history"
+
+    if intent != "shopping.price_help" and not state.get("user_id"):
         return _normalize_agent_result({"response_text": LOGIN_REQUIRED_REPLY}, inherited_slots=state.get("slots"))
 
-    # 가격 비교 후속 표현은 제거하고 실제 상품명만 Shopping Agent에 전달합니다.
-    text = state["text"]
-    if state.get("intent") == "shopping.create":
+    requested_quantity = _shopping_requested_quantity(text) if intent == "shopping.create" else None
+    if intent == "shopping.create":
         text = _normalize_shopping_create_query(text)
-    if state.get("intent") == "shopping.delete_item":
+    if intent == "shopping.delete_item":
         text = _normalize_shopping_delete_query(text)
     compare_text = _strip_shopping_compare_suffix(text)
-    if state.get("intent") == "shopping.compare" and not (state.get("slots") or {}).get("shopping_flow"):
+    if intent == "shopping.compare" and not (state.get("slots") or {}).get("shopping_flow"):
         compare_text = (state.get("slots") or {}).get("shopping_product") or compare_text
 
     result = _run_agent_with_retry(
         lambda: run_shopping_agent(
             text=compare_text or text,
-            intent=state.get("intent", ""),
+            intent=intent,
             history=state.get("history", []),
             slots=state.get("slots", {}),
             db=state.get("db"),
             user_id=state.get("user_id"),
         ),
-        enabled=state.get("intent") not in _SHOPPING_WRITE_INTENTS,
+        enabled=intent not in _SHOPPING_WRITE_INTENTS,
     )
-    if state.get("intent") == "shopping.compare":
+    response_text = result.get("response_text", "") if isinstance(result, dict) else ""
+    omitted_count = _truncated_shopping_count(state.get("history"))
+    if intent == "shopping.current" and _is_shopping_show_all_request(state["text"]) and omitted_count and "목록이 없어요" in response_text:
+        result = {
+            "response_text": (
+                f"앞선 응답에서 생략된 {omitted_count}개 품목은 대화 기록에 이름이 남아 있지 않아 바로 나열할 수 없어요. "
+                "전체 품목은 장보기 목록 화면에서 확인해주세요."
+            ),
+            "actions": [{"label": "장보기 목록 보기", "url": "/shopping-list"}],
+        }
+    elif requested_quantity and "장보기 목록에 추가할까요" in response_text:
+        item_name = response_text.split("를 장보기 목록에 추가할까요", 1)[0].strip()
+        result["response_text"] = (
+            f"{item_name} {requested_quantity}를 구매할 품목으로 장보기 목록에 추가할까요? "
+            "현재 목록은 품목 단위로 저장되며 수량은 장보기 화면에서 조정할 수 있어요."
+        )
+
+    if intent == "shopping.compare":
         from ai.agents.shopping_agent.shopping_utils import extract_ingredient_names
 
         products = extract_ingredient_names(compare_text or text)
         if products:
             result["slots"] = {**(result.get("slots") or {}), "shopping_product": products[0]}
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
+
 
 def alarm_agent_node(state: GraphState) -> dict:
     """캘린더 및 알림 관리를 Alarm Agent로 위임합니다."""
@@ -506,6 +558,20 @@ def alarm_agent_node(state: GraphState) -> dict:
         enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
     result = _alarm_result_to_state(agent_result)
+    normalized_text = _normalize_text(state["text"])
+    if result.get("response_text") == "등록된 알림 목록이에요." and "이번주" in normalized_text:
+        keyword_match = re.search(r"이번\s*주\s*(.+?)\s*관련\s*알림", state["text"])
+        keyword = keyword_match.group(1).strip() if keyword_match else "요청한 조건"
+        result["response_text"] = (
+            f"이번 주 {keyword} 관련 알림을 조회했어요. "
+            "표시되는 항목이 없다면 해당 조건으로 등록된 알림이 없는 상태예요."
+        )
+    elif "등록할까요" in result.get("response_text", "") and not any(
+        word in normalized_text for word in ("오전", "오후", "시", "분")
+    ):
+        result["response_text"] = result["response_text"].replace(
+            "등록할까요", "시간이 지정되지 않아 기본 시간으로 등록할까요"
+        )
     return _normalize_agent_result(result, inherited_slots=state.get("slots"))
 
 def general_food_agent_node(state: GraphState) -> dict:
