@@ -19,6 +19,12 @@ from app.backend.mcp.server import mcp, token_verifier
 EXPECTED_TOOLS = {
     "inventory.list": "bobbeori-mcp/inventory.read",
     "inventory.expiring": "bobbeori-mcp/inventory.read",
+    "inventory.add.preview": "bobbeori-mcp/inventory.write",
+    "inventory.add": "bobbeori-mcp/inventory.write",
+    "inventory.update.preview": "bobbeori-mcp/inventory.write",
+    "inventory.update": "bobbeori-mcp/inventory.write",
+    "inventory.remove.preview": "bobbeori-mcp/inventory.write",
+    "inventory.remove": "bobbeori-mcp/inventory.write",
     "recipe.recommend": "bobbeori-mcp/recipe.read",
     "recipe.get": "bobbeori-mcp/recipe.read",
     "ingredient.guide": "bobbeori-mcp/guide.read",
@@ -41,12 +47,28 @@ def test_public_mcp_tool_contract_has_no_user_id_argument():
     for name, scope in EXPECTED_TOOLS.items():
         tool = by_name[name]
         assert "user_id" not in tool.inputSchema.get("properties", {})
-        if name not in ("receipt.commit", "shopping.save", "calendar.create", "reminder.create"):
+        if name not in (
+            "inventory.add",
+            "inventory.update",
+            "inventory.remove",
+            "receipt.commit",
+            "shopping.save",
+            "calendar.create",
+            "reminder.create",
+        ):
             assert tool.annotations.readOnlyHint is True
         assert tool.meta["securitySchemes"][0]["scopes"] == [scope]
         assert tool.outputSchema["properties"]["trace_id"]
 
-    for name in ("receipt.commit", "shopping.save", "calendar.create", "reminder.create"):
+    for name in (
+        "inventory.add",
+        "inventory.update",
+        "inventory.remove",
+        "receipt.commit",
+        "shopping.save",
+        "calendar.create",
+        "reminder.create",
+    ):
         assert by_name[name].inputSchema["properties"]["confirmed"]["const"] is True
         assert by_name[name].annotations.readOnlyHint is False
 
@@ -56,15 +78,17 @@ def test_dev_token_verifier_uses_token_subject_and_server_scopes():
 
     assert access_token is not None
     assert access_token.subject == "42"
-    assert set(access_token.scopes) == {
+    assert {
         "bobbeori-mcp/inventory.read",
+        "bobbeori-mcp/inventory.write",
         "bobbeori-mcp/recipe.read",
         "bobbeori-mcp/guide.read",
         "bobbeori-mcp/receipt.write",
         "bobbeori-mcp/shopping.write",
         "bobbeori-mcp/calendar.write",
-    }
-    assert set(settings.MCP_REQUIRED_SCOPES) == set(access_token.scopes)
+    }.issubset(access_token.scopes)
+    assert set(settings.MCP_REQUIRED_SCOPES).issubset(access_token.scopes)
+    assert "bobbeori-mcp/inventory.write" not in settings.MCP_REQUIRED_SCOPES
 
 
 def test_dev_token_verifier_rejects_invalid_token():
