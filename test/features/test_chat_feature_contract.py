@@ -43,6 +43,62 @@ def test_supervisor_service_maps_graph_state_to_chat_response(monkeypatch):
     }
 
 
+
+def test_menu_recommend_question_overrides_llm_general_misclassification():
+    """메뉴 추천 질문은 LLM이 일반 요리로 분류해도 레시피 Agent로 보정합니다."""
+
+    class FakeService:
+        """LLM이 일반 요리 intent를 반환하는 상황을 재현합니다."""
+
+        def _route_intent_payload_with_llm(self, _text, _history):
+            return {"intent": "food.general", "confidence": 0.8, "slots": {}, "tasks": []}
+
+    result = supervisor_agent.router_node(
+        {"text": "오늘 뭐 해먹지?", "history": [], "service": FakeService()}
+    )
+
+    assert result["intent"] == "recipe.recommend"
+
+
+def test_ingredient_recipe_question_routes_to_recipe_agent():
+    """식재료 활용 메뉴 질문은 레시피 Agent로 라우팅합니다."""
+
+    class FakeService:
+        """LLM의 일반 요리 오분류를 재현합니다."""
+
+        def _route_intent_payload_with_llm(self, _text, _history):
+            return {"intent": "food.general", "confidence": 0.8, "slots": {}, "tasks": []}
+
+    result = supervisor_agent.router_node(
+        {"text": "김치로 만들수있는거", "history": [], "service": FakeService()}
+    )
+
+    assert result["intent"] == "recipe.recommend"
+
+def test_expiring_question_overrides_llm_inventory_list_misclassification():
+    """소비 임박 질문은 LLM이 목록으로 분류해도 임박 재료 조회로 보정합니다."""
+
+    class FakeService:
+        """LLM이 냉장고 목록 intent를 반환하는 상황을 재현합니다."""
+
+        def _route_intent_payload_with_llm(self, _text, _history):
+            return {"intent": "inventory.list", "confidence": 0.8, "slots": {}, "tasks": []}
+
+    result = supervisor_agent.router_node(
+        {"text": "소비 임박재료 뭐 있어?", "history": [], "service": FakeService()}
+    )
+
+    assert result["intent"] == "inventory.expiring"
+
+
+def test_recipe_recommend_requires_login():
+    """비로그인 사용자의 보유 재료 기반 메뉴 추천은 로그인 안내를 반환합니다."""
+    result = supervisor_agent.recipe_agent_node(
+        {"intent": "recipe.recommend", "text": "오늘 뭐 해먹지?", "user_id": None, "slots": {}}
+    )
+
+    assert result["response_text"] == supervisor_utils.LOGIN_REQUIRED_REPLY
+
 def test_chat_route_table_covers_current_feature_nodes():
     expected_routes = {
         "inventory.list": "inventory_agent_node",
