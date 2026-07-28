@@ -31,6 +31,7 @@ function Footer() {
           </Link>
           <p>
             냉장고 속 남은 재료와 소비기한을 기준으로 오늘 먹기 좋은 메뉴를 추천하고,
+            <br className="site-footer__mobile-break" />
             부족한 재료는 장보기까지 이어주는 식재료 절약 서비스입니다.
           </p>
           <a className="site-footer__mail" href="mailto:bobbeori@bobbeori.com">

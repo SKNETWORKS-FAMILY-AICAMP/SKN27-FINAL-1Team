@@ -130,10 +130,13 @@ function FridgeRecipe() {
     <section className="fridge-recipe-page" aria-labelledby="fridge-recipe-title">
       <div className="fridge-recipe-hero">
         <div className="fridge-recipe-hero__copy">
-          <h1 id="fridge-recipe-title">냉장고파먹기</h1>
+          <h1 className="hero-mobile-sr-only" id="fridge-recipe-title">냉장고파먹기</h1>
           <p>
-            지금 냉장고에 있는 재료와 소비 임박 재료를 기준으로 만들기 좋은 메뉴를 추천받아보세요.
-            추천 결과는 저장해서 마이페이지에서 다시 확인할 수 있어요.
+            <span className="hero-desktop-copy">
+              지금 냉장고에 있는 재료와 소비 임박 재료를 기준으로 만들기 좋은 메뉴를 추천받아보세요.
+              추천 결과는 저장해서 마이페이지에서 다시 확인할 수 있어요.
+            </span>
+            <span className="hero-mobile-copy">냉장고 재료로<br />만들기 좋은 메뉴를 추천해요.</span>
           </p>
           <div className="fridge-recipe-hero__actions">
             <button

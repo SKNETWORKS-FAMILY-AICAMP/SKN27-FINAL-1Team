@@ -3048,13 +3048,13 @@ body.is-receipt-crop-resizing * {
 
   .receipt-page {
     width: min(100% - 32px, 430px);
-    padding: 0 0 108px;
+    padding: 0 0 24px;
     overflow-x: hidden;
   }
 
   .receipt-hero {
     min-height: auto;
-    padding: 22px 20px;
+    padding: 12px 20px;
     display: block;
     box-sizing: border-box;
     overflow: hidden;
@@ -3069,9 +3069,11 @@ body.is-receipt-crop-resizing * {
   }
 
   .receipt-hero p {
-    margin-top: 8px;
-    font-size: 12px;
-    line-height: 1.45;
+    margin: 0;
+    color: #5f4635;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.5;
   }
 
   .receipt-hero__image,
@@ -3079,29 +3081,47 @@ body.is-receipt-crop-resizing * {
     display: none;
   }
 
+  .receipt-branch {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #f1dddd;
+  }
+
   .receipt-stepper {
     width: auto;
     margin: 10px -4px 0;
-    padding: 10px 12px;
-    grid-template-columns: repeat(4, minmax(112px, 1fr));
+    padding: 10px 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     border-radius: 18px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .receipt-stepper::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
   }
 
   .receipt-stepper li {
-    justify-content: flex-start;
-    font-size: 11px;
+    justify-content: center;
+    gap: 4px;
+    font-size: 9px;
   }
 
   .receipt-stepper b {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+    box-shadow: 0 0 0 3px #fff7f6;
+  }
+
+  .receipt-stepper li:not(:last-child)::after {
+    left: calc(50% + 29px);
+    right: calc(-50% + 29px);
+  }
+
+  .receipt-stepper li.is-active b {
+    box-shadow:
+      0 0 0 3px #fff7f6,
+      0 4px 10px rgba(211, 73, 86, 0.2);
+  }
+
+  .receipt-stepper span {
+    padding-right: 0;
   }
 
   .receipt-branch {
@@ -3351,6 +3371,12 @@ body.is-receipt-crop-resizing * {
     padding: 0 10px;
     box-sizing: border-box;
     overflow-x: hidden;
+  }
+
+  .receipt-page {
+    width: min(100% - 32px, 430px);
+    max-width: 430px;
+    padding: 0 0 24px;
   }
   .receipt-mapping-row {
     display: flex !important;

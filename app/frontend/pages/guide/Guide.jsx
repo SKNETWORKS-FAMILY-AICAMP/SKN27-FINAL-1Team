@@ -8,7 +8,7 @@ import { API_URL } from '../../utils/api.js'
 import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/ingredientImages.js'
 
 const GUIDE_PAGE_SIZE = 12
-const FRIDGE_PAGE_SIZE = 16
+const FRIDGE_PAGE_SIZE = 8
 const GUEST_RECOMMENDATION_PAGE_SIZE = 8
 const GUIDE_SCROLL_POSITION_KEY = 'guide-scroll-position'
 const SEASONAL_RECOMMENDATION_SIZE = 60
@@ -237,7 +237,6 @@ function Guide() {
   const [page, setPage] = useState(1)
   const [guideItems, setGuideItems] = useState([])
   const [seasonalGuideItems, setSeasonalGuideItems] = useState([])
-  const [totalCount, setTotalCount] = useState(0)
   const [hasNextPage, setHasNextPage] = useState(false)
   const [selectedGuide, setSelectedGuide] = useState(null)
   const [recommendedRecipes, setRecommendedRecipes] = useState([])
@@ -245,6 +244,7 @@ function Guide() {
   const [recipeSlideDirection, setRecipeSlideDirection] = useState('next')
   const recipeDragStartX = useRef(null)
   const recipeDidDrag = useRef(false)
+  const loadMoreRef = useRef(null)
   const [isListLoading, setIsListLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isRecipeLoading, setIsRecipeLoading] = useState(false)
@@ -337,14 +337,19 @@ function Guide() {
         })
         if (!response.ok) throw new Error('식재료 가이드를 불러오지 못했습니다.')
         const data = await response.json()
-        setGuideItems(data.items || [])
-        setTotalCount(data.total || 0)
+        setGuideItems((current) => {
+          const items = data.items || []
+          if (page === 1) return items
+          const loadedCodes = new Set(current.map((item) => item.code))
+          return [...current, ...items.filter((item) => !loadedCodes.has(item.code))]
+        })
         setHasNextPage(Boolean(data.has_next))
       } catch (error) {
         if (error.name !== 'AbortError') {
           setErrorMessage(error.message)
-          setGuideItems([])
-          setTotalCount(0)
+          if (page === 1) {
+            setGuideItems([])
+          }
           setHasNextPage(false)
         }
       } finally {
@@ -357,6 +362,21 @@ function Guide() {
       window.clearTimeout(timer)
     }
   }, [page, searchTerm, selectedMajorCategory, selectedMiddleCategory])
+
+  useEffect(() => {
+    if (isDetailPage || isListLoading || !hasNextPage || !loadMoreRef.current) return undefined
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return
+        observer.disconnect()
+        setPage((current) => current + 1)
+      },
+      { rootMargin: '240px 0px' },
+    )
+    observer.observe(loadMoreRef.current)
+    return () => observer.disconnect()
+  }, [hasNextPage, isDetailPage, isListLoading])
 
   useEffect(() => {
     if (isDetailPage || isListLoading) return undefined
@@ -628,7 +648,7 @@ function Guide() {
   const featuredTotalPages = isLoggedIn ? fridgeTotalPages : guestTotalPages
   const canPageFeaturedIngredients = featuredTotalPages > 1
   const featuredIngredients = isLoggedIn ? fridgeFeaturedIngredients : guestSuggestions
-  const totalPages = Math.max(1, Math.ceil(totalCount / GUIDE_PAGE_SIZE))
+  const mobileFeaturedIngredients = isLoggedIn ? fridgeIngredients : guestRecommendationItems
   const guideTips = useMemo(() => buildGuideTips(selectedGuide), [selectedGuide])
   const visibleGuideTips = useMemo(
     () => guideTips.filter((tip) => !tip.isMissing || shouldShowMissingGuideTip(selectedGuide, tip)),
@@ -719,11 +739,6 @@ function Guide() {
     </button>
   )
 
-  const goToPage = (nextPage) => {
-    const normalizedPage = Math.min(Math.max(Number(nextPage) || 1, 1), totalPages)
-    setPage(normalizedPage)
-  }
-
   const openSuggestionForm = () => {
     setSuggestionMessage('')
     if (!isLoggedIn) {
@@ -783,8 +798,11 @@ function Guide() {
         <>
       <div className="guide-hero">
         <div className="guide-hero__copy">
-          <h1 id="guide-title">식재료 가이드</h1>
-          <p>재료별 보관, 손질, 세척, 신선도 팁을 한눈에 확인해요!</p>
+          <h1 className="hero-mobile-sr-only" id="guide-title">식재료 가이드</h1>
+          <p>
+            <span className="hero-desktop-copy">재료별 보관, 손질, 세척, 신선도 팁을 한눈에 확인해요!</span>
+            <span className="hero-mobile-copy">보관법부터 영양성분까지<br />한눈에 확인해요.</span>
+          </p>
         </div>
 
         <div className="guide-search-wrap">
@@ -872,7 +890,7 @@ function Guide() {
             </button>
           ) : null}
           <div
-            className="guide-ingredient-list"
+            className="guide-ingredient-list guide-ingredient-list--desktop"
             aria-label={isLoggedIn ? '내 냉장고 재료 목록' : '추천 식재료 목록'}
           >
           {featuredIngredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge: isLoggedIn }))}
@@ -887,6 +905,24 @@ function Guide() {
             </div>
           ) : null}
           {!isLoggedIn && !isListLoading && guestSuggestions.length === 0 ? (
+            <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
+          ) : null}
+          </div>
+          <div
+            className="guide-ingredient-list guide-ingredient-list--mobile"
+            aria-label={isLoggedIn ? '내 냉장고 재료 스와이프 목록' : '추천 식재료 스와이프 목록'}
+          >
+          {mobileFeaturedIngredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge: isLoggedIn }))}
+          {isLoggedIn && isFridgeLoading ? <p className="guide-empty">냉장고 재료를 불러오는 중입니다.</p> : null}
+          {isLoggedIn && !isFridgeLoading && fridgeErrorMessage ? (
+            <p className="guide-empty">{fridgeErrorMessage}</p>
+          ) : null}
+          {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
+            <div className="guide-empty guide-fridge-empty">
+              <span className="guide-fridge-empty__mobile">등록된 재료가 없습니다.</span>
+            </div>
+          ) : null}
+          {!isLoggedIn && !isListLoading && guestRecommendationItems.length === 0 ? (
             <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
           ) : null}
           </div>
@@ -964,12 +1000,6 @@ function Guide() {
             ) : null}
           </div>
 
-          <div className="guide-all__header">
-            <span className="guide-list-summary">
-              {isListLoading ? '불러오는 중' : `${totalCount}개 · ${page}/${totalPages}`}
-            </span>
-          </div>
-
           <div className="guide-all-list" aria-label="전체 재료 목록">
             {guideItems.map((ingredient) => (
               <button
@@ -984,28 +1014,13 @@ function Guide() {
                   label={ingredient.name}
                   src={getGuideIcon(ingredientImageCatalog, ingredient)}
                 />
-                <div>
-                  <strong>{ingredient.name}</strong>
-                  <p>{formatCategory(ingredient) || '분류 정보 없음'}</p>
-                  <small>{formatMonths(ingredient.seasonal_months)}</small>
-                </div>
-                <span aria-hidden="true" />
+                <strong>{ingredient.name}</strong>
               </button>
             ))}
           </div>
 
-          <div className="guide-pagination" aria-label="식재료 목록 페이지">
-            <button type="button" disabled={page <= 1 || isListLoading} onClick={() => goToPage(page - 1)}>
-              이전
-            </button>
-
-            <span className="guide-pagination__status" aria-current="page">
-              {page} / {totalPages}
-            </span>
-
-            <button type="button" disabled={!hasNextPage || isListLoading} onClick={() => goToPage(page + 1)}>
-              다음
-            </button>
+          <div className="guide-infinite-loader" ref={loadMoreRef} aria-live="polite">
+            {isListLoading && guideItems.length ? '목록을 불러오는 중' : ''}
           </div>
         </section>
       ) : (
