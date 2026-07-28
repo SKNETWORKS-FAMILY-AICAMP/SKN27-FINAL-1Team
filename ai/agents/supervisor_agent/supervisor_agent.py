@@ -185,6 +185,7 @@ def _route_read_fallback(
     if (
         not _is_guide_query(text)
         and not _is_alarm_calendar_query(text)
+        and not _is_expiring_question(text)
         and any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS)
     ):
         return _route_result("inventory.list")
@@ -249,6 +250,7 @@ def router_node(state: GraphState) -> dict:
     if (
         not _is_guide_query(text)
         and not _is_alarm_calendar_query(text)
+        and not _is_expiring_question(text)
         and any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS)
     ):
         return _route_result("inventory.list")
@@ -329,6 +331,12 @@ def router_node(state: GraphState) -> dict:
         # 전담 Agent가 없는 명확한 일반 요리 질문은 잘못 분류된 LLM 결과만 보정합니다.
         if _is_food_general_query(text):
             route_payload = {**route_payload, "intent": "food.general", "confidence": 1.0, "tasks": []}
+        # 메뉴 추천 표현은 일반 요리 지식 응답 대신 레시피 추천으로 보정합니다.
+        elif _is_recipe_recommend_query(text):
+            route_payload = {**route_payload, "intent": "recipe.recommend", "confidence": 1.0, "tasks": []}
+        # 소비기한·임박 표현은 냉장고 목록이 아닌 임박 재료 조회로 보정합니다.
+        elif _is_expiring_question(text):
+            route_payload = {**route_payload, "intent": "inventory.expiring", "confidence": 1.0, "tasks": []}
         if route_payload.get("intent") == "shopping.compare":
             route_slots = route_payload.get("slots") or {}
             current_product = (
@@ -400,6 +408,12 @@ def guide_agent_node(state: GraphState) -> dict:
 def recipe_agent_node(state: GraphState) -> dict:
     """레시피 검색/추천 요청을 Recipe Agent로 위임합니다."""
     query = state["text"]
+    # 보유 재료를 반영하는 메뉴 추천은 사용자 냉장고 정보가 필요합니다.
+    if state.get("intent") == "recipe.recommend" and not state.get("user_id"):
+        return _normalize_agent_result(
+            {"response_text": LOGIN_REQUIRED_REPLY},
+            inherited_slots=state.get("slots"),
+        )
     expiring_ingredients = (state.get("slots") or {}).get("expiring_ingredients") or []
     if state.get("intent") == "recipe.recommend" and expiring_ingredients:
         # 직전 임박 재료 조회 결과를 추천 조건으로 명시해 후속 질문의 문맥을 보존합니다.

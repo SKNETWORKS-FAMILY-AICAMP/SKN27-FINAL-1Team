@@ -17,3 +17,18 @@ def test_guide_and_calendar_lists_keep_their_domain_priority():
 
     assert guide_result["intent"] == "ingredient.guide"
     assert calendar_result["intent"] == "alarm.calendar"
+
+def test_inventory_request_routes_cover_common_user_expressions():
+    """등록·소비·폐기·조회·활용 추천의 대표 표현을 올바른 Agent로 분기합니다."""
+    cases = {
+        "양파 2개 냉장에 추가해줘": "inventory.action",
+        "양파 1개 먹엇어": "inventory.action",
+        "호박 3개 삭제해줘": "inventory.delete",
+        "소비 임박재료 뭐 있어?": "inventory.expiring",
+        "내 냉장고 재료 뭐 있어?": "inventory.list",
+        "김치로 만들수있는거": "recipe.recommend",
+    }
+
+    for text, expected_intent in cases.items():
+        result = router_node({"text": text, "history": []})
+        assert result["intent"] == expected_intent
