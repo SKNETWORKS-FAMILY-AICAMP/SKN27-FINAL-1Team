@@ -85,6 +85,10 @@ function RecipeList() {
 
   const [draftSearchTerm, setDraftSearchTerm] = useState(criteria.query || criteria.ingredient);
 
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+
   const [recipes, setRecipes] = useState([]);
 
   const [total, setTotal] = useState(0);
@@ -143,6 +147,49 @@ function RecipeList() {
 
     lastSearchRef.current = criteriaKey;
   }, [criteriaKey, criteria.query, criteria.ingredient]);
+
+  useEffect(() => {
+    const query = draftSearchTerm.trim();
+    if (!query) {
+      setSearchSuggestions([]);
+      setIsSuggestionsLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsSuggestionsLoading(true);
+      try {
+        const items = [];
+        for (let nextPage = 1; ; nextPage += 1) {
+          const params = new URLSearchParams({
+            query,
+            page: String(nextPage),
+            page_size: "100",
+          });
+          const response = await fetch(`${API_URL}/api/v1/recipes/search?${params}`, {
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error();
+          const data = await response.json();
+          items.push(...(data.items || []));
+          if (!data.has_next) break;
+        }
+        setSearchSuggestions(
+          [...new Map(items.map((recipe) => [recipe.title, recipe])).values()],
+        );
+      } catch (fetchError) {
+        if (fetchError.name !== "AbortError") setSearchSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setIsSuggestionsLoading(false);
+      }
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [draftSearchTerm]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -268,6 +315,17 @@ function RecipeList() {
     });
   };
 
+  const selectSearchSuggestion = (title) => {
+    setDraftSearchTerm(title);
+    setSearchSuggestions([]);
+    navigateToCriteria({
+      ...criteria,
+      query: title,
+      ingredient: "",
+      browseAll: false,
+    });
+  };
+
   const handleFilterChange = (updates) => {
     navigateToCriteria({
       ...criteria,
@@ -370,25 +428,47 @@ function RecipeList() {
 
           <p>
             <span className="hero-desktop-copy">국, 볶음, 반찬, 파스타까지 오늘 끌리는 메뉴를 자유롭게 둘러보세요.</span>
-            <span className="hero-mobile-copy">다양한 레시피를<br />검색하고 둘러보세요.</span>
+            <span className="hero-mobile-copy">다양한 레시피를 검색하고 둘러보세요.</span>
           </p>
 
-          <form
-            className="recipe-list-search"
-            aria-label="레시피 검색"
-            onSubmit={submitSearch}
-          >
-            <span aria-hidden="true" />
+          <div className="recipe-list-search-wrap">
+            <form
+              className="recipe-list-search"
+              aria-label="레시피 검색"
+              onSubmit={submitSearch}
+            >
+              <span aria-hidden="true" />
 
-            <input
-              type="search"
-              placeholder="레시피 이름을 검색해보세요"
-              value={draftSearchTerm}
-              onChange={(event) => setDraftSearchTerm(event.target.value)}
-            />
+              <input
+                type="search"
+                placeholder="레시피 이름을 검색해보세요"
+                value={draftSearchTerm}
+                onChange={(event) => setDraftSearchTerm(event.target.value)}
+              />
 
-            <button type="submit">검색</button>
-          </form>
+              <button type="submit">검색</button>
+            </form>
+
+            {draftSearchTerm.trim() ? (
+              <div className="recipe-list-search-suggestions" aria-live="polite">
+                {isSuggestionsLoading ? (
+                  <p>검색 중...</p>
+                ) : searchSuggestions.length ? (
+                  searchSuggestions.map((recipe) => (
+                    <button
+                      key={recipe.recipe_id}
+                      type="button"
+                      onClick={() => selectSearchSuggestion(recipe.title)}
+                    >
+                      <strong>{recipe.title}</strong>
+                    </button>
+                  ))
+                ) : (
+                  <p>일치하는 레시피가 없습니다.</p>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <ImageSlot className="recipe-list-hero__image" src={imageSearch} />
