@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-from datetime import datetime, timezone
+import json
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Awaitable, Callable, Literal
 
 from fastapi.encoders import jsonable_encoder
@@ -26,7 +27,9 @@ from app.backend.mcp.confirmation import (
 from app.backend.mcp.contracts import ToolResult
 from app.backend.mcp.runtime import db_session, failure, require_user, security, success
 from app.backend.schemas.receipts import ReceiptConfirmItem, ReceiptConfirmRequest
+from app.backend.schemas.inventory import IngredientCreate, InventoryUpdateItem
 from app.backend.schemas.shopping import ShoppingIngredientInput
+from app.backend.services.inventory_service.inventory_service import inventory_service
 from app.backend.services.recommendation_service.recipe_detail_service import recipe_detail_service
 from app.backend.services.shopping_service import shopping_service
 
@@ -84,6 +87,7 @@ async def _run_confirmed(
     confirmation_token: str,
     confirmed: bool,
     executor: Callable[[Session, dict[str, Any]], dict[str, Any] | Awaitable[dict[str, Any]]],
+    preview_action: str | None = None,
 ) -> ToolResult:
     if confirmed is not True:
         return failure(ValueError("Explicit confirmation is required. Run preview and confirm it first."))
@@ -113,13 +117,19 @@ async def _run_confirmed(
                 fail_mutation(db, mutation_id, exc)
                 raise
     except Exception as exc:
-        return failure(exc, next_actions=[action.replace("create", "preview").replace("commit", "preview").replace("save", "preview")])
+        fallback = preview_action or action.replace("create", "preview").replace("commit", "preview").replace("save", "preview")
+        return failure(exc, next_actions=[fallback])
 
 
 def _aware(value: datetime, field_name: str) -> datetime:
     if value.tzinfo is None:
         raise ValueError(f"{field_name} must include a timezone offset, for example +09:00.")
     return value
+
+
+def _validate_inventory_dates(purchase_date: date, expiration_date: date) -> None:
+    if expiration_date < purchase_date:
+        raise ValueError("expiration_date cannot be earlier than purchase_date.")
 
 
 def _event_key(action: str, user_id: int, title: str, start_at: datetime) -> str:
@@ -158,6 +168,300 @@ async def _execute_calendar(db: Session, user_id: int, payload: dict[str, Any]) 
 
 
 def register_write_tools(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="inventory.add.preview",
+        title="Preview refrigerator additions",
+        description=(
+            "Validate 1-50 refrigerator items without saving them. Always show this preview "
+            "and ask for explicit confirmation before calling inventory.add."
+        ),
+        annotations=PREVIEW,
+        meta=security("inventory:write"),
+        structured_output=True,
+    )
+    def inventory_add_preview(
+        items: Annotated[list[IngredientCreate], Field(min_length=1, max_length=50)],
+    ) -> ToolResult:
+        user_id = require_user("inventory:write")
+        try:
+            encoded_items = [item.model_dump(mode="json") for item in items]
+            fingerprints = [json.dumps(item, ensure_ascii=False, sort_keys=True) for item in encoded_items]
+            if len(fingerprints) != len(set(fingerprints)):
+                raise ValueError("Duplicate inventory items are not allowed in one request.")
+
+            prepared = []
+            preview_items = []
+            with db_session() as db:
+                for item in items:
+                    inventory_service._validate_ingredient_name(item.name)
+                    rule = inventory_service.prepare_storage_rule(
+                        db, item.name, item.category, item.storage_method
+                    )
+                    purchase_date = item.purchase_date or date.today()
+                    expiration_date = item.expiration_date or (
+                        purchase_date + timedelta(days=rule[1])
+                    )
+                    _validate_inventory_dates(purchase_date, expiration_date)
+                    data = item.model_dump(mode="json")
+                    prepared.append(
+                        {
+                            "data": data,
+                            "prepared_rule": {
+                                "storage_method": rule[0],
+                                "lifespan_days": rule[1],
+                            },
+                        }
+                    )
+                    preview_items.append(
+                        {
+                            **data,
+                            "storage_method": rule[0],
+                            "purchase_date": purchase_date.isoformat(),
+                            "expiration_date": expiration_date.isoformat(),
+                            "is_ai_recommended": item.expiration_date is None,
+                        }
+                    )
+            return _preview_result(
+                "inventory.add",
+                user_id,
+                {"items": prepared},
+                {"item_count": len(preview_items), "items": preview_items},
+            )
+        except Exception as exc:
+            return failure(exc)
+
+    @mcp.tool(
+        name="inventory.add",
+        title="Add refrigerator items",
+        description=(
+            "Add the exact 1-50 items approved through inventory.add.preview. "
+            "Do not call this without explicit user confirmation."
+        ),
+        annotations=SAVE,
+        meta=security("inventory:write"),
+        structured_output=True,
+    )
+    async def inventory_add(
+        confirmation_token: str,
+        confirmed: Literal[True],
+    ) -> ToolResult:
+        user_id = require_user("inventory:write")
+
+        def execute(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
+            prepared = [
+                (
+                    IngredientCreate.model_validate(item["data"]),
+                    (
+                        str(item["prepared_rule"]["storage_method"]),
+                        int(item["prepared_rule"]["lifespan_days"]),
+                    ),
+                )
+                for item in payload["items"]
+            ]
+            results = inventory_service.add_ingredients_batch(db, user_id, prepared)
+            return {"added_count": len(results), "items": results}
+
+        return await _run_confirmed(
+            action="inventory.add",
+            user_id=user_id,
+            confirmation_token=confirmation_token,
+            confirmed=confirmed,
+            executor=execute,
+            preview_action="inventory.add.preview",
+        )
+
+    @mcp.tool(
+        name="inventory.update.preview",
+        title="Preview refrigerator updates",
+        description=(
+            "Validate 1-50 partial refrigerator-item updates without saving them. "
+            "Use inventory.list first when inventory IDs are unknown."
+        ),
+        annotations=PREVIEW,
+        meta=security("inventory:write"),
+        structured_output=True,
+    )
+    def inventory_update_preview(
+        items: Annotated[list[InventoryUpdateItem], Field(min_length=1, max_length=50)],
+    ) -> ToolResult:
+        user_id = require_user("inventory:write")
+        try:
+            ids = [item.inventory_id for item in items]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Duplicate inventory IDs are not allowed in one request.")
+
+            prepared = []
+            changes = []
+            with db_session() as db:
+                rows = inventory_service.get_active_ingredients_by_ids(db, user_id, ids)
+                by_id = {int(fridge_item.id): (fridge_item, ingredient) for fridge_item, ingredient in rows}
+                for request in items:
+                    fridge_item, ingredient = by_id[request.inventory_id]
+                    before = inventory_service._inventory_snapshot(fridge_item, ingredient)
+                    supplied = request.model_fields_set - {"inventory_id"}
+                    after = dict(before)
+                    for field_name in supplied:
+                        value = getattr(request, field_name)
+                        after[field_name] = value.isoformat() if hasattr(value, "isoformat") else value
+
+                    if "name" in supplied and after["name"].strip() != before["name"]:
+                        if "expiration_date" not in supplied:
+                            after["expiration_date"] = None
+                    data = IngredientCreate.model_validate(after)
+                    inventory_service._validate_ingredient_name(data.name)
+                    rule = inventory_service.prepare_storage_rule(
+                        db, data.name, data.category, data.storage_method
+                    )
+                    purchase_date = data.purchase_date or date.today()
+                    expiration_date = data.expiration_date or (
+                        purchase_date + timedelta(days=rule[1])
+                    )
+                    _validate_inventory_dates(purchase_date, expiration_date)
+                    resolved = {
+                        **data.model_dump(mode="json"),
+                        "storage_method": rule[0],
+                        "purchase_date": purchase_date.isoformat(),
+                        "expiration_date": expiration_date.isoformat(),
+                        "is_ai_recommended": data.expiration_date is None,
+                    }
+                    prepared.append(
+                        {
+                            "inventory_id": request.inventory_id,
+                            "before": before,
+                            "data": data.model_dump(mode="json"),
+                            "preserve_is_ai_recommended": (
+                                bool(fridge_item.is_ai_recommended)
+                                if "expiration_date" not in supplied
+                                and not (
+                                    "name" in supplied
+                                    and after["name"].strip() != before["name"]
+                                )
+                                else None
+                            ),
+                            "prepared_rule": {
+                                "storage_method": rule[0],
+                                "lifespan_days": rule[1],
+                            },
+                        }
+                    )
+                    changes.append(
+                        {
+                            "inventory_id": request.inventory_id,
+                            "before": before,
+                            "after": resolved,
+                            "changed_fields": sorted(supplied),
+                        }
+                    )
+            return _preview_result(
+                "inventory.update",
+                user_id,
+                {"items": prepared},
+                {"item_count": len(changes), "changes": changes},
+            )
+        except Exception as exc:
+            return failure(exc)
+
+    @mcp.tool(
+        name="inventory.update",
+        title="Update refrigerator items",
+        description=(
+            "Apply the exact 1-50 partial updates approved through inventory.update.preview. "
+            "The call fails if any item changed after preview."
+        ),
+        annotations=REPLACE,
+        meta=security("inventory:write"),
+        structured_output=True,
+    )
+    async def inventory_update(
+        confirmation_token: str,
+        confirmed: Literal[True],
+    ) -> ToolResult:
+        user_id = require_user("inventory:write")
+
+        def execute(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
+            results = inventory_service.update_ingredients_batch(db, user_id, payload["items"])
+            return {"updated_count": len(results), "items": results}
+
+        return await _run_confirmed(
+            action="inventory.update",
+            user_id=user_id,
+            confirmation_token=confirmation_token,
+            confirmed=confirmed,
+            executor=execute,
+            preview_action="inventory.update.preview",
+        )
+
+    @mcp.tool(
+        name="inventory.remove.preview",
+        title="Preview refrigerator removals",
+        description=(
+            "Validate 1-100 active refrigerator IDs without changing them. Use inventory.list "
+            "first, then show the exact items and ask for confirmation."
+        ),
+        annotations=PREVIEW,
+        meta=security("inventory:write"),
+        structured_output=True,
+    )
+    def inventory_remove_preview(
+        inventory_ids: Annotated[list[int], Field(min_length=1, max_length=100)],
+    ) -> ToolResult:
+        user_id = require_user("inventory:write")
+        try:
+            if any(inventory_id <= 0 for inventory_id in inventory_ids):
+                raise ValueError("Inventory IDs must be positive integers.")
+            if len(inventory_ids) != len(set(inventory_ids)):
+                raise ValueError("Duplicate inventory IDs are not allowed in one request.")
+            with db_session() as db:
+                rows = inventory_service.get_active_ingredients_by_ids(db, user_id, inventory_ids)
+                by_id = {int(item.id): (item, ingredient) for item, ingredient in rows}
+                preview_items = [
+                    {
+                        "inventory_id": inventory_id,
+                        **inventory_service._inventory_snapshot(*by_id[inventory_id]),
+                    }
+                    for inventory_id in inventory_ids
+                ]
+            return _preview_result(
+                "inventory.remove",
+                user_id,
+                {"inventory_ids": inventory_ids},
+                {"item_count": len(preview_items), "items": preview_items},
+            )
+        except Exception as exc:
+            return failure(exc)
+
+    @mcp.tool(
+        name="inventory.remove",
+        title="Remove refrigerator items",
+        description=(
+            "Remove the exact 1-100 active items approved through inventory.remove.preview. "
+            "Removal marks them inactive and is all-or-nothing."
+        ),
+        annotations=REPLACE,
+        meta=security("inventory:write"),
+        structured_output=True,
+    )
+    async def inventory_remove(
+        confirmation_token: str,
+        confirmed: Literal[True],
+    ) -> ToolResult:
+        user_id = require_user("inventory:write")
+
+        def execute(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
+            removed_ids = inventory_service.remove_ingredients_batch(
+                db, user_id, [int(value) for value in payload["inventory_ids"]]
+            )
+            return {"removed_count": len(removed_ids), "inventory_ids": removed_ids}
+
+        return await _run_confirmed(
+            action="inventory.remove",
+            user_id=user_id,
+            confirmation_token=confirmation_token,
+            confirmed=confirmed,
+            executor=execute,
+            preview_action="inventory.remove.preview",
+        )
+
     @mcp.tool(
         name="receipt.preview",
         title="Preview receipt commit",
