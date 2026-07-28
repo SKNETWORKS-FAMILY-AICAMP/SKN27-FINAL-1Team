@@ -53,13 +53,13 @@
 
 **SKN27기 Final Project 1팀**
 
-| 프로필 | 이름 | 역할 | 담당 | GitHub |
-|:---:|:---:|:---:|:---|:---:|
-| <!-- 사진 --> | **이재희** | PM · MCP · Calendar | 프로젝트 총괄, Google Calendar 연동·알림, MCP 구조 설계 & RunPod Serverless 연동, 캘린더/알림 Agent | [![EJ-pro](https://img.shields.io/badge/EJ--pro-181717?logo=github&logoColor=white)](https://github.com/EJ-pro) |
-| <!-- 사진 --> | **박준희** | APM · OCR · Agent | 영수증 OCR 모델 벤치마크·연동, OCR 결과 저장·검증, 이미지 검증 파이프라인 보안, 장보기 Agent | [![enblav262](https://img.shields.io/badge/enblav262-181717?logo=github&logoColor=white)](https://github.com/enblav262) |
-| <!-- 사진 --> | **김재묵** | Backend · Agent | FastAPI REST API, OAuth 2.0 + JWT 인증, 챗봇, 냉장고 재고 관리 Agent | [![jaemukkim](https://img.shields.io/badge/jaemukkim-181717?logo=github&logoColor=white)](https://github.com/jaemukkim) |
-| <!-- 사진 --> | **김주영** | GraphDB · Agent | Neo4j 그래프 설계, 식재료 가이드 데이터 확보·정제, 가이드 Agent | [![enooola0204-spec](https://img.shields.io/badge/enooola0204--spec-181717?logo=github&logoColor=white)](https://github.com/enooola0204-spec) |
-| <!-- 사진 --> | **김경수** | Data Pipeline · Recommendation | 레시피 데이터 확보·정제, 식재료 매칭 및 추천 로직, 추천 API·추천 Agent | [![wynn3312](https://img.shields.io/badge/wynn3312-181717?logo=github&logoColor=white)](https://github.com/wynn3312) |
+| 이름 | 역할 | 담당 | GitHub |
+|:---:|:---:|:---|:---:|
+| **이재희** | PM · MCP · Calendar | 프로젝트 총괄, Google Calendar 연동·알림, MCP 구조 설계 & RunPod Serverless 연동, 캘린더/알림 Agent | [![EJ-pro](https://img.shields.io/badge/EJ--pro-181717?logo=github&logoColor=white)](https://github.com/EJ-pro) |
+| **박준희** | APM · OCR · Agent | 영수증 OCR 모델 벤치마크·연동, OCR 결과 저장·검증, 이미지 검증 파이프라인 보안, 장보기 Agent | [![enblav262](https://img.shields.io/badge/enblav262-181717?logo=github&logoColor=white)](https://github.com/enblav262) |
+| **김재묵** | Backend · Agent | FastAPI REST API, OAuth 2.0 + JWT 인증, 챗봇, 냉장고 재고 관리 Agent | [![jaemukkim](https://img.shields.io/badge/jaemukkim-181717?logo=github&logoColor=white)](https://github.com/jaemukkim) |
+| **김주영** | GraphDB · Agent | Neo4j 그래프 설계, 식재료 가이드 데이터 확보·정제, 가이드 Agent | [![enooola0204-spec](https://img.shields.io/badge/enooola0204--spec-181717?logo=github&logoColor=white)](https://github.com/enooola0204-spec) |
+| **김경수** | Data Pipeline · Recommendation | 레시피 데이터 확보·정제, 식재료 매칭 및 추천 로직, 추천 API·추천 Agent | [![wynn3312](https://img.shields.io/badge/wynn3312-181717?logo=github&logoColor=white)](https://github.com/wynn3312) |
 
 ---
 
