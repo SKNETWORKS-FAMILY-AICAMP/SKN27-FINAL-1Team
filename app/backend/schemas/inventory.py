@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class IngredientBase(BaseModel):
@@ -20,6 +20,25 @@ class IngredientCreate(IngredientBase):
     """냉장고 식재료 생성/수정 요청 스키마입니다."""
 
     pass
+
+
+class InventoryUpdateItem(BaseModel):
+    """MCP에서 냉장고 항목을 부분 수정할 때 사용하는 입력 스키마입니다."""
+
+    inventory_id: int = Field(..., gt=0)
+    name: Optional[str] = Field(None, min_length=1)
+    category: Optional[str] = None
+    quantity: Optional[float] = Field(None, gt=0)
+    unit: Optional[str] = Field(None, min_length=1)
+    storage_method: Optional[str] = None
+    purchase_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not (self.model_fields_set - {"inventory_id"}):
+            raise ValueError("At least one inventory field must be provided.")
+        return self
 
 
 class IngredientResponse(IngredientBase):
