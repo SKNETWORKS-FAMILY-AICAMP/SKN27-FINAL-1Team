@@ -112,7 +112,8 @@ class Settings:
     _MCP_DEFAULT_SCOPES: str = (
         f"{MCP_SCOPE_PREFIX}/inventory.read,{MCP_SCOPE_PREFIX}/recipe.read,"
         f"{MCP_SCOPE_PREFIX}/guide.read,{MCP_SCOPE_PREFIX}/receipt.write,"
-        f"{MCP_SCOPE_PREFIX}/shopping.write,{MCP_SCOPE_PREFIX}/calendar.write"
+        f"{MCP_SCOPE_PREFIX}/shopping.write,{MCP_SCOPE_PREFIX}/calendar.write,"
+        f"{MCP_SCOPE_PREFIX}/inventory.write"
     )
     MCP_SUPPORTED_SCOPES: list[str] = [
         value.strip()
