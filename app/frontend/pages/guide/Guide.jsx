@@ -8,8 +8,8 @@ import { API_URL } from '../../utils/api.js'
 import { getIngredientImageUrl, useIngredientImageCatalog } from '../../utils/ingredientImages.js'
 
 const GUIDE_PAGE_SIZE = 12
-const FRIDGE_PAGE_SIZE = 8
-const GUEST_RECOMMENDATION_PAGE_SIZE = 8
+const FRIDGE_PAGE_SIZE = 10
+const GUEST_RECOMMENDATION_PAGE_SIZE = 10
 const GUIDE_SCROLL_POSITION_KEY = 'guide-scroll-position'
 const SEASONAL_RECOMMENDATION_SIZE = 60
 const GUIDE_RECIPE_LIMIT = 12
@@ -715,11 +715,12 @@ function Guide() {
     navigate('/guide')
   }
 
-  const renderIngredientButton = (ingredient, { isFridge = false } = {}) => (
+  const renderIngredientButton = (ingredient, { isFridge = false, keyPrefix = '' } = {}) => (
     <button
       className={`guide-ingredient ${isDetailPage && selectedGuide?.code === ingredient.code ? 'is-active' : ''}`}
-      key={isFridge ? `fridge-${ingredient.id}` : ingredient.code}
+      key={`${keyPrefix}${isFridge ? `fridge-${ingredient.id}` : ingredient.code}`}
       type="button"
+      tabIndex={keyPrefix ? -1 : undefined}
       onClick={() => (isFridge ? selectFridgeIngredient(ingredient) : selectIngredient(ingredient))}
     >
       <ImageSlot
@@ -738,6 +739,28 @@ function Guide() {
       </span>
     </button>
   )
+
+  const renderMobileIngredientTrack = (ingredients, { isFridge = false } = {}) => {
+    if (ingredients.length <= 4) {
+      return ingredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge }))
+    }
+
+    return (
+      <div
+        className="guide-marquee__track"
+        style={{ '--guide-marquee-duration': `${Math.max(14, ingredients.length * 2.4)}s` }}
+      >
+        <div className="guide-marquee__group">
+          {ingredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge }))}
+        </div>
+        <div className="guide-marquee__group" aria-hidden="true" inert="">
+          {ingredients.map((ingredient) =>
+            renderIngredientButton(ingredient, { isFridge, keyPrefix: 'duplicate-' }),
+          )}
+        </div>
+      </div>
+    )
+  }
 
   const openSuggestionForm = () => {
     setSuggestionMessage('')
@@ -798,10 +821,14 @@ function Guide() {
         <>
       <div className="guide-hero">
         <div className="guide-hero__copy">
-          <h1 className="hero-mobile-sr-only" id="guide-title">식재료 가이드</h1>
+          <h1 className="hero-mobile-sr-only" id="guide-title">
+            식재료의 모든 정보를
+            <br />
+            한곳에서 확인하세요
+          </h1>
           <p>
             <span className="hero-desktop-copy">재료별 보관, 손질, 세척, 신선도 팁을 한눈에 확인해요!</span>
-            <span className="hero-mobile-copy">보관법부터 영양성분까지<br />한눈에 확인해요.</span>
+            <span className="hero-mobile-copy">보관법부터 영양성분까지 확인해요.</span>
           </p>
         </div>
 
@@ -909,10 +936,10 @@ function Guide() {
           ) : null}
           </div>
           <div
-            className="guide-ingredient-list guide-ingredient-list--mobile"
+            className={`guide-ingredient-list guide-ingredient-list--mobile${mobileFeaturedIngredients.length > 4 ? ' is-marquee' : ''}`}
             aria-label={isLoggedIn ? '내 냉장고 재료 스와이프 목록' : '추천 식재료 스와이프 목록'}
           >
-          {mobileFeaturedIngredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge: isLoggedIn }))}
+          {renderMobileIngredientTrack(mobileFeaturedIngredients, { isFridge: isLoggedIn })}
           {isLoggedIn && isFridgeLoading ? <p className="guide-empty">냉장고 재료를 불러오는 중입니다.</p> : null}
           {isLoggedIn && !isFridgeLoading && fridgeErrorMessage ? (
             <p className="guide-empty">{fridgeErrorMessage}</p>
@@ -1139,7 +1166,11 @@ function Guide() {
                                   <div className="guide-suggestion__panel">
                                     <div className="guide-suggestion__intro">
                                       <h3 id={suggestionTitleId}>나만의 가이드 제보</h3>
-                                      <p>직접 알고 있는 방법이나 참고한 링크를 남겨주세요. 확인 후 서비스에 반영될 수 있어요.</p>
+                                      <p>
+                                        직접 알고 있는 방법이나 참고한 링크를 남겨주세요.
+                                        <br />
+                                        확인 후 서비스에 반영될 수 있어요.
+                                      </p>
                                     </div>
 
                                     {isActive && isSuggestionFormOpen ? (
@@ -1343,9 +1374,18 @@ function Guide() {
                 ‹
               </button>
             ) : null}
-            <div className="guide-ingredient-list" aria-label="제철 식재료 목록">
+            <div className="guide-ingredient-list guide-ingredient-list--desktop" aria-label="제철 식재료 목록">
               {seasonalFeaturedIngredients.map((ingredient) => renderIngredientButton(ingredient))}
               {!isListLoading && seasonalFeaturedIngredients.length === 0 ? (
+                <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
+              ) : null}
+            </div>
+            <div
+              className={`guide-ingredient-list guide-ingredient-list--mobile${seasonalGuideItems.length > 4 ? ' is-marquee' : ''}`}
+              aria-label="제철 식재료 자동 이동 목록"
+            >
+              {renderMobileIngredientTrack(seasonalGuideItems)}
+              {!isListLoading && seasonalGuideItems.length === 0 ? (
                 <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
               ) : null}
             </div>

@@ -31,6 +31,48 @@
   font-weight: 900;
 }
 
+@media (min-width: 761px) {
+  .shopping-eyebrow {
+    display: none;
+  }
+
+  .shopping-hero {
+    min-height: 300px;
+    padding: 36px 44px;
+    grid-template-columns: minmax(380px, 1fr) minmax(300px, 0.9fr);
+    gap: 32px;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid #f3d9dc;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
+    box-shadow: 0 12px 36px rgba(85, 42, 43, 0.07);
+  }
+
+  .shopping-hero__copy h1 {
+    font-size: clamp(30px, 3vw, 40px);
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  .shopping-hero__copy p {
+    max-width: 520px;
+    margin-top: 14px;
+    color: #695453;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .shopping-hero--card .shopping-hero__copy > p {
+    display: none;
+  }
+
+  .shopping-hero__art img {
+    width: min(100%, 410px);
+    max-height: 270px;
+  }
+}
+
 .shopping-hero__copy p {
   max-width: 360px;
   margin: 12px 0 0;
@@ -1686,9 +1728,11 @@
   }
 
   .shopping-hero--card {
-    min-height: auto;
-    padding: 8px 20px;
+    min-height: 76px;
+    padding: 20px;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
     overflow: hidden;
     border: 1px solid #f3d9dc;
     border-radius: 22px;
@@ -1714,7 +1758,8 @@
   }
 
   .shopping-list-toolbar {
-    padding-bottom: 18px;
+    margin-top: var(--mobile-gap-section);
+    padding-bottom: var(--mobile-gap-list);
     border-bottom: 1px solid #f1dddd;
   }
 
@@ -1766,13 +1811,13 @@
   }
 
   .shopping-main-grid {
-    margin-top: 12px;
+    margin-top: var(--mobile-gap-list);
     display: block;
   }
 
   .shopping-personal-panel {
     min-height: 0;
-    margin-top: 12px;
+    margin-top: var(--mobile-gap-list);
     padding: 14px;
     gap: 12px;
   }
@@ -1805,11 +1850,11 @@
   }
 
   .shopping-price-panel {
-    margin-top: 12px;
+    margin-top: var(--mobile-gap-list);
   }
 
   .shopping-owned-panel {
-    margin-top: 12px;
+    margin-top: var(--mobile-gap-list);
   }
 
   .shopping-panel__header {
@@ -1835,7 +1880,7 @@
   .shopping-items {
     border: 0;
     display: grid;
-    gap: 8px;
+    gap: var(--mobile-gap-group);
     overflow: visible;
   }
 

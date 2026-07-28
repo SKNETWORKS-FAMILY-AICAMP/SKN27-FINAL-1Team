@@ -172,12 +172,25 @@ body {
 }
 
 @media (max-width: 760px) {
+  :root {
+    --mobile-gap-related: 12px;
+    --mobile-gap-group: 16px;
+    --mobile-gap-list: 24px;
+    --mobile-gap-section: 28px;
+  }
+
   .hero-desktop-copy {
     display: none;
   }
 
   .hero-mobile-copy {
     display: inline;
+    color: #5f4635;
+    font-size: clamp(12px, 4.1vw, 16px);
+    font-weight: 700;
+    line-height: 1.6;
+    letter-spacing: -0.035em;
+    white-space: nowrap;
   }
 
   .hero-mobile-sr-only {

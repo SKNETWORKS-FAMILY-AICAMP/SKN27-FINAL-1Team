@@ -178,6 +178,53 @@
   filter: drop-shadow(0 14px 22px rgba(69, 42, 25, 0.08));
 }
 
+@media (min-width: 761px) {
+  .guide-hero {
+    min-height: 300px;
+    padding: 36px 44px;
+    grid-template-columns: minmax(380px, 1fr) minmax(300px, 0.9fr);
+    grid-template-areas:
+      "copy art"
+      "search art";
+    align-content: center;
+    gap: 0 32px;
+    box-sizing: border-box;
+    overflow: visible;
+    border: 1px solid #f3d9dc;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
+    box-shadow: 0 12px 36px rgba(85, 42, 43, 0.07);
+  }
+
+  .guide-hero__copy h1 {
+    font-size: clamp(30px, 3vw, 40px);
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  .guide-hero__copy p {
+    margin-top: 14px;
+    color: #695453;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .guide-hero__copy > p {
+    display: none;
+  }
+
+  .guide-search-wrap {
+    width: min(100%, 620px);
+    align-self: start;
+    margin-top: 24px;
+  }
+
+  .guide-hero__art img {
+    width: min(100%, 410px);
+    max-height: 270px;
+  }
+}
+
 .guide-panel {
   box-sizing: border-box;
   border: 1.4px solid #f0d7b1;
@@ -345,7 +392,7 @@
 
 .guide-ingredient-list {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   align-items: center;
   gap: 12px;
 }
@@ -747,7 +794,7 @@
 
 .guide-all-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 24px 18px;
 }
 
@@ -2222,6 +2269,12 @@
   }
 }
 
+@keyframes guide-mobile-marquee {
+  to {
+    transform: translateX(calc(-50% - 3px));
+  }
+}
+
 .guide-page--detail > .guide-loading,
 .guide-page--detail > .guide-empty {
   min-height: 360px;
@@ -2260,10 +2313,6 @@
     max-width: none;
   }
 
-  .guide-all-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .guide-recipe-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2293,8 +2342,8 @@
   }
 
   .guide-hero {
-    min-height: auto;
-    padding: 16px 20px;
+    min-height: 136px;
+    padding: 20px;
     display: block;
     box-sizing: border-box;
     overflow: visible;
@@ -2373,18 +2422,18 @@
   }
 
   .guide-ingredients {
-    margin-top: 10px;
-    padding: 12px 0;
+    margin-top: var(--mobile-gap-section);
+    padding: var(--mobile-gap-related) 0;
   }
 
   .guide-all + .guide-ingredients--seasonal {
-    margin-top: 20px;
-    padding-top: 18px;
+    margin-top: var(--mobile-gap-section);
+    padding-top: var(--mobile-gap-list);
     border-top: 1px solid #f1dddd;
   }
 
   .guide-ingredients__header {
-    margin-bottom: 6px;
+    margin-bottom: var(--mobile-gap-related);
   }
 
   .guide-ingredients.is-empty {
@@ -2508,6 +2557,7 @@
   }
 
   .guide-ingredient-list--desktop,
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop,
   .guide-ingredients.is-empty .guide-ingredient-list--desktop {
     display: none;
   }
@@ -2518,6 +2568,30 @@
     grid-template: none;
     grid-auto-flow: initial;
     grid-auto-columns: initial;
+  }
+
+  .guide-ingredient-list--mobile.is-marquee,
+  .guide-ingredients--seasonal .guide-ingredient-list--mobile.is-marquee {
+    display: block;
+    overflow: hidden;
+    scroll-snap-type: none;
+  }
+
+  .guide-marquee__track {
+    width: max-content;
+    display: flex;
+    gap: 6px;
+    animation: guide-mobile-marquee var(--guide-marquee-duration) linear infinite;
+    will-change: transform;
+  }
+
+  .guide-marquee__group {
+    display: flex;
+    gap: 6px;
+  }
+
+  .guide-ingredient-list--mobile.is-marquee:active .guide-marquee__track {
+    animation-play-state: paused;
   }
 
   .guide-more-button {
@@ -2538,18 +2612,19 @@
   }
 
   .guide-all {
-    margin-top: 12px;
-    padding: 20px 0 0;
+    margin-top: var(--mobile-gap-section);
+    padding: var(--mobile-gap-list) 0 0;
   }
 
   .guide-ingredients + .guide-all {
-    margin-top: 20px;
-    padding-top: 18px;
+    margin-top: var(--mobile-gap-section);
+    padding-top: var(--mobile-gap-list);
     border-top: 1px solid #f1dddd;
   }
 
   .guide-category-tabs {
-    margin: 0 0 10px;
+    margin: 0 0 var(--mobile-gap-list);
+    gap: var(--mobile-gap-group);
   }
 
   .guide-category-tab-list button {
@@ -2558,7 +2633,7 @@
 
   .guide-all-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px 12px;
+    gap: var(--mobile-gap-list) 12px;
   }
 
   .guide-all-item {
@@ -2704,6 +2779,20 @@
   }
 }
 
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .guide-ingredient-list--mobile.is-marquee {
+    overflow-x: auto;
+  }
+
+  .guide-marquee__track {
+    animation: none;
+  }
+
+  .guide-marquee__group[aria-hidden="true"] {
+    display: none;
+  }
+}
+
 @media (max-width: 480px) {
   .guide-page {
     width: min(100% - 32px, 430px);
@@ -2810,7 +2899,6 @@
   }
 
   .guide-page--detail .guide-tip-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     padding: 0 8px;
     gap: 4px;
     overflow-x: hidden;
