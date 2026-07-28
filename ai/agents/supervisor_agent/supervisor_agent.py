@@ -12,6 +12,7 @@ from ai.agents.inventory_agent.inventory_utils import (
     _extract_add_items,
     _extract_quantity,
     _is_all_quantity_request,
+    _is_storage_change_request,
     ADD_WORDS,
     DELETE_WORDS,
     CONSUME_WORDS,
@@ -123,6 +124,8 @@ def _route_write_request(
     shopping_intent = analyze_shopping_intent(text)
     if shopping_intent in _SHOPPING_WRITE_INTENTS:
         return _route_result(shopping_intent)
+    if not is_receipt_query and _is_storage_change_request(text):
+        return _route_result("inventory.storage_change")
     if not is_receipt_query and any(word in normalized for word in DELETE_WORDS):
         return _route_result("inventory.delete")
     if not is_receipt_query and not _is_expiring_question(text) and any(word in normalized for word in CONSUME_WORDS):
@@ -398,6 +401,7 @@ def guide_agent_node(state: GraphState) -> dict:
     normalized = _normalize_text(query)
     if ingredient and guide_type in guide_labels and (
         "물어보" in normalized
+        or normalized.startswith("그럼")
         or (guide_type == "storage" and any(phrase in normalized for phrase in ("넣으면되", "넣어도되", "둬도되", "두면되", "보관해도되")))
     ):
         # 직전 가이드 질문을 설명하는 문장은 저장된 식재료와 유형으로 복원합니다.

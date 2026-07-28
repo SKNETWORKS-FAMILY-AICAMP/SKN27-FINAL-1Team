@@ -24,6 +24,7 @@ def test_inventory_request_routes_cover_common_user_expressions():
         "양파 2개 냉장에 추가해줘": "inventory.action",
         "양파 1개 먹엇어": "inventory.action",
         "호박 3개 삭제해줘": "inventory.delete",
+        "감자 보관 위치를 냉동으로 바꿔줘": "inventory.storage_change",
         "소비 임박재료 뭐 있어?": "inventory.expiring",
         "내 냉장고 재료 뭐 있어?": "inventory.list",
         "김치로 만들수있는거": "recipe.recommend",

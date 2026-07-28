@@ -24,7 +24,9 @@ from ai.agents.inventory_agent.inventory_utils import (
     _pending_add_from_history,
     _pending_add_storage_from_history,
     _pending_consume_from_history,
-    _storage_choice_response
+    _storage_choice_response,
+    _is_storage_change_request,
+    _extract_storage_change_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,6 +111,12 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
             db.commit()
             return {"response_text": "\n".join(added), "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
 
+        if action == "change_storage" and len(parts) >= 4:
+            if not _is_safe_action_name(parts[2]) or parts[3] not in STORAGE_KEYS:
+                return {"response_text": "올바른 식재료명과 보관 위치를 입력해주세요.", "slots": {"inventory_pending": None}}
+            reply = inventory_service.change_storage_by_name(db, user_id, parts[2], parts[3])
+            return {"response_text": reply, "actions": [_inventory_refresh_action()], "slots": {"inventory_pending": None}}
+
         if action == "delete_ingredient" and len(parts) >= 4:
             if not _is_safe_action_name(parts[2]) or not _is_positive_quantity(parts[3]):
                 return {"response_text": "올바른 식재료명과 수량을 입력해주세요.", "slots": {"inventory_pending": None}}
@@ -123,18 +131,19 @@ def execute_inventory_action(action: str, parts: list[str], db: Session, user_id
     return {"response_text": "확인할 작업을 찾지 못했어요. 다시 요청해주세요.", "slots": {"inventory_pending": None}}
 
 
-def get_inventory_list(db: Session, user_id: int) -> str:
-    """냉장고 보유 재료를 짧게 요약합니다."""
+def get_inventory_list(db: Session, user_id: int, storage: str | None = None) -> str:
+    """냉장고 보유 재료를 보관 위치 조건에 맞춰 짧게 요약합니다."""
     items = inventory_service.get_ingredients(db=db, user_id=user_id)
+    if storage:
+        items = [item for item in items if item.get("storage_method") == storage]
     if not items:
-        return EMPTY_INVENTORY_REPLY
+        return f"{storage}에 보관 중인 재료는 없어요." if storage else EMPTY_INVENTORY_REPLY
 
     names = [item["name"] for item in items[:8]]
+    location = storage or "냉장고"
     if len(items) > 8:
-        return f"현재 냉장고에는 {', '.join(names)} 외 {len(items) - 8}개가 있어요."
-    return f"현재 냉장고에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{_apply_josa(names[-1], '이가')} 있어요."
-
-
+        return f"현재 {location}에는 {', '.join(names)} 외 {len(items) - 8}개가 있어요."
+    return f"현재 {location}에는 {', '.join(names[:-1]) + ', ' if len(names) > 1 else ''}{_apply_josa(names[-1], '이가')} 있어요."
 def _get_expiring_inventory_result(db: Session, user_id: int, text: str = "") -> dict:
     """임박 재료 안내문과 다음 Agent에 전달할 재료명 목록을 함께 반환합니다."""
     items = inventory_service.get_ingredients(db=db, user_id=user_id)
@@ -293,10 +302,22 @@ def run_inventory_agent(intent: str, text: str, history: list, db: Session, user
         return {"response_text": "확인할 작업을 찾지 못했어요. 다시 요청해주세요.", "slots": {"inventory_pending": None}}
 
     if intent == "inventory.list":
-        return {"response_text": get_inventory_list(db, user_id)}
+        return {"response_text": get_inventory_list(db, user_id, _extract_storage(text))}
     
     if intent == "inventory.expiring":
         return _get_expiring_inventory_result(db, user_id, text)
+
+    if intent == "inventory.storage_change":
+        name = _extract_storage_change_name(text)
+        storage = _extract_storage(text)
+        if not name or not storage or not _is_storage_change_request(text):
+            return {"response_text": "변경할 식재료와 보관 위치를 함께 알려주세요. 예: 감자 보관 위치를 냉동으로 바꿔줘"}
+        command = f"확인:change_storage:{name}:{storage}"
+        return {
+            "response_text": f"{name} 보관 위치를 {storage}으로 변경할까요?",
+            "actions": [_confirm_action("확인", command), _confirm_action("취소", "취소")],
+            "slots": {"inventory_pending": None},
+        }
 
     if intent == "inventory.cancel" or intent == "action.cancel":
         last_action = None

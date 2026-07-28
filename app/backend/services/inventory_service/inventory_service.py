@@ -578,6 +578,32 @@ class InventoryService:
         return float(total)
 
 
+
+    def change_storage_by_name(self, db: Session, user_id: int, ingredient_name: str, storage_method: str) -> str:
+        """동일 식재료 중 가장 먼저 등록된 활성 항목의 보관 위치를 변경합니다."""
+        if storage_method not in STORAGE_KEYS:
+            return "냉장, 냉동, 실온 중 하나로 보관 위치를 알려주세요."
+
+        # ponytail: 동일 식재료가 여러 건이면 가장 먼저 등록된 한 건만 변경합니다. 항목 선택 UI가 필요해지면 개별 ID 선택으로 확장합니다.
+        items = (
+            db.query(FridgeItem, Ingredient)
+            .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
+            .filter(FridgeItem.user_id == user_id, FridgeItem.status.in_(ACTIVE_STATUSES))
+            .order_by(FridgeItem.id)
+            .with_for_update(of=FridgeItem)
+            .all()
+        )
+        target_item = self._find_item_by_name(items, ingredient_name)
+        if not target_item:
+            resolved_name = self._resolve_known_ingredient_name(db, ingredient_name)
+            target_item = self._find_item_by_name(items, resolved_name) if resolved_name else None
+        if not target_item:
+            return f"냉장고에서 {ingredient_name}{_object_particle(ingredient_name)} 찾을 수 없어요. 이미 다 쓰셨거나 등록되지 않았을 수 있습니다."
+
+        target_item.storage_location = storage_method
+        db.commit()
+        return f"{ingredient_name} 보관 위치를 {storage_method}으로 변경했어요."
+
     def delete_ingredient_by_name(self, db: Session, user_id: int, ingredient_name: str) -> str:
         """챗봇에서 식재료 이름을 받아 냉장고 항목을 폐기 처리합니다."""
         # ponytail: 사용자별 재고 전체를 잠급니다. 동시 쓰기량이 커지면 대상 식재료 행만 잠그도록 좁힙니다.

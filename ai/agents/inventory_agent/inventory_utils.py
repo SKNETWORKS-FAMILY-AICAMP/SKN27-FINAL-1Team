@@ -10,6 +10,7 @@ CONSUME_WORDS = ("먹었어", "먹엇어", "다썼어", "다먹었어", "소비�
 ADD_WORDS = ("추가", "등록", "넣", "샀", "삿", "사왔", "구매")
 INVENTORY_LIST_WORDS = ("뭐있", "뭐가있", "냉장고목록", "재료목록", "내재료", "등록한식재료", "보유재료", "현재재고")
 EXPIRING_WORDS = ("상하는", "임박", "소비기한", "유통기한", "기한", "적게남", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이")
+STORAGE_CHANGE_WORDS = ("보관위치", "보관 위치", "옮겨", "이동", "변경", "바꿔")
 
 # 식재료 입력 파싱용 기본값
 DEFAULT_STORAGE = "냉장"
@@ -50,16 +51,20 @@ def _apply_josa(word: str, josa_type: str) -> str:
 
 
 def _confirm_action(label: str, command: str) -> dict:
+    """프론트엔드 확인 버튼에 전달할 내부 명령을 만듭니다."""
     return {"label": label, "data": {"message": command}}
 
 def _inventory_refresh_action() -> dict:
+    """재고 변경 후 냉장고 목록을 다시 불러오도록 요청합니다."""
     return {"label": "냉장고 새로고침", "data": {"refreshInventory": True}}
 
 def _quantity_text(quantity: float) -> str:
+    """수량을 불필요한 소수점 없이 화면용 문자열로 변환합니다."""
     number = float(quantity or 1)
     return str(int(number)) if number.is_integer() else str(number)
 
 def _extract_quantity(text: str) -> float | None:
+    """문장에서 숫자 또는 한글 수량을 추출합니다."""
     match = re.search(r"(\d+(?:\.\d+)?)\s*(?:개|피스|g|kg|ml|l)?", text, re.IGNORECASE)
     if match:
         return float(match.group(1))
@@ -101,6 +106,7 @@ def _extract_consume_name(text: str) -> str:
     return target.strip(" ,/\t\n을를은는이가도")
 
 def _extract_storage(text: str) -> str | None:
+    """문장에서 냉장·냉동·실온 보관 위치를 추출합니다."""
     normalized = text.replace(" ", "")
     aliases = {"냉장실": "냉장", "냉동실": "냉동", "상온": "실온"}
     for alias, storage in aliases.items():
@@ -111,6 +117,19 @@ def _extract_storage(text: str) -> str | None:
         if re.search(rf"(?<![가-힣A-Za-z0-9]){storage}(?:에|으로)?(?![가-힣A-Za-z0-9])", text):
             return storage
     return None
+
+def _is_storage_change_request(text: str) -> bool:
+    """보관 위치를 실제로 변경해 달라는 요청인지 확인합니다."""
+    normalized = _normalize_text(text)
+    return bool(_extract_storage(text)) and any(word.replace(" ", "") in normalized for word in STORAGE_CHANGE_WORDS)
+
+
+def _extract_storage_change_name(text: str) -> str:
+    """보관 위치 변경 문장에서 대상 식재료명만 추출합니다."""
+    target = re.split(r"보관\s*위치|보관위치|냉장실|냉동실|냉장|냉동|실온|상온", text, maxsplit=1)[0]
+    for token in ("냉장고에서", "냉장고에", "냉장고", "재료", "식재료"):
+        target = target.replace(token, " ")
+    return target.strip(" ,/\t\n").rstrip("을를은는이가도 ")
 
 def _strip_add_name(name: str) -> str:
     cleaned = name.strip()
