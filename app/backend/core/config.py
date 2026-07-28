@@ -8,6 +8,10 @@ class Settings:
     # App Settings
     PROJECT_NAME: str = "밥벌이 (Bobbeori)"
     DEV_MODE: bool = os.getenv("DEV_MODE", "True").lower() == "true"
+    AUTO_RUN_DB_MIGRATIONS: bool = os.getenv(
+        "AUTO_RUN_DB_MIGRATIONS",
+        "true" if DEV_MODE else "false",
+    ).lower() == "true"
     
     # Database Settings
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
