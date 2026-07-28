@@ -33,3 +33,36 @@ def test_settings_accept_local_receipt_s3_environment_names():
     )
 
     assert result.stdout.strip() == "s3|local-private-receipts|local-receipts|temporary"
+
+
+def test_database_migrations_default_to_local_development_only():
+    env = os.environ.copy()
+    env.pop("AUTO_RUN_DB_MIGRATIONS", None)
+    env["DEV_MODE"] = "false"
+    production = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from app.backend.core.config import settings; print(settings.AUTO_RUN_DB_MIGRATIONS)",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    env["DEV_MODE"] = "true"
+    development = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from app.backend.core.config import settings; print(settings.AUTO_RUN_DB_MIGRATIONS)",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert production.stdout.strip() == "False"
+    assert development.stdout.strip() == "True"

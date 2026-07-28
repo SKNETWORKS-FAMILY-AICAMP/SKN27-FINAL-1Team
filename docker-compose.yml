@@ -13,10 +13,22 @@ services:
             DB_ENGINE: postgresql
             DB_HOST: postgres
             NEO4J_URI: bolt://neo4j:7687
+            AWS_PROFILE: ${AWS_PROFILE:-bobbeori-local}
+            AWS_SDK_LOAD_CONFIG: "1"
+            AWS_LOGIN_CACHE_DIRECTORY: /root/.aws/login/cache
         volumes:
             - ./app:/project/app
             - ./ai:/project/ai
             - ./storage:/project/storage
+
+            - type: bind
+              source: "${USERPROFILE}/.aws/config"
+              target: /root/.aws/config
+              read_only: true
+
+            - type: bind
+              source: "${USERPROFILE}/.aws/login/cache"
+              target: /root/.aws/login/cache
         command:
             [
                 "uvicorn",

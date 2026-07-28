@@ -15,6 +15,7 @@ from app.backend.api.recipes import recipes_api
 from app.backend.api.recommendations import recommendations_api
 from app.backend.api.shopping import shopping_api
 from app.backend.core.config import settings
+from app.backend.jobs.migrate import run_migrations
 from app.backend.services.inventory_service.inventory_seed import seed_common_inventory_standards
 
 
@@ -50,6 +51,15 @@ app.include_router(shopping_api.router, prefix=API_V1_PREFIX)
 app.include_router(notifications_api.router, prefix=API_V1_PREFIX)
 app.include_router(calendar_api.router, prefix=API_V1_PREFIX)
 app.include_router(chat_api.router, prefix=API_V1_PREFIX)
+
+
+@app.on_event("startup")
+def migrate_database():
+    """Keep manually started local backends in sync with the ORM models."""
+    if not settings.AUTO_RUN_DB_MIGRATIONS:
+        return
+    logger.info("Applying pending database migrations before serving requests")
+    run_migrations()
 
 
 @app.on_event("startup")
