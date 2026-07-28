@@ -363,13 +363,14 @@ function RecipeList() {
     <section className="recipe-list-page" aria-labelledby="recipe-list-title">
       <div className="recipe-list-hero">
         <div className="recipe-list-hero__copy">
-          <h1 id="recipe-list-title">
+          <h1 className="hero-mobile-sr-only" id="recipe-list-title">
             다양한 레시피를
             <strong>한곳에서 만나보세요</strong>
           </h1>
 
           <p>
-            국, 볶음, 반찬, 파스타까지 오늘 끌리는 메뉴를 자유롭게 둘러보세요.
+            <span className="hero-desktop-copy">국, 볶음, 반찬, 파스타까지 오늘 끌리는 메뉴를 자유롭게 둘러보세요.</span>
+            <span className="hero-mobile-copy">다양한 레시피를<br />검색하고 둘러보세요.</span>
           </p>
 
           <form

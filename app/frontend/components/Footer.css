@@ -39,6 +39,10 @@
   line-height: 1.55;
 }
 
+.site-footer__mobile-break {
+  display: none;
+}
+
 .site-footer__mail {
   width: fit-content;
   color: var(--figma-coral);
@@ -161,6 +165,10 @@
 
   .site-footer__brand p {
     font-size: 12px;
+  }
+
+  .site-footer__mobile-break {
+    display: block;
   }
 
   .site-footer__menus {
