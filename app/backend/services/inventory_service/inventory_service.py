@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal
 from datetime import date, datetime, timedelta
-from typing import Optional, List
+from typing import Any, Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -382,6 +382,126 @@ class InventoryService:
             db.flush()
         db.refresh(fridge_item)
         return self._map_to_response(fridge_item, ingredient)
+
+    def add_ingredients_batch(
+        self,
+        db: Session,
+        user_id: int,
+        prepared_items: list[tuple[IngredientCreate, tuple[str, int]]],
+    ) -> list[dict[str, Any]]:
+        """사전 검사된 MCP 입력을 현재 트랜잭션에서 한 번에 추가합니다."""
+        return [
+            self.add_ingredient(
+                db,
+                user_id,
+                data,
+                commit=False,
+                prepared_rule=prepared_rule,
+                validate_name=False,
+            )
+            for data, prepared_rule in prepared_items
+        ]
+
+    def get_active_ingredients_by_ids(
+        self,
+        db: Session,
+        user_id: int,
+        inventory_ids: list[int],
+        *,
+        lock: bool = False,
+    ) -> list[tuple[FridgeItem, Ingredient]]:
+        """인증 사용자의 활성 냉장고 항목을 ID 순서로 조회합니다."""
+        query = (
+            db.query(FridgeItem, Ingredient)
+            .join(Ingredient, FridgeItem.ingredient_id == Ingredient.id)
+            .filter(
+                FridgeItem.user_id == user_id,
+                FridgeItem.id.in_(sorted(inventory_ids)),
+                FridgeItem.status.in_(ACTIVE_STATUSES),
+            )
+            .order_by(FridgeItem.id)
+        )
+        if lock:
+            query = query.with_for_update(of=FridgeItem)
+        rows = query.all()
+        if len(rows) != len(inventory_ids):
+            raise LookupError("One or more inventory items were not found.")
+        return rows
+
+    def update_ingredients_batch(
+        self,
+        db: Session,
+        user_id: int,
+        prepared_items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """사전 검사된 MCP 수정 목록을 ID 정렬 후 현재 트랜잭션에서 반영합니다."""
+        ids = sorted(int(item["inventory_id"]) for item in prepared_items)
+        rows = self.get_active_ingredients_by_ids(db, user_id, ids, lock=True)
+        by_id = {int(fridge_item.id): (fridge_item, ingredient) for fridge_item, ingredient in rows}
+        results: list[dict[str, Any]] = []
+
+        # MCP batch writes intentionally keep this transaction path separate.
+        # The existing REST service remains unchanged; consolidate only after both
+        # paths have equivalent regression coverage.
+        for prepared in sorted(prepared_items, key=lambda item: int(item["inventory_id"])):
+            fridge_item, current_ingredient = by_id[int(prepared["inventory_id"])]
+            before = prepared["before"]
+            current = self._inventory_snapshot(fridge_item, current_ingredient)
+            if current != before:
+                raise ValueError("Inventory changed after preview. Run inventory.update.preview again.")
+
+            data = IngredientCreate.model_validate(prepared["data"])
+            rule_data = prepared["prepared_rule"]
+            rule = (str(rule_data["storage_method"]), int(rule_data["lifespan_days"]))
+            ingredient = self._get_or_create_ingredient(db, data, validate=False)
+            storage_location, expiration_date, is_ai_recommended = self._resolve_item_dates_and_storage(
+                db, ingredient, data, rule
+            )
+            purchase_date = self._parse_date(data.purchase_date) or date.today()
+            d_day = (expiration_date - date.today()).days
+
+            fridge_item.ingredient_id = ingredient.id
+            fridge_item.display_name = data.name.strip()
+            fridge_item.quantity = data.quantity
+            fridge_item.unit = data.unit
+            fridge_item.storage_location = storage_location
+            fridge_item.purchased_date = purchase_date
+            fridge_item.expiry_date = expiration_date
+            fridge_item.status = self._get_status_from_d_day(d_day)
+            preserved_ai_flag = prepared.get("preserve_is_ai_recommended")
+            fridge_item.is_ai_recommended = (
+                is_ai_recommended if preserved_ai_flag is None else bool(preserved_ai_flag)
+            )
+            db.flush()
+            results.append(self._map_to_response(fridge_item, ingredient))
+        return results
+
+    def remove_ingredients_batch(
+        self,
+        db: Session,
+        user_id: int,
+        inventory_ids: list[int],
+    ) -> list[int]:
+        """인증 사용자의 활성 항목 전체를 잠근 뒤 현재 트랜잭션에서 제거합니다."""
+        rows = self.get_active_ingredients_by_ids(db, user_id, sorted(inventory_ids), lock=True)
+        removed_ids: list[int] = []
+        for fridge_item, _ingredient in rows:
+            fridge_item.status = "used"
+            removed_ids.append(int(fridge_item.id))
+        db.flush()
+        return removed_ids
+
+    def _inventory_snapshot(self, item: FridgeItem, ingredient: Ingredient) -> dict[str, Any]:
+        """Preview 이후 동시 변경을 감지할 공개 수정 필드 스냅샷을 만듭니다."""
+        return {
+            "name": item.display_name or ingredient.name,
+            "category": ingredient.category or DEFAULT_CATEGORY,
+            "quantity": float(item.quantity) if item.quantity is not None else 1.0,
+            "unit": item.unit or ingredient.default_unit or "개",
+            "storage_method": item.storage_location or DEFAULT_STORAGE,
+            "purchase_date": item.purchased_date.isoformat() if item.purchased_date else None,
+            "expiration_date": item.expiry_date.isoformat() if item.expiry_date else None,
+        }
 
     def get_ingredients(self, db: Session, user_id: int):
         """사용자 냉장고의 활성 식재료 목록을 조회합니다."""

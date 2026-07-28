@@ -250,12 +250,13 @@ function Header() {
           </Link>
         </div>
         <button
-          className={profileImageUrl ? 'site-header__mobile-bell has-profile-image' : 'site-header__mobile-bell'}
+          className={`site-header__mobile-bell${profileImageUrl ? ' has-profile-image' : !isLoggedIn ? ' is-login' : ''}`}
           type="button"
-          aria-label="알림 보기"
+          aria-label={isLoggedIn ? '마이페이지' : '로그인'}
           onClick={() => navigate(isLoggedIn ? '/mypage' : '/login')}
         >
           {profileImageUrl && <img src={profileImageUrl} alt="" />}
+          {!isLoggedIn && '로그인'}
         </button>
       </div>
     </header>

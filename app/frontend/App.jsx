@@ -31,6 +31,12 @@ import RecipeList from './pages/recipe_list/RecipeList.jsx'
 import RecipeRecommend from './pages/recipe_recommend/RecipeRecommend.jsx'
 import ShoppingList from './pages/shopping_list/ShoppingList.jsx'
 
+function RequireAuth({ children }) {
+  return localStorage.getItem('bobbeori-token')
+    ? children
+    : <Navigate to="/login" replace />
+}
+
 function AppLayout() {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
@@ -122,8 +128,8 @@ function AppLayout() {
         {!isAuthPage && <Breadcrumbs />}
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/fridge" element={<Fridge />} />
-          <Route path="/receipt-ocr" element={<ReceiptOcr />} />
+          <Route path="/fridge" element={<RequireAuth><Fridge /></RequireAuth>} />
+          <Route path="/receipt-ocr" element={<RequireAuth><ReceiptOcr /></RequireAuth>} />
           <Route path="/recipes" element={<RecipeList />} />
           <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/guide" element={<Guide />} />
@@ -133,7 +139,7 @@ function AppLayout() {
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback/:provider" element={<Callback />} />
           <Route path="/mypage" element={<Mypage />} />
-          <Route path="/shopping-list" element={<ShoppingList />} />
+          <Route path="/shopping-list" element={<RequireAuth><ShoppingList /></RequireAuth>} />
           <Route path="/faq" element={<FaqPage />} />
           <Route
             path="/support"

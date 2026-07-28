@@ -41,6 +41,7 @@ MCP_SCOPE_NAMES = (
     "receipt.write",
     "shopping.write",
     "calendar.write",
+    "inventory.write",
 )
 
 

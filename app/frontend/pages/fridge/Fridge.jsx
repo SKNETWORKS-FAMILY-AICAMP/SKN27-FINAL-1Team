@@ -757,8 +757,11 @@ function Fridge() {
     <section className="fridge-page" aria-labelledby="fridge-title">
       <div className="fridge-hero">
         <div className="fridge-hero__copy">
-          <h1 id="fridge-title">냉장고 재료 관리</h1>
-          <p>우리 집 재료를 한눈에 관리하고, 소비기한이 가까운 재료를 먼저 확인해요.</p>
+          <h1 className="hero-mobile-sr-only" id="fridge-title">냉장고 재료 관리</h1>
+          <p>
+            <span className="hero-desktop-copy">우리 집 재료를 한눈에 관리하고, 소비기한이 가까운 재료를 먼저 확인해요.</span>
+            <span className="hero-mobile-copy">냉장고 재료와 소비기한을<br />한눈에 확인해요.</span>
+          </p>
         </div>
         {ingredients.length > 0 ? (
           <label className="fridge-search" aria-label="재료명 검색">
@@ -1109,7 +1112,9 @@ function Fridge() {
         </div>
       )}
       {isLoggedIn ? (
-        <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={openAddModal}>+</button>
+        <button className="fridge-floating-add" type="button" aria-label="재료 추가" onClick={openAddModal}>
+          <span aria-hidden="true">+</span>
+        </button>
       ) : null}
     </section>
   )

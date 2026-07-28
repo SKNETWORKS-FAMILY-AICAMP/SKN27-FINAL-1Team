@@ -588,12 +588,12 @@
 @media (max-width: 760px) {
   .fridge-page {
     width: min(100% - 32px, 430px);
-    padding: 0 0 108px;
+    padding: 0 0 24px;
   }
 
   .fridge-hero {
     min-height: auto;
-    padding: 22px 20px;
+    padding: 12px 20px;
     display: block;
     box-sizing: border-box;
     overflow: hidden;
@@ -612,8 +612,11 @@
   }
 
   .fridge-hero__copy p {
-    margin-top: 8px;
-    font-size: 12px;
+    margin: 0;
+    color: #5f4635;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.5;
   }
 
   .fridge-search {
@@ -646,9 +649,10 @@
 
   .fridge-toolbar {
     min-height: 0;
-    padding: 0;
+    padding: 0 0 18px;
     display: block;
     border: 0;
+    border-bottom: 1px solid #f1dddd;
     border-radius: 0;
     background: transparent;
   }
@@ -669,7 +673,7 @@
   }
 
   .fridge-card-grid {
-    margin-top: 12px;
+    margin-top: 20px;
     padding: 0;
     display: grid;
     grid-template-columns: 1fr;
@@ -754,29 +758,36 @@
   }
 
   .fridge-floating-add {
-    width: 58px;
-    height: 58px;
+    width: 52px;
+    height: 52px;
+    padding: 0;
     display: grid;
     place-items: center;
     position: fixed;
-    right: 18px;
-    bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px));
+    right: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     z-index: 70;
+    box-sizing: border-box;
     border: 1.6px solid var(--figma-coral-stroke);
     border-radius: 50%;
     background: var(--figma-coral);
     color: #fff;
     cursor: pointer;
     font: inherit;
-    font-size: 34px;
-    font-weight: 500;
     box-shadow: 0 12px 24px rgba(255, 107, 116, 0.28);
+  }
+
+  .fridge-floating-add span {
+    font-size: 32px;
+    font-weight: 500;
+    line-height: 1;
+    transform: translateY(-2px);
   }
 }
 
 @media (max-width: 480px) {
   .fridge-page {
-    width: min(100% - 24px, 430px);
+    width: min(100% - 32px, 430px);
   }
 }
 /* ==========================================================================
