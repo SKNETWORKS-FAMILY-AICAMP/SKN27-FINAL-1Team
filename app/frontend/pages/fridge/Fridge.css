@@ -547,6 +547,54 @@
   display: none;
 }
 
+@media (min-width: 761px) {
+  .fridge-hero {
+    min-height: 300px;
+    padding: 36px 44px;
+    grid-template-columns: minmax(380px, 1fr) minmax(300px, 0.9fr);
+    grid-template-areas:
+      "copy empty"
+      "search empty";
+    align-content: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid #f3d9dc;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
+    box-shadow: 0 12px 36px rgba(85, 42, 43, 0.07);
+  }
+
+  .fridge-hero__copy {
+    grid-area: copy;
+    align-self: end;
+  }
+
+  .fridge-hero__copy h1 {
+    font-size: clamp(30px, 3vw, 40px);
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  .fridge-hero__copy p {
+    max-width: 520px;
+    margin-top: 14px;
+    color: #695453;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .fridge-hero__copy > p {
+    display: none;
+  }
+
+  .fridge-search {
+    width: min(100%, 620px);
+    grid-area: search;
+    align-self: start;
+    margin-top: 24px;
+  }
+}
+
 @media (max-width: 1120px) {
   .fridge-hero {
     grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
@@ -592,9 +640,10 @@
   }
 
   .fridge-hero {
-    min-height: auto;
-    padding: 12px 20px;
-    display: block;
+    min-height: 76px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
     box-sizing: border-box;
     overflow: hidden;
     border: 1px solid #f3d9dc;
@@ -643,13 +692,13 @@
   }
 
   .fridge-layout {
-    margin-top: 12px;
+    margin-top: var(--mobile-gap-section);
     display: block;
   }
 
   .fridge-toolbar {
     min-height: 0;
-    padding: 0 0 18px;
+    padding: 0 0 var(--mobile-gap-list);
     display: block;
     border: 0;
     border-bottom: 1px solid #f1dddd;
@@ -668,16 +717,16 @@
   }
 
   .fridge-toolbar-controls {
-    margin-top: 12px;
+    margin-top: var(--mobile-gap-group);
     justify-content: flex-end;
   }
 
   .fridge-card-grid {
-    margin-top: 20px;
+    margin-top: var(--mobile-gap-list);
     padding: 0;
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 20px;
     border: 0;
     border-radius: 0;
     background: transparent;
