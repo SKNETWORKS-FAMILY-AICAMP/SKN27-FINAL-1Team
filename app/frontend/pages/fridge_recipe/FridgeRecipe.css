@@ -330,7 +330,7 @@
 @media (max-width: 760px) {
   .fridge-recipe-page {
     width: min(100% - 28px, 430px);
-    padding: 0 0 108px;
+    padding: 0 0 24px;
     overflow-x: hidden;
     word-break: normal;
     overflow-wrap: anywhere;
@@ -338,7 +338,7 @@
 
   .fridge-recipe-hero {
     min-height: auto;
-    padding: 22px 20px;
+    padding: 16px 20px;
     display: block;
     border-radius: 22px;
   }
@@ -349,14 +349,16 @@
 
   .fridge-recipe-hero p {
     max-width: 100%;
-    margin-top: 8px;
-    font-size: 12px;
+    margin: 0;
+    color: #5f4635;
+    font-size: 13px;
+    font-weight: 800;
     line-height: 1.5;
     overflow-wrap: anywhere;
   }
 
   .fridge-recipe-hero__actions {
-    margin-top: 14px;
+    margin-top: 12px;
     gap: 6px;
   }
 
@@ -401,6 +403,12 @@
 
   .fridge-recipe-section-title {
     display: block;
+  }
+
+  .fridge-recipe-results {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #f1dddd;
   }
 
   .fridge-recipe-grid {
@@ -484,6 +492,6 @@
 
 @media (max-width: 480px) {
   .fridge-recipe-page {
-    width: min(100% - 24px, 430px);
+    width: min(100% - 32px, 430px);
   }
 }

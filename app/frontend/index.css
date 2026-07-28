@@ -166,3 +166,28 @@ body {
   }
 
 }
+/* Mobile hero copy keeps desktop marketing text unchanged. */
+.hero-mobile-copy {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .hero-desktop-copy {
+    display: none;
+  }
+
+  .hero-mobile-copy {
+    display: inline;
+  }
+
+  .hero-mobile-sr-only {
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    position: absolute;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

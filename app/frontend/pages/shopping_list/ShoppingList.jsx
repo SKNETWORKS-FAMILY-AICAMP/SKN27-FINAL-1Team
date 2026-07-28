@@ -890,9 +890,10 @@ function ShoppingList() {
       <div className="shopping-hero shopping-hero--card">
         <div className="shopping-hero__copy">
           <span className="shopping-eyebrow">장보기</span>
-          <h1 id="shopping-title">지금 사야 할 재료</h1>
+          <h1 className="hero-mobile-sr-only" id="shopping-title">지금 사야 할 재료</h1>
           <p>
-            냉장고에 있는 재료와 부족한 재료를 함께 보고, 필요한 재료는 구매 링크로 바로 확인해요.
+            <span className="hero-desktop-copy">냉장고에 있는 재료와 부족한 재료를 함께 보고, 필요한 재료는 구매 링크로 바로 확인해요.</span>
+            <span className="hero-mobile-copy">부족한 재료를 확인하고<br />필요한 재료만 구매해요.</span>
           </p>
         </div>
         <div className="shopping-hero__art" aria-hidden="true">

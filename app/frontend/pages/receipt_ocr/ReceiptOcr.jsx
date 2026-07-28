@@ -1832,12 +1832,15 @@ function ReceiptOcr() {
     <section className="receipt-page" aria-labelledby="receipt-title">
       <div className="receipt-hero">
         <div className="receipt-hero__copy">
-          <h1 id="receipt-title">
+          <h1 className="hero-mobile-sr-only" id="receipt-title">
             구매한 식재료를
             <br />
             한번에 정리하세요
           </h1>
-          <p>영수증을 올리면 재료명, 수량, 금액을 확인해 냉장고 관리까지 이어져요.</p>
+          <p>
+            <span className="hero-desktop-copy">영수증을 올리면 재료명, 수량, 금액을 확인해 냉장고 관리까지 이어져요.</span>
+            <span className="hero-mobile-copy">영수증으로 구매한 식재료를<br />한 번에 정리해요.</span>
+          </p>
         </div>
         <ImageSlot className="receipt-hero__image" src={imageReceipt} />
       </div>

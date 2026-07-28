@@ -341,6 +341,7 @@
   .site-header__mobile-bell {
     width: 36px;
     height: 36px;
+    padding: 0;
     display: grid;
     place-items: center;
     border: 0;
@@ -381,6 +382,22 @@
   }
 
   .site-header__mobile-bell.has-profile-image::before {
+    display: none;
+  }
+
+  .site-header__mobile-bell.is-login {
+    width: 48px;
+    height: 28px;
+    justify-self: end;
+    border-radius: 9px;
+    background: #ff6b74;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .site-header__mobile-bell.is-login::before {
     display: none;
   }
 
