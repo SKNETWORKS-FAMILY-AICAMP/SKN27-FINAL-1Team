@@ -87,8 +87,8 @@ def test_dev_token_verifier_uses_token_subject_and_server_scopes():
         "bobbeori-mcp/shopping.write",
         "bobbeori-mcp/calendar.write",
     }.issubset(access_token.scopes)
-    assert set(settings.MCP_REQUIRED_SCOPES).issubset(access_token.scopes)
-    assert "bobbeori-mcp/inventory.write" not in settings.MCP_REQUIRED_SCOPES
+    assert set(settings.MCP_REQUIRED_SCOPES) == set(access_token.scopes)
+    assert "bobbeori-mcp/inventory.write" in settings.MCP_REQUIRED_SCOPES
 
 
 def test_dev_token_verifier_rejects_invalid_token():

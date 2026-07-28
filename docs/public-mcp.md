@@ -16,6 +16,9 @@ The Streamable HTTP endpoint is `http://localhost:8001/mcp`. In local developmen
 |---|---|---|
 | `inventory.list` | `bobbeori-mcp/inventory.read` | Read active refrigerator items |
 | `inventory.expiring` | `bobbeori-mcp/inventory.read` | Read items near or past expiry |
+| `inventory.add.preview` / `inventory.add` | `bobbeori-mcp/inventory.write` | Review, then add 1–50 refrigerator items atomically |
+| `inventory.update.preview` / `inventory.update` | `bobbeori-mcp/inventory.write` | Review, then partially update 1–50 active items atomically |
+| `inventory.remove.preview` / `inventory.remove` | `bobbeori-mcp/inventory.write` | Review, then remove 1–100 active items atomically |
 | `recipe.recommend` | `bobbeori-mcp/recipe.read` | Recommend recipes from inventory |
 | `recipe.get` | `bobbeori-mcp/recipe.read` | Read recipe details and ingredient ownership |
 | `ingredient.guide` | `bobbeori-mcp/guide.read` | Read storage, preparation, freshness, and nutrition guidance |
@@ -44,8 +47,8 @@ MCP_JWKS_URL=https://auth.example.com/.well-known/jwks.json
 MCP_JWT_AUDIENCE=https://api.example.com/mcp
 MCP_JWT_ALGORITHMS=RS256
 MCP_SCOPE_PREFIX=bobbeori-mcp
-MCP_SUPPORTED_SCOPES=bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write
-MCP_REQUIRED_SCOPES=bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write
+MCP_SUPPORTED_SCOPES=bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write,bobbeori-mcp/inventory.write
+MCP_REQUIRED_SCOPES=bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write,bobbeori-mcp/inventory.write
 MCP_PREVIEW_TOKEN_SECRET=replace-with-a-separate-random-secret-at-least-32-chars
 MCP_PREVIEW_TTL_SECONDS=600
 # Only needed if the reverse proxy forwards a Host/Origin unlike MCP_RESOURCE_URL.
@@ -55,7 +58,7 @@ MCP_ALLOWED_ORIGINS=https://api.example.com
 
 The authorization server must support OAuth 2.1 authorization code flow with PKCE and expose authorization-server metadata. Its access token `sub` is the external OAuth subject, and the Bobbeori user maps to it through `POST /api/v1/auth/mcp/link` after the user is signed in to Bobbeori. The MCP server validates signature, issuer, audience, expiry, and scopes and exposes protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`.
 
-The initial MCP account link requests all six scopes so ChatGPT and Codex can use every advertised tool without a second OAuth flow. Each tool still declares and enforces only its own scope, and write execution additionally requires the signed preview token plus explicit confirmation.
+The initial MCP account link requests all seven scopes, including `inventory.write`, so ChatGPT and Codex can use all 19 advertised tools without a second OAuth flow. Each tool still declares and enforces only its own scope, and write execution additionally requires the signed preview token plus explicit confirmation. Existing connections must complete OAuth login again after `inventory.write` is deployed because previously issued access tokens do not contain the new scope.
 
 ## Receipt storage
 
@@ -76,7 +79,7 @@ After deploying to public HTTPS, Codex can register the server with:
 
 ```powershell
 codex mcp add bobbeori --url https://api.example.com/mcp
-codex mcp login bobbeori --scopes bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write
+codex mcp login bobbeori --scopes bobbeori-mcp/inventory.read,bobbeori-mcp/recipe.read,bobbeori-mcp/guide.read,bobbeori-mcp/receipt.write,bobbeori-mcp/shopping.write,bobbeori-mcp/calendar.write,bobbeori-mcp/inventory.write
 ```
 
 For ChatGPT, enable developer mode, create a connector using the same public `/mcp` URL, and complete the OAuth account-linking flow.

@@ -109,19 +109,17 @@ class Settings:
         if value.strip()
     ]
     MCP_SCOPE_PREFIX: str = os.getenv("MCP_SCOPE_PREFIX", "bobbeori-mcp").strip().rstrip("/")
-    _MCP_REQUIRED_DEFAULT_SCOPES: str = (
+    _MCP_DEFAULT_SCOPES: str = (
         f"{MCP_SCOPE_PREFIX}/inventory.read,{MCP_SCOPE_PREFIX}/recipe.read,"
         f"{MCP_SCOPE_PREFIX}/guide.read,{MCP_SCOPE_PREFIX}/receipt.write,"
-        f"{MCP_SCOPE_PREFIX}/shopping.write,{MCP_SCOPE_PREFIX}/calendar.write"
-    )
-    _MCP_SUPPORTED_DEFAULT_SCOPES: str = (
-        f"{_MCP_REQUIRED_DEFAULT_SCOPES},{MCP_SCOPE_PREFIX}/inventory.write"
+        f"{MCP_SCOPE_PREFIX}/shopping.write,{MCP_SCOPE_PREFIX}/calendar.write,"
+        f"{MCP_SCOPE_PREFIX}/inventory.write"
     )
     MCP_SUPPORTED_SCOPES: list[str] = [
         value.strip()
         for value in os.getenv(
             "MCP_SUPPORTED_SCOPES",
-            _MCP_SUPPORTED_DEFAULT_SCOPES,
+            _MCP_DEFAULT_SCOPES,
         ).split(",")
         if value.strip()
     ]
@@ -129,7 +127,7 @@ class Settings:
         value.strip()
         for value in os.getenv(
             "MCP_REQUIRED_SCOPES",
-            _MCP_REQUIRED_DEFAULT_SCOPES,
+            _MCP_DEFAULT_SCOPES,
         ).split(",")
         if value.strip()
     ]
