@@ -173,6 +173,95 @@ def test_source_recipe_list_keeps_the_available_recipe_title():
     ]
 
 
+def test_owned_ingredient_sources_are_merged_and_exposed_as_recipe_filters():
+    service = ShoppingService(provider=FakeProvider())
+    owned_ingredients = service._dedupe_owned_ingredients(
+        [
+            {
+                "name": "물",
+                "ingredient_id": 23,
+                "source_refs": [
+                    {"type": "recipe", "recipe_id": 7, "recipe_title": "단호박물까스"},
+                ],
+            },
+            {
+                "name": "물",
+                "ingredient_id": 23,
+                "source_refs": [
+                    {"type": "recipe", "recipe_id": 8, "recipe_title": "들깨 무나물"},
+                ],
+            },
+        ]
+    )
+    shopping_list = SimpleNamespace(recipe_id=None, recipe=None, items=[])
+
+    assert owned_ingredients == [
+        {
+            "name": "물",
+            "ingredient_id": 23,
+            "source_refs": [
+                {"type": "recipe", "recipe_id": 7, "recipe_title": "단호박물까스"},
+                {"type": "recipe", "recipe_id": 8, "recipe_title": "들깨 무나물"},
+            ],
+        }
+    ]
+    assert service._list_source_recipes(shopping_list, owned_ingredients) == [
+        {"type": "recipe", "recipe_id": 7, "recipe_title": "단호박물까스"},
+        {"type": "recipe", "recipe_id": 8, "recipe_title": "들깨 무나물"},
+    ]
+
+
+def test_recipe_sync_tags_owned_ingredients_with_their_recipe_source(monkeypatch):
+    service = ShoppingService(provider=FakeProvider())
+    db = FakeDb()
+    shopping_list = SimpleNamespace(
+        id=11,
+        recipe_id=7,
+        recipe=SimpleNamespace(title="들깨 무나물"),
+        source="recipe",
+        status="active",
+        items=[],
+    )
+    shopping_service_module = importlib.import_module(
+        "app.backend.services.shopping_service.shopping_service"
+    )
+    monkeypatch.setattr(
+        shopping_service_module.recipe_detail_service,
+        "get_recipe_detail",
+        lambda *_args, **_kwargs: {
+            "title": "들깨 무나물",
+            "owned_ingredients": [{"name": "물", "ingredient_id": 23}],
+            "maybe_owned_ingredients": [],
+            "missing_ingredients": [],
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_source_ref",
+        lambda *_args, **_kwargs: {
+            "type": "recipe",
+            "recipe_id": 7,
+            "recipe_title": "들깨 무나물",
+        },
+    )
+    monkeypatch.setattr(service, "_merge_items_into_list", lambda *_args, **_kwargs: False)
+
+    result = service._sync_recipe_list(db=db, user_id=5, shopping_list=shopping_list)
+
+    assert result == {
+        "changed": False,
+        "owned_ingredients": [
+            {
+                "name": "물",
+                "ingredient_id": 23,
+                "source_refs": [
+                    {"type": "recipe", "recipe_id": 7, "recipe_title": "들깨 무나물"},
+                ],
+            }
+        ],
+    }
+
+
 def test_complete_purchase_can_stock_an_owned_ingredient(monkeypatch):
     service = ShoppingService(provider=FakeProvider())
     db = FakeDb()
@@ -230,6 +319,8 @@ def test_remove_recipe_source_keeps_items_shared_with_another_source(monkeypatch
     db = FakeDb()
     recipe_only_item = SimpleNamespace(
         id=1,
+        ingredient_id=101,
+        name="상추",
         source_type="recipe",
         source_refs=[{"type": "recipe", "recipe_id": 7, "recipe_title": "리스샐러드"}],
         is_purchased=False,
@@ -237,6 +328,8 @@ def test_remove_recipe_source_keeps_items_shared_with_another_source(monkeypatch
     )
     shared_item = SimpleNamespace(
         id=2,
+        ingredient_id=102,
+        name="설탕",
         source_type="recipe",
         source_refs=[
             {"type": "recipe", "recipe_id": 7, "recipe_title": "리스샐러드"},
@@ -247,6 +340,8 @@ def test_remove_recipe_source_keeps_items_shared_with_another_source(monkeypatch
     )
     manual_item = SimpleNamespace(
         id=3,
+        ingredient_id=103,
+        name="우유",
         source_type="manual",
         source_refs=[{"type": "manual"}],
         is_purchased=False,
@@ -261,6 +356,19 @@ def test_remove_recipe_source_keeps_items_shared_with_another_source(monkeypatch
     )
     monkeypatch.setattr(service, "_get_user_list", lambda *_args, **_kwargs: shopping_list)
     monkeypatch.setattr(service, "get_list", lambda *_args, **_kwargs: {"id": 11})
+    shopping_service_module = importlib.import_module(
+        "app.backend.services.shopping_service.shopping_service"
+    )
+    monkeypatch.setattr(
+        shopping_service_module.recipe_detail_service,
+        "get_recipe_detail",
+        lambda _db, recipe_id, _user_id: {
+            "title": "체리초코케이크",
+            "missing_ingredients": [
+                {"ingredient_id": 102, "name": "설탕", "amount": "20g"},
+            ],
+        },
+    )
 
     result = service.remove_recipe_source(
         db=db,
@@ -279,3 +387,66 @@ def test_remove_recipe_source_keeps_items_shared_with_another_source(monkeypatch
     ]
     assert manual_item.source_refs == [{"type": "manual"}]
     assert db.commit_count == 1
+
+
+def test_remove_recipe_source_recovers_missing_shared_recipe_ref(monkeypatch):
+    service = ShoppingService(provider=FakeProvider())
+    db = FakeDb()
+    shared_item = SimpleNamespace(
+        id=1,
+        ingredient_id=23,
+        name="양파",
+        source_type="recipe",
+        source_refs=[{"type": "recipe", "recipe_id": 7, "recipe_title": "프렌치토스트"}],
+        is_purchased=False,
+        is_deleted=False,
+    )
+    remaining_recipe_item = SimpleNamespace(
+        id=2,
+        ingredient_id=99,
+        name="감자",
+        source_type="recipe",
+        source_refs=[{"type": "recipe", "recipe_id": 8, "recipe_title": "애호박전"}],
+        is_purchased=False,
+        is_deleted=False,
+    )
+    shopping_list = SimpleNamespace(
+        id=11,
+        recipe_id=7,
+        recipe=SimpleNamespace(title="프렌치토스트"),
+        status="active",
+        items=[shared_item, remaining_recipe_item],
+    )
+    monkeypatch.setattr(service, "_get_user_list", lambda *_args, **_kwargs: shopping_list)
+    monkeypatch.setattr(service, "get_list", lambda *_args, **_kwargs: {"id": 11})
+
+    shopping_service_module = importlib.import_module(
+        "app.backend.services.shopping_service.shopping_service"
+    )
+    monkeypatch.setattr(
+        shopping_service_module.recipe_detail_service,
+        "get_recipe_detail",
+        lambda _db, recipe_id, _user_id: {
+            "title": "애호박전",
+            "missing_ingredients": [
+                {"ingredient_id": 24, "name": "양파", "amount": "1개"},
+                {"ingredient_id": 99, "name": "감자", "amount": "1개"},
+            ],
+        },
+    )
+
+    service.remove_recipe_source(
+        db=db,
+        user_id=5,
+        shopping_list_id=11,
+        recipe_id=7,
+    )
+
+    assert db.deleted == []
+    assert shopping_list.items == [shared_item, remaining_recipe_item]
+    assert shared_item.source_refs == [
+        {"type": "recipe", "recipe_id": 8, "recipe_title": "애호박전"}
+    ]
+    assert remaining_recipe_item.source_refs == [
+        {"type": "recipe", "recipe_id": 8, "recipe_title": "애호박전"}
+    ]

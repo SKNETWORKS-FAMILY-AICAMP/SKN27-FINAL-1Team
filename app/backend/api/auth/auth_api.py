@@ -56,6 +56,7 @@ async def social_login(login_data: SocialLoginRequest, db: Session = Depends(get
         provider_id=user_info["provider_id"],
         email=user_info.get("email"),
         nickname=user_info.get("nickname"),
+        profile_image_url=user_info.get("profile_image_url"),
     )
     return {"access_token": access_token, "token_type": "bearer", "is_new_user": is_new_user}
 

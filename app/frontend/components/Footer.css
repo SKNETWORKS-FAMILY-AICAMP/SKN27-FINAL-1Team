@@ -149,10 +149,6 @@
 }
 
 @media (max-width: 680px) {
-  .site-footer {
-    padding-bottom: 66px;
-  }
-
   .site-footer__inner {
     padding: 22px 0 14px;
     grid-template-columns: 1fr;

@@ -70,10 +70,18 @@ function RecipeList() {
   const { dialogNode, showAlert } = useAppDialog();
 
   const criteria = useMemo(
-    () => RecipeFilterConfig.parseSearchParams(location.search),
-
-    [location.search],
+    () => RecipeFilterConfig.parseCriteria(location.search, location.state),
+    [location.search, location.state],
   );
+
+  const criteriaKey = [
+    criteria.query,
+    criteria.ingredient,
+    criteria.category,
+    criteria.timeFilter,
+    criteria.levelFilter,
+    criteria.browseAll ? "1" : "0",
+  ].join("|");
 
   const [draftSearchTerm, setDraftSearchTerm] = useState(criteria.query || criteria.ingredient);
 
@@ -103,16 +111,20 @@ function RecipeList() {
 
   const loadMoreRef = useRef(null);
 
-  const lastSearchRef = useRef(location.search);
-  const fetchPage = lastSearchRef.current !== location.search ? 1 : page;
+  const lastSearchRef = useRef(criteriaKey);
+  const fetchPage = lastSearchRef.current !== criteriaKey ? 1 : page;
 
   const navigateToCriteria = (nextCriteria) => {
-    const params = RecipeFilterConfig.buildSearchParams(nextCriteria);
-
-    const search = params.toString();
-
-    navigate(search ? `/recipes?${search}` : "/recipes", { replace: true });
+    const state = RecipeFilterConfig.buildLocationState(nextCriteria);
+    RecipeFilterConfig.writeStoredCriteria(state);
+    navigate("/recipes", { replace: true, state });
   };
+
+  useEffect(() => {
+    if (!RecipeFilterConfig.hasLegacyCriteriaInUrl(location.search)) return;
+    navigateToCriteria(RecipeFilterConfig.parseCriteria(location.search, location.state));
+    // 옛 URL 쿼리를 state로 옮기고 주소에서 제거
+  }, [location.search, location.state]);
 
   useEffect(() => {
     setDraftSearchTerm(criteria.query || criteria.ingredient);
@@ -129,8 +141,8 @@ function RecipeList() {
 
     setError(null);
 
-    lastSearchRef.current = location.search;
-  }, [location.search, criteria.query, criteria.ingredient]);
+    lastSearchRef.current = criteriaKey;
+  }, [criteriaKey, criteria.query, criteria.ingredient]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -191,7 +203,7 @@ function RecipeList() {
     fetchRecipes();
 
     return () => controller.abort();
-  }, [location.search, page, criteria, fetchPage, retryVersion]);
+  }, [criteriaKey, page, criteria, fetchPage, retryVersion]);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -325,7 +337,14 @@ function RecipeList() {
   };
 
   const resetFilters = () => {
-    navigate("/recipes");
+    navigateToCriteria({
+      query: "",
+      ingredient: "",
+      category: RecipeFilterConfig.FILTER_ALL,
+      timeFilter: RecipeFilterConfig.FILTER_ALL,
+      levelFilter: RecipeFilterConfig.FILTER_ALL,
+      browseAll: false,
+    });
   };
 
   const showNoResults = !isLoading && !error && recipes.length === 0;
@@ -447,14 +466,14 @@ function RecipeList() {
             <div className="recipe-list-choice-group__options">
               {difficultyOptions.map((option) => (
                 <button
-                  className={criteria.levelFilter === option ? "is-active" : ""}
-                  key={option}
+                  className={criteria.levelFilter === option.value ? "is-active" : ""}
+                  key={option.value}
                   type="button"
-                  aria-pressed={criteria.levelFilter === option}
+                  aria-pressed={criteria.levelFilter === option.value}
                   disabled={!FEATURE_FLAGS.levelFilter}
-                  onClick={() => handleFilterChange({ levelFilter: option })}
+                  onClick={() => handleFilterChange({ levelFilter: option.value })}
                 >
-                  {option}
+                  {option.label}
                 </button>
               ))}
             </div>

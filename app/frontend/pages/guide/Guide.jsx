@@ -112,6 +112,10 @@ function splitTipText(text) {
     .filter(Boolean)
 }
 
+function compactTipTitle(title = '') {
+  return String(title).replace(/(?:방법|확인법)$/, '').trim()
+}
+
 function normalizeSourceUrl(url) {
   if (!url) return null
   let normalized = String(url).trim().replace(/\s+/g, '')
@@ -784,15 +788,23 @@ function Guide() {
         </div>
 
         <div className="guide-search-wrap">
-          <label className="guide-search guide-hero__search" aria-label="식재료명 검색">
+          <div className="guide-search guide-hero__search" role="search">
             <span aria-hidden="true" />
             <input
+              aria-label="식재료명 검색"
               placeholder="식재료명을 검색해보세요"
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
-          </label>
+            <button
+              type="button"
+              disabled={!searchTerm.trim() || !searchSuggestions.length}
+              onClick={() => selectIngredient(searchSuggestions[0])}
+            >
+              검색
+            </button>
+          </div>
 
           {searchTerm.trim() ? (
             <div className="guide-search-suggestions" aria-live="polite">
@@ -827,7 +839,7 @@ function Guide() {
       {errorMessage ? <p className="guide-error">{errorMessage}</p> : null}
 
       <section
-        className={`guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}`}
+        className={`guide-ingredients${isLoggedIn ? '' : ' guide-ingredients--seasonal'}${isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? ' is-empty' : ''}`}
         aria-labelledby="guide-ingredients-title"
       >
           <div className="guide-ingredients__header">
@@ -870,7 +882,8 @@ function Guide() {
           ) : null}
           {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
             <div className="guide-empty guide-fridge-empty">
-              <span>냉장고 재료를 등록해주세요.</span>
+              <span className="guide-fridge-empty__desktop">냉장고 재료를 등록해주세요.</span>
+              <span className="guide-fridge-empty__mobile">등록된 재료가 없습니다.</span>
             </div>
           ) : null}
           {!isLoggedIn && !isListLoading && guestSuggestions.length === 0 ? (
@@ -1045,11 +1058,17 @@ function Guide() {
                         key={tip.title}
                         role="tab"
                         aria-selected={selectedTip.title === tip.title}
+                        aria-label={tip.title}
                         onClick={() => setSelectedTipTitle(tip.title)}
                       >
                         <div className="guide-tip-card__title">
                           <span aria-hidden="true" />
-                          <h3>{tip.title}</h3>
+                          <h3>
+                            <b className="guide-tip-title--full">{tip.title}</b>
+                            <b aria-hidden="true" className="guide-tip-title--compact">
+                              {compactTipTitle(tip.title)}
+                            </b>
+                          </h3>
                         </div>
                       </button>
                     ))}
@@ -1080,11 +1099,13 @@ function Guide() {
                             {!tip.isMissing ? (
                               <div className="guide-tip-source">
                                 {tip.sourceUrl ? (
-                                  <a href={tip.sourceUrl} target="_blank" rel="noreferrer">
-                                    {tip.source}
+                                  <a href={tip.sourceUrl} target="_blank" rel="noreferrer" title={tip.source}>
+                                    <span className="guide-tip-source__name">{tip.source.split(' - ')[0]}</span>
                                   </a>
                                 ) : (
-                                  <span>{tip.source}</span>
+                                  <span title={tip.source}>
+                                    <span className="guide-tip-source__name">{tip.source.split(' - ')[0]}</span>
+                                  </span>
                                 )}
                               </div>
                             ) : (

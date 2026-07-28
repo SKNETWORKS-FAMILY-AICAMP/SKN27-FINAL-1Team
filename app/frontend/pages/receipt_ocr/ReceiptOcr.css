@@ -3047,25 +3047,30 @@ body.is-receipt-crop-resizing * {
   }
 
   .receipt-page {
-    width: min(100% - 28px, 430px);
+    width: min(100% - 32px, 430px);
     padding: 0 0 108px;
     overflow-x: hidden;
   }
 
   .receipt-hero {
     min-height: auto;
-    padding-top: 8px;
-    grid-template-columns: 1fr;
-    gap: 0;
+    padding: 22px 20px;
+    display: block;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid #f3d9dc;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
+    box-shadow: 0 12px 36px rgba(85, 42, 43, 0.07);
   }
 
   .receipt-hero h1 {
-    font-size: 28px;
+    font-size: 25px;
   }
 
   .receipt-hero p {
-    margin-top: 10px;
-    font-size: 13px;
+    margin-top: 8px;
+    font-size: 12px;
     line-height: 1.45;
   }
 

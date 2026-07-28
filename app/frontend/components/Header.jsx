@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import appIcon from '../assets/app_icon.png'
 import logoText from '../assets/logo_text_extracted.png'
+import { API_URL, authenticatedFetch } from '../utils/api.js'
 import { shouldRevealAppBanner } from './headerBanner.js'
 import './Header.css'
 
@@ -38,6 +39,7 @@ function Header() {
   const [isAppBannerDismissed, setIsAppBannerDismissed] = useState(false)
   const [isHomeBannerReady, setIsHomeBannerReady] = useState(false)
   const [authMode, setAuthMode] = useState(getAuthMode)
+  const [profileImageUrl, setProfileImageUrl] = useState(null)
   const isLoggedIn = authMode === 'user'
   const isAppBannerVisible = !isAppBannerDismissed && (pathname !== '/' || isHomeBannerReady)
   const headerClassName = [
@@ -63,6 +65,18 @@ function Header() {
       window.removeEventListener('bobbeori-auth-change', syncAuthMode)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setProfileImageUrl(null)
+      return
+    }
+
+    authenticatedFetch(`${API_URL}/api/v1/auth/me`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((user) => setProfileImageUrl(user?.profile_image_url || null))
+      .catch(() => setProfileImageUrl(null))
+  }, [isLoggedIn])
 
   useEffect(() => {
     closeMobileMenu()
@@ -146,7 +160,11 @@ function Header() {
           ))}
 
           <div
-            className={isRecipeMenuOpen ? 'site-header__dropdown is-open' : 'site-header__dropdown'}
+            className={
+              isRecipeMenuOpen
+                ? 'site-header__dropdown site-header__desktop-only is-open'
+                : 'site-header__dropdown site-header__desktop-only'
+            }
             onMouseEnter={() => setIsRecipeMenuOpen(true)}
             onMouseLeave={() => setIsRecipeMenuOpen(false)}
             onFocus={() => setIsRecipeMenuOpen(true)}
@@ -190,6 +208,21 @@ function Header() {
             </div>
           </div>
 
+          {recipeItems.map((item) => (
+            <NavLink
+              key={`mobile-${item.to}`}
+              to={item.to}
+              className={({ isActive }) =>
+                isActive
+                  ? 'site-header__nav-link site-header__mobile-only active'
+                  : 'site-header__nav-link site-header__mobile-only'
+              }
+              onClick={closeMobileMenu}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+
           <NavLink
             to="/shopping-list"
             className={({ isActive }) =>
@@ -217,11 +250,13 @@ function Header() {
           </Link>
         </div>
         <button
-          className="site-header__mobile-bell"
+          className={profileImageUrl ? 'site-header__mobile-bell has-profile-image' : 'site-header__mobile-bell'}
           type="button"
           aria-label="알림 보기"
-          onClick={() => navigate('/mypage')}
-        />
+          onClick={() => navigate(isLoggedIn ? '/mypage' : '/login')}
+        >
+          {profileImageUrl && <img src={profileImageUrl} alt="" />}
+        </button>
       </div>
     </header>
   )

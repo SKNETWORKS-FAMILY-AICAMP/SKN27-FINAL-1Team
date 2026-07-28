@@ -14,7 +14,8 @@ class AuthService:
         provider: str, 
         provider_id: str, 
         email: str = None, 
-        nickname: str = None
+        nickname: str = None,
+        profile_image_url: str = None,
     ) -> tuple[str, bool]:
         """
         소셜 프로필 정보를 받아 DB 조회를 거쳐 회원가입 또는 로그인을 처리하고,
@@ -49,7 +50,8 @@ class AuthService:
                     provider=provider,
                     provider_id=provider_id,
                     email=email,
-                    nickname=safe_nickname
+                    nickname=safe_nickname,
+                    profile_image_url=profile_image_url,
                 )
                 db.add(user)
                 # user.id 값을 임시로 얻어와서 하위 테이블 생성을 위해 DB에 flush 실행
@@ -59,6 +61,9 @@ class AuthService:
                 db.commit()
                 # 새롭게 생성된 DB의 최신 상태를 객체에 동기화(refresh)
                 db.refresh(user)
+            elif profile_image_url and user.profile_image_url != profile_image_url:
+                user.profile_image_url = profile_image_url
+                db.commit()
                 
             # 자체 JWT Access Token 생성 (유저 ID를 subject로 담음)
             access_token = create_access_token(subject=str(user.id))
