@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -54,17 +55,37 @@ def load_cases(agent: str | None, regression_only: bool = False) -> list[dict]:
     ]
     return [case for case in cases if agent is None or case["agent"] == agent]
 
+def _latest_bot_context(history: list[dict]) -> tuple[str, dict]:
+    """평가 케이스의 마지막 봇 메시지에서 대기 문맥과 슬롯을 복원합니다."""
+    for message in reversed(history or []):
+        if message.get("role") == "bot":
+            return message.get("text", ""), message.get("slots") if isinstance(message.get("slots"), dict) else {}
+    return "", {}
+
+
 def infer_intent(case: dict) -> str:
     """평가 문장을 해당 도메인의 조회 또는 미리보기 intent로 변환합니다."""
     text = case["message"].replace(" ", "")
     agent = case["agent"]
+    previous_text, _ = _latest_bot_context(case.get("history", []))
+    previous_normalized = previous_text.replace(" ", "")
     if agent == "inventory":
         if "소비기한" in text or "빨리먹" in text:
             return "inventory.expiring"
+        if "보관위치" in text and any(storage in text for storage in ("냉장", "냉동", "실온")):
+            return "inventory.storage_change"
         if "삭제" in text or "폐기" in text or "버릴" in text:
             return "inventory.delete"
         if "뭐가있" in text or "남아있" in text or "재고" in text:
             return "inventory.list"
+        if "어디에보관" in previous_normalized and any(storage in text for storage in ("냉장", "냉동", "실온")):
+            return "inventory.pending_add_storage"
+        if "몇개추가" in previous_normalized and any(char.isdigit() for char in text):
+            return "inventory.pending_add"
+        if "몇개소비" in previous_normalized and any(char.isdigit() for char in text):
+            return "inventory.pending_consume"
+        if "몇개폐기" in previous_normalized and any(char.isdigit() for char in text):
+            return "inventory.pending_delete"
         return "inventory.action"
     if agent == "recipe":
         if "먹기좋" in text or "어울" in text:
@@ -83,18 +104,17 @@ def infer_intent(case: dict) -> str:
     if agent == "alarm":
         return "alarm.calendar" if "일정" in text else "alarm.notification"
     return {"guide": "ingredient.guide", "general_food": "food.general"}[agent]
-
-
 def run_case(case: dict, db, user_id: int) -> dict:
     """확인 명령 없이 단일 에이전트의 미리보기 응답을 수집합니다."""
     node = AGENT_NODES[case["agent"]]
     state = {
         "text": case["message"],
-        "history": case["history"],
+        # 평가 픽스처의 JSON 메시지를 실제 채팅 객체와 같은 속성 접근 형태로 변환합니다.
+        "history": [SimpleNamespace(**message) if isinstance(message, dict) else message for message in case["history"]],
         "intent": infer_intent(case),
         "db": db,
         "user_id": user_id,
-        "slots": {},
+        "slots": _latest_bot_context(case.get("history", []))[1],
         "service": supervisor_service,
     }
     try:

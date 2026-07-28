@@ -256,8 +256,9 @@ class BobbeoriStack(Stack):
             "NEO4J_DATABASE": "neo4j",
             "AWS_REGION": Aws.REGION,
             "RECEIPT_STORAGE_BACKEND": "s3",
-            "S3_RECEIPT_BUCKET": receipts_bucket.bucket_name,
-            "S3_RECEIPT_PREFIX": "receipts",
+            "RECEIPT_S3_BUCKET": receipts_bucket.bucket_name,
+            "RECEIPT_S3_PREFIX": f"receipts/{environment_name}",
+            "RECEIPT_S3_TEMP_PREFIX": f"temp/{environment_name}",
             "CORS_ALLOWED_ORIGINS": self.node.try_get_context("cors_allowed_origins")
             or f"https://{app_host}",
             "MCP_DEV_TOKEN_AUTH": "false",
