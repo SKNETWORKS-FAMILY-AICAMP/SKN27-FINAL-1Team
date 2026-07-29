@@ -121,7 +121,9 @@
 | **Database** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white) ![Neo4j](https://img.shields.io/badge/Neo4j-008CC1?logo=neo4j&logoColor=white) |
 | **AI / Agent** | ![OpenAI](https://img.shields.io/badge/OpenAI_Vision-412991?logo=openai&logoColor=white) ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?logo=langchain&logoColor=white) ![LangGraph](https://img.shields.io/badge/LangGraph-1C3C3C?logo=langchain&logoColor=white) ![Tavily](https://img.shields.io/badge/Tavily-6E56CF) |
 | **Infra / 연동** | ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white) ![MCP](https://img.shields.io/badge/MCP-000000) ![RunPod](https://img.shields.io/badge/RunPod_Serverless-673AB7) ![Google Calendar](https://img.shields.io/badge/Google_Calendar-4285F4?logo=googlecalendar&logoColor=white) ![OAuth](https://img.shields.io/badge/Kakao·Naver·Google_OAuth-FEE500) ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white) |
-
+| **SEO / Web** | ![Vite](https://img.shields.io/badge/Vite-Prerender-646CFF?logo=vite&logoColor=white) ![Google Search](https://img.shields.io/badge/Google_Search-SEO-4285F4?logo=google&logoColor=white) ![Open Graph](https://img.shields.io/badge/Open_Graph-Metadata-1877F2?logo=facebook&logoColor=white) ![Twitter Card](https://img.shields.io/badge/Twitter_Card-000000?logo=x&logoColor=white) ![Schema.org](https://img.shields.io/badge/Schema.org-JSON--LD-7B1FA2) ![Canonical](https://img.shields.io/badge/Canonical-URL-009688) ![Sitemap](https://img.shields.io/badge/Sitemap-XML-FF9800) ![Robots](https://img.shields.io/badge/Robots-txt-607D8B) |
+| **Observability / Analytics** | ![Langfuse](https://img.shields.io/badge/Langfuse-000000?logo=langfuse&logoColor=white) ![GA4](https://img.shields.io/badge/GA4-E37400?logo=googleanalytics&logoColor=white) |
+| **Storage** | ![Amazon S3](https://img.shields.io/badge/Amazon_S3-Private_Storage-569A31?logo=amazons3&logoColor=white) ![CloudFront](https://img.shields.io/badge/Amazon_CloudFront-CDN-8C4FFF?logo=amazoncloudfront&logoColor=white) |
 ---
 
 ## 시스템 아키텍처
@@ -171,11 +173,11 @@ flowchart TD
 ```
 
 **왜 순수 LLM이 아니라 하이브리드인가?**
-LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 버릴까봐"* 같은 발화에서 '버릴까'라는 단어에 꽂혀 **실제 냉장고 데이터를 삭제하는 의도로 오판(환각)** 하는 현상이 관찰됐습니다. DB에 직접 쓰기/삭제하는 작업은 통제된 룰 방어막 안에서만 동작하도록 제한해 **데이터 무결성을 지키면서 응답 속도까지 확보**했습니다. ([성과 및 검증](#성과-및-검증))
+LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 버릴까봐"* 같은 발화에서 '버릴까'라는 단어에 꽂혀 **실제 냉장고 데이터를 삭제하는 의도로 오판(환각)** 하는 현상이 관찰됐습니다. DB에 직접 쓰기/삭제하는 작업은 통제된 룰 방어막 안에서만 동작하도록 제한해 **데이터 무결성을 지키면서 응답 속도까지 확보**했습니다.
 
 ### 2. 영수증 OCR — OpenAI Vision + 파일 검증 파이프라인
 
-영수증 이미지에서 **상품명·수량·금액**을 추출하고, 식재료명 정규화를 거쳐 냉장고 재고로 자동 등록합니다. OCR 엔진은 EasyOCR로 실험을 시작해, 정확도·비용·속도를 종합 비교한 끝에 **OpenAI Vision(GPT-5.4 mini) 기반**으로 확정했습니다. ([OCR 모델 벤치마크](#ocr-모델-벤치마크))
+영수증 이미지에서 **상품명·수량·금액**을 추출하고, 식재료명 정규화를 거쳐 냉장고 재고로 자동 등록합니다. OCR 엔진은 EasyOCR로 실험을 시작해, 정확도·비용·속도를 종합 비교한 끝에 **OpenAI Vision(GPT-5.4 mini) 기반**으로 확정했습니다.
 
 ```
 파일 검증(확장자·MIME·크기·다중 이미지) → 안전 저장(UUID 파일명) → 이미지 전처리 → OCR 파싱 → 재료명 정규화 → 재고 등록
@@ -183,6 +185,26 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 
 - **보안** : 확장자·MIME 타입·용량을 1차 검증하고 UUID 파일명으로 안전 저장해 악성 파일 업로드를 차단
 - **정규화** : OCR로 읽은 원시 상품명을 대표 재료명으로 매핑해 재고·추천과 연결
+
+#### Private S3 영수증 저장소
+
+영수증 원본 이미지는 공개 경로에 직접 노출하지 않고 Private S3 Bucket에 저장합니다.
+
+- **사용자별 저장 경로 분리** : 환경과 사용자 ID를 기준으로 S3 Object Key 구성
+- **안전한 파일명** : 원본 파일명 대신 UUID 기반 파일명 사용
+- **비공개 저장** : S3 Object에 대한 직접 공개 접근 차단
+- **DB 참조 관리** : 데이터베이스에는 실제 이미지가 아닌 `s3://` 형식의 Object URI 저장
+- **제한된 이미지 접근** : 백엔드 인증 후 짧은 유효시간의 Presigned URL로 이미지 제공
+- **환경별 저장소 지원** : 운영 환경은 S3, 로컬 개발 환경은 로컬 업로드 디렉터리 사용
+
+```text
+영수증 업로드
+    → 파일 형식·MIME·용량 검증
+    → UUID 파일명 생성
+    → Private S3 저장
+    → S3 Object URI를 DB에 저장
+    → 인증된 요청에만 Presigned URL 발급
+```
 
 ### 3. 그래프 기반 레시피 추천 — Neo4j
 
@@ -220,39 +242,100 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 - **안전한 변경 작업** : 쓰기 작업은 `preview → 사용자 확인 → commit` 순서로 실행하며, 단기 서명 토큰과 멱등성 기록으로 중복 실행 방지
 - **일관된 응답 규격** : 모든 Tool이 성공 여부, 데이터, 경고, 확인 필요 여부, 다음 작업, 추적 ID를 동일한 구조로 반환
 
-상세 연결 및 운영 설정은 [`docs/public-mcp.md`](docs/public-mcp.md)에서 확인할 수 있습니다.
+### 6. 검색 노출 최적화 — SEO + Prerender
+
+React SPA는 초기 HTML에 페이지 내용과 메타데이터가 충분히 포함되지 않아 검색 엔진이 페이지 정보를 수집하기 어렵다는 한계가 있습니다. 이를 보완하기 위해 공개 페이지별 SEO 메타데이터를 관리하고, 빌드 과정에서 검색 엔진이 바로 읽을 수 있는 정적 HTML을 생성합니다.
+
+| 구성 | 적용 내용 |
+|:---|:---|
+| **페이지별 메타데이터** | 공개 페이지별 `title`, `description`, `canonical` URL 설정 |
+| **Prerender** | Vite 빌드 시 공개 경로의 SEO 메타데이터가 포함된 정적 HTML 생성 |
+| **검색 엔진 제어** | `robots.txt`와 `sitemap.xml`을 통해 크롤링 허용 범위와 공개 URL 제공 |
+| **검색 중복 방지** | 페이지별 Canonical URL을 지정해 중복 URL 색인 방지 |
+| **소셜 공유 최적화** | Open Graph와 Twitter Card 메타데이터 및 대표 이미지 제공 |
+| **구조화 데이터** | Schema.org의 `WebSite` JSON-LD를 적용해 서비스명과 사이트 정보 제공 |
+| **개인화 페이지 보호** | 냉장고, 영수증, 마이페이지, 인증 콜백 등 사용자별 페이지에 `noindex` 적용 |
+
+검색 노출이 필요한 `/`, `/faq`, `/terms`, `/privacy` 경로만 색인을 허용하고, 로그인 이후 사용하는 개인화 페이지와 인증 처리 경로는 검색 결과에서 제외합니다.
+
+프론트엔드 빌드 시 `prerender-seo.mjs`가 경로별 정적 HTML을 생성하고, CloudFront가 요청 경로에 맞는 Prerender 결과를 제공하도록 구성했습니다. 메타데이터, Sitemap, Robots 설정은 자동 테스트를 통해 검증합니다.
+
+### 7. AI Agent 관측성 — Langfuse
+
+멀티 에이전트의 복잡한 실행 과정을 추적하고 오류 원인을 분석하기 위해 Langfuse를 연동했습니다. 사용자의 채팅 요청마다 고유한 세션을 생성하고, Supervisor Agent부터 하위 Agent와 Tool 실행까지 하나의 Trace로 연결합니다.
+
+| 추적 항목 | 적용 내용 |
+|:---|:---|
+| **사용자·세션 추적** | 사용자와 채팅 세션별로 Agent 실행 기록을 분리 |
+| **Agent 실행 흐름** | Supervisor의 의도 분석과 하위 Agent 라우팅 과정 추적 |
+| **라우팅 결과** | 선택된 Intent, 라우팅 신뢰도, 실행 Task 수 기록 |
+| **Tool 실행 결과** | 완료·실패한 Intent와 Action·Source 수 기록 |
+| **오류 추적** | Agent 실행 예외와 실패 지점을 Error Trace로 저장 |
+| **성공 여부 평가** | 각 Supervisor 요청의 성공 여부를 Boolean Score로 기록 |
+
+Langfuse Trace에는 사용자 입력, 대화 이력 수, 선택된 Intent, 라우팅 신뢰도, 완료·실패 작업과 오류 정보가 기록됩니다. 이를 통해 잘못된 Agent 라우팅, Tool 호출 실패, 응답 지연과 반복되는 오류를 세션 단위로 분석할 수 있습니다.
+
+Langfuse 설정값이 없는 환경에서는 추적 기능만 비활성화되며, 챗봇 기능은 정상적으로 동작하도록 구성했습니다.
+
+### 8. 사용자 행동 및 전환 분석 — Google Analytics 4
+
+서비스 사용 흐름과 핵심 기능의 전환율을 확인하기 위해 Google Analytics 4를 연동했습니다. React SPA의 라우트 변경을 직접 감지해 페이지 조회를 기록하고, 주요 기능의 완료 시점을 사용자 행동 이벤트로 수집합니다.
+
+| 이벤트 | 측정 내용 |
+|:---|:---|
+| `page_view` | React Router를 통한 페이지 이동 |
+| `sign_up` | 소셜 로그인 기반 신규 가입 |
+| `login` | Google·Kakao·Naver 로그인 |
+| `receipt_ocr_complete` | 영수증 OCR 처리 완료 |
+| `fridge_ingredient_add` | 냉장고 식재료 등록 |
+| `ingredient_consume` | 냉장고 식재료 소비 처리 |
+| `recipe_recommend` | 보유 재료 기반 레시피 추천 실행 |
+| `select_content` | 추천·검색 결과에서 레시피 상세 선택 |
+| `shopping_list_create` | 레시피 부족 재료 기반 장보기 목록 생성 |
+
+수집한 이벤트를 기반으로 다음과 같은 핵심 사용자 흐름을 분석할 수 있습니다.
+
+```text
+회원가입·로그인
+    → 영수증 OCR 완료
+    → 냉장고 식재료 등록
+    → 레시피 추천
+    → 레시피 상세 조회
+    → 장보기 목록 생성
+```
 
 ---
 
 ## 데이터 설계
 
-### 이중 데이터베이스 (RDB + Graph)
+### 이중 데이터베이스 — RDB + Graph
 
 | 데이터베이스 | 역할 |
 |:---|:---|
-| **PostgreSQL (RDB)** | 구조화 데이터(사용자·재고·거래)의 안전한 저장과 조회 |
-| **Neo4j (Graph)** | 식재료 – 레시피 – 가이드 간 관계 기반 추천 |
+| **PostgreSQL (RDB)** | 사용자, 냉장고 재고, 영수증, 장보기 목록 등 구조화 데이터 저장·조회 |
+| **Neo4j (Graph)** | 식재료, 레시피, 가이드 간 관계 탐색 및 보유 재료 기반 추천 |
 
-**Neo4j 그래프 스키마 (주요 노드·관계)**
+### Neo4j 그래프 스키마
 
-```
-(사용자)-[:USES]->(식재료)-[:CONTAINS]->(레시피)
-(식재료)-[:HAS]->(가이드)      // 보관·손질·궁합
-(레시피)-[:REFERENCES]->(가이드)
-(사용자)-[:HAS]->(캘린더)
+```mermaid
+flowchart LR
+    R["레시피<br/>Recipe"] -->|"REQUIRES_INGREDIENT"| I["식재료<br/>Ingredient"]
+    I -->|"HAS_GUIDE"| G["식재료 가이드<br/>Guide"]
+    I -->|"HAS_ALIAS"| A["식재료 별칭<br/>Alias"]
+    I -->|"IN_SEASON"| S["제철 월<br/>SeasonMonth"]
+    G -->|"SOURCED_FROM"| SRC["데이터 출처<br/>Source"]
 ```
 
 ### 식재료 정규화 — 추천을 위한 데이터 엔지니어링
 
-원재료명은 별칭으로 보존하고, 정규화 결과는 별도 정제 테이블로 관리합니다.
+원재료명은 별칭으로 보존하고, 정규화 결과는 별도의 정제 데이터로 관리합니다.
 
 - **유사 재료명 병합** : 흰대파, 파 한 단 → `대파`
-- **동의어 통합** : 달걀 / 계란 → `계란`
-- **조미료/양념류 분리** : 간장, 고추장, 소금
-- **도구/용기성 데이터 제거** : 냄비, 팬, 종이컵
-- **브랜드명/상품명 정리** : 리챔, 스팸 → `햄`
-- **문장형 이상치는 검토 대상으로 분리**
-
+- **동의어 통합** : 달걀, 계란 → `계란`
+- **조미료·양념류 분리** : 간장, 고추장, 소금
+- **도구·용기성 데이터 제거** : 냄비, 팬, 종이컵
+- **브랜드명·상품명 정리** : 리챔, 스팸 → `햄`
+- **문장형 이상치 분리** : 재료명으로 판단하기 어려운 문장은 검토 대상으로 분리
 
 ---
 
@@ -271,8 +354,6 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 - **데이터 무결성 방어** : DB 쓰기/삭제는 규칙 기반 경로에서만 동작해 LLM 오분류가 데이터 변경으로 이어지는 것을 방지
 - **정확도 향상** : Rule-based 대비 **+22.0%p**, LLM-only 대비 **+13.5%p** 향상
 
-> 상세 보고서: [`docs/intent_router_benchmark.md`](docs/intent_router_benchmark.md)
-
 ### OCR 모델 벤치마크
 
 영수증 인식 모델을 정확도·비용·속도 기준으로 비교해 **GPT-5.4 mini**를 최종 채택했습니다.
@@ -289,6 +370,11 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 
 - **총 388건**의 테스트 (기능 209 · unit/fixture 97 · API 55 · A/B 27 · 경계 15)
 - **GitHub Actions** 기반 통합 CI/CD, **Pull Request 통과율 100%**
+
+### 운영 관측 및 분석 체계
+
+- **Langfuse** : Agent 라우팅, Tool 실행, 오류, 응답 시간과 세션별 성공 여부 추적
+- **GA4** : 로그인, OCR, 재고 등록, 레시피 추천, 장보기 목록 생성까지의 전환 퍼널 분석
 
 ---
 
@@ -393,7 +479,6 @@ docker compose up -d --build
 | Neo4j Browser | http://localhost:7474 |
 
 > 기동 시 `postgres → recipe_load → neo4j → neo4j_load → backend → frontend` 순서로 데이터 적재까지 자동 수행됩니다.
-> 상세 가이드 및 트러블슈팅: [`docs/kickstarter.md`](docs/kickstarter.md)
 
 ### Docker 없이 실행
 
