@@ -92,9 +92,27 @@ _WRITE_TASK_INTENTS = {
     "shopping.purchase",
     "shopping.delete_item",
     "shopping.check_item",
-    "alarm.notification",
-    "alarm.calendar",
 }
+
+_ALARM_TASK_INTENTS = {"alarm.notification", "alarm.calendar"}
+_ALARM_WRITE_WORDS = ("등록", "추가", "생성", "삭제", "수정", "변경", "동기화", "읽음 처리")
+_ALARM_READ_WORDS = ("조회", "목록", "알려", "보여", "있어", "뭐", "확인", "읽지 않은")
+
+
+def _infer_task_mode(intent: str, text: str) -> str:
+    """Agent intent와 요청 문장을 기준으로 조회 또는 변경 작업을 구분합니다."""
+    if intent in _WRITE_TASK_INTENTS:
+        return "write"
+    if intent not in _ALARM_TASK_INTENTS:
+        return "read"
+
+    normalized = re.sub(r"\s+", "", text or "")
+    if any(word.replace(" ", "") in normalized for word in _ALARM_WRITE_WORDS):
+        return "write"
+    if any(word.replace(" ", "") in normalized for word in _ALARM_READ_WORDS):
+        return "read"
+    # 알람 요청이 모호하면 병렬 실행으로 변경 작업이 섞이지 않도록 보수적으로 처리합니다.
+    return "write"
 
 _LLM_ROUTE_SYSTEM_PROMPT = """
 You are the Supervisor intent router for the Bobbeori food chatbot.
@@ -299,7 +317,7 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
             "id": task_id,
             "intent": intent,
             "text": task_text,
-            "mode": "write" if intent in _WRITE_TASK_INTENTS else "read",
+            "mode": _infer_task_mode(intent, task_text),
             "depends_on": list(dict.fromkeys(depends_on)),
         })
         seen_task_intents.add(intent)

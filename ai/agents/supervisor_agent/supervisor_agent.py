@@ -28,6 +28,7 @@ from ai.agents.recipe_agent import run_recipe_agent
 from ai.agents.supervisor_agent.agent_execution import (
     _agent_result_failed,
     _agent_result_needs_retry,
+    _agent_result_satisfies_task,
     _prepare_task_plan,
     _ready_task_batch,
     _merge_agent_results,
@@ -788,7 +789,7 @@ def multi_agent_node(state: GraphState) -> dict:
 
         for task in batch:
             result = outcomes[task["id"]]
-            failed = _agent_result_failed(result) or _agent_result_needs_retry(result)
+            failed = not _agent_result_satisfies_task(task, result)
             if failed and task["mode"] == "read" and service and hasattr(service, "_repair_multi_agent_task"):
                 repaired = service._repair_multi_agent_task(
                     state["text"],
@@ -798,7 +799,7 @@ def multi_agent_node(state: GraphState) -> dict:
                 if repaired:
                     try:
                         result = _run_multi_task(state, repaired, task_results, handlers)
-                        failed = _agent_result_failed(result) or _agent_result_needs_retry(result)
+                        failed = not _agent_result_satisfies_task(task, result)
                         task = repaired
                     except Exception:
                         logger.exception("재계획한 Agent task 실행에 실패했습니다: intent=%s", task["intent"])

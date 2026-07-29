@@ -172,10 +172,10 @@ class ChatService:
         reply = response["reply"]
         if _should_shorten_response(response, user_settings):
             if OpenAI is not None and app_settings.OPENAI_API_KEY:
-                client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY)
+                client_ai = OpenAI(api_key=app_settings.OPENAI_API_KEY, timeout=app_settings.SUPERVISOR_LLM_TIMEOUT_SECONDS)
                 try:
                     result = client_ai.chat.completions.create(
-                        model=app_settings.OPENAI_MODEL,
+                        model=app_settings.SUPERVISOR_OPENAI_MODEL,
                         messages=[
                             {
                                 "role": "system",
@@ -202,9 +202,10 @@ class ChatService:
 
             # JSON 모드를 사용해 자유 형식 응답이 라우터로 유입되지 않게 합니다.
             llm = ChatOpenAI(
-                model=app_settings.OPENAI_MODEL,
+                model=app_settings.SUPERVISOR_OPENAI_MODEL,
                 api_key=app_settings.OPENAI_API_KEY,
                 temperature=0.0,
+                timeout=app_settings.SUPERVISOR_LLM_TIMEOUT_SECONDS,
             ).bind(response_format={"type": "json_object"})
 
             messages = [SystemMessage(content=_LLM_ROUTE_SYSTEM_PROMPT)]
@@ -258,9 +259,10 @@ class ChatService:
             from langchain_openai import ChatOpenAI
 
             llm = ChatOpenAI(
-                model=app_settings.OPENAI_MODEL,
+                model=app_settings.SUPERVISOR_OPENAI_MODEL,
                 api_key=app_settings.OPENAI_API_KEY,
                 temperature=0.0,
+                timeout=app_settings.SUPERVISOR_LLM_TIMEOUT_SECONDS,
             ).bind(response_format={"type": "json_object"})
             response = llm.invoke([
                 SystemMessage(content=(
@@ -295,9 +297,10 @@ class ChatService:
             from langchain_openai import ChatOpenAI
 
             llm = ChatOpenAI(
-                model=app_settings.OPENAI_MODEL,
+                model=app_settings.SUPERVISOR_OPENAI_MODEL,
                 api_key=app_settings.OPENAI_API_KEY,
                 temperature=0.0,
+                timeout=app_settings.SUPERVISOR_LLM_TIMEOUT_SECONDS,
             ).bind(response_format={"type": "json_object"})
             response = llm.invoke([
                 SystemMessage(content=(
@@ -336,9 +339,10 @@ class ChatService:
             from langchain_openai import ChatOpenAI
 
             llm = ChatOpenAI(
-                model=app_settings.OPENAI_MODEL,
+                model=app_settings.SUPERVISOR_OPENAI_MODEL,
                 api_key=app_settings.OPENAI_API_KEY,
                 temperature=0.0,
+                timeout=app_settings.SUPERVISOR_LLM_TIMEOUT_SECONDS,
             )
             response = llm.invoke([
                 SystemMessage(content=(

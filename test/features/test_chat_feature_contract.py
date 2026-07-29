@@ -606,14 +606,14 @@ def test_mixed_read_write_request_reaches_multi_agent_planner():
     assert [task["intent"] for task in result["tasks"]] == ["inventory.expiring", "shopping.create"]
 
 
-def test_llm_router_uses_last_eight_messages():
-    """LLM 의도 분류 문맥에는 최근 8개 메시지만 전달합니다."""
-    history = [SimpleNamespace(role="user", text=f"질문 {index}") for index in range(10)]
+def test_llm_router_uses_last_twelve_messages():
+    """LLM 의도 분류 문맥에는 최근 12개 메시지만 전달합니다."""
+    history = [SimpleNamespace(role="user", text=f"질문 {index}") for index in range(15)]
 
     result = chat_context._build_llm_route_history(history)
 
-    assert len(result) == 8
-    assert result[0]["text"] == "질문 2"
+    assert len(result) == 12
+    assert result[0]["text"] == "질문 3"
 
 def test_llm_plan_parser_keeps_dependencies_and_write_mode():
     """LLM 계획 JSON의 의존성과 쓰기 모드를 안전한 task 계약으로 변환합니다."""
@@ -759,3 +759,27 @@ def test_inventory_recipe_calendar_request_has_rule_fallback_when_llm_plan_fails
         "alarm.calendar",
     ]
     assert result["tasks"][2]["text"] == "내일 6시 30분에 일정 등록해줘"
+
+def test_alarm_task_mode_distinguishes_lookup_and_write_requests():
+    """알람과 일정의 조회 요청은 읽기, 변경 요청은 쓰기 작업으로 구분합니다."""
+    tasks = [
+        {"intent": "alarm.calendar", "text": "내일 일정 조회해줘"},
+        {"intent": "alarm.calendar", "text": "내일 일정 등록해줘"},
+        {"intent": "alarm.notification", "text": "읽지 않은 알림 있어?"},
+        {"intent": "alarm.notification", "text": "우유 구매 알림 등록해줘"},
+    ]
+
+    plan = supervisor_agent._prepare_task_plan(tasks)
+
+    assert [task["mode"] for task in plan] == ["read", "write", "read", "write"]
+
+
+def test_read_task_rejects_write_confirmation_result():
+    """조회 작업이 쓰기 확인 상태로 바뀌면 성공 결과로 처리하지 않습니다."""
+    task = {"intent": "alarm.calendar", "text": "내일 일정 조회해줘", "mode": "read"}
+    result = {
+        "response_text": "일정을 등록할까요?",
+        "pending_action": {"action": "create_event"},
+    }
+
+    assert supervisor_agent._agent_result_satisfies_task(task, result) is False

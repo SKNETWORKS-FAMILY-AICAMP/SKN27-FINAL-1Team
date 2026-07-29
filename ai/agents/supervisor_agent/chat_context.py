@@ -16,8 +16,8 @@ from ai.agents.supervisor_agent.supervisor_utils import (
 
 # Agent에 전달하는 대화 이력을 제한해 토큰 사용량이 계속 증가하지 않게 합니다.
 _CHAT_HISTORY_LIMIT = 12
-# 의도 분류에는 최근 8개 메시지를 전달해 생략된 주제를 유지합니다.
-_LLM_ROUTE_HISTORY_LIMIT = 8
+# 의도 분류에도 Agent와 같은 최근 12개 메시지를 전달해 생략된 주제를 유지합니다.
+_LLM_ROUTE_HISTORY_LIMIT = 12
 
 
 def _message_value(message: Any, key: str, default: Any = None) -> Any:

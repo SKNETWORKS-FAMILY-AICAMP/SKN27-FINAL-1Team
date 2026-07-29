@@ -6,21 +6,9 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.backend.schemas.chat import AgentResult
+from ai.agents.supervisor_agent.supervisor_utils import _infer_task_mode
 
 logger = logging.getLogger(__name__)
-_WRITE_TASK_INTENTS = {
-    "inventory.action",
-    "inventory.delete",
-    "inventory.storage_change",
-    "shopping.create",
-    "shopping.purchase",
-    "shopping.delete_item",
-    "shopping.check_item",
-    "alarm.notification",
-    "alarm.calendar",
-}
-
-
 def _calendar_task_needs_recipe_result(text: str) -> bool:
     """제목이 생략된 일정 등록 task가 추천 메뉴명을 필요로 하는지 확인합니다."""
     normalized = re.sub(r"\s+", "", text or "")
@@ -50,7 +38,7 @@ def _prepare_task_plan(tasks: list[dict[str, Any]] | None) -> list[dict[str, Any
             "id": task_id,
             "intent": intent,
             "text": str(raw_task.get("text") or ""),
-            "mode": "write" if intent in _WRITE_TASK_INTENTS else "read",
+            "mode": _infer_task_mode(intent, str(raw_task.get("text") or "")),
             "depends_on": [
                 str(dependency)
                 for dependency in raw_task.get("depends_on") or []
@@ -96,6 +84,7 @@ _LOW_QUALITY_RESPONSE_MARKERS = (
     "실행할 도구가 연결되지 않았어요",
     "챗봇 연결 중 문제가 생겼어요",
     "요청을 처리하는 중 문제가 생겼어요",
+    "음식과 관련된 대화만 지원하고 있어요",
 )
 
 def _agent_result_needs_retry(agent_result: Any) -> bool:
@@ -122,6 +111,22 @@ def _agent_result_failed(agent_result: Any) -> bool:
     status = str(agent_result.get("status") or slots.get("agent_status") or slots.get("guide_status") or "").lower()
     return agent_result.get("ok") is False or status in {"error", "unsupported"} or bool(agent_result.get("error"))
 
+
+def _agent_result_satisfies_task(task: dict[str, Any], agent_result: Any) -> bool:
+    """Agent 결과가 요청한 작업을 정상적으로 마쳤거나 다음 입력을 요청했는지 확인합니다."""
+    if _agent_result_failed(agent_result) or _agent_result_needs_retry(agent_result):
+        return False
+    if task.get("mode") != "read" or not isinstance(agent_result, dict):
+        return True
+
+    # 조회 작업이 확인 대기 상태로 바뀌면 잘못된 쓰기 분기로 판단합니다.
+    if isinstance(agent_result.get("pending_action"), dict):
+        return False
+    for action in agent_result.get("actions") or []:
+        message = (action.get("data") or {}).get("message") if isinstance(action, dict) else None
+        if isinstance(message, str) and message.startswith("확인:"):
+            return False
+    return True
 
 def _run_agent_with_retry(call: Any, *, enabled: bool = True) -> Any:
     """안전한 조회 요청이 실패하면 한 번만 재호출하고 두 번째 실패를 응답으로 변환합니다."""
