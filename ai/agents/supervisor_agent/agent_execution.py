@@ -9,6 +9,10 @@ from app.backend.schemas.chat import AgentResult
 from ai.agents.supervisor_agent.supervisor_utils import _infer_task_mode
 
 logger = logging.getLogger(__name__)
+
+_READ_CONFIRM_ACTIONS = {"shopping_select_product", "shopping_cancel_flow"}
+
+
 def _calendar_task_needs_recipe_result(text: str) -> bool:
     """제목이 생략된 일정 등록 task가 추천 메뉴명을 필요로 하는지 확인합니다."""
     normalized = re.sub(r"\s+", "", text or "")
@@ -112,13 +116,15 @@ def _agent_result_failed(agent_result: Any) -> bool:
     return agent_result.get("ok") is False or status in {"error", "unsupported"} or bool(agent_result.get("error"))
 
 
-def _has_confirmation_action(agent_result: dict[str, Any]) -> bool:
-    """Agent 응답에 실제 변경 작업을 승인하는 버튼이 있는지 확인합니다."""
+def _confirmation_action_name(agent_result: dict[str, Any]) -> str | None:
+    """Agent 응답의 확인 버튼에 담긴 작업명을 반환합니다."""
     for action in agent_result.get("actions") or []:
         message = (action.get("data") or {}).get("message") if isinstance(action, dict) else None
-        if isinstance(message, str) and message.startswith(("확인:", "확인토큰:")):
-            return True
-    return False
+        if isinstance(message, str) and message.startswith("확인:"):
+            return message.split(":", 2)[1]
+        if isinstance(message, str) and message.startswith("확인토큰:"):
+            return "signed_write"
+    return None
 
 
 def _has_write_pending_action(agent_result: dict[str, Any]) -> bool:
@@ -138,14 +144,17 @@ def _agent_result_outcome(task: dict[str, Any], agent_result: Any) -> str:
 
     slots = agent_result.get("slots") if isinstance(agent_result.get("slots"), dict) else {}
     status = str(agent_result.get("status") or slots.get("agent_status") or "").lower()
-    has_confirmation = _has_confirmation_action(agent_result)
+    confirmation_action = _confirmation_action_name(agent_result)
+    has_write_confirmation = bool(confirmation_action and confirmation_action not in _READ_CONFIRM_ACTIONS)
 
     # 조회 작업에서 변경 확인 버튼이 나오면 잘못된 Agent 분기로 판단합니다.
-    if task.get("mode") == "read" and (has_confirmation or _has_write_pending_action(agent_result)):
+    if task.get("mode") == "read" and (has_write_confirmation or _has_write_pending_action(agent_result)):
         return "failed"
+    if confirmation_action in _READ_CONFIRM_ACTIONS:
+        return "awaiting_input"
     if status == "needs_input":
         return "awaiting_input"
-    if task.get("mode") == "write" and (has_confirmation or isinstance(agent_result.get("pending_action"), dict)):
+    if task.get("mode") == "write" and (has_write_confirmation or isinstance(agent_result.get("pending_action"), dict)):
         return "awaiting_input"
     if status == "not_found":
         return "not_found"

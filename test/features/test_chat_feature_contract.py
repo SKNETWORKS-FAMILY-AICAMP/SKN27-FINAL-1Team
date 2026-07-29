@@ -784,6 +784,48 @@ def test_read_task_rejects_write_confirmation_result():
 
     assert supervisor_agent._agent_result_outcome(task, result) == "failed"
 
+
+def test_shopping_product_selection_waits_without_retry(monkeypatch):
+    """가격 조회의 상품 후보 선택은 실패 재시도 없이 사용자 입력을 기다립니다."""
+    calls = []
+
+    def fake_shopping(_state):
+        calls.append("shopping.compare")
+        return {
+            "response_text": "네이버 쇼핑 기준 상품 후보예요.",
+            "actions": [
+                {"label": "1번 담기", "data": {"message": "확인:shopping_select_product:0"}},
+                {"label": "선택 취소", "data": {"message": "확인:shopping_cancel_flow:"}},
+            ],
+        }
+
+    class Service:
+        """재시도가 발생하면 테스트를 실패시키는 최소 서비스 대역입니다."""
+
+        def _repair_multi_agent_task(self, *_args):
+            raise AssertionError("상품 후보 선택 응답을 실패로 재시도하면 안 됩니다.")
+
+    monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
+    monkeypatch.setattr(
+        supervisor_agent,
+        "guide_agent_node",
+        lambda _state: {"response_text": "감자 보관법이에요."},
+    )
+
+    result = supervisor_agent.multi_agent_node({
+        "text": "감자 보관법과 가격 알려줘",
+        "tasks": [
+            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법 알려줘"},
+            {"id": "shopping", "intent": "shopping.compare", "text": "감자 가격 알려줘"},
+        ],
+        "service": Service(),
+    })
+
+    assert calls == ["shopping.compare"]
+    assert result["slots"]["awaiting_input_intents"] == ["shopping.compare"]
+    assert result["slots"]["failed_intents"] == []
+
+
 def test_multi_agent_reports_partial_failure_by_task(monkeypatch):
     """일부 Agent만 실패하면 성공 결과와 실패한 작업명을 함께 안내합니다."""
     monkeypatch.setattr(
