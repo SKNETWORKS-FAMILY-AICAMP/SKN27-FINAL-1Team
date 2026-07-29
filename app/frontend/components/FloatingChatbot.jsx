@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mascot from '../assets/mascot_avatar.webp'
-import { API_URL } from '../utils/api.js'
+import { API_URL, showApiNotice } from '../utils/api.js'
 import ChatWelcome from './ChatWelcome'
 import './FloatingChatbot.css'
 
@@ -335,7 +335,13 @@ function FloatingChatbot() {
         className="floating-chatbot__toggle"
         type="button"
         aria-label={isOpen ? '챗봇 닫기' : '챗봇 열기'}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          if (!localStorage.getItem('bobbeori-token')) {
+            showApiNotice('loginRequired')
+            return
+          }
+          setIsOpen((prev) => !prev)
+        }}
       >
         <img src={mascot} alt="" />
       </button>
