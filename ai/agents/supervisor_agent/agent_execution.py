@@ -112,21 +112,77 @@ def _agent_result_failed(agent_result: Any) -> bool:
     return agent_result.get("ok") is False or status in {"error", "unsupported"} or bool(agent_result.get("error"))
 
 
-def _agent_result_satisfies_task(task: dict[str, Any], agent_result: Any) -> bool:
-    """Agent 결과가 요청한 작업을 정상적으로 마쳤거나 다음 입력을 요청했는지 확인합니다."""
-    if _agent_result_failed(agent_result) or _agent_result_needs_retry(agent_result):
-        return False
-    if task.get("mode") != "read" or not isinstance(agent_result, dict):
-        return True
-
-    # 조회 작업이 확인 대기 상태로 바뀌면 잘못된 쓰기 분기로 판단합니다.
-    if isinstance(agent_result.get("pending_action"), dict):
-        return False
+def _has_confirmation_action(agent_result: dict[str, Any]) -> bool:
+    """Agent 응답에 실제 변경 작업을 승인하는 버튼이 있는지 확인합니다."""
     for action in agent_result.get("actions") or []:
         message = (action.get("data") or {}).get("message") if isinstance(action, dict) else None
-        if isinstance(message, str) and message.startswith("확인:"):
-            return False
-    return True
+        if isinstance(message, str) and message.startswith(("확인:", "확인토큰:")):
+            return True
+    return False
+
+
+def _has_write_pending_action(agent_result: dict[str, Any]) -> bool:
+    """조회 요청에 섞이면 안 되는 변경 대기 작업인지 확인합니다."""
+    pending = agent_result.get("pending_action")
+    if not isinstance(pending, dict):
+        return False
+    action = str(pending.get("action") or pending.get("intent") or "").lower()
+    return any(word in action for word in ("create", "add", "delete", "update", "change", "consume", "purchase", "sync"))
+
+def _agent_result_outcome(task: dict[str, Any], agent_result: Any) -> str:
+    """Agent 결과를 완료, 추가 입력 대기, 조회 결과 없음, 실패로 구분합니다."""
+    if _agent_result_failed(agent_result) or _agent_result_needs_retry(agent_result):
+        return "failed"
+    if not isinstance(agent_result, dict):
+        return "failed"
+
+    slots = agent_result.get("slots") if isinstance(agent_result.get("slots"), dict) else {}
+    status = str(agent_result.get("status") or slots.get("agent_status") or "").lower()
+    has_confirmation = _has_confirmation_action(agent_result)
+
+    # 조회 작업에서 변경 확인 버튼이 나오면 잘못된 Agent 분기로 판단합니다.
+    if task.get("mode") == "read" and (has_confirmation or _has_write_pending_action(agent_result)):
+        return "failed"
+    if status == "needs_input":
+        return "awaiting_input"
+    if task.get("mode") == "write" and (has_confirmation or isinstance(agent_result.get("pending_action"), dict)):
+        return "awaiting_input"
+    if status == "not_found":
+        return "not_found"
+    return "completed"
+
+
+def _agent_result_satisfies_task(task: dict[str, Any], agent_result: Any) -> bool:
+    """Agent 결과가 실패가 아닌 유효한 작업 결과인지 확인합니다."""
+    return _agent_result_outcome(task, agent_result) != "failed"
+
+
+_TASK_LABELS = {
+    "inventory.list": "냉장고 재료 조회",
+    "inventory.expiring": "소비기한 임박 재료 조회",
+    "recipe.recommend": "레시피 추천",
+    "recipe.search": "레시피 검색",
+    "ingredient.guide": "식재료 가이드 조회",
+    "shopping.current": "장보기 목록 조회",
+    "shopping.compare": "가격 비교",
+    "alarm.notification": "알림 처리",
+    "alarm.calendar": "일정 처리",
+}
+
+
+def _multi_agent_failure_reply(
+    plan: list[dict[str, Any]],
+    failed_ids: set[str],
+    blocked_ids: set[str],
+) -> str:
+    """실패하거나 앞 작업 때문에 실행하지 못한 요청을 사용자 문장으로 만듭니다."""
+    labels = {task["id"]: _TASK_LABELS.get(task["intent"], task["intent"]) for task in plan}
+    lines = []
+    if failed_ids:
+        lines.append(f"처리하지 못한 요청: {', '.join(labels[task_id] for task_id in failed_ids)}")
+    if blocked_ids:
+        lines.append(f"앞 작업이 완료되지 않아 실행하지 않은 요청: {', '.join(labels[task_id] for task_id in blocked_ids)}")
+    return "일부 요청을 완료하지 못했어요.\n" + "\n".join(lines)
 
 def _run_agent_with_retry(call: Any, *, enabled: bool = True) -> Any:
     """안전한 조회 요청이 실패하면 한 번만 재호출하고 두 번째 실패를 응답으로 변환합니다."""

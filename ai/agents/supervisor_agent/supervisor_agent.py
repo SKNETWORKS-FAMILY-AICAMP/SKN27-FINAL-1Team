@@ -1,6 +1,6 @@
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait
 from contextvars import copy_context
 
 from langgraph.graph import END, StateGraph
@@ -28,7 +28,8 @@ from ai.agents.recipe_agent import run_recipe_agent
 from ai.agents.supervisor_agent.agent_execution import (
     _agent_result_failed,
     _agent_result_needs_retry,
-    _agent_result_satisfies_task,
+    _agent_result_outcome,
+    _multi_agent_failure_reply,
     _prepare_task_plan,
     _ready_task_batch,
     _merge_agent_results,
@@ -93,6 +94,9 @@ from ai.agents.shopping_agent.shopping_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 병렬 조회가 이 시간을 넘기면 완료된 결과만 반환합니다.
+_AGENT_TASK_TIMEOUT_SECONDS = 20
 
 
 def _route_write_request(
@@ -279,6 +283,38 @@ def router_node(state: GraphState) -> dict:
         command = _verify_and_claim_confirm_token(text, state.get("user_id"))
         if not command:
             return _route_result("action.invalid")
+        resume_tasks = trusted_slots.get("supervisor_resume_tasks")
+        if isinstance(resume_tasks, list) and resume_tasks:
+            resumed_ids = {
+                str(task.get("id"))
+                for task in resume_tasks
+                if isinstance(task, dict) and task.get("id")
+            }
+            tasks = [{
+                "id": "confirmed_action",
+                "intent": "action.confirm",
+                "text": command,
+                "depends_on": [],
+            }]
+            for task in resume_tasks:
+                if not isinstance(task, dict) or not task.get("intent"):
+                    continue
+                dependencies = [
+                    str(dependency)
+                    for dependency in task.get("depends_on") or []
+                    if str(dependency) in resumed_ids
+                ]
+                if not dependencies:
+                    dependencies = ["confirmed_action"]
+                tasks.append({
+                    "id": str(task.get("id") or f"resume_{len(tasks)}"),
+                    "intent": str(task["intent"]),
+                    "text": str(task.get("text") or ""),
+                    "depends_on": dependencies,
+                })
+            result = _route_result("multi_agent", tasks=tasks)
+            result["text"] = str(trusted_slots.get("supervisor_original_request") or original_text)
+            return result
         result = _route_result("action.confirm")
         result["text"] = command
         return result
@@ -718,18 +754,29 @@ def multi_agent_node(state: GraphState) -> dict:
 
     pending = list(plan)
     completed_ids: set[str] = set()
+    awaiting_input_ids: set[str] = set()
     failed_ids: set[str] = set()
+    blocked_ids: set[str] = set()
+    task_outcomes: dict[str, str] = {}
     task_results: dict[str, dict] = {}
     service = state.get("service")
 
     while pending:
-        ready, blocked = _ready_task_batch(pending, completed_ids, failed_ids)
+        ready, blocked = _ready_task_batch(
+            pending,
+            completed_ids,
+            failed_ids | awaiting_input_ids | blocked_ids,
+        )
         for task in blocked:
-            failed_ids.add(task["id"])
+            blocked_ids.add(task["id"])
+            task_outcomes[task["id"]] = "blocked"
             pending.remove(task)
+        if not ready and blocked:
+            continue
         if not ready:
             # 순환 의존성이나 잘못된 task ID는 실행하지 않고 실패로 종료합니다.
             failed_ids.update(task["id"] for task in pending)
+            task_outcomes.update({task["id"]: "failed" for task in pending})
             break
 
         resolved_ready = []
@@ -759,26 +806,36 @@ def multi_agent_node(state: GraphState) -> dict:
         batch = read_batch or [ready[0]]
         outcomes = {}
         if len(batch) > 1:
-            with ThreadPoolExecutor(max_workers=min(4, len(batch))) as executor:
-                futures = {
-                    executor.submit(
-                        copy_context().run,
-                        _run_multi_task,
-                        state,
-                        task,
-                        task_results,
-                        handlers,
-                        isolated_db=True,
-                    ): task
-                    for task in batch
+            executor = ThreadPoolExecutor(max_workers=min(4, len(batch)))
+            futures = {
+                executor.submit(
+                    copy_context().run,
+                    _run_multi_task,
+                    state,
+                    task,
+                    task_results,
+                    handlers,
+                    isolated_db=True,
+                ): task
+                for task in batch
+            }
+            done, unfinished = wait(futures, timeout=_AGENT_TASK_TIMEOUT_SECONDS)
+            for future in done:
+                task = futures[future]
+                try:
+                    outcomes[task["id"]] = future.result()
+                except Exception:
+                    logger.exception("병렬 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
+                    outcomes[task["id"]] = {"status": "error", "response_text": "요청 처리에 실패했어요."}
+            for future in unfinished:
+                task = futures[future]
+                future.cancel()
+                outcomes[task["id"]] = {
+                    "status": "error",
+                    "response_text": "응답 시간이 길어져 이 요청은 완료하지 못했어요.",
                 }
-                for future in as_completed(futures):
-                    task = futures[future]
-                    try:
-                        outcomes[task["id"]] = future.result()
-                    except Exception:
-                        logger.exception("병렬 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
-                        outcomes[task["id"]] = {"status": "error", "response_text": "요청 처리에 실패했어요."}
+            # 실행 중인 외부 요청은 종료할 수 없으므로 완료된 결과를 먼저 반환합니다.
+            executor.shutdown(wait=False, cancel_futures=True)
         else:
             task = batch[0]
             try:
@@ -789,8 +846,8 @@ def multi_agent_node(state: GraphState) -> dict:
 
         for task in batch:
             result = outcomes[task["id"]]
-            failed = not _agent_result_satisfies_task(task, result)
-            if failed and task["mode"] == "read" and service and hasattr(service, "_repair_multi_agent_task"):
+            outcome = _agent_result_outcome(task, result)
+            if outcome == "failed" and task["mode"] == "read" and service and hasattr(service, "_repair_multi_agent_task"):
                 repaired = service._repair_multi_agent_task(
                     state["text"],
                     task,
@@ -799,14 +856,18 @@ def multi_agent_node(state: GraphState) -> dict:
                 if repaired:
                     try:
                         result = _run_multi_task(state, repaired, task_results, handlers)
-                        failed = not _agent_result_satisfies_task(task, result)
                         task = repaired
+                        outcome = _agent_result_outcome(task, result)
                     except Exception:
                         logger.exception("재계획한 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
-                        failed = True
+                        outcome = "failed"
 
-            if failed:
+            task_outcomes[task["id"]] = outcome
+            if outcome == "failed":
                 failed_ids.add(task["id"])
+            elif outcome == "awaiting_input":
+                awaiting_input_ids.add(task["id"])
+                task_results[task["id"]] = {"task": task, "result": result}
             else:
                 completed_ids.add(task["id"])
                 task_results[task["id"]] = {"task": task, "result": result}
@@ -817,28 +878,55 @@ def multi_agent_node(state: GraphState) -> dict:
         for task in plan
         if task["id"] in task_results
     ]
-    if failed_ids:
-        ordered_results.append({"response_text": "일부 요청은 처리하지 못했어요. 잠시 후 다시 시도해주세요."})
-    if not ordered_results:
+    failure_reply = _multi_agent_failure_reply(plan, failed_ids, blocked_ids) if failed_ids or blocked_ids else ""
+    if not ordered_results and not failure_reply:
         return general_node(state)
 
-    result = _merge_agent_results(*ordered_results)
+    result = _merge_agent_results(*ordered_results) if ordered_results else {"response_text": ""}
+    completed_results = [
+        task_results[task["id"]]["result"]
+        for task in plan
+        if task["id"] in completed_ids
+    ]
     read_only = all(task["mode"] == "read" for task in plan)
-    if read_only and service and hasattr(service, "_synthesize_multi_agent_response"):
-        synthesized = service._synthesize_multi_agent_response(state["text"], ordered_results)
+    if read_only and len(completed_results) >= 2 and service and hasattr(service, "_synthesize_multi_agent_response"):
+        synthesized = service._synthesize_multi_agent_response(state["text"], completed_results)
         if synthesized:
             result["response_text"] = synthesized
+    if failure_reply:
+        result["response_text"] = "\n\n".join(filter(None, [result.get("response_text", "").strip(), failure_reply]))
     result["slots"] = {
         **(result.get("slots") or {}),
-        "completed_intents": [
-            task["intent"] for task in plan if task["id"] in completed_ids
-        ],
-        "failed_intents": [
-            task["intent"] for task in plan if task["id"] in failed_ids
+        "completed_intents": [task["intent"] for task in plan if task["id"] in completed_ids],
+        "awaiting_input_intents": [task["intent"] for task in plan if task["id"] in awaiting_input_ids],
+        "failed_intents": [task["intent"] for task in plan if task["id"] in failed_ids],
+        "blocked_intents": [task["intent"] for task in plan if task["id"] in blocked_ids],
+        "task_outcomes": [
+            {
+                "id": task["id"],
+                "intent": task["intent"],
+                "status": task_outcomes.get(task["id"], "failed"),
+            }
+            for task in plan
         ],
     }
+    resumable_tasks = [
+        task
+        for task in plan
+        if task["id"] in blocked_ids
+        and set(task.get("depends_on") or []) & (awaiting_input_ids | blocked_ids)
+    ]
+    if resumable_tasks:
+        result["slots"]["supervisor_resume_tasks"] = resumable_tasks
+        result["slots"]["supervisor_original_request"] = state["text"]
+        result["response_text"] = "\n\n".join(filter(None, [
+            result.get("response_text", "").strip(),
+            "확인하면 남은 요청도 이어서 처리할게요.",
+        ]))
+    else:
+        result["slots"]["supervisor_resume_tasks"] = None
+        result["slots"]["supervisor_original_request"] = None
     return result
-
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"

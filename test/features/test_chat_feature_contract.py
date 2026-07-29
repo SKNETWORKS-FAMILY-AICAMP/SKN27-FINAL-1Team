@@ -732,8 +732,8 @@ def test_inventory_recipe_calendar_request_runs_in_dependency_order(monkeypatch)
     assert result["slots"]["completed_intents"] == [
         "inventory.list",
         "recipe.recommend",
-        "alarm.calendar",
     ]
+    assert result["slots"]["awaiting_input_intents"] == ["alarm.calendar"]
     assert result["actions"][0]["label"] == "등록"
 
 def test_inventory_recipe_calendar_request_has_rule_fallback_when_llm_plan_fails():
@@ -782,4 +782,159 @@ def test_read_task_rejects_write_confirmation_result():
         "pending_action": {"action": "create_event"},
     }
 
-    assert supervisor_agent._agent_result_satisfies_task(task, result) is False
+    assert supervisor_agent._agent_result_outcome(task, result) == "failed"
+
+def test_multi_agent_reports_partial_failure_by_task(monkeypatch):
+    """일부 Agent만 실패하면 성공 결과와 실패한 작업명을 함께 안내합니다."""
+    monkeypatch.setattr(
+        supervisor_agent,
+        "inventory_agent_node",
+        lambda _state: {"response_text": "현재 냉장고에는 감자가 있어요."},
+    )
+    monkeypatch.setattr(
+        supervisor_agent,
+        "recipe_agent_node",
+        lambda _state: {"status": "error", "response_text": "레시피 조회에 실패했어요."},
+    )
+
+    result = supervisor_agent.multi_agent_node({
+        "text": "냉장고를 보여주고 레시피도 추천해줘",
+        "tasks": [
+            {"id": "inventory", "intent": "inventory.list", "text": "냉장고 재료 조회해줘"},
+            {"id": "recipe", "intent": "recipe.recommend", "text": "감자 레시피 추천해줘"},
+        ],
+    })
+
+    assert "현재 냉장고에는 감자가 있어요." in result["response_text"]
+    assert "처리하지 못한 요청: 레시피 추천" in result["response_text"]
+    assert result["slots"]["completed_intents"] == ["inventory.list"]
+    assert result["slots"]["failed_intents"] == ["recipe.recommend"]
+    assert result["slots"]["task_outcomes"][1]["status"] == "failed"
+
+
+def test_confirmation_pending_task_blocks_dependent_task(monkeypatch):
+    """사용자 확인을 기다리는 쓰기 작업의 후속 작업은 먼저 실행하지 않습니다."""
+    calls = []
+
+    def fake_shopping(_state):
+        calls.append("shopping.create")
+        return {
+            "response_text": "감자를 장보기 목록에 추가할까요?",
+            "actions": [{"label": "추가", "data": {"message": "확인:add_item"}}],
+        }
+
+    def fake_recipe(_state):
+        calls.append("recipe.recommend")
+        return {"response_text": "감자 요리를 추천해요."}
+
+    monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
+    monkeypatch.setattr(supervisor_agent, "recipe_agent_node", fake_recipe)
+
+    result = supervisor_agent.multi_agent_node({
+        "text": "감자를 장보기에 추가하고 그 재료로 레시피 추천해줘",
+        "tasks": [
+            {"id": "shopping", "intent": "shopping.create", "text": "감자를 장보기에 추가해줘"},
+            {"id": "recipe", "intent": "recipe.recommend", "text": "그 재료로 레시피 추천해줘", "depends_on": ["shopping"]},
+        ],
+    })
+
+    assert calls == ["shopping.create"]
+    assert result["slots"]["awaiting_input_intents"] == ["shopping.create"]
+    assert result["slots"]["blocked_intents"] == ["recipe.recommend"]
+    assert "앞 작업이 완료되지 않아 실행하지 않은 요청: 레시피 추천" in result["response_text"]
+    assert result["slots"]["supervisor_resume_tasks"][0]["intent"] == "recipe.recommend"
+    assert result["slots"]["supervisor_original_request"] == "감자를 장보기에 추가하고 그 재료로 레시피 추천해줘"
+
+
+def test_confirmed_action_restores_remaining_supervisor_plan(monkeypatch):
+    """서명된 확인 요청은 저장된 후속 작업과 함께 복합 계획으로 복원합니다."""
+    monkeypatch.setattr(
+        supervisor_agent,
+        "_verify_and_claim_confirm_token",
+        lambda _text, _user_id: "shopping_create:{\"items\":[{\"name\":\"감자\"}]}",
+    )
+
+    result = supervisor_agent.router_node({
+        "text": "확인토큰:test",
+        "history": [],
+        "user_id": 7,
+        "context_enforced": True,
+        "trusted_context": {
+            "intent": "multi_agent",
+            "slots": {
+                "supervisor_original_request": "감자를 장보기에 추가하고 그 재료로 레시피 추천해줘",
+                "supervisor_resume_tasks": [{
+                    "id": "recipe",
+                    "intent": "recipe.recommend",
+                    "text": "그 재료로 레시피 추천해줘",
+                    "depends_on": ["shopping"],
+                }],
+            },
+        },
+    })
+
+    assert result["intent"] == "multi_agent"
+    assert result["text"] == "감자를 장보기에 추가하고 그 재료로 레시피 추천해줘"
+    assert [task["intent"] for task in result["tasks"]] == ["action.confirm", "recipe.recommend"]
+    assert result["tasks"][1]["depends_on"] == ["confirmed_action"]
+
+
+def test_parallel_agent_timeout_keeps_completed_result(monkeypatch):
+    """한 Agent가 제한 시간을 넘겨도 완료된 병렬 조회 결과는 유지합니다."""
+    import time
+
+    monkeypatch.setattr(supervisor_agent, "_AGENT_TASK_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(
+        supervisor_agent,
+        "guide_agent_node",
+        lambda _state: {"response_text": "감자 보관법이에요."},
+    )
+
+    def slow_shopping(_state):
+        """제한 시간보다 늦은 장보기 조회를 재현합니다."""
+        time.sleep(0.05)
+        return {"response_text": "감자 가격이에요."}
+
+    monkeypatch.setattr(supervisor_agent, "shopping_agent_node", slow_shopping)
+
+    result = supervisor_agent.multi_agent_node({
+        "text": "감자 보관법과 가격 알려줘",
+        "tasks": [
+            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법"},
+            {"id": "price", "intent": "shopping.compare", "text": "감자 가격"},
+        ],
+    })
+
+    assert "감자 보관법이에요." in result["response_text"]
+    assert result["slots"]["completed_intents"] == ["ingredient.guide"]
+    assert result["slots"]["failed_intents"] == ["shopping.compare"]
+
+def test_supervisor_resume_plan_round_trips_through_signed_context():
+    """남은 Supervisor 계획은 현재 사용자와 세션에 귀속된 토큰으로 복원됩니다."""
+    response = {
+        "intent": "multi_agent",
+        "slots": {
+            "supervisor_original_request": "감자를 추가하고 레시피 추천해줘",
+            "supervisor_resume_tasks": [{
+                "id": "recipe",
+                "intent": "recipe.recommend",
+                "text": "그 재료로 레시피 추천해줘",
+                "depends_on": ["inventory"],
+            }],
+        },
+    }
+
+    token = chat_context._issue_context_token(response, user_id=7, session_id="session-resume")
+    restored = chat_context._verify_context_token(token, user_id=7, session_id="session-resume")
+
+    assert restored["slots"]["supervisor_resume_tasks"][0]["intent"] == "recipe.recommend"
+    assert chat_context._verify_context_token(token, user_id=8, session_id="session-resume") == {}
+
+
+def test_signed_confirmation_token_cannot_be_reused():
+    """같은 확인 토큰은 최초 한 번만 내부 실행 명령으로 변환됩니다."""
+    command = "확인:add_ingredient:감자:1:냉장"
+    token = supervisor_utils._issue_confirm_token(command, user_id=7)
+
+    assert supervisor_utils._verify_and_claim_confirm_token(token, user_id=7) == command
+    assert supervisor_utils._verify_and_claim_confirm_token(token, user_id=7) is None

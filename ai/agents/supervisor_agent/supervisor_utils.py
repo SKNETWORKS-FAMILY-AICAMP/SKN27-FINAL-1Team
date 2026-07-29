@@ -30,6 +30,7 @@ _TRUSTED_CONTEXT_SLOT_KEYS = {
     "inventory_pending", "inventory_last_action", "ingredient", "keyword",
     "guide_type", "shopping_product", "date", "quantity", "storage", "use_inventory",
     "expiring_ingredients", "shopping_flow",
+    "supervisor_resume_tasks", "supervisor_original_request",
 }
 
 _CONTEXT_SLOT_KEYS = {
@@ -85,6 +86,7 @@ _MULTI_AGENT_TASK_INTENTS = {
     "alarm.calendar",
 }
 _WRITE_TASK_INTENTS = {
+    "action.confirm",
     "inventory.action",
     "inventory.delete",
     "inventory.storage_change",

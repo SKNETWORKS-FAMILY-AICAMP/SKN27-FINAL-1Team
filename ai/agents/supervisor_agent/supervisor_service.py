@@ -127,6 +127,13 @@ class ChatService:
                             final_state = supervisor_agent.invoke(initial_state, config=invoke_config)
                             route_payload = final_state.get("intent_payload") or {}
                             route_slots = final_state.get("slots") or {}
+                            task_outcomes = route_slots.get("task_outcomes", [])
+                            completed_count = sum(
+                                outcome.get("status") in {"completed", "not_found"}
+                                for outcome in task_outcomes
+                                if isinstance(outcome, dict)
+                            )
+                            task_completion_rate = completed_count / len(task_outcomes) if task_outcomes else 1.0
                             try:
                                 observation.update(
                                     output={"intent": final_state.get("intent", "general")},
@@ -137,13 +144,21 @@ class ChatService:
                                         "action_count": len(final_state.get("actions") or []),
                                         "source_count": len(final_state.get("sources") or []),
                                         "completed_intents": route_slots.get("completed_intents", []),
+                                        "awaiting_input_intents": route_slots.get("awaiting_input_intents", []),
                                         "failed_intents": route_slots.get("failed_intents", []),
+                                        "blocked_intents": route_slots.get("blocked_intents", []),
+                                        "task_outcomes": task_outcomes,
                                     },
                                 )
                                 langfuse_client.score_current_trace(
                                     name="supervisor_success",
-                                    value=1,
+                                    value=0 if route_slots.get("failed_intents") else 1,
                                     data_type="BOOLEAN",
+                                )
+                                langfuse_client.score_current_trace(
+                                    name="task_completion_rate",
+                                    value=task_completion_rate,
+                                    data_type="NUMERIC",
                                 )
                             except Exception as trace_exc:
                                 logger.warning("Langfuse result recording failed: %s", trace_exc)
