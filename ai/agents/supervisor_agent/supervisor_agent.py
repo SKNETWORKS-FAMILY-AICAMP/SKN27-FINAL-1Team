@@ -626,6 +626,12 @@ def alarm_agent_node(state: GraphState) -> dict:
         enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
     result = _alarm_result_to_state(agent_result)
+    if "Google Calendar is not connected" in result.get("response_text", ""):
+        result = {
+            "response_text": "일정을 등록하려면 먼저 Google Calendar를 연결해주세요.",
+            "status": "needs_input",
+            "actions": [{"label": "캘린더 연결하기", "url": "/mypage"}],
+        }
     normalized_text = _normalize_text(state["text"])
     if result.get("response_text") == "등록된 알림 목록이에요." and "이번주" in normalized_text:
         keyword_match = re.search(r"이번\s*주\s*(.+?)\s*관련\s*알림", state["text"])

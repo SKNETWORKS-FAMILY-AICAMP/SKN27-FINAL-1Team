@@ -333,6 +333,31 @@ def test_alarm_action_payload_survives_supervisor_adapter(monkeypatch):
     assert action_payload["payload"]["reminder_type"] == "shopping_reminder"
 
 
+def test_alarm_calendar_connection_error_is_mapped_to_korean(monkeypatch):
+    """Google Calendar 미연동 오류는 한국어 안내와 연결 버튼으로 변환합니다."""
+
+    def fake_run(**_kwargs):
+        return {
+            "ok": False,
+            "intent": "calendar.create",
+            "message": "Google Calendar is not connected.",
+            "error": {"code": "HTTP_404", "message": "Google Calendar is not connected."},
+        }
+
+    monkeypatch.setattr(alarm_agent_module, "run", fake_run)
+
+    result = supervisor_agent.alarm_agent_node({
+        "text": "확인:alarm:{}",
+        "intent": "action.confirm",
+        "db": SimpleNamespace(),
+        "user_id": 7,
+    })
+
+    assert result["response_text"] == "일정을 등록하려면 먼저 Google Calendar를 연결해주세요."
+    assert result["slots"]["agent_status"] == "needs_input"
+    assert result["actions"] == [{"label": "캘린더 연결하기", "url": "/mypage"}]
+
+
 def test_alarm_confirm_payload_returns_to_alarm_agent(monkeypatch):
     """슈퍼바이저 확인 메시지가 Alarm Agent 실행 인자로 복원되는지 확인합니다."""
     calls = []
