@@ -55,11 +55,11 @@
 
 | 이름 | 역할 | 담당 | GitHub |
 |:---:|:---:|:---|:---:|
-| **이재희** | PM · MCP · Calendar | 프로젝트 총괄, Google Calendar 연동·알림, MCP 구조 설계 & RunPod Serverless 연동, 캘린더/알림 Agent | [![EJ-pro](https://img.shields.io/badge/EJ--pro-181717?logo=github&logoColor=white)](https://github.com/EJ-pro) |
-| **박준희** | APM · OCR · Agent | 영수증 OCR 모델 벤치마크·연동, OCR 결과 저장·검증, 이미지 검증 파이프라인 보안, 장보기 Agent | [![enblav262](https://img.shields.io/badge/enblav262-181717?logo=github&logoColor=white)](https://github.com/enblav262) |
-| **김재묵** | Backend · Agent | FastAPI REST API, OAuth 2.0 + JWT 인증, 챗봇, 냉장고 재고 관리 Agent | [![jaemukkim](https://img.shields.io/badge/jaemukkim-181717?logo=github&logoColor=white)](https://github.com/jaemukkim) |
-| **김주영** | GraphDB · Agent | Neo4j 그래프 설계, 식재료 가이드 데이터 확보·정제, 가이드 Agent | [![enooola0204-spec](https://img.shields.io/badge/enooola0204--spec-181717?logo=github&logoColor=white)](https://github.com/enooola0204-spec) |
-| **김경수** | Data Pipeline · Recommendation | 레시피 데이터 확보·정제, 식재료 매칭 및 추천 로직, 추천 API·추천 Agent | [![wynn3312](https://img.shields.io/badge/wynn3312-181717?logo=github&logoColor=white)](https://github.com/wynn3312) |
+| **이재희** | PM · MCP · Calendar | 프로젝트 총괄, AWS ECS 기반 운영 인프라 설계·배포, GitHub Actions CI/CD 및 Smoke Test 구현, Android 앱·음성 조리 기능 구현, Google Calendar 연동 및 알림 Agent 설계 | [![EJ-pro](https://img.shields.io/badge/EJ--pro-181717?logo=github&logoColor=white)](https://github.com/EJ-pro) |
+| **박준희** | APM · OCR · SEO · Agent | 영수증 OCR 모델 선정·연동 및 품질 검증, 이미지 업로드 검증·보안 처리 강화, 장보기 Agent 기능 설계, SEO · Prerender · 검색 노출 구조 구축 | [![enblav262](https://img.shields.io/badge/enblav262-181717?logo=github&logoColor=white)](https://github.com/enblav262) |
+| **김재묵** | Backend · Agent · Langfuse | Supervisor Agent 및 멀티에이전트 라우팅 구현, FastAPI 기반 백엔드 API 개발, OAuth 2.0 소셜 로그인·JWT 인증 처리, Langfuse Trace · 평가 · 디버깅 체계 구축 | [![jaemukkim](https://img.shields.io/badge/jaemukkim-181717?logo=github&logoColor=white)](https://github.com/jaemukkim) |
+| **김주영** | Neo4j · GA4 · Agent | Neo4j GraphDB 스키마·관계 구조 설계, 식재료 가이드 데이터 수집·정제, GraphDB 적재 파이프라인 및 Guide Agent 구현, GA4 이벤트·전환 퍼널 측정 체계 구축 | [![enooola0204-spec](https://img.shields.io/badge/enooola0204--spec-181717?logo=github&logoColor=white)](https://github.com/enooola0204-spec) |
+| **김경수** | ML · MCP · Data | 레시피 데이터 수집·정제 및 특징 데이터 구축, LightFM 기반 추천 모델 설계 · 평가, 추천 추론 파이프라인 및 API 연동, MCP Tool · OAuth 구조 구현 | [![wynn3312](https://img.shields.io/badge/wynn3312-181717?logo=github&logoColor=white)](https://github.com/wynn3312) |
 
 ---
 
