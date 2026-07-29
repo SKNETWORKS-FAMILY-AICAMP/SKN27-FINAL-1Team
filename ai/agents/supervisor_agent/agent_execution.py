@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -7,6 +8,89 @@ from pydantic import ValidationError
 from app.backend.schemas.chat import AgentResult
 
 logger = logging.getLogger(__name__)
+_WRITE_TASK_INTENTS = {
+    "inventory.action",
+    "inventory.delete",
+    "inventory.storage_change",
+    "shopping.create",
+    "shopping.purchase",
+    "shopping.delete_item",
+    "shopping.check_item",
+    "alarm.notification",
+    "alarm.calendar",
+}
+
+
+def _calendar_task_needs_recipe_result(text: str) -> bool:
+    """제목이 생략된 일정 등록 task가 추천 메뉴명을 필요로 하는지 확인합니다."""
+    normalized = re.sub(r"\s+", "", text or "")
+    if not any(word in normalized for word in ("등록", "추가", "생성")):
+        return False
+    if any(word in normalized for word in ("추천메뉴", "추천레시피", "그메뉴", "그요리")):
+        return True
+
+    remainder = re.sub(r"(?:오늘|내일|모레|다음날|오전|오후)", "", normalized)
+    remainder = re.sub(r"\d{1,2}(?:월|일|시|분)|\d{1,2}:\d{2}", "", remainder)
+    remainder = re.sub(r"(?:캘린더|일정|등록|추가|생성|해줘|해주세요|에|으로|로)", "", remainder)
+    return not remainder
+
+def _prepare_task_plan(tasks: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """기존 task 형식을 유지하면서 실행 ID, 모드, 의존성을 보완합니다."""
+    plan = []
+    used_ids = set()
+    for index, raw_task in enumerate(tasks or [], start=1):
+        if not isinstance(raw_task, dict) or not raw_task.get("intent"):
+            continue
+        task_id = str(raw_task.get("id") or f"task_{index}")
+        if task_id in used_ids:
+            task_id = f"task_{index}"
+        used_ids.add(task_id)
+        intent = str(raw_task["intent"])
+        plan.append({
+            "id": task_id,
+            "intent": intent,
+            "text": str(raw_task.get("text") or ""),
+            "mode": "write" if intent in _WRITE_TASK_INTENTS else "read",
+            "depends_on": [
+                str(dependency)
+                for dependency in raw_task.get("depends_on") or []
+                if str(dependency) != task_id
+            ],
+        })
+
+    task_by_intent = {task["intent"]: task for task in plan}
+    if "inventory.expiring" in task_by_intent and "recipe.recommend" in task_by_intent:
+        dependency_id = task_by_intent["inventory.expiring"]["id"]
+        dependencies = task_by_intent["recipe.recommend"]["depends_on"]
+        if dependency_id not in dependencies:
+            dependencies.append(dependency_id)
+    if "inventory.list" in task_by_intent and "recipe.recommend" in task_by_intent:
+        dependency_id = task_by_intent["inventory.list"]["id"]
+        dependencies = task_by_intent["recipe.recommend"]["depends_on"]
+        if dependency_id not in dependencies:
+            dependencies.append(dependency_id)
+    if "recipe.recommend" in task_by_intent and "alarm.calendar" in task_by_intent:
+        calendar_task = task_by_intent["alarm.calendar"]
+        if _calendar_task_needs_recipe_result(calendar_task["text"]):
+            dependency_id = task_by_intent["recipe.recommend"]["id"]
+            if dependency_id not in calendar_task["depends_on"]:
+                calendar_task["depends_on"].append(dependency_id)
+    return plan
+
+
+def _ready_task_batch(
+    pending: list[dict[str, Any]],
+    completed_ids: set[str],
+    failed_ids: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """완료된 의존성을 기준으로 다음 실행 묶음과 실행 불가 작업을 반환합니다."""
+    blocked = [task for task in pending if set(task["depends_on"]) & failed_ids]
+    ready = [
+        task
+        for task in pending
+        if task not in blocked and set(task["depends_on"]).issubset(completed_ids)
+    ]
+    return ready, blocked
 
 _LOW_QUALITY_RESPONSE_MARKERS = (
     "실행할 도구가 연결되지 않았어요",

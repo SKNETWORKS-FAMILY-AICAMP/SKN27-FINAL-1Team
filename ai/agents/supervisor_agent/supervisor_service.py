@@ -40,6 +40,7 @@ from ai.agents.supervisor_agent.supervisor_utils import (
     _LLM_ROUTE_CONFIDENCE,
     _LLM_ROUTE_INTENTS,
     _LLM_ROUTE_SYSTEM_PROMPT,
+    _MULTI_AGENT_TASK_INTENTS,
     _is_llm_route_payload_valid,
     _parse_llm_route_payload,
     _route_payload,
@@ -242,6 +243,120 @@ class ChatService:
             logger.exception("LLM intent 분류에 실패했습니다.")
             return _route_payload("general", confidence=0.0)
 
+
+    def _resolve_multi_agent_task(
+        self,
+        user_text: str,
+        task: dict[str, Any],
+        dependency_results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """선행 Agent 결과를 사용해 의존 task의 실행 문장만 구체화합니다."""
+        if not dependency_results or not app_settings.OPENAI_API_KEY:
+            return task
+        try:
+            from langchain_core.messages import HumanMessage, SystemMessage
+            from langchain_openai import ChatOpenAI
+
+            llm = ChatOpenAI(
+                model=app_settings.OPENAI_MODEL,
+                api_key=app_settings.OPENAI_API_KEY,
+                temperature=0.0,
+            ).bind(response_format={"type": "json_object"})
+            response = llm.invoke([
+                SystemMessage(content=(
+                    "선행 Agent 결과를 다음 task가 실행할 수 있는 독립 문장으로 바꾼다. "
+                    "JSON의 text만 반환하고, 원문과 결과에 없는 대상·수량·날짜를 만들지 않는다."
+                )),
+                HumanMessage(content=json.dumps({
+                    "user_request": user_text,
+                    "task": task,
+                    "dependency_results": [
+                        result.get("response_text", "") for result in dependency_results
+                    ],
+                }, ensure_ascii=False)),
+            ])
+            text = str(json.loads(response.content).get("text") or "").strip()
+            return {**task, "text": text} if text else task
+        except Exception:
+            logger.exception("의존 task 실행 문장 생성에 실패했습니다.")
+            return task
+
+    def _repair_multi_agent_task(
+        self,
+        user_text: str,
+        task: dict[str, Any],
+        completed_results: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """실패한 읽기 task를 같은 요청 범위 안에서 한 번만 다시 계획합니다."""
+        if task.get("mode") != "read" or not app_settings.OPENAI_API_KEY:
+            return None
+        try:
+            from langchain_core.messages import HumanMessage, SystemMessage
+            from langchain_openai import ChatOpenAI
+
+            llm = ChatOpenAI(
+                model=app_settings.OPENAI_MODEL,
+                api_key=app_settings.OPENAI_API_KEY,
+                temperature=0.0,
+            ).bind(response_format={"type": "json_object"})
+            response = llm.invoke([
+                SystemMessage(content=(
+                    "실패한 음식 서비스 조회 task를 한 번만 보정한다. "
+                    "JSON으로 intent와 text만 반환하고, 사용자 요청에 없는 정보를 만들지 않는다."
+                )),
+                HumanMessage(content=json.dumps({
+                    "user_request": user_text,
+                    "failed_task": task,
+                    "completed_results": [
+                        result.get("response_text", "")[:500] for result in completed_results
+                    ],
+                    "allowed_intents": sorted(_MULTI_AGENT_TASK_INTENTS),
+                }, ensure_ascii=False)),
+            ])
+            payload = json.loads(response.content)
+            intent = str(payload.get("intent") or task["intent"])
+            text = str(payload.get("text") or task["text"]).strip()
+            if intent not in _MULTI_AGENT_TASK_INTENTS or not text:
+                return None
+            return {**task, "intent": intent, "text": text}
+        except Exception:
+            logger.exception("복합 요청 task 재계획에 실패했습니다.")
+            return None
+
+    def _synthesize_multi_agent_response(
+        self,
+        user_text: str,
+        task_results: list[dict[str, Any]],
+    ) -> str | None:
+        """여러 읽기 Agent 결과를 중복 없이 하나의 최종 답변으로 정리합니다."""
+        if len(task_results) < 2 or not app_settings.OPENAI_API_KEY:
+            return None
+        try:
+            from langchain_core.messages import HumanMessage, SystemMessage
+            from langchain_openai import ChatOpenAI
+
+            llm = ChatOpenAI(
+                model=app_settings.OPENAI_MODEL,
+                api_key=app_settings.OPENAI_API_KEY,
+                temperature=0.0,
+            )
+            response = llm.invoke([
+                SystemMessage(content=(
+                    "여러 Agent의 결과를 사용자 질문 순서에 맞춰 하나의 짧은 한국어 답변으로 합친다. "
+                    "제공된 결과만 사용하고, 수치·재료·출처를 새로 만들거나 생략하지 않는다."
+                )),
+                HumanMessage(content=json.dumps({
+                    "user_request": user_text,
+                    "agent_results": [
+                        result.get("response_text", "") for result in task_results
+                    ],
+                }, ensure_ascii=False)),
+            ])
+            content = str(response.content or "").strip()
+            return content or None
+        except Exception:
+            logger.exception("복합 요청 최종 응답 합성에 실패했습니다.")
+            return None
 
     def _reply_guide(self, text: str) -> dict[str, Any]:
         """Guide Agent 공통 응답을 Supervisor GraphState 형식으로 변환합니다."""

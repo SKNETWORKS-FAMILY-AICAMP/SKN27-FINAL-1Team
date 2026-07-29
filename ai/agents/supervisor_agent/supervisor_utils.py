@@ -74,6 +74,26 @@ _MULTI_AGENT_TASK_INTENTS = {
     "shopping.current",
     "shopping.history",
     "shopping.compare",
+    "inventory.action",
+    "inventory.delete",
+    "inventory.storage_change",
+    "shopping.create",
+    "shopping.purchase",
+    "shopping.delete_item",
+    "shopping.check_item",
+    "alarm.notification",
+    "alarm.calendar",
+}
+_WRITE_TASK_INTENTS = {
+    "inventory.action",
+    "inventory.delete",
+    "inventory.storage_change",
+    "shopping.create",
+    "shopping.purchase",
+    "shopping.delete_item",
+    "shopping.check_item",
+    "alarm.notification",
+    "alarm.calendar",
 }
 
 _LLM_ROUTE_SYSTEM_PROMPT = """
@@ -96,7 +116,15 @@ Response schema:
     "quantity": null,
     "storage": null
   }},
-  "tasks": []
+  "tasks": [
+    {{
+      "id": "task_1",
+      "intent": "one allowed task intent",
+      "text": "standalone task request",
+      "mode": "read or write",
+      "depends_on": []
+    }}
+  ]
 }}
 
 Rules:
@@ -116,13 +144,20 @@ Rules:
 - alarm.calendar: calendar schedule lookup or management.
 - food.general: food-related unit conversion, ingredient substitution, comparison between ingredient or product variants, reheating already-cooked leftovers, or general cooking knowledge not handled by another intent. Do not use it for storage questions, including leftover food storage.
 - Examples: "동물성 휘핑크림과 식물성은 뭐가 달라?" and "남은 치킨 데우는 방법은?" must be food.general.
-- multi_agent: a request that needs two or more read-only intents. Put each task in tasks as {{"intent": "...", "text": "..."}}.
+- multi_agent: a request that needs two or more intents. Split it into standalone tasks.
+- Give every task a unique id. Set mode to read or write and list prerequisite task ids in depends_on.
+- Independent read tasks have an empty depends_on list. A task that uses another task's result must depend on it.
+- A fridge-based recipe request must plan inventory.list first and make recipe.recommend depend on it.
+- If a calendar title is omitted after asking for a recipe, make alarm.calendar depend on recipe.recommend and preserve the requested date and time.
+- Example: '냉장고 재료 조회해서 레시피 추천해주고 내일 6시 30분에 일정 등록해줘' becomes inventory.list -> recipe.recommend -> alarm.calendar.
+- A write task may appear only as part of a multi-step request. It still requires the domain Agent's confirmation flow.
 - general: non-food requests or unsupported requests outside the service scope.
 - Set is_follow_up=true only when the current message depends on the latest assistant response and omits a subject or entity.
 - Use previous_intent metadata from the latest assistant message when the current message is a short follow-up.
 
 Safety:
-- For DB-changing requests such as add, consume, delete, update ingredients, return general. Rule-based routing already handles them before this LLM fallback.
+- For a single DB-changing request, return general because rule-based routing handles it first.
+- For a mixed read/write request, return multi_agent and include the write task without claiming it was executed.
 - If uncertain, lower confidence below 0.5.
 """.format(allowed_intents="\n".join(f"- {intent}" for intent in _LLM_ROUTE_INTENTS))
 
@@ -239,16 +274,42 @@ def _parse_llm_route_payload(content: str, fallback_text: str = "") -> dict[str,
 
     tasks = []
     seen_task_intents = set()
-    for task in payload.get("tasks") or []:
+    raw_tasks = payload.get("tasks") or []
+    raw_ids = {
+        str(task.get("id", "")).strip()
+        for task in raw_tasks
+        if isinstance(task, dict) and str(task.get("id", "")).strip()
+    }
+    for index, task in enumerate(raw_tasks, start=1):
         if not isinstance(task, dict):
             continue
         intent = str(task.get("intent", "")).strip()
         if intent not in _MULTI_AGENT_TASK_INTENTS or intent in seen_task_intents:
             continue
         task_text = str(task.get("text", "")).strip() or fallback_text
-        if task_text:
-            tasks.append({"intent": intent, "text": task_text})
-            seen_task_intents.add(intent)
+        if not task_text:
+            continue
+        task_id = str(task.get("id", "")).strip() or f"task_{index}"
+        depends_on = [
+            dependency
+            for dependency in task.get("depends_on") or []
+            if isinstance(dependency, str) and dependency in raw_ids and dependency != task_id
+        ]
+        tasks.append({
+            "id": task_id,
+            "intent": intent,
+            "text": task_text,
+            "mode": "write" if intent in _WRITE_TASK_INTENTS else "read",
+            "depends_on": list(dict.fromkeys(depends_on)),
+        })
+        seen_task_intents.add(intent)
+
+    task_by_intent = {task["intent"]: task for task in tasks}
+    if "inventory.expiring" in task_by_intent and "recipe.recommend" in task_by_intent:
+        dependency_id = task_by_intent["inventory.expiring"]["id"]
+        recipe_dependencies = task_by_intent["recipe.recommend"]["depends_on"]
+        if dependency_id not in recipe_dependencies:
+            recipe_dependencies.append(dependency_id)
 
     intent = str(payload.get("intent", "")).strip()
     if intent not in _LLM_ROUTE_INTENTS:
