@@ -267,6 +267,22 @@ class ChatService:
         dependency_results: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """선행 Agent 결과를 사용해 의존 task의 실행 문장만 구체화합니다."""
+        if task.get("intent") == "alarm.calendar":
+            recipe_title = next((
+                str((action.get("data") or {}).get("title") or "").strip()
+                for result in dependency_results
+                for action in result.get("actions") or []
+                if isinstance(action, dict) and (action.get("data") or {}).get("title")
+            ), "")
+            if recipe_title:
+                task_text = str(task.get("text") or "")
+                resolved_text = (
+                    task_text.replace("일정", f"{recipe_title} 일정", 1)
+                    if "일정" in task_text
+                    else f"{recipe_title} {task_text}"
+                )
+                return {**task, "text": resolved_text}
+
         if not dependency_results or not app_settings.OPENAI_API_KEY:
             return task
         try:

@@ -663,6 +663,32 @@ def test_dependent_write_task_uses_previous_agent_result(monkeypatch):
     assert received == ["두부를 장보기 목록에 추가해줘"]
     assert result["slots"]["completed_intents"] == ["inventory.expiring", "shopping.create"]
 
+def test_recipe_result_supplies_calendar_title_without_llm(monkeypatch):
+    """추천 메뉴가 필요한 일정은 첫 레시피 제목을 사용해 실행 문장을 완성합니다."""
+    monkeypatch.setattr("ai.agents.supervisor_agent.supervisor_service.app_settings.OPENAI_API_KEY", "")
+
+    task = {
+        "id": "calendar",
+        "intent": "alarm.calendar",
+        "text": "내일 오후 6시 30분에 일정 등록해줘",
+        "mode": "write",
+        "depends_on": ["recipe"],
+    }
+    result = supervisor_service._resolve_multi_agent_task(
+        "냉장고 재료로 레시피 추천하고 내일 오후 6시 30분에 일정 등록해줘",
+        task,
+        [{
+            "response_text": "고추장찌개, 카레라이스, 찜닭을 추천해요.",
+            "actions": [
+                {"label": "고추장찌개", "url": "/recipes/1", "data": {"recipe_id": 1, "title": "고추장찌개"}},
+                {"label": "카레라이스", "url": "/recipes/2", "data": {"recipe_id": 2, "title": "카레라이스"}},
+            ],
+        }],
+    )
+
+    assert result["text"] == "내일 오후 6시 30분에 고추장찌개 일정 등록해줘"
+
+
 def test_inventory_recipe_calendar_request_runs_in_dependency_order(monkeypatch):
     """냉장고 조회, 레시피 추천, 일정 등록 요청을 결과 의존 순서대로 처리합니다."""
     calls = []
