@@ -2433,6 +2433,49 @@
   }
 }
 
+.guide-pagination {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.guide-pagination button,
+.guide-pagination__status {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.4px solid #efd8b8;
+  border-radius: 12px;
+  background: #fff;
+  color: #6d4128;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.guide-pagination button {
+  cursor: pointer;
+}
+
+.guide-pagination button:hover:not(:disabled) {
+  border-color: var(--figma-coral);
+  box-shadow: 0 8px 16px rgba(255, 107, 116, 0.1);
+}
+
+.guide-pagination button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.guide-pagination__status {
+  min-width: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff4e3;
+}
+
 @media (min-width: 761px) and (max-width: 900px) {
   .guide-all-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2923,6 +2966,146 @@
 
   .guide-hero__copy p {
     max-width: 100%;
+  }
+}
+
+@media (min-width: 761px) {
+  .guide-ingredients .guide-ingredient-list--mobile {
+    display: none;
+  }
+
+  .guide-ingredient-list--desktop,
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 12px;
+    overflow: visible;
+  }
+
+  .guide-ingredients .guide-ingredient,
+  .guide-ingredients--seasonal .guide-ingredient {
+    width: 100%;
+    min-width: 0;
+    height: 66px;
+    padding: 7px 8px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #edd5c2;
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .guide-ingredients .guide-ingredient:hover,
+  .guide-ingredients .guide-ingredient:focus-visible {
+    border-color: #ff8b93;
+    box-shadow: 0 5px 14px rgba(255, 107, 116, 0.1);
+  }
+
+  .guide-ingredients .guide-ingredient__image,
+  .guide-ingredients--seasonal .guide-ingredient__image {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .guide-ingredients .guide-ingredient__name,
+  .guide-ingredients--seasonal .guide-ingredient__name {
+    width: auto;
+    min-width: 0;
+    font-size: var(--guide-ingredient-name-size, 14px);
+    white-space: normal;
+  }
+
+  .guide-all-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .guide-all-item {
+    min-height: 144px;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 12px;
+    border: 1.4px solid #efd8b8;
+    border-radius: 14px;
+    background: #fff;
+    text-align: left;
+  }
+
+  .guide-all-item:hover,
+  .guide-all-item:focus-visible {
+    border-color: var(--figma-coral);
+    box-shadow: 0 10px 20px rgba(255, 107, 116, 0.1);
+  }
+
+  .guide-all-item__image {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
+  }
+
+  .guide-all-item p {
+    margin: 6px 0 0;
+    color: #6f4b36;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .guide-all-item small {
+    display: block;
+    margin-top: 6px;
+    color: #8b673e;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .guide-all-item > span[aria-hidden="true"] {
+    width: 9px;
+    height: 9px;
+    border-top: 2px solid #9b6d4d;
+    border-right: 2px solid #9b6d4d;
+    transform: rotate(45deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .guide-ingredients .guide-ingredient-list--desktop {
+    display: none;
+  }
+
+  .guide-ingredients .guide-ingredient-list--mobile {
+    display: flex;
+  }
+
+  .guide-ingredients .guide-ingredient__name {
+    min-height: 2.4em;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: var(--guide-ingredient-name-size, 14px);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .guide-all-item__meta p,
+  .guide-all-item__meta small,
+  .guide-all-item > span[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .guide-ingredient-list--desktop,
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
