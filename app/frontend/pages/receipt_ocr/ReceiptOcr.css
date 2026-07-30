@@ -994,6 +994,28 @@
   text-align: center;
 }
 
+@media (min-width: 1121px) {
+  .receipt-before-side,
+  .receipt-before-side .receipt-history {
+    height: 100%;
+  }
+
+  .receipt-before-side {
+    align-self: stretch;
+  }
+
+  .receipt-before-side .receipt-history {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .receipt-before-side .receipt-history__placeholder {
+    display: grid;
+    flex: 1;
+    place-items: center;
+  }
+}
+
 .receipt-history-detail {
   margin-top: 12px;
   padding: 14px;

@@ -393,6 +393,7 @@ function Guide() {
     async function loadSeasonalRecommendations() {
       try {
         const seasonalItems = []
+        const loadedSeasonalKeys = new Set()
         for (let nextPage = 1; ; nextPage += 1) {
           const params = new URLSearchParams({
             page: String(nextPage),
@@ -404,9 +405,13 @@ function Guide() {
           })
           if (!response.ok) return
           const data = await response.json()
-          seasonalItems.push(
-            ...(data.items || []).filter((ingredient) => ingredient.seasonal_months?.includes(selectedSeasonalMonth)),
-          )
+          seasonalItems.push(...(data.items || []).filter((ingredient) => {
+            if (!ingredient.seasonal_months?.includes(selectedSeasonalMonth)) return false
+            const key = ingredient.code || String(ingredient.name || '').replace(/\s/g, '').toLowerCase()
+            if (!key || loadedSeasonalKeys.has(key)) return false
+            loadedSeasonalKeys.add(key)
+            return true
+          }))
           if (!data.has_next) break
         }
         setSeasonalGuideItems(seasonalItems)
@@ -961,17 +966,19 @@ function Guide() {
                 >
                   전체
                 </button>
-                {categoryOptions.middle_categories.map((category) => (
-                  <button
-                    className={selectedMiddleCategory === category ? 'is-active' : ''}
-                    key={category}
-                    type="button"
-                    aria-pressed={selectedMiddleCategory === category}
-                    onClick={() => setSelectedMiddleCategory(category)}
-                  >
-                    {category}
-                  </button>
-                ))}
+                {selectedMajorCategory
+                  ? categoryOptions.middle_categories.map((category) => (
+                    <button
+                      className={selectedMiddleCategory === category ? 'is-active' : ''}
+                      key={category}
+                      type="button"
+                      aria-pressed={selectedMiddleCategory === category}
+                      onClick={() => setSelectedMiddleCategory(category)}
+                    >
+                      {category}
+                    </button>
+                  ))
+                  : null}
               </div>
             </div>
           </div>
