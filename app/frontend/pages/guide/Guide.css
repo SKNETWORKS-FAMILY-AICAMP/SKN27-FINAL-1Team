@@ -274,12 +274,43 @@
 }
 
 .guide-ingredients--seasonal .guide-ingredient__image {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
 }
 
 .guide-ingredients--seasonal .guide-ingredient__name {
-  font-size: 13px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee {
+  display: block;
+  overflow: hidden;
+}
+
+.guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-marquee__track {
+  --guide-marquee-loop-gap: 6px;
+  width: max-content;
+  display: flex;
+  gap: 12px;
+  animation: guide-mobile-marquee var(--guide-marquee-duration) linear infinite;
+  will-change: transform;
+}
+
+.guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-marquee__group {
+  display: flex;
+  gap: 12px;
+}
+
+.guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-ingredient {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 92px;
+  padding-inline: 8px;
+}
+
+.guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee:hover .guide-marquee__track {
+  animation-play-state: paused;
 }
 
 .guide-ingredients__header {
@@ -554,8 +585,8 @@
 }
 
 .guide-ingredient__image {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
   border-radius: 50%;
 }
@@ -564,7 +595,7 @@
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: var(--guide-ingredient-name-size, 14px);
+  font-size: var(--guide-ingredient-name-size, 15px);
   line-height: 1.2;
   text-align: center;
 }
@@ -764,6 +795,10 @@
   background: #fff1f4;
 }
 
+.guide-category-middle-slot {
+  min-height: 46px;
+}
+
 .guide-category-tab-list--middle button {
   border-radius: 14px;
 }
@@ -794,8 +829,8 @@
 
 .guide-all-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 24px 18px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 32px 22px;
 }
 
 .guide-all-item {
@@ -826,7 +861,7 @@
 }
 
 .guide-all-item__image {
-  width: min(108px, 100%);
+  width: min(78px, 100%);
   aspect-ratio: 1;
   border-radius: 50%;
   overflow: hidden;
@@ -835,9 +870,43 @@
 .guide-all-item strong {
   display: block;
   color: var(--figma-text);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1.25;
+}
+
+@media (min-width: 1081px) {
+  .guide-ingredients {
+    padding: 24px 0 28px;
+  }
+
+  .guide-ingredients + .guide-all {
+    margin-top: 24px;
+    padding-top: 28px;
+    border-top: 1px solid #edd8d0;
+  }
+
+  .guide-category-tabs {
+    margin-bottom: 28px;
+    gap: 20px;
+  }
+
+  .guide-all-list {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 44px 28px;
+  }
+
+  .guide-all-item__image {
+    width: min(112px, 100%);
+  }
+
+  .guide-all-item strong {
+    font-size: 19px;
+  }
+
+  .guide-all + .guide-ingredients--seasonal {
+    margin-top: 48px;
+  }
 }
 
 .guide-infinite-loader {
@@ -2271,7 +2340,21 @@
 
 @keyframes guide-mobile-marquee {
   to {
-    transform: translateX(calc(-50% - 3px));
+    transform: translateX(calc(-50% - var(--guide-marquee-loop-gap, 3px)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee {
+    overflow-x: auto;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-marquee__track {
+    animation: none;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-marquee__group[aria-hidden="true"] {
+    display: none;
   }
 }
 
@@ -2323,6 +2406,10 @@
 }
 
 @media (min-width: 761px) and (max-width: 1080px) {
+  .guide-all-list {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
   .guide-ingredient-list--desktop,
   .guide-ingredients--seasonal .guide-ingredient-list--desktop {
     padding: 0;
@@ -2330,6 +2417,12 @@
     grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 12px;
     overflow: visible;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .guide-all-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -2527,7 +2620,7 @@
 
   .guide-ingredients:not(.guide-ingredients--seasonal) .guide-ingredient__name {
     width: 100%;
-    font-size: 13px;
+    font-size: 14px;
     white-space: normal;
   }
 
@@ -2542,18 +2635,26 @@
 
   .guide-ingredients--seasonal .guide-ingredient__name {
     width: 100%;
-    white-space: normal;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list--mobile.is-marquee .guide-ingredient {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 92px;
+    padding-inline: 8px;
   }
 
   .guide-ingredient__image {
-    width: 42px;
-    height: 42px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
   }
 
   .guide-ingredients--seasonal .guide-ingredient__image {
-    width: 42px;
-    height: 42px;
+    width: 38px;
+    height: 38px;
   }
 
   .guide-ingredient-list--desktop,
@@ -2573,8 +2674,17 @@
   .guide-ingredient-list--mobile.is-marquee,
   .guide-ingredients--seasonal .guide-ingredient-list--mobile.is-marquee {
     display: block;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
     scroll-snap-type: none;
+    scrollbar-width: none;
+  }
+
+  .guide-ingredient-list--mobile.is-marquee::-webkit-scrollbar,
+  .guide-ingredients--seasonal .guide-ingredient-list--mobile.is-marquee::-webkit-scrollbar {
+    display: none;
   }
 
   .guide-marquee__track {
@@ -2633,7 +2743,7 @@
 
   .guide-all-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--mobile-gap-list) 12px;
+    gap: 28px 12px;
   }
 
   .guide-all-item {
@@ -2641,11 +2751,11 @@
   }
 
   .guide-all-item__image {
-    width: min(88px, 100%);
+    width: min(64px, 100%);
   }
 
   .guide-all-item strong {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .guide-detail__header {
