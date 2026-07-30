@@ -57,8 +57,7 @@
 | <!-- 사진 --> | **이재희** | PM · MCP · Calendar | 프로젝트 총괄, Google Calendar 연동·알림, MCP 구조 설계 & RunPod Serverless 연동, 캘린더/알림 Agent | [![EJ-pro](https://img.shields.io/badge/EJ--pro-181717?logo=github&logoColor=white)](https://github.com/EJ-pro) |
 | <!-- 사진 --> | **박준희** | OCR · Agent | 영수증 OCR 모델 벤치마크·연동, OCR 결과 저장·검증, 이미지 검증 파이프라인 보안, 장보기 Agent | [![enblav262](https://img.shields.io/badge/enblav262-181717?logo=github&logoColor=white)](https://github.com/enblav262) |
 | <!-- 사진 --> | **김재묵** | Backend · Agent | FastAPI REST API, OAuth 2.0 + JWT 인증, 챗봇, 냉장고 재고 관리 Agent | [![jaemukkim](https://img.shields.io/badge/jaemukkim-181717?logo=github&logoColor=white)](https://github.com/jaemukkim) |
-| <!-- 사진 --> | **김주영** | GraphDB · Agent | Neo4j 그래프 설계, 식재료 가이드 데이터 확보·정제, 가이드 Agent, GA4 연동
-| [![enooola0204-spec](https://img.shields.io/badge/enooola0204--spec-181717?logo=github&logoColor=white)](https://github.com/enooola0204-spec) |
+| <!-- 사진 --> | **김주영** | GraphDB · Agent | Neo4j 그래프 설계, 식재료 가이드 데이터 확보·정제, 가이드 Agent | [![enooola0204-spec](https://img.shields.io/badge/enooola0204--spec-181717?logo=github&logoColor=white)](https://github.com/enooola0204-spec) |
 | <!-- 사진 --> | **김경수** | ML · Data Pipeline | 추천 데이터 확보·정제, ML 기반 추천 고도화(감성분석), 추천 API·추천 Agent | [![wynn3312](https://img.shields.io/badge/wynn3312-181717?logo=github&logoColor=white)](https://github.com/wynn3312) |
 
 ---
@@ -110,9 +109,9 @@
 | 🧾 **영수증 OCR 재고 등록** | 영수증을 촬영하면 품목을 인식·정규화해 냉장고 재고로 자동 등록 | OpenAI Vision OCR, 파일 검증 파이프라인 |
 | 🧊 **냉장고 재고 관리** | 재료별 유통기한을 직접 입력하거나 미입력 시 AI가 자동 생성, 실온·냉장·냉동 보관방법으로 등록·관리 | PostgreSQL, AI 유통기한 추정, 재고 관리 Agent |
 | 🥗 **냉장고 파먹기 추천** | 보유 재료로 만들 수 있는 레시피를 우선 추천, 부족·대체 재료 안내 | Neo4j 그래프, BERT 감성분석, 하이브리드 추천 |
-| 📖 **식재료 가이드** | 재료별 보관법·손질법·세척법·신선도확인법·제철·영양 정보 제공 | Neo4j 그래프 지식베이스 |
+| 📖 **식재료 가이드** | 재료별 보관법·손질법·궁합 정보 제공 | Neo4j 그래프 지식베이스 |
 | 🛒 **장보기 · 가격 비교** | 레시피에 부족한 재료를 추려 구매 목록·가격 비교 | Tavily Search, 커머스 API |
-| 💬 **AI 챗봇** | "계란 유통기한 언제까지야?"처럼 대화로 재고 조회·추천·관리 | LangGraph Supervisor 멀티 에이전트 |
+| 💬 **AI 챗봇** | "계란 언제까지야?"처럼 대화로 재고 조회·추천·관리 | LangGraph Supervisor 멀티 에이전트 |
 | 🔔 **캘린더 알림** | 유통기한 임박·저녁 추천 메뉴를 매일 정해진 시간에 Google Calendar로 알림 | MCP + RunPod Serverless |
 | 🔐 **소셜 로그인** | 카카오·네이버·구글 OAuth 2.0 간편 로그인 | OAuth 2.0 + JWT |
 
@@ -236,7 +235,7 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 
 ### 3. 그래프 기반 레시피 추천 — Neo4j + BERT 감성분석
 
-"레시피 → 식재료" 관계를 Neo4j 그래프로 모델링해 **보유 재료로 만들 수 있는 요리**를 우선 추천하고, 부족한 재료를 함께 제시합니다.
+"재료 → 레시피" 관계를 Neo4j 그래프로 모델링해 **보유 재료로 만들 수 있는 요리**를 우선 추천하고, 부족한 재료와 대체 재료를 함께 제시합니다.
 
 - **하이브리드 추천 (Cold Start 대응)** : 서비스 초기에는 콘텐츠 기반 **기본 추천**, 사용자 데이터가 쌓이면 **개인화 추천**으로 전환
 - **감성분석 가중치** : 한국어 BERT(`WhitePeak/bert-base-cased-Korean-sentiment`)로 레시피 리뷰의 긍·부정(-1~+1)을 분석해 "만들 수 있으면서 평이 좋은" 레시피를 상위로
@@ -277,11 +276,11 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 
 원재료명은 별칭으로 보존하고, 정규화 결과는 별도 정제 테이블로 관리합니다.
 
-- **유사 재료명 병합** : 흰대파, 파 한 단 → `파`
-- **동의어 통합** : 달걀 / 계란 → `달걀`
+- **유사 재료명 병합** : 흰대파, 파 한 단 → `대파`
+- **동의어 통합** : 달걀 / 계란 → `계란`
 - **조미료/양념류 분리** : 간장, 고추장, 소금
 - **도구/용기성 데이터 제거** : 냄비, 팬, 종이컵
-- **브랜드명/상품명 정리** : 현미 햇반 → `현미`
+- **브랜드명/상품명 정리** : 리챔, 스팸 → `햄`
 - **문장형 이상치는 검토 대상으로 분리**
 
 
@@ -331,7 +330,7 @@ LLM 단독은 정확도가 높지만, *"이 레시피 어려운데 그냥 다 �
 | 냉장고 관리 | 재고 목록·수정·유통기한 관리 |
 | 영수증 등록 | 영수증 업로드 → OCR 결과 확인·등록 |
 | 냉장고 파먹기 / 레시피 추천 / 메뉴 추천 | 보유 재료 기반 레시피 추천·상세 |
-| 식재료 가이드 | 보관·손질·세척·신선도·제철·영양 정보 |
+| 식재료 가이드 | 보관·손질·세척·신선도 정보 |
 | 장보기 | 부족 재료 목록·구매 링크 |
 | AI 챗봇 | 자연어로 재고 조회·추천·관리 |
 | 마이페이지 · 로그인 | 소셜 로그인, 사용자 설정 |
