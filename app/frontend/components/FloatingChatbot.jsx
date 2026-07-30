@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mascot from '../assets/mascot_avatar.webp'
 import { API_URL, showApiNotice } from '../utils/api.js'
@@ -76,21 +76,38 @@ function FloatingChatbot() {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState(initialMessages)
   const [isSending, setIsSending] = useState(false)
-  const messagesEndRef = useRef(null)
+  const messagesRef = useRef(null)
+  const autoScrollRef = useRef(true)
   const sessionIdRef = useRef(createChatSessionId())
   const contextTokenRef = useRef(null)
 
+  // 타이핑으로 말풍선 높이가 변한 직후 채팅 목록을 마지막 내용까지 이동합니다.
+  const scrollToBottom = useCallback(() => {
+    if (!autoScrollRef.current) return
+    requestAnimationFrame(() => {
+      const container = messagesRef.current
+      if (container) container.scrollTop = container.scrollHeight
+    })
+  }, [])
+
   // 새 메시지나 로딩 말풍선이 추가되면 마지막 응답으로 이동합니다.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' })
-  }, [messages, isSending, isOpen])
+    scrollToBottom()
+  }, [messages, isSending, isOpen, scrollToBottom])
 
+  // 사용자가 위 내용을 읽으려고 스크롤하면 타이핑 중 강제 이동을 멈춥니다.
+  const handleMessagesScroll = (event) => {
+    const container = event.currentTarget
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+    autoScrollRef.current = distanceFromBottom < 40
+  }
   // 확인 버튼은 내부 명령을 보내되 사용자에게는 버튼 라벨만 보여줍니다.
   const requestChat = async (text, displayText = text) => {
     const trimmed = text.trim()
     const visibleText = displayText.trim()
     if (!trimmed || isSending) return
 
+    autoScrollRef.current = true
     setMessages((prev) => [...prev, { role: 'user', text: visibleText }])
     setMessage('')
     setIsSending(true)
@@ -194,6 +211,7 @@ function FloatingChatbot() {
                 aria-label="새 채팅"
                 title="새 채팅 시작"
                 onClick={() => {
+                  autoScrollRef.current = true
                   setMessages(initialMessages)
                   sessionIdRef.current = createChatSessionId()
                   contextTokenRef.current = null
@@ -222,7 +240,7 @@ function FloatingChatbot() {
             </div>
           </header>
 
-          <div className="floating-chatbot__messages">
+          <div className="floating-chatbot__messages" ref={messagesRef} onScroll={handleMessagesScroll}>
             {messages.map((item, index) => (
               <div className={`floating-chatbot__message-row is-${item.role}`} key={`${item.role}-${index}`}>
                 {item.role === 'bot' ? <img className="floating-chatbot__bot-avatar" src={mascot} alt="" /> : null}
@@ -231,7 +249,7 @@ function FloatingChatbot() {
                     item.isTyping ? (
                       <TypewriterMessage
                         text={item.text}
-                        onTyping={() => messagesEndRef.current?.scrollIntoView({ block: 'end' })}
+                        onTyping={scrollToBottom}
                         onComplete={() => {
                           setMessages((prev) => {
                             const next = [...prev]
@@ -310,7 +328,6 @@ function FloatingChatbot() {
             {messages.length === 1 && !isSending ? (
               <ChatWelcome onRequestChat={requestChat} />
             ) : null}
-            <div ref={messagesEndRef} />
           </div>
 
           <form className="floating-chatbot__form" onSubmit={sendMessage}>
@@ -335,14 +352,12 @@ function FloatingChatbot() {
         className="floating-chatbot__toggle"
         type="button"
         aria-label={isOpen ? '챗봇 닫기' : '챗봇 열기'}
-        onClick={() => {
-          if (!localStorage.getItem('bobbeori-token')) {
-            showApiNotice('loginRequired')
-            return
-          }
-          setIsOpen((prev) => !prev)
-        }}
-      >
+        onClick={() =>
+          setIsOpen((prev) => {
+            if (!prev) autoScrollRef.current = true
+            return !prev
+          })
+        }      >
         <img src={mascot} alt="" />
       </button>
     </aside>
