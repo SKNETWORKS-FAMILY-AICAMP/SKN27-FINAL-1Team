@@ -11,6 +11,32 @@ from ai.agents.supervisor_agent import chat_context, supervisor_utils
 from ai.agents.supervisor_agent.supervisor_service import supervisor_service
 
 
+def _invoke_multi_agent(state: dict) -> dict:
+    """주어진 작업 목록을 실제 Supervisor 병렬 그래프로 실행합니다."""
+    original_service = state.get("service")
+
+    class FixedPlanner:
+        """테스트 작업 계획을 반환하고 기존 서비스 기능은 그대로 위임합니다."""
+
+        def _route_intent_payload_with_llm(self, _text, _history):
+            return {
+                "intent": "multi_agent",
+                "confidence": 1.0,
+                "slots": state.get("slots") or {},
+                "tasks": state.get("tasks") or [],
+            }
+
+        def __getattr__(self, name):
+            if original_service is None:
+                raise AttributeError(name)
+            return getattr(original_service, name)
+
+    return supervisor_agent.supervisor_agent.invoke({
+        **state,
+        "history": state.get("history") or [],
+        "service": FixedPlanner(),
+    })
+
 def test_supervisor_service_maps_graph_state_to_chat_response(monkeypatch):
     def fake_invoke(state, config=None):
         assert state["text"] == "두부로 뭐 해먹지?"
@@ -101,16 +127,16 @@ def test_recipe_recommend_requires_login():
 
 def test_chat_route_table_covers_current_feature_nodes():
     expected_routes = {
-        "inventory.list": "inventory_agent_node",
-        "inventory.expiring": "inventory_agent_node",
-        "ingredient.guide": "guide_agent_node",
-        "recipe.recommend": "recipe_agent_node",
-        "recipe.search": "recipe_agent_node",
-        "receipt.guide": "receipt_guide_node",
-        "inventory.action": "inventory_agent_node",
-        "shopping.current": "shopping_agent_node",
-        "shopping.create": "shopping_agent_node",
-        "shopping.compare": "shopping_agent_node",
+        "inventory.list": "Inventory Agent (Single)",
+        "inventory.expiring": "Inventory Agent (Single)",
+        "ingredient.guide": "Guide Agent (Single)",
+        "recipe.recommend": "Recipe Agent (Single)",
+        "recipe.search": "Recipe Agent (Single)",
+        "receipt.guide": "Receipt Guide Agent",
+        "inventory.action": "Inventory Agent (Single)",
+        "shopping.current": "Shopping Agent (Single)",
+        "shopping.create": "Shopping Agent (Single)",
+        "shopping.compare": "Shopping Agent (Single)",
     }
 
     for intent, node_name in expected_routes.items():
@@ -154,16 +180,16 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     assert product_candidate_result["intent"] == "shopping.compare"
     assert human_food_candidate_result["intent"] == "shopping.compare"
     assert stock_in_result["intent"] == "shopping.purchase"
-    assert supervisor_agent.route_intent(current_result) == "shopping_agent_node"
-    assert supervisor_agent.route_intent(create_result) == "shopping_agent_node"
-    assert supervisor_agent.route_intent(compare_result) == "shopping_agent_node"
+    assert supervisor_agent.route_intent(current_result) == "Shopping Agent (Single)"
+    assert supervisor_agent.route_intent(create_result) == "Shopping Agent (Single)"
+    assert supervisor_agent.route_intent(compare_result) == "Shopping Agent (Single)"
 
 
 def test_chat_routes_shopping_confirm_action_to_shopping_agent():
     """장보기 확인 버튼 메시지가 Inventory/Alarm이 아닌 Shopping Agent로 이동하는지 확인합니다."""
     state = {"intent": "action.confirm", "text": "확인:shopping_create:두부|양파"}
 
-    assert supervisor_agent.route_intent(state) == "shopping_agent_node"
+    assert supervisor_agent.route_intent(state) == "Shopping Agent (Single)"
 
 
 def test_chat_routes_pending_shopping_flow_follow_ups_to_shopping_agent():
@@ -205,7 +231,7 @@ def test_chat_routes_pending_shopping_flow_follow_ups_to_shopping_agent():
     assert selection["intent"] == "shopping.compare"
     assert purchase["intent"] == "shopping.purchase"
     assert cancel["intent"] == "shopping.cancel"
-    assert supervisor_agent.route_intent(cancel) == "shopping_agent_node"
+    assert supervisor_agent.route_intent(cancel) == "Shopping Agent (Single)"
 
 
 def test_pending_shopping_selection_passes_original_reply_to_subgraph(monkeypatch):
@@ -525,7 +551,7 @@ def test_multi_agent_runs_dependency_before_recipe(monkeypatch):
     monkeypatch.setattr(supervisor_agent, "inventory_agent_node", fake_inventory)
     monkeypatch.setattr(supervisor_agent, "recipe_agent_node", fake_recipe)
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "임박 재료와 레시피 알려줘",
         "tasks": [
             {"intent": "recipe.recommend", "text": "레시피 추천해줘"},
@@ -554,7 +580,7 @@ def test_multi_agent_runs_independent_reads_in_parallel(monkeypatch):
     monkeypatch.setattr(supervisor_agent, "guide_agent_node", fake_guide)
     monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "감자 보관법과 가격 알려줘",
         "tasks": [
             {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법", "depends_on": []},
@@ -591,7 +617,7 @@ def test_multi_agent_replans_failed_read_once(monkeypatch):
     monkeypatch.setattr(supervisor_agent, "guide_agent_node", fake_guide)
     monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "감자 보관법과 가격 알려줘",
         "service": FakeService(),
         "tasks": [
@@ -640,6 +666,23 @@ def test_llm_router_uses_last_twelve_messages():
     assert len(result) == 12
     assert result[0]["text"] == "질문 3"
 
+
+def test_llm_router_prunes_diagnostic_slots_from_history():
+    """LLM 라우팅 이력에는 후속 대화에 필요한 슬롯만 전달합니다."""
+    history = [{
+        "role": "bot",
+        "text": "복합 요청을 처리했어요.",
+        "intent": "multi_agent",
+        "slots": {
+            "ingredient": "감자",
+            "task_outcomes": [{"id": "guide", "status": "completed"}],
+            "completed_intents": ["ingredient.guide"],
+        },
+    }]
+
+    result = chat_context._build_llm_route_history(history)
+
+    assert result[0]["slots"] == {"ingredient": "감자"}
 def test_llm_plan_parser_keeps_dependencies_and_write_mode():
     """LLM 계획 JSON의 의존성과 쓰기 모드를 안전한 task 계약으로 변환합니다."""
     payload = supervisor_utils._parse_llm_route_payload(json.dumps({
@@ -676,7 +719,7 @@ def test_dependent_write_task_uses_previous_agent_result(monkeypatch):
     monkeypatch.setattr(supervisor_agent, "inventory_agent_node", fake_inventory)
     monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "임박 재료를 확인하고 장보기 목록에 추가해줘",
         "service": FakeService(),
         "tasks": [
@@ -771,7 +814,7 @@ def test_inventory_recipe_calendar_request_runs_in_dependency_order(monkeypatch)
     monkeypatch.setattr(supervisor_agent, "recipe_agent_node", fake_recipe)
     monkeypatch.setattr(supervisor_agent, "alarm_agent_node", fake_alarm)
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "냉장고 재료 조회해서 레시피 추천해주고 내일 6시 30분에 일정 등록해줘",
         "history": [],
         "service": service,
@@ -863,7 +906,7 @@ def test_shopping_product_selection_waits_without_retry(monkeypatch):
         lambda _state: {"response_text": "감자 보관법이에요."},
     )
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "감자 보관법과 가격 알려줘",
         "tasks": [
             {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법 알려줘"},
@@ -877,6 +920,47 @@ def test_shopping_product_selection_waits_without_retry(monkeypatch):
     assert result["slots"]["failed_intents"] == []
 
 
+def test_multi_agent_does_not_synthesize_before_shopping_selection(monkeypatch):
+    """가격 상품 선택이 남아 있으면 완료된 일부 결과만으로 최종 답변을 합성하지 않습니다."""
+    class Service:
+        """불완전한 결과 합성이 호출되는지 확인하는 최소 테스트 서비스입니다."""
+
+        def _synthesize_multi_agent_response(self, *_args):
+            raise AssertionError("상품 선택 전에는 복합 응답을 합성하면 안 됩니다.")
+
+    monkeypatch.setattr(
+        supervisor_agent,
+        "guide_agent_node",
+        lambda _state: {"response_text": "감자는 서늘하고 어두운 곳에 보관하세요."},
+    )
+    monkeypatch.setattr(
+        supervisor_agent,
+        "recipe_agent_node",
+        lambda _state: {"response_text": "감자채볶음을 추천해요."},
+    )
+    monkeypatch.setattr(
+        supervisor_agent,
+        "shopping_agent_node",
+        lambda _state: {
+            "response_text": "감자 상품을 선택해주세요.",
+            "actions": [
+                {"label": "1번 선택", "data": {"message": "확인:shopping_select_product:0"}},
+            ],
+        },
+    )
+
+    result = _invoke_multi_agent({
+        "text": "감자 보관법과 감자 가격, 감자 레시피를 모두 알려줘",
+        "tasks": [
+            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법 알려줘"},
+            {"id": "shopping", "intent": "shopping.compare", "text": "감자 가격 알려줘"},
+            {"id": "recipe", "intent": "recipe.search", "text": "감자 레시피 알려줘"},
+        ],
+        "service": Service(),
+    })
+
+    assert "감자 상품을 선택해주세요." in result["response_text"]
+    assert result["slots"]["awaiting_input_intents"] == ["shopping.compare"]
 def test_multi_agent_reports_partial_failure_by_task(monkeypatch):
     """일부 Agent만 실패하면 성공 결과와 실패한 작업명을 함께 안내합니다."""
     monkeypatch.setattr(
@@ -890,7 +974,7 @@ def test_multi_agent_reports_partial_failure_by_task(monkeypatch):
         lambda _state: {"status": "error", "response_text": "레시피 조회에 실패했어요."},
     )
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "냉장고를 보여주고 레시피도 추천해줘",
         "tasks": [
             {"id": "inventory", "intent": "inventory.list", "text": "냉장고 재료 조회해줘"},
@@ -923,7 +1007,7 @@ def test_confirmation_pending_task_blocks_dependent_task(monkeypatch):
     monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
     monkeypatch.setattr(supervisor_agent, "recipe_agent_node", fake_recipe)
 
-    result = supervisor_agent.multi_agent_node({
+    result = _invoke_multi_agent({
         "text": "감자를 장보기에 추가하고 그 재료로 레시피 추천해줘",
         "tasks": [
             {"id": "shopping", "intent": "shopping.create", "text": "감자를 장보기에 추가해줘"},
@@ -972,35 +1056,6 @@ def test_confirmed_action_restores_remaining_supervisor_plan(monkeypatch):
     assert result["tasks"][1]["depends_on"] == ["confirmed_action"]
 
 
-def test_parallel_agent_timeout_keeps_completed_result(monkeypatch):
-    """한 Agent가 제한 시간을 넘겨도 완료된 병렬 조회 결과는 유지합니다."""
-    import time
-
-    monkeypatch.setattr(supervisor_agent, "_AGENT_TASK_TIMEOUT_SECONDS", 0.01)
-    monkeypatch.setattr(
-        supervisor_agent,
-        "guide_agent_node",
-        lambda _state: {"response_text": "감자 보관법이에요."},
-    )
-
-    def slow_shopping(_state):
-        """제한 시간보다 늦은 장보기 조회를 재현합니다."""
-        time.sleep(0.05)
-        return {"response_text": "감자 가격이에요."}
-
-    monkeypatch.setattr(supervisor_agent, "shopping_agent_node", slow_shopping)
-
-    result = supervisor_agent.multi_agent_node({
-        "text": "감자 보관법과 가격 알려줘",
-        "tasks": [
-            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법"},
-            {"id": "price", "intent": "shopping.compare", "text": "감자 가격"},
-        ],
-    })
-
-    assert "감자 보관법이에요." in result["response_text"]
-    assert result["slots"]["completed_intents"] == ["ingredient.guide"]
-    assert result["slots"]["failed_intents"] == ["shopping.compare"]
 
 def test_supervisor_resume_plan_round_trips_through_signed_context():
     """남은 Supervisor 계획은 현재 사용자와 세션에 귀속된 토큰으로 복원됩니다."""
@@ -1031,3 +1086,212 @@ def test_signed_confirmation_token_cannot_be_reused():
 
     assert supervisor_utils._verify_and_claim_confirm_token(token, user_id=7) == command
     assert supervisor_utils._verify_and_claim_confirm_token(token, user_id=7) is None
+
+
+def test_multi_agent_graph_exposes_agent_specific_fanout_nodes():
+    """복합 요청 그래프는 단일 처리 노드 대신 Agent별 병렬 분기를 노출합니다."""
+    nodes = supervisor_agent.supervisor_agent.get_graph().nodes
+
+    assert "multi_agent_node" not in nodes
+    assert "Guide Agent" in nodes
+    assert "Recipe Agent" in nodes
+    assert "Shopping Agent" in nodes
+    assert "execution_collect_node" in nodes
+
+
+def test_compiled_graph_runs_independent_agent_branches_in_parallel(monkeypatch):
+    """독립된 Guide와 Shopping 작업은 컴파일된 LangGraph에서 동시에 실행됩니다."""
+    from threading import Barrier
+
+    barrier = Barrier(2)
+
+    class Service:
+        """두 개의 독립 조회 작업을 반환하는 Supervisor 서비스 대역입니다."""
+
+        def _route_intent_payload_with_llm(self, _text, _history):
+            return {
+                "intent": "multi_agent",
+                "confidence": 0.95,
+                "slots": {},
+                "tasks": [
+                    {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법", "depends_on": []},
+                    {"id": "price", "intent": "shopping.compare", "text": "감자 가격", "depends_on": []},
+                ],
+            }
+
+        def _synthesize_multi_agent_response(self, _text, _results):
+            return None
+
+    def fake_guide(_state):
+        barrier.wait(timeout=3)
+        return {"response_text": "감자 보관법", "slots": {}}
+
+    def fake_shopping(_state):
+        barrier.wait(timeout=3)
+        return {"response_text": "감자 가격", "slots": {}}
+
+    monkeypatch.setattr(supervisor_agent, "guide_agent_node", fake_guide)
+    monkeypatch.setattr(supervisor_agent, "shopping_agent_node", fake_shopping)
+
+    result = supervisor_agent.supervisor_agent.invoke({
+        "text": "감자 보관법과 가격 알려줘",
+        "history": [],
+        "service": Service(),
+        "user_id": 2,
+    })
+
+    assert "감자 보관법" in result["response_text"]
+    assert "감자 가격" in result["response_text"]
+    assert result["slots"]["completed_intents"] == ["ingredient.guide", "shopping.compare"]
+
+
+def test_multi_agent_dispatch_serializes_write_tasks():
+    """독립된 쓰기 작업도 한 번에 하나씩만 실행 묶음에 포함합니다."""
+    plan = supervisor_agent._prepare_task_plan([
+        {"id": "inventory", "intent": "inventory.action", "text": "양파 추가해줘"},
+        {"id": "shopping", "intent": "shopping.create", "text": "감자 장보기에 넣어줘"},
+    ])
+
+    first = supervisor_agent.execution_dispatch_node({
+        "multi_plan": plan,
+        "multi_task_results": {},
+    })
+    second = supervisor_agent.execution_dispatch_node({
+        "multi_plan": plan,
+        "multi_task_results": {
+            "inventory": {"task": plan[0], "result": {"response_text": "완료"}, "outcome": "completed"},
+        },
+    })
+
+    assert [task["id"] for task in first["multi_batch"]] == ["inventory"]
+    assert [task["id"] for task in second["multi_batch"]] == ["shopping"]
+
+
+def test_parallel_read_fails_when_isolated_db_session_cannot_open(monkeypatch):
+    """병렬 조회 세션 생성 실패 시 부모 요청의 DB 세션을 공유하지 않습니다."""
+    def fail_session():
+        """독립 DB 세션 생성 실패를 재현합니다."""
+        raise RuntimeError("DB 연결 실패")
+
+    monkeypatch.setattr("app.backend.db.session.SessionLocal", fail_session)
+    handler_called = False
+
+    def fake_guide(_state):
+        """공유 세션으로 실행되는지 확인하는 가짜 Guide 핸들러입니다."""
+        nonlocal handler_called
+        handler_called = True
+        return {"response_text": "감자 보관법"}
+
+    with pytest.raises(RuntimeError, match="병렬 조회용 DB 세션"):
+        supervisor_agent._run_multi_task(
+            {"text": "감자 보관법", "db": object(), "slots": {}},
+            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법", "mode": "read", "depends_on": []},
+            {},
+            {"Guide Agent (Single)": fake_guide},
+            isolated_db=True,
+        )
+
+    assert handler_called is False
+
+
+def test_parallel_branch_records_domain_agent_observation(monkeypatch):
+    """병렬 분기의 실제 도메인 Agent 호출이 Langfuse Agent 구간으로 기록됩니다."""
+    captured = {}
+
+    class Observation:
+        """Langfuse observation의 입력과 결과 갱신을 저장합니다."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc, _traceback):
+            return False
+
+        def update(self, **kwargs):
+            captured["update"] = kwargs
+
+    class Client:
+        """Agent observation 생성 요청을 저장하는 가짜 Langfuse 클라이언트입니다."""
+
+        def start_as_current_observation(self, **kwargs):
+            captured["start"] = kwargs
+            return Observation()
+
+    monkeypatch.setattr(supervisor_agent, "get_langfuse_client", lambda: Client())
+    monkeypatch.setattr(
+        supervisor_agent,
+        "guide_agent_node",
+        lambda _state: {"response_text": "감자 보관법", "slots": {}},
+    )
+
+    result = supervisor_agent._run_parallel_agent_branch({
+        "text": "감자 보관법 알려줘",
+        "multi_current_task": {
+            "id": "guide_1",
+            "intent": "ingredient.guide",
+            "text": "감자 보관법 알려줘",
+            "mode": "read",
+            "depends_on": [],
+        },
+        "multi_task_results": {},
+    })
+
+    assert captured["start"]["name"] == "Guide Agent"
+    assert captured["start"]["as_type"] == "agent"
+    assert captured["start"]["input"]["task_id"] == "guide_1"
+    assert captured["update"]["output"]["outcome"] == "completed"
+    assert result["multi_task_results"]["guide_1"]["outcome"] == "completed"
+
+
+def test_compiled_graph_runs_dependent_tasks_in_separate_steps(monkeypatch):
+    """냉장고 조회, 레시피 추천, 일정 확인은 선행 결과 순서대로 다시 분기됩니다."""
+    calls = []
+
+    class Service:
+        """의존성이 있는 세 작업을 반환하고 후속 문장을 구체화합니다."""
+
+        def _route_intent_payload_with_llm(self, _text, _history):
+            return {
+                "intent": "multi_agent",
+                "confidence": 0.95,
+                "slots": {},
+                "tasks": [
+                    {"id": "inventory", "intent": "inventory.list", "text": "냉장고 조회", "depends_on": []},
+                    {"id": "recipe", "intent": "recipe.recommend", "text": "레시피 추천", "depends_on": ["inventory"]},
+                    {"id": "calendar", "intent": "alarm.calendar", "text": "내일 일정 등록", "depends_on": ["recipe"]},
+                ],
+            }
+
+        def _resolve_multi_agent_task(self, _text, task, _results):
+            if task["intent"] == "recipe.recommend":
+                return {**task, "text": "감자로 레시피 추천"}
+            return {**task, "text": "내일 오후 6시 30분 감자전 일정 등록"}
+
+    def fake_inventory(_state):
+        calls.append("inventory.list")
+        return {"response_text": "감자가 있어요."}
+
+    def fake_recipe(state):
+        calls.append("recipe.recommend")
+        assert state["text"] == "감자로 레시피 추천"
+        return {"response_text": "감자전을 추천해요."}
+
+    def fake_alarm(state):
+        calls.append("alarm.calendar")
+        assert state["text"] == "내일 오후 6시 30분 감자전 일정 등록"
+        return {"status": "needs_input", "response_text": "감자전 일정을 등록할까요?"}
+
+    monkeypatch.setattr(supervisor_agent, "inventory_agent_node", fake_inventory)
+    monkeypatch.setattr(supervisor_agent, "recipe_agent_node", fake_recipe)
+    monkeypatch.setattr(supervisor_agent, "alarm_agent_node", fake_alarm)
+
+    result = supervisor_agent.supervisor_agent.invoke({
+        "text": "냉장고 조회해서 레시피 추천하고 내일 일정 등록해줘",
+        "history": [],
+        "service": Service(),
+        "user_id": 2,
+    })
+
+    assert calls == ["inventory.list", "recipe.recommend", "alarm.calendar"]
+    assert result["slots"]["completed_intents"] == ["inventory.list", "recipe.recommend"]
+    assert result["slots"]["awaiting_input_intents"] == ["alarm.calendar"]

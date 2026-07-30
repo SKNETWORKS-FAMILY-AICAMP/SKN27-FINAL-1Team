@@ -1,4 +1,12 @@
-from typing import TypedDict, Any, Optional
+from typing import Annotated, TypedDict, Any, Optional
+
+
+def _merge_multi_task_results(
+    current: dict[str, dict] | None,
+    update: dict[str, dict] | None,
+) -> dict[str, dict]:
+    """병렬 Agent가 반환한 작업 결과를 작업 ID 기준으로 합칩니다."""
+    return {**(current or {}), **(update or {})}
 
 class GraphState(TypedDict, total=False):
     """LangGraph에서 노드 간에 전달되는 챗봇의 작업 상태(State)입니다."""
@@ -18,6 +26,10 @@ class GraphState(TypedDict, total=False):
     intent_payload: Optional[dict] # LLM/룰 라우팅 결과 원본 dict
     slots: Optional[dict]          # LLM이 추출한 식재료, 날짜 등 슬롯
     tasks: Optional[list[dict]]    # 복합 요청의 실행 모드와 의존성을 포함한 작업 계획
+    multi_plan: list[dict]         # Supervisor가 정규화한 복합 요청 실행 계획
+    multi_batch: list[dict]        # 현재 단계에서 동시에 실행할 수 있는 작업 묶음
+    multi_current_task: dict       # 병렬 분기된 Agent 노드가 담당할 단일 작업
+    multi_task_results: Annotated[dict[str, dict], _merge_multi_task_results]  # 병렬 Agent 실행 결과
     pending_action: Optional[dict] # 사용자 확인을 기다리는 쓰기 작업
     keyword: Optional[str]          # 추출된 핵심 키워드 (예: "감자", "양파")
     
