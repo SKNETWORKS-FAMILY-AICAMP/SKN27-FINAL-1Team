@@ -81,6 +81,8 @@ class Settings:
     # OpenAI & AI Tools Settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    SUPERVISOR_OPENAI_MODEL: str = os.getenv("SUPERVISOR_OPENAI_MODEL", "gpt-4.1-mini")
+    SUPERVISOR_LLM_TIMEOUT_SECONDS: int = int(os.getenv("SUPERVISOR_LLM_TIMEOUT_SECONDS", 20))
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
     LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
