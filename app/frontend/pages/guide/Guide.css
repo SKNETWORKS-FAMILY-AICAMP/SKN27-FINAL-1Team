@@ -2413,10 +2413,22 @@
   .guide-ingredient-list--desktop,
   .guide-ingredients--seasonal .guide-ingredient-list--desktop {
     padding: 0;
-    display: grid;
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    display: flex;
     gap: 12px;
-    overflow: visible;
+    overflow: hidden;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop > .guide-ingredient {
+    flex: 1 1 0;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee {
+    display: block;
+  }
+
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-marquee__track,
+  .guide-ingredients--seasonal .guide-ingredient-list--desktop.is-marquee .guide-marquee__group {
+    flex-wrap: nowrap;
   }
 }
 
@@ -2930,6 +2942,7 @@
 
   .guide-detail-guide {
     width: 100%;
+    height: 396px;
     margin-top: 24px;
   }
 
