@@ -729,27 +729,8 @@ function Guide() {
     </button>
   )
 
-  const renderMobileIngredientTrack = (ingredients, { isFridge = false, marqueeThreshold = 4 } = {}) => {
-    if (ingredients.length <= marqueeThreshold) {
-      return ingredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge }))
-    }
-
-    return (
-      <div
-        className="guide-marquee__track"
-        style={{ '--guide-marquee-duration': `${Math.max(14, ingredients.length * 2.4)}s` }}
-      >
-        <div className="guide-marquee__group">
-          {ingredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge }))}
-        </div>
-        <div className="guide-marquee__group" aria-hidden="true" inert="">
-          {ingredients.map((ingredient) =>
-            renderIngredientButton(ingredient, { isFridge, keyPrefix: 'duplicate-' }),
-          )}
-        </div>
-      </div>
-    )
-  }
+  const renderMobileIngredientTrack = (ingredients, { isFridge = false } = {}) =>
+    ingredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge }))
 
   const openSuggestionForm = () => {
     setSuggestionMessage('')
@@ -886,9 +867,7 @@ function Guide() {
         </div>
         <div className="guide-fridge-pager">
           <div
-            className={`guide-ingredient-list guide-ingredient-list--desktop${
-              mobileFeaturedIngredients.length > 8 ? ' is-marquee' : ''
-            }`}
+            className="guide-ingredient-list guide-ingredient-list--desktop"
             aria-label={isLoggedIn ? '내 냉장고 재료 자동 이동 목록' : '추천 식재료 자동 이동 목록'}
           >
           {renderMobileIngredientTrack(mobileFeaturedIngredients, { isFridge: isLoggedIn, marqueeThreshold: 8 })}
@@ -903,24 +882,6 @@ function Guide() {
             </div>
           ) : null}
           {!isLoggedIn && !isListLoading && guestSuggestions.length === 0 ? (
-            <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
-          ) : null}
-          </div>
-          <div
-            className={`guide-ingredient-list guide-ingredient-list--mobile${mobileFeaturedIngredients.length > 4 ? ' is-marquee' : ''}`}
-            aria-label={isLoggedIn ? '내 냉장고 재료 스와이프 목록' : '추천 식재료 스와이프 목록'}
-          >
-          {renderMobileIngredientTrack(mobileFeaturedIngredients, { isFridge: isLoggedIn })}
-          {isLoggedIn && isFridgeLoading ? <p className="guide-empty">냉장고 재료를 불러오는 중입니다.</p> : null}
-          {isLoggedIn && !isFridgeLoading && fridgeErrorMessage ? (
-            <p className="guide-empty">{fridgeErrorMessage}</p>
-          ) : null}
-          {isLoggedIn && !isFridgeLoading && !fridgeErrorMessage && fridgeIngredients.length === 0 ? (
-            <div className="guide-empty guide-fridge-empty">
-              <span className="guide-fridge-empty__mobile">등록된 재료가 없습니다.</span>
-            </div>
-          ) : null}
-          {!isLoggedIn && !isListLoading && guestRecommendationItems.length === 0 ? (
             <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
           ) : null}
           </div>
@@ -1320,19 +1281,10 @@ function Guide() {
           </div>
           <div className="guide-fridge-pager">
             <div
-              className={`guide-ingredient-list guide-ingredient-list--desktop${seasonalGuideItems.length > 8 ? ' is-marquee' : ''}`}
+              className="guide-ingredient-list guide-ingredient-list--desktop"
               aria-label="제철 식재료 자동 이동 목록"
             >
               {renderMobileIngredientTrack(seasonalGuideItems, { marqueeThreshold: 8 })}
-              {!isListLoading && seasonalGuideItems.length === 0 ? (
-                <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
-              ) : null}
-            </div>
-            <div
-              className={`guide-ingredient-list guide-ingredient-list--mobile${seasonalGuideItems.length > 4 ? ' is-marquee' : ''}`}
-              aria-label="제철 식재료 자동 이동 목록"
-            >
-              {renderMobileIngredientTrack(seasonalGuideItems)}
               {!isListLoading && seasonalGuideItems.length === 0 ? (
                 <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
               ) : null}
