@@ -148,8 +148,8 @@
 }
 
 .receipt-stepper {
-  width: min(100%, 640px);
-  margin: 10px 0 8px auto;
+  width: 100%;
+  margin: 10px 0 8px;
   padding: 12px 14px;
   box-sizing: border-box;
   display: grid;
