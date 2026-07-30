@@ -275,7 +275,6 @@ function Guide() {
   useEffect(() => {
     if (!isLoggedIn) {
       setFridgeIngredients([])
-      setFridgePage(1)
       setFridgeErrorMessage('')
       setIsFridgeLoading(false)
       return undefined
@@ -301,7 +300,6 @@ function Guide() {
           return true
         })
         setFridgeIngredients(ingredients)
-        setFridgePage(1)
       } catch (error) {
         if (error.name !== 'AbortError') {
           setFridgeIngredients([])
@@ -726,8 +724,8 @@ function Guide() {
     </button>
   )
 
-  const renderMobileIngredientTrack = (ingredients, { isFridge = false } = {}) => {
-    if (ingredients.length <= 4) {
+  const renderMobileIngredientTrack = (ingredients, { isFridge = false, marqueeThreshold = 4 } = {}) => {
+    if (ingredients.length <= marqueeThreshold) {
       return ingredients.map((ingredient) => renderIngredientButton(ingredient, { isFridge }))
     }
 
@@ -884,11 +882,11 @@ function Guide() {
         <div className="guide-fridge-pager">
           <div
             className={`guide-ingredient-list guide-ingredient-list--desktop${
-              mobileFeaturedIngredients.length > 4 ? ' is-marquee' : ''
+              mobileFeaturedIngredients.length > 8 ? ' is-marquee' : ''
             }`}
             aria-label={isLoggedIn ? '내 냉장고 재료 자동 이동 목록' : '추천 식재료 자동 이동 목록'}
           >
-          {renderMobileIngredientTrack(mobileFeaturedIngredients, { isFridge: isLoggedIn })}
+          {renderMobileIngredientTrack(mobileFeaturedIngredients, { isFridge: isLoggedIn, marqueeThreshold: 8 })}
           {isLoggedIn && isFridgeLoading ? <p className="guide-empty">냉장고 재료를 불러오는 중입니다.</p> : null}
           {isLoggedIn && !isFridgeLoading && fridgeErrorMessage ? (
             <p className="guide-empty">{fridgeErrorMessage}</p>
@@ -954,29 +952,27 @@ function Guide() {
             </div>
 
             <div className="guide-category-middle-slot">
-              {selectedMajorCategory ? (
-                <div className="guide-category-tab-list guide-category-tab-list--middle" role="group" aria-label="중분류">
+              <div className="guide-category-tab-list guide-category-tab-list--middle" role="group" aria-label="중분류">
+                <button
+                  className={!selectedMiddleCategory ? 'is-active' : ''}
+                  type="button"
+                  aria-pressed={!selectedMiddleCategory}
+                  onClick={() => setSelectedMiddleCategory('')}
+                >
+                  전체
+                </button>
+                {categoryOptions.middle_categories.map((category) => (
                   <button
-                    className={!selectedMiddleCategory ? 'is-active' : ''}
+                    className={selectedMiddleCategory === category ? 'is-active' : ''}
+                    key={category}
                     type="button"
-                    aria-pressed={!selectedMiddleCategory}
-                    onClick={() => setSelectedMiddleCategory('')}
+                    aria-pressed={selectedMiddleCategory === category}
+                    onClick={() => setSelectedMiddleCategory(category)}
                   >
-                    전체
+                    {category}
                   </button>
-                  {categoryOptions.middle_categories.map((category) => (
-                    <button
-                      className={selectedMiddleCategory === category ? 'is-active' : ''}
-                      key={category}
-                      type="button"
-                      aria-pressed={selectedMiddleCategory === category}
-                      onClick={() => setSelectedMiddleCategory(category)}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1317,10 +1313,10 @@ function Guide() {
           </div>
           <div className="guide-fridge-pager">
             <div
-              className={`guide-ingredient-list guide-ingredient-list--desktop${seasonalGuideItems.length > 4 ? ' is-marquee' : ''}`}
+              className={`guide-ingredient-list guide-ingredient-list--desktop${seasonalGuideItems.length > 8 ? ' is-marquee' : ''}`}
               aria-label="제철 식재료 자동 이동 목록"
             >
-              {renderMobileIngredientTrack(seasonalGuideItems)}
+              {renderMobileIngredientTrack(seasonalGuideItems, { marqueeThreshold: 8 })}
               {!isListLoading && seasonalGuideItems.length === 0 ? (
                 <p className="guide-empty">{currentMonth}월 제철 식재료가 없습니다.</p>
               ) : null}

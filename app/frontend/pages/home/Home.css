@@ -2455,6 +2455,7 @@
   left: max(6vw, calc((100vw - 1200px) / 2 + 20px));
   z-index: 2;
   box-sizing: border-box;
+  border-radius: 24px;
   background: linear-gradient(90deg, rgba(255, 248, 242, 0.88) 0%, rgba(255, 248, 242, 0.58) 58%, transparent 100%);
   transform: translateY(-50%);
 }
@@ -2591,7 +2592,7 @@
     right: auto;
     bottom: auto;
     left: 18px;
-    border-radius: 0;
+    border-radius: 18px;
     background: linear-gradient(90deg, rgba(255, 248, 242, 0.88) 0%, rgba(255, 248, 242, 0.58) 58%, transparent 100%);
     box-shadow: none;
     transform: none;
