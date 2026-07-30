@@ -1,8 +1,14 @@
 import logging
 import re
+from contextlib import nullcontext
 
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
+
+try:
+    from langfuse import get_client as get_langfuse_client
+except ImportError:
+    get_langfuse_client = None
 
 from ai.agents.inventory_agent.inventory_utils import (
     _pending_add_many_from_history,
@@ -93,6 +99,15 @@ from ai.agents.shopping_agent.shopping_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+_AGENT_OBSERVATION_BY_INTENT_PREFIX = {
+    "inventory": "Inventory Agent",
+    "ingredient": "Guide Agent",
+    "recipe": "Recipe Agent",
+    "shopping": "Shopping Agent",
+    "alarm": "Alarm Agent",
+    "receipt": "Receipt Agent",
+}
 
 
 def _route_write_request(
@@ -739,7 +754,7 @@ def _run_multi_task(
         if local_db is not None:
             local_db.close()
 
-def multi_agent_plan_node(state: GraphState) -> dict:
+def execution_plan_node(state: GraphState) -> dict:
     """복합 요청을 의존성이 보완된 Supervisor 실행 계획으로 변환합니다."""
     return {
         "multi_plan": _prepare_task_plan(state.get("tasks")),
@@ -748,7 +763,7 @@ def multi_agent_plan_node(state: GraphState) -> dict:
     }
 
 
-def multi_agent_dispatch_node(state: GraphState) -> dict:
+def execution_dispatch_node(state: GraphState) -> dict:
     """완료 결과를 기준으로 다음 병렬 실행 묶음과 차단 작업을 계산합니다."""
     plan = state.get("multi_plan") or []
     task_results = state.get("multi_task_results") or {}
@@ -777,6 +792,33 @@ def multi_agent_dispatch_node(state: GraphState) -> dict:
     }
 
 
+def _open_agent_observation(task: dict):
+    """도메인 Agent 실행을 Langfuse에서 구분할 수 있는 추적 구간을 만듭니다."""
+    if get_langfuse_client is None:
+        return nullcontext(None)
+
+    intent = str(task.get("intent") or "")
+    agent_name = _AGENT_OBSERVATION_BY_INTENT_PREFIX.get(
+        intent.split(".", 1)[0],
+        "Domain Agent",
+    )
+    try:
+        return get_langfuse_client().start_as_current_observation(
+            name=agent_name,
+            as_type="agent",
+            input={
+                "task_id": task.get("id"),
+                "intent": intent,
+                "text": task.get("text"),
+                "mode": task.get("mode"),
+                "depends_on": task.get("depends_on") or [],
+            },
+        )
+    except Exception:
+        logger.warning("Langfuse Agent 추적 구간을 만들지 못했습니다.", exc_info=True)
+        return nullcontext(None)
+
+
 def _run_parallel_agent_branch(state: GraphState) -> dict:
     """병렬 분기에서 할당된 작업 하나를 기존 도메인 Agent로 실행합니다."""
     task = state["multi_current_task"]
@@ -797,33 +839,55 @@ def _run_parallel_agent_branch(state: GraphState) -> dict:
         task = {**task, **(resolved or {})}
 
     handlers = {
-        "inventory_agent_node": inventory_agent_node,
-        "guide_agent_node": guide_agent_node,
-        "recipe_agent_node": recipe_agent_node,
-        "receipt_guide_node": receipt_guide_node,
-        "receipt_lookup_node": receipt_lookup_node,
-        "shopping_agent_node": shopping_agent_node,
-        "alarm_agent_node": alarm_agent_node,
+        "Inventory Agent (Single)": inventory_agent_node,
+        "Guide Agent (Single)": guide_agent_node,
+        "Recipe Agent (Single)": recipe_agent_node,
+        "Receipt Guide Agent": receipt_guide_node,
+        "Receipt Lookup Agent": receipt_lookup_node,
+        "Shopping Agent (Single)": shopping_agent_node,
+        "Alarm Agent (Single)": alarm_agent_node,
     }
-    try:
-        result = _run_multi_task(
-            state, task, task_results, handlers, isolated_db=task["mode"] == "read"
-        )
-        outcome = _agent_result_outcome(task, result)
-        if outcome == "failed" and task["mode"] == "read" and service and hasattr(service, "_repair_multi_agent_task"):
-            repaired = service._repair_multi_agent_task(
-                state["text"],
-                task,
-                [item["result"] for item in task_results.values() if isinstance(item.get("result"), dict)],
+    repaired_task = False
+    with _open_agent_observation(task) as observation:
+        try:
+            result = _run_multi_task(
+                state, task, task_results, handlers, isolated_db=task["mode"] == "read"
             )
-            if repaired:
-                task = {**task, **repaired}
-                result = _run_multi_task(state, task, task_results, handlers, isolated_db=True)
-                outcome = _agent_result_outcome(task, result)
-    except Exception:
-        logger.exception("LangGraph 병렬 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
-        result = {"status": "error", "response_text": "요청 처리에 실패했어요."}
-        outcome = "failed"
+            outcome = _agent_result_outcome(task, result)
+            if outcome == "failed" and task["mode"] == "read" and service and hasattr(service, "_repair_multi_agent_task"):
+                repaired = service._repair_multi_agent_task(
+                    state["text"],
+                    task,
+                    [item["result"] for item in task_results.values() if isinstance(item.get("result"), dict)],
+                )
+                if repaired:
+                    repaired_task = True
+                    task = {**task, **repaired}
+                    result = _run_multi_task(state, task, task_results, handlers, isolated_db=True)
+                    outcome = _agent_result_outcome(task, result)
+        except Exception:
+            logger.exception("LangGraph 병렬 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
+            result = {"status": "error", "response_text": "요청 처리에 실패했어요."}
+            outcome = "failed"
+
+        if observation is not None:
+            try:
+                result_slots = result.get("slots") if isinstance(result, dict) else {}
+                observation.update(
+                    output={
+                        "outcome": outcome,
+                        "response_text": str((result or {}).get("response_text") or "")[:500],
+                    },
+                    metadata={
+                        "task_id": task.get("id"),
+                        "intent": task.get("intent"),
+                        "mode": task.get("mode"),
+                        "repaired": repaired_task,
+                        "retry_count": (result_slots or {}).get("agent_retry_count", 0),
+                    },
+                )
+            except Exception:
+                logger.warning("Langfuse Agent 실행 결과를 기록하지 못했습니다.", exc_info=True)
 
     return {
         "multi_task_results": {
@@ -832,12 +896,12 @@ def _run_parallel_agent_branch(state: GraphState) -> dict:
     }
 
 
-def multi_agent_collect_node(state: GraphState) -> dict:
+def execution_collect_node(state: GraphState) -> dict:
     """한 단계의 병렬 Agent 실행이 끝난 뒤 다음 의존 작업 분기를 준비합니다."""
     return {"multi_batch": []}
 
 
-def multi_agent_response_node(state: GraphState) -> dict:
+def execution_response_node(state: GraphState) -> dict:
     """모든 복합 작업 결과를 순서대로 합쳐 최종 Supervisor 응답을 만듭니다."""
     plan = state.get("multi_plan") or []
     task_results = state.get("multi_task_results") or {}
@@ -864,7 +928,14 @@ def multi_agent_response_node(state: GraphState) -> dict:
         if task["id"] in completed_ids and isinstance(task_results[task["id"]].get("result"), dict)
     ]
     service = state.get("service")
-    if all(task["mode"] == "read" for task in plan) and len(completed_results) >= 2 and service and hasattr(service, "_synthesize_multi_agent_response"):
+    all_tasks_completed = len(completed_ids) == len(plan)
+    if (
+        all_tasks_completed
+        and all(task["mode"] == "read" for task in plan)
+        and len(completed_results) >= 2
+        and service
+        and hasattr(service, "_synthesize_multi_agent_response")
+    ):
         synthesized = service._synthesize_multi_agent_response(state["text"], completed_results)
         if synthesized:
             result["response_text"] = synthesized
@@ -902,37 +973,37 @@ def multi_agent_response_node(state: GraphState) -> dict:
 
 
 _PARALLEL_BRANCH_BY_INTENT = {
-    "inventory.list": "parallel_inventory_branch",
-    "inventory.expiring": "parallel_inventory_branch",
-    "inventory.action": "parallel_inventory_branch",
-    "inventory.delete": "parallel_inventory_branch",
-    "inventory.storage_change": "parallel_inventory_branch",
-    "ingredient.guide": "parallel_guide_branch",
-    "recipe.recommend": "parallel_recipe_branch",
-    "recipe.search": "parallel_recipe_branch",
-    "recipe.pairing": "parallel_recipe_branch",
-    "shopping.current": "parallel_shopping_branch",
-    "shopping.history": "parallel_shopping_branch",
-    "shopping.compare": "parallel_shopping_branch",
-    "shopping.create": "parallel_shopping_branch",
-    "shopping.purchase": "parallel_shopping_branch",
-    "shopping.delete_item": "parallel_shopping_branch",
-    "shopping.check_item": "parallel_shopping_branch",
-    "alarm.notification": "parallel_alarm_branch",
-    "alarm.calendar": "parallel_alarm_branch",
-    "receipt.lookup": "parallel_receipt_branch",
-    "receipt.guide": "parallel_receipt_branch",
+    "inventory.list": "Inventory Agent",
+    "inventory.expiring": "Inventory Agent",
+    "inventory.action": "Inventory Agent",
+    "inventory.delete": "Inventory Agent",
+    "inventory.storage_change": "Inventory Agent",
+    "ingredient.guide": "Guide Agent",
+    "recipe.recommend": "Recipe Agent",
+    "recipe.search": "Recipe Agent",
+    "recipe.pairing": "Recipe Agent",
+    "shopping.current": "Shopping Agent",
+    "shopping.history": "Shopping Agent",
+    "shopping.compare": "Shopping Agent",
+    "shopping.create": "Shopping Agent",
+    "shopping.purchase": "Shopping Agent",
+    "shopping.delete_item": "Shopping Agent",
+    "shopping.check_item": "Shopping Agent",
+    "alarm.notification": "Alarm Agent",
+    "alarm.calendar": "Alarm Agent",
+    "receipt.lookup": "Receipt Agent",
+    "receipt.guide": "Receipt Agent",
 }
 
 
-def dispatch_multi_agent_tasks(state: GraphState):
+def dispatch_execution_tasks(state: GraphState):
     """현재 작업 묶음을 기존 Agent별 LangGraph 분기로 전송합니다."""
     batch = state.get("multi_batch") or []
     if not batch:
-        return "multi_agent_response_node"
+        return "execution_response_node"
     return [
         Send(
-            _PARALLEL_BRANCH_BY_INTENT.get(task["intent"], "parallel_unknown_branch"),
+            _PARALLEL_BRANCH_BY_INTENT.get(task["intent"], "Unknown Agent"),
             {**state, "multi_current_task": task},
         )
         for task in batch
@@ -944,11 +1015,11 @@ def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
     if intent == "multi_agent":
-        return "multi_agent_plan_node"
+        return "execution_plan_node"
     if intent.startswith("alarm."):
-        return "alarm_agent_node"
+        return "Alarm Agent (Single)"
     if intent.startswith("shopping."):
-        return "shopping_agent_node"
+        return "Shopping Agent (Single)"
     if intent.startswith("inventory.") or intent.startswith("action."):
         if intent == "action.invalid":
             return "general_node"
@@ -956,73 +1027,73 @@ def route_intent(state: GraphState) -> str:
             parts = state["text"].split(":")
             action = parts[1] if len(parts) >= 2 else ""
             if action in SHOPPING_CONFIRM_ACTIONS:
-                return "shopping_agent_node"
+                return "Shopping Agent (Single)"
             if action in _INVENTORY_CONFIRM_ACTIONS:
-                return "inventory_agent_node"
+                return "Inventory Agent (Single)"
             if action in _ALARM_CONFIRM_ACTIONS:
-                return "alarm_agent_node"
+                return "Alarm Agent (Single)"
             return "general_node"
-        return "inventory_agent_node"
+        return "Inventory Agent (Single)"
     routes = {
-        "ingredient.guide": "guide_agent_node",
-        "recipe.recommend": "recipe_agent_node",
-        "recipe.search": "recipe_agent_node",
-        "recipe.pairing": "recipe_agent_node",
-        "receipt.lookup": "receipt_lookup_node",
-        "receipt.guide": "receipt_guide_node",
-        "food.general": "general_food_agent_node",
+        "ingredient.guide": "Guide Agent (Single)",
+        "recipe.recommend": "Recipe Agent (Single)",
+        "recipe.search": "Recipe Agent (Single)",
+        "recipe.pairing": "Recipe Agent (Single)",
+        "receipt.lookup": "Receipt Lookup Agent",
+        "receipt.guide": "Receipt Guide Agent",
+        "food.general": "General Food Agent",
     }
     return routes.get(intent, "general_node")
 
 workflow = StateGraph(GraphState)
 workflow.add_node("router", router_node)
-workflow.add_node("inventory_agent_node", inventory_agent_node)
-workflow.add_node("multi_agent_plan_node", multi_agent_plan_node)
-workflow.add_node("multi_agent_dispatch_node", multi_agent_dispatch_node)
-workflow.add_node("parallel_inventory_branch", _run_parallel_agent_branch)
-workflow.add_node("parallel_guide_branch", _run_parallel_agent_branch)
-workflow.add_node("parallel_recipe_branch", _run_parallel_agent_branch)
-workflow.add_node("parallel_shopping_branch", _run_parallel_agent_branch)
-workflow.add_node("parallel_alarm_branch", _run_parallel_agent_branch)
-workflow.add_node("parallel_receipt_branch", _run_parallel_agent_branch)
-workflow.add_node("parallel_unknown_branch", _run_parallel_agent_branch)
-workflow.add_node("multi_agent_collect_node", multi_agent_collect_node)
-workflow.add_node("multi_agent_response_node", multi_agent_response_node)
-workflow.add_node("alarm_agent_node", alarm_agent_node)
-workflow.add_node("shopping_agent_node", shopping_agent_node)
-workflow.add_node("guide_agent_node", guide_agent_node)
-workflow.add_node("recipe_agent_node", recipe_agent_node)
-workflow.add_node("receipt_lookup_node", receipt_lookup_node)
-workflow.add_node("receipt_guide_node", receipt_guide_node)
-workflow.add_node("general_food_agent_node", general_food_agent_node)
+workflow.add_node("Inventory Agent (Single)", inventory_agent_node)
+workflow.add_node("execution_plan_node", execution_plan_node)
+workflow.add_node("execution_dispatch_node", execution_dispatch_node)
+workflow.add_node("Inventory Agent", _run_parallel_agent_branch)
+workflow.add_node("Guide Agent", _run_parallel_agent_branch)
+workflow.add_node("Recipe Agent", _run_parallel_agent_branch)
+workflow.add_node("Shopping Agent", _run_parallel_agent_branch)
+workflow.add_node("Alarm Agent", _run_parallel_agent_branch)
+workflow.add_node("Receipt Agent", _run_parallel_agent_branch)
+workflow.add_node("Unknown Agent", _run_parallel_agent_branch)
+workflow.add_node("execution_collect_node", execution_collect_node)
+workflow.add_node("execution_response_node", execution_response_node)
+workflow.add_node("Alarm Agent (Single)", alarm_agent_node)
+workflow.add_node("Shopping Agent (Single)", shopping_agent_node)
+workflow.add_node("Guide Agent (Single)", guide_agent_node)
+workflow.add_node("Recipe Agent (Single)", recipe_agent_node)
+workflow.add_node("Receipt Lookup Agent", receipt_lookup_node)
+workflow.add_node("Receipt Guide Agent", receipt_guide_node)
+workflow.add_node("General Food Agent", general_food_agent_node)
 workflow.add_node("general_node", general_node)
 
 workflow.set_entry_point("router")
 workflow.add_conditional_edges("router", route_intent)
-workflow.add_edge("multi_agent_plan_node", "multi_agent_dispatch_node")
-workflow.add_conditional_edges("multi_agent_dispatch_node", dispatch_multi_agent_tasks)
+workflow.add_edge("execution_plan_node", "execution_dispatch_node")
+workflow.add_conditional_edges("execution_dispatch_node", dispatch_execution_tasks)
 for node_name in (
-    "parallel_inventory_branch",
-    "parallel_guide_branch",
-    "parallel_recipe_branch",
-    "parallel_shopping_branch",
-    "parallel_alarm_branch",
-    "parallel_receipt_branch",
-    "parallel_unknown_branch",
+    "Inventory Agent",
+    "Guide Agent",
+    "Recipe Agent",
+    "Shopping Agent",
+    "Alarm Agent",
+    "Receipt Agent",
+    "Unknown Agent",
 ):
-    workflow.add_edge(node_name, "multi_agent_collect_node")
-workflow.add_edge("multi_agent_collect_node", "multi_agent_dispatch_node")
-workflow.add_edge("multi_agent_response_node", END)
+    workflow.add_edge(node_name, "execution_collect_node")
+workflow.add_edge("execution_collect_node", "execution_dispatch_node")
+workflow.add_edge("execution_response_node", END)
 
 for node_name in (
-    "inventory_agent_node",
-    "alarm_agent_node",
-    "shopping_agent_node",
-    "guide_agent_node",
-    "recipe_agent_node",
-    "receipt_lookup_node",
-    "receipt_guide_node",
-    "general_food_agent_node",
+    "Inventory Agent (Single)",
+    "Alarm Agent (Single)",
+    "Shopping Agent (Single)",
+    "Guide Agent (Single)",
+    "Recipe Agent (Single)",
+    "Receipt Lookup Agent",
+    "Receipt Guide Agent",
+    "General Food Agent",
     "general_node",
 ):
     workflow.add_edge(node_name, END)

@@ -127,16 +127,16 @@ def test_recipe_recommend_requires_login():
 
 def test_chat_route_table_covers_current_feature_nodes():
     expected_routes = {
-        "inventory.list": "inventory_agent_node",
-        "inventory.expiring": "inventory_agent_node",
-        "ingredient.guide": "guide_agent_node",
-        "recipe.recommend": "recipe_agent_node",
-        "recipe.search": "recipe_agent_node",
-        "receipt.guide": "receipt_guide_node",
-        "inventory.action": "inventory_agent_node",
-        "shopping.current": "shopping_agent_node",
-        "shopping.create": "shopping_agent_node",
-        "shopping.compare": "shopping_agent_node",
+        "inventory.list": "Inventory Agent (Single)",
+        "inventory.expiring": "Inventory Agent (Single)",
+        "ingredient.guide": "Guide Agent (Single)",
+        "recipe.recommend": "Recipe Agent (Single)",
+        "recipe.search": "Recipe Agent (Single)",
+        "receipt.guide": "Receipt Guide Agent",
+        "inventory.action": "Inventory Agent (Single)",
+        "shopping.current": "Shopping Agent (Single)",
+        "shopping.create": "Shopping Agent (Single)",
+        "shopping.compare": "Shopping Agent (Single)",
     }
 
     for intent, node_name in expected_routes.items():
@@ -180,16 +180,16 @@ def test_chat_routes_shopping_requests_to_shopping_agent():
     assert product_candidate_result["intent"] == "shopping.compare"
     assert human_food_candidate_result["intent"] == "shopping.compare"
     assert stock_in_result["intent"] == "shopping.purchase"
-    assert supervisor_agent.route_intent(current_result) == "shopping_agent_node"
-    assert supervisor_agent.route_intent(create_result) == "shopping_agent_node"
-    assert supervisor_agent.route_intent(compare_result) == "shopping_agent_node"
+    assert supervisor_agent.route_intent(current_result) == "Shopping Agent (Single)"
+    assert supervisor_agent.route_intent(create_result) == "Shopping Agent (Single)"
+    assert supervisor_agent.route_intent(compare_result) == "Shopping Agent (Single)"
 
 
 def test_chat_routes_shopping_confirm_action_to_shopping_agent():
     """장보기 확인 버튼 메시지가 Inventory/Alarm이 아닌 Shopping Agent로 이동하는지 확인합니다."""
     state = {"intent": "action.confirm", "text": "확인:shopping_create:두부|양파"}
 
-    assert supervisor_agent.route_intent(state) == "shopping_agent_node"
+    assert supervisor_agent.route_intent(state) == "Shopping Agent (Single)"
 
 
 def test_chat_routes_pending_shopping_flow_follow_ups_to_shopping_agent():
@@ -231,7 +231,7 @@ def test_chat_routes_pending_shopping_flow_follow_ups_to_shopping_agent():
     assert selection["intent"] == "shopping.compare"
     assert purchase["intent"] == "shopping.purchase"
     assert cancel["intent"] == "shopping.cancel"
-    assert supervisor_agent.route_intent(cancel) == "shopping_agent_node"
+    assert supervisor_agent.route_intent(cancel) == "Shopping Agent (Single)"
 
 
 def test_pending_shopping_selection_passes_original_reply_to_subgraph(monkeypatch):
@@ -920,6 +920,47 @@ def test_shopping_product_selection_waits_without_retry(monkeypatch):
     assert result["slots"]["failed_intents"] == []
 
 
+def test_multi_agent_does_not_synthesize_before_shopping_selection(monkeypatch):
+    """가격 상품 선택이 남아 있으면 완료된 일부 결과만으로 최종 답변을 합성하지 않습니다."""
+    class Service:
+        """불완전한 결과 합성이 호출되는지 확인하는 최소 테스트 서비스입니다."""
+
+        def _synthesize_multi_agent_response(self, *_args):
+            raise AssertionError("상품 선택 전에는 복합 응답을 합성하면 안 됩니다.")
+
+    monkeypatch.setattr(
+        supervisor_agent,
+        "guide_agent_node",
+        lambda _state: {"response_text": "감자는 서늘하고 어두운 곳에 보관하세요."},
+    )
+    monkeypatch.setattr(
+        supervisor_agent,
+        "recipe_agent_node",
+        lambda _state: {"response_text": "감자채볶음을 추천해요."},
+    )
+    monkeypatch.setattr(
+        supervisor_agent,
+        "shopping_agent_node",
+        lambda _state: {
+            "response_text": "감자 상품을 선택해주세요.",
+            "actions": [
+                {"label": "1번 선택", "data": {"message": "확인:shopping_select_product:0"}},
+            ],
+        },
+    )
+
+    result = _invoke_multi_agent({
+        "text": "감자 보관법과 감자 가격, 감자 레시피를 모두 알려줘",
+        "tasks": [
+            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법 알려줘"},
+            {"id": "shopping", "intent": "shopping.compare", "text": "감자 가격 알려줘"},
+            {"id": "recipe", "intent": "recipe.search", "text": "감자 레시피 알려줘"},
+        ],
+        "service": Service(),
+    })
+
+    assert "감자 상품을 선택해주세요." in result["response_text"]
+    assert result["slots"]["awaiting_input_intents"] == ["shopping.compare"]
 def test_multi_agent_reports_partial_failure_by_task(monkeypatch):
     """일부 Agent만 실패하면 성공 결과와 실패한 작업명을 함께 안내합니다."""
     monkeypatch.setattr(
@@ -1052,10 +1093,10 @@ def test_multi_agent_graph_exposes_agent_specific_fanout_nodes():
     nodes = supervisor_agent.supervisor_agent.get_graph().nodes
 
     assert "multi_agent_node" not in nodes
-    assert "parallel_guide_branch" in nodes
-    assert "parallel_recipe_branch" in nodes
-    assert "parallel_shopping_branch" in nodes
-    assert "multi_agent_collect_node" in nodes
+    assert "Guide Agent" in nodes
+    assert "Recipe Agent" in nodes
+    assert "Shopping Agent" in nodes
+    assert "execution_collect_node" in nodes
 
 
 def test_compiled_graph_runs_independent_agent_branches_in_parallel(monkeypatch):
@@ -1111,11 +1152,11 @@ def test_multi_agent_dispatch_serializes_write_tasks():
         {"id": "shopping", "intent": "shopping.create", "text": "감자 장보기에 넣어줘"},
     ])
 
-    first = supervisor_agent.multi_agent_dispatch_node({
+    first = supervisor_agent.execution_dispatch_node({
         "multi_plan": plan,
         "multi_task_results": {},
     })
-    second = supervisor_agent.multi_agent_dispatch_node({
+    second = supervisor_agent.execution_dispatch_node({
         "multi_plan": plan,
         "multi_task_results": {
             "inventory": {"task": plan[0], "result": {"response_text": "완료"}, "outcome": "completed"},
@@ -1146,11 +1187,60 @@ def test_parallel_read_fails_when_isolated_db_session_cannot_open(monkeypatch):
             {"text": "감자 보관법", "db": object(), "slots": {}},
             {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법", "mode": "read", "depends_on": []},
             {},
-            {"guide_agent_node": fake_guide},
+            {"Guide Agent (Single)": fake_guide},
             isolated_db=True,
         )
 
     assert handler_called is False
+
+
+def test_parallel_branch_records_domain_agent_observation(monkeypatch):
+    """병렬 분기의 실제 도메인 Agent 호출이 Langfuse Agent 구간으로 기록됩니다."""
+    captured = {}
+
+    class Observation:
+        """Langfuse observation의 입력과 결과 갱신을 저장합니다."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc, _traceback):
+            return False
+
+        def update(self, **kwargs):
+            captured["update"] = kwargs
+
+    class Client:
+        """Agent observation 생성 요청을 저장하는 가짜 Langfuse 클라이언트입니다."""
+
+        def start_as_current_observation(self, **kwargs):
+            captured["start"] = kwargs
+            return Observation()
+
+    monkeypatch.setattr(supervisor_agent, "get_langfuse_client", lambda: Client())
+    monkeypatch.setattr(
+        supervisor_agent,
+        "guide_agent_node",
+        lambda _state: {"response_text": "감자 보관법", "slots": {}},
+    )
+
+    result = supervisor_agent._run_parallel_agent_branch({
+        "text": "감자 보관법 알려줘",
+        "multi_current_task": {
+            "id": "guide_1",
+            "intent": "ingredient.guide",
+            "text": "감자 보관법 알려줘",
+            "mode": "read",
+            "depends_on": [],
+        },
+        "multi_task_results": {},
+    })
+
+    assert captured["start"]["name"] == "Guide Agent"
+    assert captured["start"]["as_type"] == "agent"
+    assert captured["start"]["input"]["task_id"] == "guide_1"
+    assert captured["update"]["output"]["outcome"] == "completed"
+    assert result["multi_task_results"]["guide_1"]["outcome"] == "completed"
 
 
 def test_compiled_graph_runs_dependent_tasks_in_separate_steps(monkeypatch):
