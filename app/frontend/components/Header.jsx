@@ -245,8 +245,12 @@ function Header() {
         </nav>
 
         <div className="site-header__actions">
-          <Link className="site-header__start" to={isLoggedIn ? '/mypage' : '/login'}>
-            {isLoggedIn ? '마이페이지' : '로그인'}
+          <Link
+            aria-label={isLoggedIn ? '마이페이지' : '로그인'}
+            className={`site-header__start${isLoggedIn ? ` site-header__profile${profileImageUrl ? ' has-profile-image' : ''}` : ''}`}
+            to={isLoggedIn ? '/mypage' : '/login'}
+          >
+            {isLoggedIn ? profileImageUrl && <img src={profileImageUrl} alt="" /> : '로그인'}
           </Link>
         </div>
         <button
