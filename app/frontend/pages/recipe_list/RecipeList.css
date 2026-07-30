@@ -638,6 +638,25 @@
   display: none;
 }
 
+@media (min-width: 761px) {
+  .recipe-list-filter__controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .recipe-list-choice-group,
+  .recipe-list-choice-group--select {
+    width: 100%;
+  }
+
+  .recipe-list-choice-group__options button {
+    min-width: 0;
+    padding-inline: 8px;
+    flex: 1;
+  }
+}
+
 @media (max-width: 1120px) {
   .recipe-list-hero {
     grid-template-columns: minmax(0, 1fr) minmax(270px, 0.8fr);

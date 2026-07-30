@@ -148,8 +148,8 @@
 }
 
 .receipt-stepper {
-  width: min(100%, 640px);
-  margin: 10px 0 8px auto;
+  width: 100%;
+  margin: 10px 0 8px;
   padding: 12px 14px;
   box-sizing: border-box;
   display: grid;
@@ -249,7 +249,7 @@
 
 .receipt-before-grid {
   display: grid;
-  grid-template-columns: minmax(330px, 0.82fr) minmax(360px, 0.92fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-areas:
     "upload side"
     "chart chart";
@@ -992,6 +992,28 @@
   font-weight: 800;
   line-height: 1.5;
   text-align: center;
+}
+
+@media (min-width: 1121px) {
+  .receipt-before-side,
+  .receipt-before-side .receipt-history {
+    height: 100%;
+  }
+
+  .receipt-before-side {
+    align-self: stretch;
+  }
+
+  .receipt-before-side .receipt-history {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .receipt-before-side .receipt-history__placeholder {
+    display: grid;
+    flex: 1;
+    place-items: center;
+  }
 }
 
 .receipt-history-detail {

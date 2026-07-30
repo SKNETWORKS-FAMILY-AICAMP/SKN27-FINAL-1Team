@@ -104,7 +104,7 @@ function AppLayout() {
 
   // 세션 만료 안내를 닫으면 로그인 화면으로 이동합니다.
   const closeApiNotice = () => {
-    const shouldRedirectToLogin = apiNotice?.type === 'sessionExpired'
+    const shouldRedirectToLogin = apiNotice?.type === 'sessionExpired' || apiNotice?.type === 'loginRequired'
     setApiNotice(null)
     if (shouldRedirectToLogin) navigate('/login')
   }
