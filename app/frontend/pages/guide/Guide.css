@@ -2415,7 +2415,8 @@
     padding: 0;
     display: flex;
     gap: 12px;
-    overflow: hidden;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .guide-ingredients--seasonal .guide-ingredient-list--desktop > .guide-ingredient {
@@ -2672,7 +2673,7 @@
   .guide-ingredient-list--desktop,
   .guide-ingredients--seasonal .guide-ingredient-list--desktop,
   .guide-ingredients.is-empty .guide-ingredient-list--desktop {
-    display: none;
+    display: flex;
   }
 
   .guide-ingredients:not(.guide-ingredients--seasonal) .guide-ingredient-list--mobile,
