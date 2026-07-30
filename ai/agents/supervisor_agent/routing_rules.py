@@ -17,6 +17,10 @@ _GUIDE_CATEGORY_WORDS = (
 _GUIDE_LIST_PHRASES = ("뭐가있", "어떤재료", "무슨재료", "종류", "목록", "리스트", "분류")
 
 
+def _looks_like_compound_request(text: str) -> bool:
+    """한 문장에 둘 이상의 작업을 연결하는 표현이 있는지 확인합니다."""
+    return bool(re.search(r"(?:그리고|그다음|다음에|한 뒤|후에|하면서|해서|해주고|하고\s+.+(?:해줘|알려줘|보여줘))", text))
+
 def _normalize_text(text: str) -> str:
     """사용자 문장을 간단 비교할 수 있도록 정리합니다."""
     return text.replace(" ", "").lower()
@@ -145,11 +149,13 @@ def _is_expiring_question(text: str) -> bool:
     normalized = text.replace(" ", "").lower()
     return any(word in normalized for word in ("상하는", "임박", "소비임박", "소비기한", "유통기한", "기한", "적게남", "남은거", "먼저먹", "먹어야", "다되어", "다돼", "끝나", "d-day", "디데이"))
 
-def _build_read_tasks(text: str) -> list[dict[str, str]]:
-    """복합 조회 요청을 기존 Agent가 처리할 순차 작업 목록으로 분해합니다."""
+def _build_fallback_tasks(text: str) -> list[dict[str, str]]:
+    """LLM 계획이 없을 때 명확한 복합 요청을 최소 작업 목록으로 분해합니다."""
     intents = []
     normalized = _normalize_text(text)
 
+    if "냉장고" in normalized and any(word in normalized for word in ("재료", "조회", "뭐있")):
+        intents.append("inventory.list")
     if any(phrase in normalized for phrase in _GUIDE_PHRASES):
         intents.append("ingredient.guide")
     if _is_expiring_question(text):
@@ -164,8 +170,18 @@ def _build_read_tasks(text: str) -> list[dict[str, str]]:
         intents.append("recipe.recommend")
     elif _is_recipe_search_query(text):
         intents.append("recipe.search")
+    if _is_alarm_calendar_query(text) and _is_alarm_write_query(text):
+        intents.append("alarm.calendar")
 
     tasks = [{"intent": intent, "text": text} for intent in dict.fromkeys(intents)]
+    calendar_match = re.search(
+        r"((?:오늘|내일|모레|\d{1,2}월).*?(?:일정|캘린더).*?(?:등록|추가|생성).*?$)",
+        text,
+    )
+    if calendar_match:
+        for task in tasks:
+            if task["intent"] == "alarm.calendar":
+                task["text"] = calendar_match.group(1).strip()
     if "ingredient.guide" in intents and "shopping.compare" in intents:
         price_text = re.sub(
             r"^.+?(?:보관법|보관방법|손질법|손질방법|세척법|세척방법|영양성분|칼로리|제철)"

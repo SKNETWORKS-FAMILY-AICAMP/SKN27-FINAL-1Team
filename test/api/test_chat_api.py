@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from fastapi.testclient import TestClient
 
@@ -157,11 +157,10 @@ def test_langfuse_records_supervisor_result(monkeypatch):
     assert observation.update.call_args.kwargs["output"] == {"intent": "general"}
     assert observation.update.call_args.kwargs["metadata"]["route_confidence"] == 0.9
     assert observation.update.call_args.kwargs["metadata"]["failed_intents"] == []
-    langfuse_client.score_current_trace.assert_called_once_with(
-        name="supervisor_success",
-        value=1,
-        data_type="BOOLEAN",
-    )
+    langfuse_client.score_current_trace.assert_has_calls([
+        call(name="supervisor_success", value=1, data_type="BOOLEAN"),
+        call(name="task_completion_rate", value=1.0, data_type="NUMERIC"),
+    ])
 
 
 

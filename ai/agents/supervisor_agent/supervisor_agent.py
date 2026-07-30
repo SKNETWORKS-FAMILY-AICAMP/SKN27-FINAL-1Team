@@ -1,5 +1,7 @@
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, wait
+from contextvars import copy_context
 
 from langgraph.graph import END, StateGraph
 
@@ -25,6 +27,11 @@ from ai.agents.recipe_agent import run_recipe_agent
 
 from ai.agents.supervisor_agent.agent_execution import (
     _agent_result_failed,
+    _agent_result_needs_retry,
+    _agent_result_outcome,
+    _multi_agent_failure_reply,
+    _prepare_task_plan,
+    _ready_task_batch,
     _merge_agent_results,
     _normalize_agent_result,
     _run_agent_with_retry,
@@ -38,11 +45,12 @@ from ai.agents.supervisor_agent.chat_context import (
 )
 from ai.agents.supervisor_agent.chat_response_mapper import _alarm_result_to_state
 from ai.agents.supervisor_agent.routing_rules import (
-    _build_read_tasks,
+    _build_fallback_tasks,
     _is_alarm_calendar_query,
     _is_alarm_notification_query,
     _is_alarm_write_query,
     _is_guide_query,
+    _looks_like_compound_request,
     _is_receipt_lookup_query,
     _is_receipt_query,
     _is_recipe_pairing_query,
@@ -86,6 +94,9 @@ from ai.agents.shopping_agent.shopping_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 병렬 조회가 이 시간을 넘기면 완료된 결과만 반환합니다.
+_AGENT_TASK_TIMEOUT_SECONDS = 20
 
 
 def _route_write_request(
@@ -149,6 +160,7 @@ def _route_read_fallback(
 ) -> dict:
     """LLM을 사용할 수 없거나 신뢰도가 낮을 때 읽기 요청을 최소 규칙으로 보완합니다."""
     normalized = _normalize_text(text)
+    is_compound_request = _looks_like_compound_request(text)
     shopping_intent = analyze_shopping_intent(text)
 
     if _is_receipt_lookup_query(text):
@@ -169,14 +181,14 @@ def _route_read_fallback(
         return _route_result("alarm.calendar")
     if _is_shopping_price_explanation(text):
         return _route_result("shopping.price_help")
-    read_tasks = _build_read_tasks(text)
-    if len(read_tasks) >= 2:
-        return _route_result("multi_agent", tasks=read_tasks)
+    fallback_tasks = _build_fallback_tasks(text)
+    if len(fallback_tasks) >= 2:
+        return _route_result("multi_agent", tasks=fallback_tasks)
     if _is_shopping_price_query(text):
         return _route_result("shopping.compare")
     if _is_guide_query(text):
         return _route_result("ingredient.guide")
-    if "장본" in normalized:
+    if "장본" in normalized and not is_compound_request:
         return _route_result("shopping.current")
     if shopping_intent:
         return _route_result(shopping_intent)
@@ -194,6 +206,7 @@ def _route_read_fallback(
         not _is_guide_query(text)
         and not _is_alarm_calendar_query(text)
         and not _is_expiring_question(text)
+        and not is_compound_request
         and any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS)
     ):
         return _route_result("inventory.list")
@@ -248,17 +261,19 @@ def router_node(state: GraphState) -> dict:
         return result
 
     normalized = _normalize_text(text)
+    is_compound_request = _looks_like_compound_request(text)
     # "장본 거"는 냉장고 재료 목록이 아니라 장보기 목록 조회로 우선 처리합니다.
-    if "장본" in normalized:
+    if "장본" in normalized and not is_compound_request:
         return _route_result("shopping.current")
     # 장보기 기능 문의는 "뭐 있어" 표현보다 장보기 문맥을 우선합니다.
-    if "장보기" in normalized:
+    if "장보기" in normalized and not is_compound_request:
         return _route_result(analyze_shopping_intent(text) or "shopping.current")
     # 목록 조회 표현은 등록 같은 단어가 포함돼도 재료 추가 요청으로 처리하지 않습니다.
     if (
         not _is_guide_query(text)
         and not _is_alarm_calendar_query(text)
         and not _is_expiring_question(text)
+        and not is_compound_request
         and any(word.replace(" ", "") in normalized for word in INVENTORY_LIST_WORDS)
     ):
         return _route_result("inventory.list")
@@ -268,6 +283,38 @@ def router_node(state: GraphState) -> dict:
         command = _verify_and_claim_confirm_token(text, state.get("user_id"))
         if not command:
             return _route_result("action.invalid")
+        resume_tasks = trusted_slots.get("supervisor_resume_tasks")
+        if isinstance(resume_tasks, list) and resume_tasks:
+            resumed_ids = {
+                str(task.get("id"))
+                for task in resume_tasks
+                if isinstance(task, dict) and task.get("id")
+            }
+            tasks = [{
+                "id": "confirmed_action",
+                "intent": "action.confirm",
+                "text": command,
+                "depends_on": [],
+            }]
+            for task in resume_tasks:
+                if not isinstance(task, dict) or not task.get("intent"):
+                    continue
+                dependencies = [
+                    str(dependency)
+                    for dependency in task.get("depends_on") or []
+                    if str(dependency) in resumed_ids
+                ]
+                if not dependencies:
+                    dependencies = ["confirmed_action"]
+                tasks.append({
+                    "id": str(task.get("id") or f"resume_{len(tasks)}"),
+                    "intent": str(task["intent"]),
+                    "text": str(task.get("text") or ""),
+                    "depends_on": dependencies,
+                })
+            result = _route_result("multi_agent", tasks=tasks)
+            result["text"] = str(trusted_slots.get("supervisor_original_request") or original_text)
+            return result
         result = _route_result("action.confirm")
         result["text"] = command
         return result
@@ -327,24 +374,45 @@ def router_node(state: GraphState) -> dict:
     if legacy_pending_allowed and _pending_consume_from_history(history) and _extract_quantity(text):
         return _route_result("inventory.pending_consume", slots=previous_slots)
 
+    service = state.get("service")
+    # 조회와 쓰기가 섞인 문장만 LLM 계획 분해를 먼저 시도합니다.
+    if service and is_compound_request:
+        compound_payload = service._route_intent_payload_with_llm(text, history)
+        if (
+            compound_payload.get("intent") == "multi_agent"
+            and compound_payload.get("confidence", 0.0) >= _LLM_ROUTE_CONFIDENCE
+            and len(compound_payload.get("tasks") or []) >= 2
+        ):
+            return _route_result(
+                "multi_agent",
+                compound_payload.get("confidence", 0.0),
+                compound_payload.get("slots", {}),
+                compound_payload.get("tasks", []),
+            )
+        fallback_tasks = _build_fallback_tasks(text)
+        if len(fallback_tasks) >= 2:
+            return _route_result("multi_agent", tasks=fallback_tasks)
+
     write_route = _route_write_request(text, write_previous_intent, write_previous_slots, is_receipt_query)
     if write_route:
         return write_route
 
     # 읽기 요청은 LLM JSON 분류를 먼저 채택합니다.
-    service = state.get("service")
     if service:
         route_payload = service._route_intent_payload_with_llm(text, history)
         route_payload = _inherit_route_context(route_payload, previous_intent, previous_slots)
-        # 전담 Agent가 없는 명확한 일반 요리 질문은 잘못 분류된 LLM 결과만 보정합니다.
-        if _is_food_general_query(text):
-            route_payload = {**route_payload, "intent": "food.general", "confidence": 1.0, "tasks": []}
-        # 메뉴 추천 표현은 일반 요리 지식 응답 대신 레시피 추천으로 보정합니다.
-        elif _is_recipe_recommend_query(text):
-            route_payload = {**route_payload, "intent": "recipe.recommend", "confidence": 1.0, "tasks": []}
-        # 소비기한·임박 표현은 냉장고 목록이 아닌 임박 재료 조회로 보정합니다.
-        elif _is_expiring_question(text):
-            route_payload = {**route_payload, "intent": "inventory.expiring", "confidence": 1.0, "tasks": []}
+        # 유효한 복합 계획은 단일 키워드 보정이 덮어쓰지 않게 보호합니다.
+        has_multi_plan = route_payload.get("intent") == "multi_agent" and len(route_payload.get("tasks") or []) >= 2
+        if not has_multi_plan:
+            # 전담 Agent가 없는 명확한 일반 요리 질문은 잘못 분류된 LLM 결과만 보정합니다.
+            if _is_food_general_query(text):
+                route_payload = {**route_payload, "intent": "food.general", "confidence": 1.0, "tasks": []}
+            # 메뉴 추천 표현은 일반 요리 지식 응답 대신 레시피 추천으로 보정합니다.
+            elif _is_recipe_recommend_query(text):
+                route_payload = {**route_payload, "intent": "recipe.recommend", "confidence": 1.0, "tasks": []}
+            # 소비기한·임박 표현은 냉장고 목록이 아닌 임박 재료 조회로 보정합니다.
+            elif _is_expiring_question(text):
+                route_payload = {**route_payload, "intent": "inventory.expiring", "confidence": 1.0, "tasks": []}
         if route_payload.get("intent") == "shopping.compare":
             route_slots = route_payload.get("slots") or {}
             current_product = (
@@ -558,6 +626,12 @@ def alarm_agent_node(state: GraphState) -> dict:
         enabled=not request["confirmed"] and not _is_alarm_write_query(state["text"]),
     )
     result = _alarm_result_to_state(agent_result)
+    if "Google Calendar is not connected" in result.get("response_text", ""):
+        result = {
+            "response_text": "일정을 등록하려면 먼저 Google Calendar를 연결해주세요.",
+            "status": "needs_input",
+            "actions": [{"label": "캘린더 연결하기", "url": "/mypage"}],
+        }
     normalized_text = _normalize_text(state["text"])
     if result.get("response_text") == "등록된 알림 목록이에요." and "이번주" in normalized_text:
         keyword_match = re.search(r"이번\s*주\s*(.+?)\s*관련\s*알림", state["text"])
@@ -592,8 +666,85 @@ def general_node(state: GraphState) -> dict:
     )
     return _normalize_agent_result({"response_text": reply}, inherited_slots=state.get("slots"))
 
+def _build_multi_task_state(
+    state: GraphState,
+    task: dict,
+    task_results: dict[str, dict],
+) -> GraphState:
+    """선행 작업 결과를 다음 Agent가 사용할 수 있는 상태로 구성합니다."""
+    dependency_results = {
+        task_id: task_results[task_id]
+        for task_id in task.get("depends_on") or []
+        if task_id in task_results
+    }
+    slots = {
+        **(state.get("slots") or {}),
+        "task_results": {
+            task_id: {
+                "intent": item["task"]["intent"],
+                "response_text": item["result"].get("response_text", ""),
+                "slots": item["result"].get("slots") or {},
+            }
+            for task_id, item in dependency_results.items()
+        },
+    }
+    task_state = {
+        **state,
+        "intent": task["intent"],
+        "text": task.get("text") or state["text"],
+        "slots": slots,
+        "tasks": [],
+    }
+
+    # 임박 재료 조회 결과는 Recipe Agent가 바로 활용할 수 있는 기존 슬롯으로도 전달합니다.
+    if task["intent"] == "recipe.recommend":
+        expiring_result = next(
+            (
+                item["result"]
+                for item in dependency_results.values()
+                if item["task"]["intent"] == "inventory.expiring"
+            ),
+            None,
+        )
+        expiring_names = ((expiring_result or {}).get("slots") or {}).get("expiring_ingredients") or []
+        if expiring_names:
+            task_state["slots"] = {**slots, "expiring_ingredients": expiring_names}
+            task_state["text"] = f"{', '.join(expiring_names)}를 우선 활용하는 레시피를 추천해줘"
+    return task_state
+
+
+def _run_multi_task(
+    state: GraphState,
+    task: dict,
+    task_results: dict[str, dict],
+    handlers: dict,
+    *,
+    isolated_db: bool = False,
+) -> dict:
+    """계획된 task 하나를 실행하고 병렬 조회에서는 독립 DB 세션을 사용합니다."""
+    task_state = _build_multi_task_state(state, task, task_results)
+    local_db = None
+    if isolated_db and state.get("db") is not None:
+        try:
+            from app.backend.db.session import SessionLocal
+
+            local_db = SessionLocal()
+            task_state["db"] = local_db
+        except Exception:
+            logger.exception("병렬 task용 DB 세션 생성에 실패해 기존 세션을 사용합니다.")
+
+    try:
+        handler = handlers.get(route_intent(task_state))
+        if not handler:
+            return {"status": "error", "response_text": "실행할 Agent를 찾지 못했어요."}
+        return handler(task_state)
+    finally:
+        if local_db is not None:
+            local_db.close()
+
+
 def multi_agent_node(state: GraphState) -> dict:
-    """작업 목록을 순차 실행하고 일부 Agent 실패가 전체 응답을 막지 않게 합니다."""
+    """의존 작업은 순차로, 독립 읽기 작업은 병렬로 실행한 뒤 결과를 검증합니다."""
     handlers = {
         "inventory_agent_node": inventory_agent_node,
         "guide_agent_node": guide_agent_node,
@@ -601,68 +752,187 @@ def multi_agent_node(state: GraphState) -> dict:
         "receipt_guide_node": receipt_guide_node,
         "receipt_lookup_node": receipt_lookup_node,
         "shopping_agent_node": shopping_agent_node,
+        "alarm_agent_node": alarm_agent_node,
     }
-    results = []
-    completed_intents = []
-    task_results = {}
-    failed_intents = []
-
-    tasks = list(state.get("tasks") or [])
-    task_intents = [task.get("intent") for task in tasks]
-    if "inventory.expiring" in task_intents and "recipe.recommend" in task_intents:
-        expiring_index = task_intents.index("inventory.expiring")
-        recipe_index = task_intents.index("recipe.recommend")
-        if expiring_index > recipe_index:
-            # 임박 재료 조회 결과가 필요한 레시피 추천보다 먼저 실행되도록 순서만 보정합니다.
-            tasks.insert(recipe_index, tasks.pop(expiring_index))
-
-    for task in tasks:
-        intent = task.get("intent", "")
-        task_state = {
-            **state,
-            "intent": intent,
-            "text": task.get("text") or state["text"],
-            "tasks": [],
-        }
-        # 임박 재료 조회 결과를 다음 레시피 추천 작업의 입력으로 전달합니다.
-        if intent == "recipe.recommend" and "inventory.expiring" in completed_intents:
-            expiring_slots = (task_results.get("inventory.expiring") or {}).get("slots") or {}
-            expiring_names = expiring_slots.get("expiring_ingredients") or []
-            task_state["slots"] = {**(task_state.get("slots") or {}), "expiring_ingredients": expiring_names}
-            task_state["text"] = (
-                f"{', '.join(expiring_names)}를 우선 활용하는 레시피를 추천해줘"
-                if expiring_names else "냉장고 재료로 요리 추천해줘"
-            )
-        handler = handlers.get(route_intent(task_state))
-        if not handler:
-            failed_intents.append(intent)
-            continue
-        try:
-            task_result = handler(task_state)
-            if _agent_result_failed(task_result):
-                failed_intents.append(intent)
-            else:
-                results.append(task_result)
-                completed_intents.append(intent)
-                task_results[intent] = task_result
-        except Exception:
-            logger.exception("Supervisor task failed: intent=%s", intent)
-            failed_intents.append(intent)
-
-    if failed_intents:
-        results.append({"response_text": "일부 요청은 처리하지 못했어요. 잠시 후 다시 시도해주세요."})
-    if not results:
+    plan = _prepare_task_plan(state.get("tasks"))
+    if len(plan) < 2:
         return general_node(state)
 
-    result = _merge_agent_results(*results)
+    pending = list(plan)
+    completed_ids: set[str] = set()
+    awaiting_input_ids: set[str] = set()
+    failed_ids: set[str] = set()
+    blocked_ids: set[str] = set()
+    task_outcomes: dict[str, str] = {}
+    task_results: dict[str, dict] = {}
+    service = state.get("service")
+
+    while pending:
+        ready, blocked = _ready_task_batch(
+            pending,
+            completed_ids,
+            failed_ids | awaiting_input_ids | blocked_ids,
+        )
+        for task in blocked:
+            blocked_ids.add(task["id"])
+            task_outcomes[task["id"]] = "blocked"
+            pending.remove(task)
+        if not ready and blocked:
+            continue
+        if not ready:
+            # 순환 의존성이나 잘못된 task ID는 실행하지 않고 실패로 종료합니다.
+            failed_ids.update(task["id"] for task in pending)
+            task_outcomes.update({task["id"]: "failed" for task in pending})
+            break
+
+        resolved_ready = []
+        for task in ready:
+            dependency_items = [
+                task_results[task_id]
+                for task_id in task.get("depends_on") or []
+                if task_id in task_results
+            ]
+            uses_expiring_recipe_bridge = task["intent"] == "recipe.recommend" and any(
+                item["task"]["intent"] == "inventory.expiring" for item in dependency_items
+            )
+            if (
+                dependency_items
+                and not uses_expiring_recipe_bridge
+                and service
+                and hasattr(service, "_resolve_multi_agent_task")
+            ):
+                task = service._resolve_multi_agent_task(
+                    state["text"],
+                    task,
+                    [item["result"] for item in dependency_items],
+                )
+            resolved_ready.append(task)
+        ready = resolved_ready
+        read_batch = [task for task in ready if task["mode"] == "read"]
+        batch = read_batch or [ready[0]]
+        outcomes = {}
+        if len(batch) > 1:
+            executor = ThreadPoolExecutor(max_workers=min(4, len(batch)))
+            futures = {
+                executor.submit(
+                    copy_context().run,
+                    _run_multi_task,
+                    state,
+                    task,
+                    task_results,
+                    handlers,
+                    isolated_db=True,
+                ): task
+                for task in batch
+            }
+            done, unfinished = wait(futures, timeout=_AGENT_TASK_TIMEOUT_SECONDS)
+            for future in done:
+                task = futures[future]
+                try:
+                    outcomes[task["id"]] = future.result()
+                except Exception:
+                    logger.exception("병렬 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
+                    outcomes[task["id"]] = {"status": "error", "response_text": "요청 처리에 실패했어요."}
+            for future in unfinished:
+                task = futures[future]
+                future.cancel()
+                outcomes[task["id"]] = {
+                    "status": "error",
+                    "response_text": "응답 시간이 길어져 이 요청은 완료하지 못했어요.",
+                }
+            # 실행 중인 외부 요청은 종료할 수 없으므로 완료된 결과를 먼저 반환합니다.
+            executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            task = batch[0]
+            try:
+                outcomes[task["id"]] = _run_multi_task(state, task, task_results, handlers)
+            except Exception:
+                logger.exception("Supervisor task 실행에 실패했습니다: intent=%s", task["intent"])
+                outcomes[task["id"]] = {"status": "error", "response_text": "요청 처리에 실패했어요."}
+
+        for task in batch:
+            result = outcomes[task["id"]]
+            outcome = _agent_result_outcome(task, result)
+            if outcome == "failed" and task["mode"] == "read" and service and hasattr(service, "_repair_multi_agent_task"):
+                repaired = service._repair_multi_agent_task(
+                    state["text"],
+                    task,
+                    [item["result"] for item in task_results.values()],
+                )
+                if repaired:
+                    try:
+                        result = _run_multi_task(state, repaired, task_results, handlers)
+                        task = repaired
+                        outcome = _agent_result_outcome(task, result)
+                    except Exception:
+                        logger.exception("재계획한 Agent task 실행에 실패했습니다: intent=%s", task["intent"])
+                        outcome = "failed"
+
+            task_outcomes[task["id"]] = outcome
+            if outcome == "failed":
+                failed_ids.add(task["id"])
+            elif outcome == "awaiting_input":
+                awaiting_input_ids.add(task["id"])
+                task_results[task["id"]] = {"task": task, "result": result}
+            else:
+                completed_ids.add(task["id"])
+                task_results[task["id"]] = {"task": task, "result": result}
+            pending = [item for item in pending if item["id"] != task["id"]]
+
+    ordered_results = [
+        task_results[task["id"]]["result"]
+        for task in plan
+        if task["id"] in task_results
+    ]
+    failure_reply = _multi_agent_failure_reply(plan, failed_ids, blocked_ids) if failed_ids or blocked_ids else ""
+    if not ordered_results and not failure_reply:
+        return general_node(state)
+
+    result = _merge_agent_results(*ordered_results) if ordered_results else {"response_text": ""}
+    completed_results = [
+        task_results[task["id"]]["result"]
+        for task in plan
+        if task["id"] in completed_ids
+    ]
+    read_only = all(task["mode"] == "read" for task in plan)
+    if read_only and len(completed_results) >= 2 and service and hasattr(service, "_synthesize_multi_agent_response"):
+        synthesized = service._synthesize_multi_agent_response(state["text"], completed_results)
+        if synthesized:
+            result["response_text"] = synthesized
+    if failure_reply:
+        result["response_text"] = "\n\n".join(filter(None, [result.get("response_text", "").strip(), failure_reply]))
     result["slots"] = {
         **(result.get("slots") or {}),
-        "completed_intents": completed_intents,
-        "failed_intents": failed_intents,
+        "completed_intents": [task["intent"] for task in plan if task["id"] in completed_ids],
+        "awaiting_input_intents": [task["intent"] for task in plan if task["id"] in awaiting_input_ids],
+        "failed_intents": [task["intent"] for task in plan if task["id"] in failed_ids],
+        "blocked_intents": [task["intent"] for task in plan if task["id"] in blocked_ids],
+        "task_outcomes": [
+            {
+                "id": task["id"],
+                "intent": task["intent"],
+                "status": task_outcomes.get(task["id"], "failed"),
+            }
+            for task in plan
+        ],
     }
+    resumable_tasks = [
+        task
+        for task in plan
+        if task["id"] in blocked_ids
+        and set(task.get("depends_on") or []) & (awaiting_input_ids | blocked_ids)
+    ]
+    if resumable_tasks:
+        result["slots"]["supervisor_resume_tasks"] = resumable_tasks
+        result["slots"]["supervisor_original_request"] = state["text"]
+        result["response_text"] = "\n\n".join(filter(None, [
+            result.get("response_text", "").strip(),
+            "확인하면 남은 요청도 이어서 처리할게요.",
+        ]))
+    else:
+        result["slots"]["supervisor_resume_tasks"] = None
+        result["slots"]["supervisor_original_request"] = None
     return result
-
-
 def route_intent(state: GraphState) -> str:
     """intent 값을 LangGraph 노드 이름으로 변환합니다."""
     intent = state.get("intent") or "general"
