@@ -666,6 +666,23 @@ def test_llm_router_uses_last_twelve_messages():
     assert len(result) == 12
     assert result[0]["text"] == "질문 3"
 
+
+def test_llm_router_prunes_diagnostic_slots_from_history():
+    """LLM 라우팅 이력에는 후속 대화에 필요한 슬롯만 전달합니다."""
+    history = [{
+        "role": "bot",
+        "text": "복합 요청을 처리했어요.",
+        "intent": "multi_agent",
+        "slots": {
+            "ingredient": "감자",
+            "task_outcomes": [{"id": "guide", "status": "completed"}],
+            "completed_intents": ["ingredient.guide"],
+        },
+    }]
+
+    result = chat_context._build_llm_route_history(history)
+
+    assert result[0]["slots"] == {"ingredient": "감자"}
 def test_llm_plan_parser_keeps_dependencies_and_write_mode():
     """LLM 계획 JSON의 의존성과 쓰기 모드를 안전한 task 계약으로 변환합니다."""
     payload = supervisor_utils._parse_llm_route_payload(json.dumps({
@@ -1035,9 +1052,9 @@ def test_multi_agent_graph_exposes_agent_specific_fanout_nodes():
     nodes = supervisor_agent.supervisor_agent.get_graph().nodes
 
     assert "multi_agent_node" not in nodes
-    assert "multi_guide_agent_node" in nodes
-    assert "multi_recipe_agent_node" in nodes
-    assert "multi_shopping_agent_node" in nodes
+    assert "parallel_guide_branch" in nodes
+    assert "parallel_recipe_branch" in nodes
+    assert "parallel_shopping_branch" in nodes
     assert "multi_agent_collect_node" in nodes
 
 
@@ -1085,6 +1102,55 @@ def test_compiled_graph_runs_independent_agent_branches_in_parallel(monkeypatch)
     assert "감자 보관법" in result["response_text"]
     assert "감자 가격" in result["response_text"]
     assert result["slots"]["completed_intents"] == ["ingredient.guide", "shopping.compare"]
+
+
+def test_multi_agent_dispatch_serializes_write_tasks():
+    """독립된 쓰기 작업도 한 번에 하나씩만 실행 묶음에 포함합니다."""
+    plan = supervisor_agent._prepare_task_plan([
+        {"id": "inventory", "intent": "inventory.action", "text": "양파 추가해줘"},
+        {"id": "shopping", "intent": "shopping.create", "text": "감자 장보기에 넣어줘"},
+    ])
+
+    first = supervisor_agent.multi_agent_dispatch_node({
+        "multi_plan": plan,
+        "multi_task_results": {},
+    })
+    second = supervisor_agent.multi_agent_dispatch_node({
+        "multi_plan": plan,
+        "multi_task_results": {
+            "inventory": {"task": plan[0], "result": {"response_text": "완료"}, "outcome": "completed"},
+        },
+    })
+
+    assert [task["id"] for task in first["multi_batch"]] == ["inventory"]
+    assert [task["id"] for task in second["multi_batch"]] == ["shopping"]
+
+
+def test_parallel_read_fails_when_isolated_db_session_cannot_open(monkeypatch):
+    """병렬 조회 세션 생성 실패 시 부모 요청의 DB 세션을 공유하지 않습니다."""
+    def fail_session():
+        """독립 DB 세션 생성 실패를 재현합니다."""
+        raise RuntimeError("DB 연결 실패")
+
+    monkeypatch.setattr("app.backend.db.session.SessionLocal", fail_session)
+    handler_called = False
+
+    def fake_guide(_state):
+        """공유 세션으로 실행되는지 확인하는 가짜 Guide 핸들러입니다."""
+        nonlocal handler_called
+        handler_called = True
+        return {"response_text": "감자 보관법"}
+
+    with pytest.raises(RuntimeError, match="병렬 조회용 DB 세션"):
+        supervisor_agent._run_multi_task(
+            {"text": "감자 보관법", "db": object(), "slots": {}},
+            {"id": "guide", "intent": "ingredient.guide", "text": "감자 보관법", "mode": "read", "depends_on": []},
+            {},
+            {"guide_agent_node": fake_guide},
+            isolated_db=True,
+        )
+
+    assert handler_called is False
 
 
 def test_compiled_graph_runs_dependent_tasks_in_separate_steps(monkeypatch):

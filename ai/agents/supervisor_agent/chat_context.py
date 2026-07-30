@@ -34,9 +34,16 @@ def _build_llm_route_history(history: list[Any] | None) -> list[dict[str, Any]]:
             "text": _message_value(message, "text", ""),
         }
         if item["role"] == "bot":
+            # 실행 결과 통계는 제외하고 다음 의도 판단에 필요한 문맥 슬롯만 전달합니다.
+            message_slots = _message_value(message, "slots", {}) or {}
+            safe_slots = {
+                key: value
+                for key, value in message_slots.items()
+                if key in _TRUSTED_CONTEXT_SLOT_KEYS
+            }
             item.update({
                 "intent": _message_value(message, "intent"),
-                "slots": _message_value(message, "slots", {}) or {},
+                "slots": safe_slots,
                 "pending_action": _message_value(message, "pending_action"),
             })
         route_history.append(item)

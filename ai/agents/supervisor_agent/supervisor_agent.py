@@ -726,8 +726,9 @@ def _run_multi_task(
 
             local_db = SessionLocal()
             task_state["db"] = local_db
-        except Exception:
-            logger.exception("병렬 task용 DB 세션 생성에 실패해 기존 세션을 사용합니다.")
+        except Exception as exc:
+            logger.exception("병렬 task용 독립 DB 세션 생성에 실패했습니다.")
+            raise RuntimeError("병렬 조회용 DB 세션을 생성하지 못했습니다.") from exc
 
     try:
         handler = handlers.get(route_intent(task_state))
@@ -776,7 +777,7 @@ def multi_agent_dispatch_node(state: GraphState) -> dict:
     }
 
 
-def _multi_agent_worker_node(state: GraphState) -> dict:
+def _run_parallel_agent_branch(state: GraphState) -> dict:
     """병렬 분기에서 할당된 작업 하나를 기존 도메인 Agent로 실행합니다."""
     task = state["multi_current_task"]
     task_results = state.get("multi_task_results") or {}
@@ -900,27 +901,27 @@ def multi_agent_response_node(state: GraphState) -> dict:
     return result
 
 
-_MULTI_AGENT_NODE_BY_INTENT = {
-    "inventory.list": "multi_inventory_agent_node",
-    "inventory.expiring": "multi_inventory_agent_node",
-    "inventory.action": "multi_inventory_agent_node",
-    "inventory.delete": "multi_inventory_agent_node",
-    "inventory.storage_change": "multi_inventory_agent_node",
-    "ingredient.guide": "multi_guide_agent_node",
-    "recipe.recommend": "multi_recipe_agent_node",
-    "recipe.search": "multi_recipe_agent_node",
-    "recipe.pairing": "multi_recipe_agent_node",
-    "shopping.current": "multi_shopping_agent_node",
-    "shopping.history": "multi_shopping_agent_node",
-    "shopping.compare": "multi_shopping_agent_node",
-    "shopping.create": "multi_shopping_agent_node",
-    "shopping.purchase": "multi_shopping_agent_node",
-    "shopping.delete_item": "multi_shopping_agent_node",
-    "shopping.check_item": "multi_shopping_agent_node",
-    "alarm.notification": "multi_alarm_agent_node",
-    "alarm.calendar": "multi_alarm_agent_node",
-    "receipt.lookup": "multi_receipt_agent_node",
-    "receipt.guide": "multi_receipt_agent_node",
+_PARALLEL_BRANCH_BY_INTENT = {
+    "inventory.list": "parallel_inventory_branch",
+    "inventory.expiring": "parallel_inventory_branch",
+    "inventory.action": "parallel_inventory_branch",
+    "inventory.delete": "parallel_inventory_branch",
+    "inventory.storage_change": "parallel_inventory_branch",
+    "ingredient.guide": "parallel_guide_branch",
+    "recipe.recommend": "parallel_recipe_branch",
+    "recipe.search": "parallel_recipe_branch",
+    "recipe.pairing": "parallel_recipe_branch",
+    "shopping.current": "parallel_shopping_branch",
+    "shopping.history": "parallel_shopping_branch",
+    "shopping.compare": "parallel_shopping_branch",
+    "shopping.create": "parallel_shopping_branch",
+    "shopping.purchase": "parallel_shopping_branch",
+    "shopping.delete_item": "parallel_shopping_branch",
+    "shopping.check_item": "parallel_shopping_branch",
+    "alarm.notification": "parallel_alarm_branch",
+    "alarm.calendar": "parallel_alarm_branch",
+    "receipt.lookup": "parallel_receipt_branch",
+    "receipt.guide": "parallel_receipt_branch",
 }
 
 
@@ -931,7 +932,7 @@ def dispatch_multi_agent_tasks(state: GraphState):
         return "multi_agent_response_node"
     return [
         Send(
-            _MULTI_AGENT_NODE_BY_INTENT.get(task["intent"], "multi_unknown_agent_node"),
+            _PARALLEL_BRANCH_BY_INTENT.get(task["intent"], "parallel_unknown_branch"),
             {**state, "multi_current_task": task},
         )
         for task in batch
@@ -978,13 +979,13 @@ workflow.add_node("router", router_node)
 workflow.add_node("inventory_agent_node", inventory_agent_node)
 workflow.add_node("multi_agent_plan_node", multi_agent_plan_node)
 workflow.add_node("multi_agent_dispatch_node", multi_agent_dispatch_node)
-workflow.add_node("multi_inventory_agent_node", _multi_agent_worker_node)
-workflow.add_node("multi_guide_agent_node", _multi_agent_worker_node)
-workflow.add_node("multi_recipe_agent_node", _multi_agent_worker_node)
-workflow.add_node("multi_shopping_agent_node", _multi_agent_worker_node)
-workflow.add_node("multi_alarm_agent_node", _multi_agent_worker_node)
-workflow.add_node("multi_receipt_agent_node", _multi_agent_worker_node)
-workflow.add_node("multi_unknown_agent_node", _multi_agent_worker_node)
+workflow.add_node("parallel_inventory_branch", _run_parallel_agent_branch)
+workflow.add_node("parallel_guide_branch", _run_parallel_agent_branch)
+workflow.add_node("parallel_recipe_branch", _run_parallel_agent_branch)
+workflow.add_node("parallel_shopping_branch", _run_parallel_agent_branch)
+workflow.add_node("parallel_alarm_branch", _run_parallel_agent_branch)
+workflow.add_node("parallel_receipt_branch", _run_parallel_agent_branch)
+workflow.add_node("parallel_unknown_branch", _run_parallel_agent_branch)
 workflow.add_node("multi_agent_collect_node", multi_agent_collect_node)
 workflow.add_node("multi_agent_response_node", multi_agent_response_node)
 workflow.add_node("alarm_agent_node", alarm_agent_node)
@@ -1001,13 +1002,13 @@ workflow.add_conditional_edges("router", route_intent)
 workflow.add_edge("multi_agent_plan_node", "multi_agent_dispatch_node")
 workflow.add_conditional_edges("multi_agent_dispatch_node", dispatch_multi_agent_tasks)
 for node_name in (
-    "multi_inventory_agent_node",
-    "multi_guide_agent_node",
-    "multi_recipe_agent_node",
-    "multi_shopping_agent_node",
-    "multi_alarm_agent_node",
-    "multi_receipt_agent_node",
-    "multi_unknown_agent_node",
+    "parallel_inventory_branch",
+    "parallel_guide_branch",
+    "parallel_recipe_branch",
+    "parallel_shopping_branch",
+    "parallel_alarm_branch",
+    "parallel_receipt_branch",
+    "parallel_unknown_branch",
 ):
     workflow.add_edge(node_name, "multi_agent_collect_node")
 workflow.add_edge("multi_agent_collect_node", "multi_agent_dispatch_node")
