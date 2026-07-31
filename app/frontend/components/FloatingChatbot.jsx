@@ -20,20 +20,41 @@ const initialMessages = [
 const createChatSessionId = () =>
   globalThis.crypto?.randomUUID?.() || String(Date.now()) + '-' + Math.random().toString(16).slice(2)
 
-// 응답 안의 '재료명' 표기를 작은 강조 배지로 바꿔 보여줍니다.
+// 챗봇 응답의 식재료 강조와 Markdown 이미지를 화면 요소로 변환합니다.
 function MessageText({ text }) {
+  const parts = String(text).split(/(!\[[^\]]*]\s*\(https?:\/\/[^)\s]+\))/g)
+
   return (
-    <p>
-      {String(text).split(/'([^']+)'/g).map((part, index) =>
-        index % 2 ? (
-          <span className="floating-chatbot__ingredient" key={`${part}-${index}`}>
-            {part}
-          </span>
-        ) : (
-          part
-        ),
-      )}
-    </p>
+    <div className="floating-chatbot__message-content">
+      {parts.map((part, partIndex) => {
+        const imageMatch = part.match(/^!\[([^\]]*)]\s*\((https?:\/\/[^)\s]+)\)$/)
+        if (imageMatch) {
+          return (
+            <img
+              className="floating-chatbot__recipe-image"
+              src={imageMatch[2]}
+              alt={imageMatch[1] || '추천 레시피'}
+              key={`${imageMatch[2]}-${partIndex}`}
+              loading="lazy"
+            />
+          )
+        }
+
+        return (
+          <p key={`${part}-${partIndex}`}>
+            {part.split(/'([^']+)'/g).map((textPart, index) =>
+              index % 2 ? (
+                <span className="floating-chatbot__ingredient" key={`${textPart}-${index}`}>
+                  {textPart}
+                </span>
+              ) : (
+                textPart
+              ),
+            )}
+          </p>
+        )
+      })}
+    </div>
   )
 }
 // 봇 메시지를 한 글자씩 타이핑하듯 보여주는 애니메이션 컴포넌트입니다.
