@@ -500,16 +500,11 @@ npm install && npm run dev
 <!-- 팀원별 개인 회고 작성 위치 -->
 
 <details>
-<summary><strong>이재희</strong></summary>
-
-<br>  
-**여기에 내용 작성**
-
-
+<summary><h4>이재희</h4></summary>
+회고 내용
 </details>
-
 <details>
-<summary><strong>박준희</strong></summary>
+<summary><h4>박준희</h4></summary>
 
 <br>
 
@@ -553,7 +548,6 @@ npm install && npm run dev
 **여기에 내용 작성**
 
 </details>
-
 
 ---
 
