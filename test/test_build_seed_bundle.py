@@ -21,6 +21,40 @@ def test_amount_parser_strips_parenthetical_annotations():
     assert build_seed_bundle._parse_amount("2큰술 또는 1큰술") == (Decimal("2"), "큰술")
 
 
+def test_recipe_seed_sql_ignores_legacy_recipe_id_for_source_url():
+    # INSERT column order: ..., difficulty, image_url, source_url, recipe_steps
+    image_url = "https://cdn.example/img.webp"
+    sql, _, _ = build_seed_bundle._build_recipe_seed_sql(
+        [
+            {
+                "recipe_code": "R0001",
+                "recipe_name": "감자볶음",
+                "menu_category": "반찬",
+                "sub_category": "",
+                "serving_size": "1",
+                "total_time_minutes": "15",
+                "difficulty": "초급",
+                "main_image_url": image_url,
+                "legacy_recipe_id": "7028997",
+                "ingredient_names": '["감자"]',
+                "ingredient_amounts": '["1개"]',
+                "main_ingredients": '["감자"]',
+                "cooking_steps": '["감자를 볶는다."]',
+                "step_times": '["5분"]',
+                "heat_levels": '["중불"]',
+                "cooking_methods": "[]",
+                "occasion_tags": "[]",
+                "beginner_tip": "",
+            }
+        ]
+    )
+
+    assert "difficulty, image_url, source_url, recipe_steps" in sql
+    assert f"'{image_url}', NULL," in sql
+    assert "10000recipe" not in sql
+    assert "7028997" not in sql
+
+
 def test_nutrition_csv_maps_korean_headers_to_db_columns():
     source = StringIO()
     writer = csv.DictWriter(source, fieldnames=list(build_seed_bundle.NUTRITION_COLUMN_MAP.values()))
