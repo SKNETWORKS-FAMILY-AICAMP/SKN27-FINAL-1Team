@@ -211,7 +211,7 @@ def _build_recipe_seed_sql(rows: list[dict[str, str]]) -> tuple[str, int, int]:
                     _sql_int(row.get("total_time_minutes")),
                     _sql_literal(row.get("difficulty")),
                     _sql_literal(row.get("main_image_url")),
-                    _sql_literal(_source_url(row.get("legacy_recipe_id"))),
+                    "NULL",
                     _sql_jsonb(recipe_steps),
                 ]
             )
@@ -399,13 +399,6 @@ def _recipe_description(row: dict[str, str]) -> str:
 def _join_json(value: str | None) -> str:
     items = _json_list(value)
     return ", ".join(item for item in items if item.strip())
-
-
-def _source_url(legacy_recipe_id: str | None) -> str | None:
-    value = (legacy_recipe_id or "").strip()
-    if not value:
-        return None
-    return f"https://www.10000recipe.com/recipe/{value}"
 
 
 def _normalize_name(name: str) -> str:

@@ -234,12 +234,15 @@
 }
 
 .floating-chatbot__message {
+  min-width: 0;
   max-width: 82%;
   margin: 0;
   padding: 11px 13px;
   border-radius: 16px;
   font-size: 14px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .floating-chatbot__message-row.is-bot .floating-chatbot__message {
@@ -258,9 +261,22 @@
   color: #ffffff;
 }
 
+.floating-chatbot__message-content {
+  min-width: 0;
+}
+
 .floating-chatbot__message p {
   margin: 0;
   white-space: pre-line;
+}
+
+.floating-chatbot__recipe-image {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  margin: 8px 0;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 /* 챗봇 응답 대기 상태를 텍스트 대신 움직이는 점으로 보여줍니다. */
