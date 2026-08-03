@@ -15,21 +15,10 @@ WORD_RE = re.compile(r"[가-힣a-zA-Z0-9]+")
 
 SORT_OPTIONS = {"sim", "date", "asc", "dsc"}
 FOOD_CATEGORY_ROOTS = {"식품"}
-NAVER_SHOPPING_SEARCH_URL = "https://search.shopping.naver.com/search/all"
+KURLY_SEARCH_URL = "https://www.kurly.com/search"
 MIN_PRICE_OUTLIER_RATIO = 0.2
 MAX_PRICE_OUTLIER_RATIO = 5.0
 NON_RETRYABLE_API_STATUSES = {401, 403, 404}
-EDIBLE_QUERY_TERMS = (
-    "올리브유",
-    "식용유",
-    "참기름",
-    "들기름",
-    "카놀라유",
-    "포도씨유",
-    "해바라기유",
-    "콩기름",
-    "오일",
-)
 BLOCKED_TITLE_TERMS = (
     "강아지",
     "고양이",
@@ -53,11 +42,11 @@ BLOCKED_CATEGORY_TERMS = (
 
 
 class NaverShoppingProvider:
-    """네이버 쇼핑 검색 API와 검색 페이지 폴백을 제공하는 provider.
+    """네이버 쇼핑 검색 API와 컬리 검색 페이지 폴백을 제공하는 provider.
 
     프론트엔드는 네이버 API를 직접 호출하지 않고 백엔드의 장보기 API만 호출합니다.
     API 상품 후보가 있으면 기존 필터와 가격 이상치 제거 로직으로 대표 상품을
-    고르고, API가 없거나 실패하면 식품 검색어가 보강된 네이버 쇼핑 검색 링크를
+    고르고, API가 없거나 실패하면 원래 상품명으로 컬리 검색 링크를
     반환합니다.
     """
 
@@ -166,32 +155,26 @@ class NaverShoppingProvider:
             return []
 
     def _build_search_fallback(self, query: str) -> ProductSearchResult:
-        enhanced_query = self._enhance_search_query(query)
-        product_link = f"{NAVER_SHOPPING_SEARCH_URL}?{urlencode({'query': enhanced_query})}"
+        search_query = self._normalize_search_query(query)
+        product_link = f"{KURLY_SEARCH_URL}?{urlencode({'sword': search_query})}"
         logger.info(
-            "네이버 쇼핑 상품 API 결과 대신 검색 페이지 링크를 제공합니다(query=%s, enhanced_query=%s).",
+            "네이버 쇼핑 상품 API 결과 대신 컬리 검색 링크를 제공합니다(query=%s, search_query=%s).",
             query,
-            enhanced_query,
+            search_query,
         )
         return ProductSearchResult(
-            provider=self.provider_name,
+            provider="kurly",
             product_id=None,
-            product_name=f"{query} 쇼핑 검색",
+            product_name=None,
             product_link=product_link,
             product_image=None,
             price=None,
-            mall_name="네이버 쇼핑",
+            mall_name="컬리",
             category1="식품",
         )
 
-    def _enhance_search_query(self, query: str) -> str:
-        cleaned_query = " ".join((query or "").split())
-        normalized_query = self._normalize(cleaned_query)
-        if "식품" in normalized_query or "식용" in normalized_query:
-            return cleaned_query
-        if any(self._normalize(term) in normalized_query for term in EDIBLE_QUERY_TERMS):
-            return f"식용 {cleaned_query}"
-        return f"{cleaned_query} 식품"
+    def _normalize_search_query(self, query: str) -> str:
+        return " ".join((query or "").split())
 
     def _to_result(self, item: dict) -> ProductSearchResult:
         return ProductSearchResult(
