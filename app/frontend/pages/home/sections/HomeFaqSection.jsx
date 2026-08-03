@@ -17,17 +17,19 @@ function HomeFaqSection() {
 
       <div className="home-faq-list">
         {faqGroups.map((group) => (
-          <details className="home-faq-group" key={group.title}>
-            <summary>{group.title}</summary>
-            <div className="home-faq-question-list">
-              {group.questions.map((item) => (
-                <details className="home-faq-question" key={item.question}>
-                  <summary>{item.question}</summary>
-                  <p>{item.answer}</p>
-                </details>
-              ))}
-            </div>
-          </details>
+          <div key={group.title} data-nosnippet={group.title === 'MCP' ? '' : undefined}>
+            <details className="home-faq-group">
+              <summary>{group.title}</summary>
+              <div className="home-faq-question-list">
+                {group.questions.map((item) => (
+                  <details className="home-faq-question" key={item.question}>
+                    <summary>{item.question}</summary>
+                    <p>{item.answer}</p>
+                  </details>
+                ))}
+              </div>
+            </details>
+          </div>
         ))}
       </div>
     </section>

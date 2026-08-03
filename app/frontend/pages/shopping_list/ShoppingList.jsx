@@ -381,8 +381,10 @@ function ShoppingList() {
   })
   const visibleItemCount = visibleActiveItems.length + visibleOwnedShoppingItems.length
   const totalItemCount = activeItems.length + ownedShoppingItems.length
-  const selectedTotalPrice = [...selectedItems, ...selectedOwnedItems]
-    .reduce((sum, item) => sum + Number(item.price || 0), 0)
+  const selectedPriceItems = [...selectedItems, ...selectedOwnedItems]
+  const selectedTotalPrice = selectedPriceItems.some((item) => item.price == null)
+    ? null
+    : selectedPriceItems.reduce((sum, item) => sum + Number(item.price), 0)
   const manualOwnedIngredient = findOwnedFridgeIngredient(
     manualSearchQuery,
     null,
