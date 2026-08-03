@@ -1,6 +1,7 @@
 import html
 import logging
 import re
+from urllib.parse import urlencode
 
 import httpx
 
@@ -14,8 +15,21 @@ WORD_RE = re.compile(r"[가-힣a-zA-Z0-9]+")
 
 SORT_OPTIONS = {"sim", "date", "asc", "dsc"}
 FOOD_CATEGORY_ROOTS = {"식품"}
+NAVER_SHOPPING_SEARCH_URL = "https://search.shopping.naver.com/search/all"
 MIN_PRICE_OUTLIER_RATIO = 0.2
 MAX_PRICE_OUTLIER_RATIO = 5.0
+NON_RETRYABLE_API_STATUSES = {401, 403, 404}
+EDIBLE_QUERY_TERMS = (
+    "올리브유",
+    "식용유",
+    "참기름",
+    "들기름",
+    "카놀라유",
+    "포도씨유",
+    "해바라기유",
+    "콩기름",
+    "오일",
+)
 BLOCKED_TITLE_TERMS = (
     "강아지",
     "고양이",
@@ -39,10 +53,12 @@ BLOCKED_CATEGORY_TERMS = (
 
 
 class NaverShoppingProvider:
-    """네이버 쇼핑 검색 API provider.
+    """네이버 쇼핑 검색 API와 검색 페이지 폴백을 제공하는 provider.
 
     프론트엔드는 네이버 API를 직접 호출하지 않고 백엔드의 장보기 API만 호출합니다.
-    네이버 provider는 상품 검색 결과를 내부 표준 형식으로 변환합니다.
+    API 상품 후보가 있으면 기존 필터와 가격 이상치 제거 로직으로 대표 상품을
+    고르고, API가 없거나 실패하면 식품 검색어가 보강된 네이버 쇼핑 검색 링크를
+    반환합니다.
     """
 
     provider_name = "naver"
@@ -65,6 +81,7 @@ class NaverShoppingProvider:
         self.sort = configured_sort if configured_sort in SORT_OPTIONS else "sim"
         self.exclude = exclude if exclude is not None else settings.NAVER_SHOPPING_EXCLUDE
         self.timeout_seconds = int(timeout_seconds or settings.NAVER_SHOPPING_TIMEOUT_SECONDS or 5)
+        self._api_disabled = False
 
     @property
     def is_configured(self) -> bool:
@@ -76,14 +93,12 @@ class NaverShoppingProvider:
             return None
 
         items = self._request_items(query, self.display)
-        if not items:
-            return None
+        if items:
+            item = self._select_best_item(query, items)
+            if item:
+                return self._to_result(item)
 
-        item = self._select_best_item(query, items)
-        if not item:
-            return None
-
-        return self._to_result(item)
+        return self._build_search_fallback(query)
 
     def search_products(self, keyword: str, display: int | None = None) -> list[ProductSearchResult]:
         query = (keyword or "").strip()
@@ -94,6 +109,9 @@ class NaverShoppingProvider:
         items = self._request_items(query, requested_display)
         candidates = [item for item in items if self._is_recommendable(query, item)]
         candidates = self._remove_price_outliers(candidates)
+        if not candidates:
+            return [self._build_search_fallback(query)]
+
         ranked_items = sorted(
             enumerate(candidates),
             key=lambda indexed_item: (self._match_score(query, self._clean(indexed_item[1].get("title")) or ""), -indexed_item[0]),
@@ -104,6 +122,8 @@ class NaverShoppingProvider:
     def _request_items(self, query: str, display: int) -> list[dict]:
         if not self.is_configured:
             logger.info("네이버 쇼핑 API 키가 없어 상품 검색을 건너뜁니다.")
+            return []
+        if self._api_disabled:
             return []
 
         try:
@@ -126,11 +146,52 @@ class NaverShoppingProvider:
                     },
                 )
                 response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in NON_RETRYABLE_API_STATUSES:
+                self._api_disabled = True
+                logger.warning(
+                    "네이버 쇼핑 API를 더 이상 재시도하지 않고 검색 링크 폴백을 사용합니다(status=%s).",
+                    exc.response.status_code,
+                )
+            logger.warning("네이버 쇼핑 검색 실패(query=%s): %s", query, exc)
+            return []
         except httpx.HTTPError as exc:
             logger.warning("네이버 쇼핑 검색 실패(query=%s): %s", query, exc)
             return []
 
-        return response.json().get("items") or []
+        try:
+            return response.json().get("items") or []
+        except ValueError as exc:
+            logger.warning("네이버 쇼핑 검색 응답을 해석하지 못했습니다(query=%s): %s", query, exc)
+            return []
+
+    def _build_search_fallback(self, query: str) -> ProductSearchResult:
+        enhanced_query = self._enhance_search_query(query)
+        product_link = f"{NAVER_SHOPPING_SEARCH_URL}?{urlencode({'query': enhanced_query})}"
+        logger.info(
+            "네이버 쇼핑 상품 API 결과 대신 검색 페이지 링크를 제공합니다(query=%s, enhanced_query=%s).",
+            query,
+            enhanced_query,
+        )
+        return ProductSearchResult(
+            provider=self.provider_name,
+            product_id=None,
+            product_name=f"{query} 쇼핑 검색",
+            product_link=product_link,
+            product_image=None,
+            price=None,
+            mall_name="네이버 쇼핑",
+            category1="식품",
+        )
+
+    def _enhance_search_query(self, query: str) -> str:
+        cleaned_query = " ".join((query or "").split())
+        normalized_query = self._normalize(cleaned_query)
+        if "식품" in normalized_query or "식용" in normalized_query:
+            return cleaned_query
+        if any(self._normalize(term) in normalized_query for term in EDIBLE_QUERY_TERMS):
+            return f"식용 {cleaned_query}"
+        return f"{cleaned_query} 식품"
 
     def _to_result(self, item: dict) -> ProductSearchResult:
         return ProductSearchResult(
