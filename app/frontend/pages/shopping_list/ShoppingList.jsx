@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import './ShoppingList.css'
 
+import appIcon from '../../assets/app_icon.png'
 import imageShop from '../../assets/extracted/images/image_shop.png'
 import { useAppDialog } from '../../components/AppDialog.jsx'
+import {
+  getMappedIngredientImageUrl,
+  useIngredientImageCatalog,
+} from '../../utils/ingredientImages.js'
 import {
   buildSourceFilterOptions,
   findExactSelectedRecipe,
@@ -29,11 +34,47 @@ import {
 } from '../../services/shoppingApi.js'
 
 const SHOPPING_CONTEXT_KEY = 'bobbeori-recipe-shopping-context'
+const DISMISSED_OWNED_STORAGE_PREFIX = 'bobbeori-shopping-dismissed-owned'
+
+function readDismissedOwnedKeys(listId) {
+  if (!listId) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(`${DISMISSED_OWNED_STORAGE_PREFIX}:${listId}`) || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeDismissedOwnedKeys(listId, keys) {
+  if (!listId) {
+    return
+  }
+  try {
+    window.localStorage.setItem(`${DISMISSED_OWNED_STORAGE_PREFIX}:${listId}`, JSON.stringify(keys))
+  } catch {
+    // localStorage 접근이 막힌 환경에서는 세션 동안만 숨김이 유지된다.
+  }
+}
 
 function ImageSlot({ src, alt = '', className = '' }) {
+  const [errored, setErrored] = useState(false)
+
+  useEffect(() => {
+    setErrored(false)
+  }, [src])
+
+  const showFallback = !src || errored
+
   return (
-    <span className={`shopping-image-slot ${src ? 'is-filled' : ''} ${className}`}>
-      {src ? <img src={src} alt={alt} /> : null}
+    <span className={`shopping-image-slot ${showFallback ? 'is-fallback' : 'is-filled'} ${className}`}>
+      {showFallback ? (
+        <img className="shopping-image-slot__fallback" src={appIcon} alt={alt || '밥벌이'} />
+      ) : (
+        <img src={src} alt={alt} onError={() => setErrored(true)} />
+      )}
     </span>
   )
 }
@@ -74,7 +115,7 @@ function formatCreatedAt(value) {
 
 function formatPrice(value) {
   if (value == null) {
-    return '가격 확인 필요'
+    return ''
   }
   return `${Number(value).toLocaleString('ko-KR')}원`
 }
@@ -312,6 +353,7 @@ function ShoppingList() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { dialogNode, showAlert, showConfirm } = useAppDialog()
+  const ingredientImageCatalog = useIngredientImageCatalog()
   const [storedContext] = useState(readShoppingContext)
   const [shoppingList, setShoppingList] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -327,6 +369,7 @@ function ShoppingList() {
   const [ingredientSuggestions, setIngredientSuggestions] = useState([])
   const [fridgeIngredients, setFridgeIngredients] = useState([])
   const [selectedOwnedKeys, setSelectedOwnedKeys] = useState([])
+  const [dismissedOwnedKeys, setDismissedOwnedKeys] = useState([])
 
   const isLoggedIn = hasShoppingAuth()
   const shoppingListId = searchParams.get('shoppingListId')
@@ -337,10 +380,13 @@ function ShoppingList() {
   const isFallbackList = Boolean(shoppingList?.isFallback)
   const ownedItems = dedupeIngredientsForDisplay(resolveOwnedIngredients(shoppingList, storedContext, isFallbackList))
   const ownedProductQuery = ownedItems.map((item) => item.name).filter(Boolean).join('|')
-  const ownedShoppingItems = ownedItems.map((item) => ({
-    ...item,
-    ...(ownedProductMap[item.name] || {}),
-  }))
+  const dismissedOwnedSet = new Set(dismissedOwnedKeys)
+  const ownedShoppingItems = ownedItems
+    .map((item) => ({
+      ...item,
+      ...(ownedProductMap[item.name] || {}),
+    }))
+    .filter((item) => !dismissedOwnedSet.has(getIngredientDisplayKey(item)))
   const activeItems = items.filter((item) => !item.is_purchased)
   const hasCurrentShoppingList = Boolean(shoppingList?.id)
   const sourceFilterOptions = buildSourceFilterOptions(shoppingList, activeItems)
@@ -375,16 +421,13 @@ function ShoppingList() {
   const isEntireRecipeSelected = Boolean(selectedRecipeSelection)
   const selectedDeleteCount = getSelectedDeleteCount({
     selectedActiveItems: selectedItems,
+    selectedOwnedItems,
     recipeActiveItems: selectedRecipeItems.active,
     recipeOwnedItems: selectedRecipeItems.owned,
     isEntireRecipeSelected,
   })
   const visibleItemCount = visibleActiveItems.length + visibleOwnedShoppingItems.length
   const totalItemCount = activeItems.length + ownedShoppingItems.length
-  const selectedPriceItems = [...selectedItems, ...selectedOwnedItems]
-  const selectedTotalPrice = selectedPriceItems.some((item) => item.price == null)
-    ? null
-    : selectedPriceItems.reduce((sum, item) => sum + Number(item.price), 0)
   const manualOwnedIngredient = findOwnedFridgeIngredient(
     manualSearchQuery,
     null,
@@ -539,6 +582,10 @@ function ShoppingList() {
     }
   }, [isLoggedIn])
 
+  useEffect(() => {
+    setDismissedOwnedKeys(readDismissedOwnedKeys(shoppingList?.id))
+  }, [shoppingList?.id])
+
   const allChecked = visibleItemCount > 0
     && visibleActiveItems.every((item) => item.is_checked)
     && visibleOwnedShoppingItems.every((item) => selectedOwnedKeys.includes(getIngredientDisplayKey(item)))
@@ -626,6 +673,19 @@ function ShoppingList() {
     ))
   }
 
+  // 보유 재료는 레시피+냉장고 상태에서 파생 계산되는 값이라 서버에 삭제할 행이 없다.
+  // 대신 숨긴 키를 브라우저(localStorage)에 저장해 목록에서만 빼고, 냉장고에는 영향을 주지 않는다.
+  const dismissOwnedItems = (ownedItemsToDismiss) => {
+    const keys = (ownedItemsToDismiss || []).map(getIngredientDisplayKey).filter(Boolean)
+    if (keys.length === 0) {
+      return
+    }
+    const nextKeys = [...new Set([...dismissedOwnedKeys, ...keys])]
+    setDismissedOwnedKeys(nextKeys)
+    writeDismissedOwnedKeys(shoppingList?.id, nextKeys)
+    setSelectedOwnedKeys((previousKeys) => previousKeys.filter((key) => !keys.includes(key)))
+  }
+
   const deleteSelectedItems = async () => {
     if (selectedDeleteCount === 0) {
       return
@@ -633,7 +693,7 @@ function ShoppingList() {
 
     const confirmMessage = isEntireRecipeSelected
       ? `‘${selectedRecipeSourceOption.label}’의 재료 ${selectedDeleteCount}개를 장보기 목록에서 삭제할까요?\n다른 레시피에도 필요한 공통 재료는 남아 있어요.`
-      : `선택한 구매 필요 재료 ${selectedDeleteCount}개를 장보기 목록에서 삭제할까요?\n보유 재료는 냉장고에서 삭제되지 않아요.`
+      : `선택한 재료 ${selectedDeleteCount}개를 장보기 목록에서 삭제할까요?\n보유 재료는 이 목록에서만 빠지고 냉장고에는 그대로 남아요.`
     const confirmed = await showConfirm(confirmMessage, {
       title: isEntireRecipeSelected ? '레시피 장보기 삭제' : '선택 재료 삭제',
       confirmText: isEntireRecipeSelected ? '레시피 삭제' : '재료 삭제',
@@ -655,6 +715,7 @@ function ShoppingList() {
         ...prev,
         items: prev.items.filter((item) => !selectedIds.has(item.id)),
       }))
+      dismissOwnedItems(selectedOwnedItems)
       return
     }
 
@@ -675,6 +736,7 @@ function ShoppingList() {
         latest = await deleteShoppingListItem(item.id)
       }
       setShoppingList(latest)
+      dismissOwnedItems(selectedOwnedItems)
     } catch (shoppingError) {
       await showAlert(shoppingError.message || '선택한 재료를 삭제하지 못했어요.', {
         title: '선택 삭제 실패',
@@ -1012,7 +1074,10 @@ function ShoppingList() {
                       <ImageSlot className="shopping-manual-result__image" src={product.product_image} alt={product.product_name || product.name} />
                       <div className="shopping-manual-result__info">
                         <strong>{product.product_name || product.name}</strong>
-                        <span>{product.mall_name || product.provider || 'provider'} · {formatPrice(product.price)}</span>
+                        <span>
+                          {product.mall_name || product.provider || 'provider'}
+                          {product.price != null ? ` · ${formatPrice(product.price)}` : ''}
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -1070,7 +1135,11 @@ function ShoppingList() {
                     disabled={isMutating}
                     onClick={() => updateItemChecked(item)}
                   />
-                  <ImageSlot className="shopping-item-row__image" src={item.product_image} alt={item.product_name || item.name} />
+                  <ImageSlot
+                    className="shopping-item-row__image"
+                    src={getMappedIngredientImageUrl(ingredientImageCatalog, item.name)}
+                    alt={item.name}
+                  />
                   <div className="shopping-item-row__info">
                     <div className="shopping-item-row__title">
                       <strong>{item.name}<span>· {formatQuantity(item)}</span></strong>
@@ -1080,11 +1149,11 @@ function ShoppingList() {
                         </span>
                       ))}
                     </div>
-                    <small>{item.product_name || '상품 검색 결과 없음'}</small>
+                    {item.product_name ? <small>{item.product_name}</small> : null}
                   </div>
                   <div className="shopping-item-row__meta">
                     <span>{item.mall_name || item.provider || 'provider'}</span>
-                    <strong>{formatPrice(item.price)}</strong>
+                    {item.price != null ? <strong>{formatPrice(item.price)}</strong> : null}
                   </div>
                   {item.product_link ? (
                     <a
@@ -1093,7 +1162,7 @@ function ShoppingList() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      구매 링크
+                      구매 링크 ↗
                     </a>
                   ) : (
                     <span className="shopping-item-row__link is-disabled">링크 없음</span>
@@ -1110,12 +1179,16 @@ function ShoppingList() {
                   <button
                     type="button"
                     className={`shopping-owned-check ${isSelected ? 'is-selected' : ''}`}
-                    aria-label={`${item.name} 입고 대상 ${isSelected ? '해제' : '선택'}`}
+                    aria-label={`${item.name} 선택 ${isSelected ? '해제' : ''}`.trim()}
                     aria-pressed={isSelected}
                     disabled={isMutating || isFallbackList}
                     onClick={() => toggleOwnedItem(item)}
                   />
-                  <ImageSlot className="shopping-item-row__image" src={item.product_image} alt={item.product_name || item.name} />
+                  <ImageSlot
+                    className="shopping-item-row__image"
+                    src={getMappedIngredientImageUrl(ingredientImageCatalog, item.name)}
+                    alt={item.name}
+                  />
                   <div className="shopping-item-row__info">
                     <div className="shopping-item-row__title">
                       <strong>{item.name}{item.amount ? <span>· {item.amount}</span> : null}</strong>
@@ -1124,11 +1197,11 @@ function ShoppingList() {
                         <span className="shopping-expired-badge">소비기한 지남</span>
                       ) : null}
                     </div>
-                    <small>{item.product_name || '상품 검색 결과 없음'}</small>
+                    {item.product_name ? <small>{item.product_name}</small> : null}
                   </div>
                   <div className="shopping-item-row__meta">
                     <span>{item.mall_name || item.provider || 'provider'}</span>
-                    <strong>{formatPrice(item.price)}</strong>
+                    {item.price != null ? <strong>{formatPrice(item.price)}</strong> : null}
                   </div>
                   {item.product_link ? (
                     <a
@@ -1137,7 +1210,7 @@ function ShoppingList() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      구매 링크
+                      구매 링크 ↗
                     </a>
                   ) : (
                     <span className="shopping-item-row__link is-disabled">링크 없음</span>
@@ -1163,10 +1236,6 @@ function ShoppingList() {
               <div>
                 <dt>보유 재료</dt>
                 <dd>{visibleOwnedShoppingItems.length}개</dd>
-              </div>
-              <div className="shopping-metric-list__total">
-                <dt>예상 금액 <span>선택 {selectedCount}개</span></dt>
-                <dd>{formatPrice(selectedTotalPrice)}</dd>
               </div>
             </dl>
             <button
@@ -1203,7 +1272,6 @@ function ShoppingList() {
       <div className="shopping-mobile-action-bar" aria-label="모바일 장보기 구매 완료">
         <div className="shopping-mobile-action-bar__summary">
           <strong>선택 {selectedCount}개</strong>
-          <span>{formatPrice(selectedTotalPrice)}</span>
         </div>
         <button
           type="button"
