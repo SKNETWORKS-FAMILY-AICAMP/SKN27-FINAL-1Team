@@ -142,6 +142,7 @@ export function getShoppingSelectionState(activeItems, ownedItems, selectedOwned
 
 export function getSelectedDeleteCount({
   selectedActiveItems,
+  selectedOwnedItems,
   recipeActiveItems,
   recipeOwnedItems,
   isEntireRecipeSelected,
@@ -149,7 +150,7 @@ export function getSelectedDeleteCount({
   if (isEntireRecipeSelected) {
     return (recipeActiveItems?.length || 0) + (recipeOwnedItems?.length || 0)
   }
-  return selectedActiveItems?.length || 0
+  return (selectedActiveItems?.length || 0) + (selectedOwnedItems?.length || 0)
 }
 
 export function findExactSelectedRecipe(recipeCandidates, selectedCount, selectedOwnedKeys) {

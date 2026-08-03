@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   createIngredientImageCatalog,
   getIngredientImageUrl,
+  getMappedIngredientImageUrl,
 } from './ingredientImages.js'
 
 const catalog = createIngredientImageCatalog({
@@ -31,4 +32,10 @@ test('같은 별칭은 매니페스트에 먼저 등록된 대표 이미지를 �
 
 test('별칭을 끄면 정확한 이름이 없는 식재료는 카테고리 이미지를 사용한다', () => {
   assert.equal(getIngredientImageUrl(catalog, '계란', '유제품', false), 'dairy.webp')
+})
+
+test('장보기용 매핑은 대표명과 별칭만 사용하고 기본 이미지는 반환하지 않는다', () => {
+  assert.equal(getMappedIngredientImageUrl(catalog, '두부'), 'tofu.webp')
+  assert.equal(getMappedIngredientImageUrl(catalog, '계란'), 'egg.webp')
+  assert.equal(getMappedIngredientImageUrl(catalog, '알 수 없음'), '')
 })

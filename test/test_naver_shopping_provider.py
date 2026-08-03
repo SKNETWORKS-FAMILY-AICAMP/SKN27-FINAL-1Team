@@ -26,7 +26,7 @@ def _item(
 
 
 def _fallback_query(product_link: str) -> str:
-    return parse_qs(urlparse(product_link).query)["query"][0]
+    return parse_qs(urlparse(product_link).query)["sword"][0]
 
 
 def test_returns_food_search_link_when_api_is_not_configured():
@@ -35,20 +35,21 @@ def test_returns_food_search_link_when_api_is_not_configured():
     result = provider.search_best_product("버터")
 
     assert result is not None
+    assert result.provider == "kurly"
     assert result.product_id is None
-    assert result.product_name == "버터 쇼핑 검색"
-    assert result.mall_name == "네이버 쇼핑"
+    assert result.product_name is None
+    assert result.mall_name == "컬리"
     assert result.price is None
-    assert _fallback_query(result.product_link) == "버터 식품"
+    assert _fallback_query(result.product_link) == "버터"
 
 
-def test_uses_edible_query_hint_for_cooking_oil_fallback():
+def test_uses_original_cooking_oil_name_for_fallback():
     provider = NaverShoppingProvider(client_id="", client_secret="")
 
     result = provider.search_best_product("올리브유")
 
     assert result is not None
-    assert _fallback_query(result.product_link) == "식용 올리브유"
+    assert _fallback_query(result.product_link) == "올리브유"
 
 
 def test_returns_search_link_when_all_api_candidates_are_filtered(monkeypatch):
@@ -65,7 +66,7 @@ def test_returns_search_link_when_all_api_candidates_are_filtered(monkeypatch):
 
     assert result is not None
     assert result.product_id is None
-    assert _fallback_query(result.product_link) == "버터 식품"
+    assert _fallback_query(result.product_link) == "버터"
 
 
 def test_keeps_filtered_product_selection_when_api_returns_valid_items(monkeypatch):
@@ -98,8 +99,8 @@ def test_manual_product_search_returns_one_fallback_candidate(monkeypatch):
     results = provider.search_products("파슬리가루", display=5)
 
     assert len(results) == 1
-    assert results[0].product_name == "파슬리가루 쇼핑 검색"
-    assert _fallback_query(results[0].product_link) == "파슬리가루 식품"
+    assert results[0].product_name is None
+    assert _fallback_query(results[0].product_link) == "파슬리가루"
 
 
 def test_disables_retries_after_non_retryable_api_status(monkeypatch):
@@ -119,5 +120,5 @@ def test_disables_retries_after_non_retryable_api_status(monkeypatch):
     second = provider.search_best_product("감자")
 
     assert request_count == 1
-    assert _fallback_query(first.product_link) == "양파 식품"
-    assert _fallback_query(second.product_link) == "감자 식품"
+    assert _fallback_query(first.product_link) == "양파"
+    assert _fallback_query(second.product_link) == "감자"
