@@ -32,12 +32,13 @@
   min-height: 300px;
   padding: 36px 44px;
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(380px, 1fr) minmax(300px, 0.9fr);
   align-items: center;
   gap: 32px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #f3d9dc;
   border-radius: 28px;
   background: linear-gradient(135deg, #fff 0%, #fff5f6 100%);
@@ -45,15 +46,16 @@
 }
 
 .recipe-list-hero::after {
-  width: 280px;
-  height: 280px;
   position: absolute;
-  top: -120px;
-  right: -80px;
-  border-radius: 50%;
-  background: rgba(255, 138, 138, 0.16);
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 180px at calc(100% + 60px) -20px,
+    rgba(255, 138, 138, 0.16),
+    transparent 100%
+  );
   content: "";
-  filter: blur(18px);
+  pointer-events: none;
 }
 
 .recipe-list-hero__copy {
