@@ -23,12 +23,56 @@
 
 </div>
 
-## 프로젝트 시연 영상
+### 프로젝트 영상
 
-[![서비스 시연 영상](https://img.youtube.com/vi/HttAWapHMdk/maxresdefault.jpg)](https://www.youtube.com/watch?v=HttAWapHMdk)
+<table>
+  <tr>
+    <th width="33%">프로젝트 광고 영상</th>
+    <th width="33%">프로젝트 시연 영상</th>
+    <th width="33%">MCP 활용 영상</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://www.youtube.com/watch?v=Q-JacxpNduw">
+        <img src="https://img.youtube.com/vi/Q-JacxpNduw/maxresdefault.jpg" width="100%" alt="밥벌이 프로젝트 광고 영상">
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://www.youtube.com/watch?v=HttAWapHMdk">
+        <img src="https://img.youtube.com/vi/HttAWapHMdk/maxresdefault.jpg" width="100%" alt="밥벌이 프로젝트 시연 영상">
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://www.youtube.com/watch?v=G3C5Ci9yciI">
+        <img src="https://img.youtube.com/vi/G3C5Ci9yciI/maxresdefault.jpg" width="100%" alt="밥벌이 프로젝트 MCP 활용 영상">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      밥벌이의 핵심 가치와 서비스를 소개합니다.
+    </td>
+    <td align="center">
+      식재료 등록부터 레시피 추천까지 핵심 기능을 시연합니다.
+    </td>
+    <td align="center">
+      ChatGPT에서 MCP 도구를 활용하는 과정을 소개합니다.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://www.youtube.com/watch?v=Q-JacxpNduw">▶ 광고 영상 보기</a>
+    </td>
+    <td align="center">
+      <a href="https://www.youtube.com/watch?v=HttAWapHMdk">▶ 시연 영상 보기</a>
+    </td>
+    <td align="center">
+      <a href="https://www.youtube.com/watch?v=G3C5Ci9yciI">▶ MCP 활용 영상 보기</a>
+    </td>
+  </tr>
+</table>
 
-> 이미지를 클릭하면 YouTube 시연 영상으로 이동합니다.
-
+> 각 썸네일을 클릭하면 YouTube 영상으로 이동합니다.
 ---
 
 ## 목차
