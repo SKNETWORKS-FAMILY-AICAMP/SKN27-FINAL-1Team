@@ -21,13 +21,13 @@
 
 </div>
 
-<!-- 상단 요약 GIF 삽입 위치 : "영수증 촬영 → 재고 자동 등록 → 레시피 추천 → 챗봇 대화" 3~4장면 -->
-<div align="center">
-
-> **핵심 흐름 시연 GIF 삽입 예정**
-> `영수증 촬영 → 냉장고 자동 등록 → 냉장고 파먹기 추천 → AI 챗봇 · 캘린더 알림`
-
 </div>
+
+## 프로젝트 시연 영상
+
+[![서비스 시연 영상](https://img.youtube.com/vi/HttAWapHMdk/maxresdefault.jpg)](https://www.youtube.com/watch?v=HttAWapHMdk)
+
+> 이미지를 클릭하면 YouTube 시연 영상으로 이동합니다.
 
 ---
 
