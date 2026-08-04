@@ -59,17 +59,6 @@
       ChatGPT에서 MCP 도구를 활용하는 과정을 소개합니다.
     </td>
   </tr>
-  <tr>
-    <td align="center">
-      <a href="https://www.youtube.com/watch?v=Q-JacxpNduw">▶ 광고 영상 보기</a>
-    </td>
-    <td align="center">
-      <a href="https://www.youtube.com/watch?v=HttAWapHMdk">▶ 시연 영상 보기</a>
-    </td>
-    <td align="center">
-      <a href="https://www.youtube.com/watch?v=G3C5Ci9yciI">▶ MCP 활용 영상 보기</a>
-    </td>
-  </tr>
 </table>
 
 > 각 썸네일을 클릭하면 YouTube 영상으로 이동합니다.
